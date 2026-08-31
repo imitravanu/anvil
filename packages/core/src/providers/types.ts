@@ -10,6 +10,14 @@ export interface ToolCallRequest {
   id: string;
   name: string;
   input: unknown;
+  /**
+   * Provider-specific data that MUST round-trip with the conversation history
+   * (keyed opaquely by each adapter). E.g. Gemini 3.x returns
+   * thoughtSignature values on function-call parts and rejects the next
+   * request if they are missing from the replayed history. Adapters that don't
+   * need this simply never read or write it.
+   */
+  providerMetadata?: Record<string, unknown>;
 }
 
 export interface ToolResultInput {
@@ -33,7 +41,13 @@ export type StreamEvent =
   | { type: "text_delta"; text: string }
   | { type: "tool_call_start"; id: string; name: string }
   | { type: "tool_call_delta"; id: string; partialInputJson: string }
-  | { type: "tool_call_end"; id: string; name: string; input: unknown }
+  | {
+      type: "tool_call_end";
+      id: string;
+      name: string;
+      input: unknown;
+      providerMetadata?: Record<string, unknown>;
+    }
   | { type: "usage"; inputTokens: number; outputTokens: number }
   | {
       type: "turn_end";

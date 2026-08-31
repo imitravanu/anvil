@@ -12,6 +12,10 @@ export interface RawGeminiChunk {
       parts?: Array<{
         text?: string;
         functionCall?: { id?: string; name?: string; args?: unknown };
+        // Gemini 3.x "thought signatures": opaque blobs returned on parts and
+        // required to be echoed back in replayed history (esp. functionCall
+        // parts) — see ai.google.dev/gemini-api/docs/thought-signatures
+        thoughtSignature?: string;
       }>;
     };
     finishReason?: string | null;
@@ -53,7 +57,16 @@ export async function* translateGeminiChunkStream(
           const id = part.functionCall.id ?? `gemini_call_${++callCounter}`;
           const name = part.functionCall.name ?? "";
           yield { type: "tool_call_start", id, name };
-          yield { type: "tool_call_end", id, name, input: part.functionCall.args ?? {} };
+          yield {
+            type: "tool_call_end",
+            id,
+            name,
+            input: part.functionCall.args ?? {},
+            // Must round-trip through history or the next request 400s
+            ...(part.thoughtSignature
+              ? { providerMetadata: { thoughtSignature: part.thoughtSignature } }
+              : {}),
+          };
         }
       }
       if (chunk.usageMetadata) {
@@ -103,6 +116,7 @@ export function toGeminiContents(messages: ConversationMessage[]): Record<string
       if (c.type === "text") {
         parts.push({ text: c.text });
       } else if (c.type === "tool_call") {
+        const signature = c.call.providerMetadata?.thoughtSignature;
         parts.push({
           functionCall: {
             id: c.call.id,
@@ -110,6 +124,9 @@ export function toGeminiContents(messages: ConversationMessage[]): Record<string
             args:
               typeof c.call.input === "object" && c.call.input !== null ? c.call.input : {},
           },
+          // Echo the thought signature back — Gemini 3.x rejects replayed
+          // function-call history without it.
+          ...(typeof signature === "string" ? { thoughtSignature: signature } : {}),
         });
       } else {
         const name = callNames.get(c.result.toolCallId) ?? "unknown_tool";

@@ -1,2 +1,3 @@
 export const CORE_VERSION = "0.1.0";
 export * from "./providers/index.js";
+export * from "./agent/index.js";
