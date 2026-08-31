@@ -5,9 +5,19 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p .",
-    "typecheck": "tsc -p . --noEmit"
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p . --noEmit",
+    "test": "vitest run"
   },
-  "dependencies": {},
-  "devDependencies": { "typescript": "^5.7.2" }
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.122.0",
+    "openai": "^7.8.0",
+    "@google/genai": "^2.19.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.11"
+  }
 }
+
