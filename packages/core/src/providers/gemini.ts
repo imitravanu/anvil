@@ -36,6 +36,10 @@ export async function* translateGeminiChunkStream(
   let callCounter = 0;
   let sawFunctionCall = false;
   let finishReason: string | null = null;
+  // Gemini attaches usageMetadata to many chunks with growing/cumulative
+  // values. The contract says usage is emitted exactly once per turn, so we
+  // buffer the latest counts and emit after the stream ends.
+  let usage: { inputTokens: number; outputTokens: number } | null = null;
 
   try {
     for await (const chunk of raw) {
@@ -53,8 +57,7 @@ export async function* translateGeminiChunkStream(
         }
       }
       if (chunk.usageMetadata) {
-        yield {
-          type: "usage",
+        usage = {
           inputTokens: chunk.usageMetadata.promptTokenCount ?? 0,
           outputTokens: chunk.usageMetadata.candidatesTokenCount ?? 0,
         };
@@ -64,6 +67,10 @@ export async function* translateGeminiChunkStream(
   } catch (err) {
     yield { type: "error", message: err instanceof Error ? err.message : String(err) };
     return;
+  }
+
+  if (usage) {
+    yield { type: "usage", ...usage };
   }
 
   // Gemini has no dedicated stop reason for function-call turns (it reports
