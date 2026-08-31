@@ -1,0 +1,131 @@
+import { useCallback, useRef, useState } from "react";
+import { randomUUID } from "node:crypto";
+import { AgentSession, type AgentEvent } from "@anvil/core";
+
+export interface DisplayToolCall {
+  id: string;
+  name: string;
+  input: unknown;
+  status: "running" | "done" | "error";
+  summary?: string;
+}
+
+export interface DisplayMessage {
+  id: string;
+  role: "user" | "assistant";
+  text: string; // accumulated so far; may still be mid-stream
+  streaming: boolean;
+  toolCalls: DisplayToolCall[];
+}
+
+export interface UsageTotals {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/**
+ * Bridges AgentSession's async generator into React state. Every event handler
+ * does a full setMessages map (never in-place mutation) so React re-renders.
+ */
+export function useAgentController(session: AgentSession) {
+  const [messages, setMessages] = useState<DisplayMessage[]>([]);
+  const [isBusy, setIsBusy] = useState(false);
+  const [usage, setUsage] = useState<UsageTotals>({ inputTokens: 0, outputTokens: 0 });
+  const currentAssistantId = useRef<string | null>(null);
+
+  const send = useCallback(
+    async (text: string) => {
+      if (isBusy) return; // simplest policy for this phase: ignore input while busy
+      const userMsg: DisplayMessage = {
+        id: randomUUID(),
+        role: "user",
+        text,
+        streaming: false,
+        toolCalls: [],
+      };
+      const assistantId = randomUUID();
+      currentAssistantId.current = assistantId;
+      setMessages((prev) => [
+        ...prev,
+        userMsg,
+        { id: assistantId, role: "assistant", text: "", streaming: true, toolCalls: [] },
+      ]);
+      setIsBusy(true);
+
+      const updateAssistant = (fn: (m: DisplayMessage) => DisplayMessage) => {
+        setMessages((prev) => prev.map((m) => (m.id === assistantId ? fn(m) : m)));
+      };
+
+      try {
+        for await (const event of session.send(text)) {
+          applyEvent(event, updateAssistant, setUsage);
+        }
+      } finally {
+        // Mark streaming done either way — completion, cancellation, or error.
+        updateAssistant((m) => ({ ...m, streaming: false }));
+        setIsBusy(false);
+        currentAssistantId.current = null;
+      }
+    },
+    [session, isBusy]
+  );
+
+  const cancel = useCallback(() => session.cancel(), [session]);
+
+  return { messages, isBusy, usage, send, cancel };
+}
+
+function applyEvent(
+  event: AgentEvent,
+  update: (fn: (m: DisplayMessage) => DisplayMessage) => void,
+  setUsage: React.Dispatch<React.SetStateAction<UsageTotals>>
+): void {
+  switch (event.type) {
+    case "text_delta":
+      update((m) => ({ ...m, text: m.text + event.text }));
+      break;
+    case "tool_started":
+      update((m) => ({
+        ...m,
+        toolCalls: [
+          ...m.toolCalls,
+          { id: event.id, name: event.name, input: event.input, status: "running" },
+        ],
+      }));
+      break;
+    case "tool_finished":
+      update((m) => ({
+        ...m,
+        toolCalls: m.toolCalls.map((t) =>
+          t.id === event.id
+            ? {
+                ...t,
+                status: (event.result.isError ? "error" : "done") as DisplayToolCall["status"],
+                summary: event.result.summary,
+              }
+            : t
+        ),
+      }));
+      break;
+    case "tool_permission_denied":
+      update((m) => ({
+        ...m,
+        toolCalls: m.toolCalls.map((t) =>
+          t.id === event.id ? { ...t, status: "error", summary: "Denied" } : t
+        ),
+      }));
+      break;
+    case "usage":
+      // Session-wide running total for the StatusBar
+      setUsage((prev) => ({
+        inputTokens: prev.inputTokens + event.inputTokens,
+        outputTokens: prev.outputTokens + event.outputTokens,
+      }));
+      break;
+    case "error":
+      update((m) => ({ ...m, text: m.text + `\n[error: ${event.message}]` }));
+      break;
+    // "turn_complete", "cancelled" — no per-message change; the for-await loop
+    // ending triggers the finally block that flips streaming/isBusy.
+  }
+}
