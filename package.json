@@ -1,0 +1,16 @@
+{
+  "name": "anvil",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "build": "npm run build -w @anvil/core && npm run build -w @anvil/tui && npm run build -w @anvil/cli",
+    "dev": "npm run dev --workspace=packages/cli",
+    "typecheck": "npm run typecheck -w @anvil/core && npm run typecheck -w @anvil/tui && npm run typecheck -w @anvil/cli",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "@types/node": "^22.10.2"
+  },
+  "engines": { "node": ">=20" }
+}
