@@ -38,6 +38,12 @@ The first time you run `anvil` (or any time via `anvil config`), you'll be asked
 provider and paste an API key — it's saved to `~/.anvil/credentials.json` (mode 0600) and you
 drop straight into a chat, no restart needed.
 
+You can re-run this onboarding flow any time **from inside the app** with `/connect` — pick
+a provider, paste (or replace) its API key, and Anvil registers it live. If you connect the
+provider you're already chatting with, the active session hot-swaps onto the new key
+(history is preserved, no restart). If it's a different provider, Anvil offers `/model` to
+switch to it.
+
 ## Usage
 
 ```
