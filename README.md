@@ -56,6 +56,9 @@ it never silently falls back to another provider.
 
 ### Slash commands
 
+Type `/` and a **command menu appears automatically** — arrow through it, Enter to run, Tab to
+fill. Or type the command directly:
+
 | Command | Effect |
 |---|---|
 | `/help` | list commands |
@@ -68,7 +71,7 @@ it never silently falls back to another provider.
 | `/session rename <title>` | rename the current session |
 
 Keys: **Esc** or **Ctrl+C** cancels a streaming turn; **Ctrl+C** while idle exits; **Up/Down** in
-an empty input recalls messages you sent this session.
+an empty input recalls messages you sent this session; typing **/** opens the command menu.
 
 ## Safety notes
 

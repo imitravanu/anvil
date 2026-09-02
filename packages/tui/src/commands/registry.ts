@@ -14,8 +14,7 @@ export const COMMANDS: Command[] = [
     name: "clear",
     description: "Clear the conversation history",
     run: (_args, ctx) => {
-      ctx.clearHistory();
-      ctx.printSystemMessage("Conversation cleared.");
+      ctx.clearHistory(); // prints its own confirmation (may mention resuming)
     },
   },
   {
