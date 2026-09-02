@@ -158,6 +158,29 @@ describe("AgentSession.send", () => {
     ]);
   });
 
+  it("rejects a concurrent send without mutating the active conversation", async () => {
+    const { session } = makeSession([
+      (request) =>
+        stalledStream(request.signal ?? new AbortController().signal, {
+          type: "text_delta",
+          text: "partial",
+        }),
+    ]);
+    const active = session.send("first");
+    await active.next();
+
+    const concurrent = await collect(session.send("second"));
+    expect(concurrent).toEqual([
+      { type: "error", message: "A turn is already in progress for this session." },
+    ]);
+    expect(session.getHistory()).toEqual([
+      { role: "user", content: [{ type: "text", text: "first" }] },
+    ]);
+
+    session.cancel();
+    await active.next();
+  });
+
   it("feeds an unknown tool name back to the model as an error result", async () => {
     const { provider, session } = makeSession([
       [

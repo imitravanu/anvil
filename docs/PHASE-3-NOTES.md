@@ -1,4 +1,8 @@
-# Phase 3 Notes — READ BEFORE USE
+# Phase 3 Notes — Superseded
+
+> **Superseded by Phase 4 and later.** This historical document describes the Phase 3
+> prototype only. Current Anvil uses interactive permission prompts; do not rely on the
+> behaviour described below for present-day safety guidance.
 
 ## ⚠️ Permission prompts are NOT implemented yet
 

@@ -1,6 +1,11 @@
 {
   "name": "@anvil/core",
   "version": "0.1.0",
+  "description": "Core agent loop, provider adapters, sessions, and tools for Anvil.",
+  "author": "mitravanu",
+  "license": "MIT",
+  "keywords": ["ai", "coding-agent", "agent", "providers"],
+  "files": ["dist"],
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

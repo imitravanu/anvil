@@ -13,7 +13,8 @@ export async function compactIfNeeded(
   contextWindow: number,
   latestInputTokens: number,
   provider: ModelProvider,
-  model: string
+  model: string,
+  signal?: AbortSignal
 ): Promise<{ history: ConversationMessage[]; result: CompactionResult }> {
   if (latestInputTokens < contextWindow * COMPACTION_THRESHOLD) {
     return { history, result: { compacted: false } };
@@ -28,7 +29,7 @@ export async function compactIfNeeded(
   const toSummarize = history.slice(0, history.length - KEEP_RECENT_MESSAGES);
   const recent = history.slice(history.length - KEEP_RECENT_MESSAGES);
 
-  const summaryText = await summarizeMessages(toSummarize, provider, model);
+  const summaryText = await summarizeMessages(toSummarize, provider, model, signal);
 
   const summaryMessage: ConversationMessage = {
     role: "user",
@@ -49,7 +50,8 @@ export async function compactIfNeeded(
 async function summarizeMessages(
   messages: ConversationMessage[],
   provider: ModelProvider,
-  model: string
+  model: string,
+  signal?: AbortSignal
 ): Promise<string> {
   // One non-streaming-in-spirit call (still uses streamCompletion, just collects all
   // text_delta events into one string) asking the model to summarize `messages` concisely,
@@ -65,6 +67,7 @@ async function summarizeMessages(
     messages,
     tools: [],
     maxTokens: 1024,
+    signal,
   });
   for await (const event of stream) {
     if (event.type === "text_delta") text += event.text;

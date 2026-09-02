@@ -8,6 +8,7 @@ import {
   AgentSession,
   loadCredentials,
   loadSettings,
+  ProviderSelectionError,
   resolveProviderSelection,
 } from "@anvil/core";
 import { App, FirstRunSetup, TuiPermissionBroker } from "@anvil/tui";
@@ -54,21 +55,39 @@ function crash(err: unknown): never {
   process.exit(1);
 }
 process.on("uncaughtException", crash);
-process.on("unhandledRejection", crash);
+// An aborted stream can reject after its consumer has stopped listening. Report
+// that diagnostic, but do not forcibly tear down Ink (and leave raw mode broken).
+process.on("unhandledRejection", (reason) => {
+  process.stderr.write(
+    "Anvil observed an unhandled promise rejection:\n" +
+      (reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)) +
+      "\n"
+  );
+  process.exitCode = 1;
+});
 
 function bootChat(): void {
   const creds = loadCredentials();
   const settings = loadSettings();
   const flags = parseFlags(process.argv.slice(2));
 
-  const selection = resolveProviderSelection({
-    flagProvider: flags.provider,
-    flagModel: flags.model,
-    envProvider: process.env.ANVIL_PROVIDER,
-    envModel: process.env.ANVIL_MODEL,
-    settings,
-    creds,
-  });
+  let selection;
+  try {
+    selection = resolveProviderSelection({
+      flagProvider: flags.provider,
+      flagModel: flags.model,
+      envProvider: process.env.ANVIL_PROVIDER,
+      envModel: process.env.ANVIL_MODEL,
+      settings,
+      creds,
+    });
+  } catch (err) {
+    if (err instanceof ProviderSelectionError) {
+      console.error(err.message);
+      process.exit(1);
+    }
+    throw err;
+  }
   if (!selection) {
     console.error("No provider is configured. Run `anvil config` to add an API key.");
     process.exit(1);
@@ -111,7 +130,8 @@ function bootChat(): void {
         maxTokens: 8192,
         projectRoot: process.cwd(),
       }}
-    />
+    />,
+    { exitOnCtrlC: false }
   );
 }
 
@@ -128,7 +148,8 @@ function runSetup(thenChat: boolean): void {
         instance?.unmount();
         if (thenChat) bootChat();
       }}
-    />
+    />,
+    { exitOnCtrlC: false }
   );
 }
 

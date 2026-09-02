@@ -22,8 +22,10 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: Input
       return;
     }
     // Ctrl+C: cancel while a turn is streaming (never kills the app mid-turn);
-    // exit cleanly while idle.
-    if (key.ctrl && _input === "c") {
+    // exit cleanly while idle. Ink delivers Ctrl+C as "c" with key.ctrl set
+    // (use-input.js maps ctrl keys to keypress.name); accept the raw \x03 byte
+    // too, in case a future Ink version changes that mapping.
+    if (key.ctrl && (_input === "c" || _input === "\x03")) {
       if (isBusy) {
         onCancel();
         return;
@@ -31,9 +33,9 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: Input
       exit();
       return;
     }
-    // History recall: only from an empty input, cycling newest → oldest on Up
-    // and back on Down. In-memory, this session only.
-    if (sentHistory.length > 0 && value === "") {
+    // History recall starts from an empty input and continues while a history
+    // entry is selected, cycling newest → oldest on Up and back on Down.
+    if (sentHistory.length > 0 && (value === "" || historyIndex.current !== -1)) {
       if (key.upArrow) {
         historyIndex.current =
           historyIndex.current === -1
@@ -57,13 +59,19 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: Input
       <Text color={theme.colors.primary}>{"> "}</Text>
       <TextInput
         value={value}
-        onChange={setValue}
+        onChange={(nextValue) => {
+          // Typing after recall starts a new draft; Up/Down then starts again
+          // from the newest sent message instead of overwriting the draft.
+          if (nextValue !== value) historyIndex.current = -1;
+          setValue(nextValue);
+        }}
         placeholder={isBusy ? "working… (Esc to cancel)" : "Type a message"}
         onSubmit={(text) => {
           const trimmed = text.trim();
           if (!trimmed || isBusy) return; // ignore input while a turn is in flight
           onSubmit(trimmed);
           setValue("");
+          historyIndex.current = -1;
         }}
       />
     </Box>

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 
 const MAX_STREAM_BYTES = 20 * 1024; // per stream, same cap as the prototype
+export const RUN_COMMAND_TIMEOUT_MS = 120_000;
 
 interface CapturedStream {
   text: string;
@@ -58,11 +59,16 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
     // detached: true puts the child in its own process group, which is what
     // makes process.kill(-pid) below kill the entire command tree (bash -c
     // wrappers mean the interesting process is often a grandchild).
-    const child = spawn("bash", ["-c", command], { cwd: ctx.projectRoot, detached: true });
+    const child = spawn("bash", ["-c", command], {
+      cwd: ctx.projectRoot,
+      detached: true,
+      // Commands do not need Anvil's credentials or arbitrary parent environment.
+      env: { PATH: process.env.PATH ?? "/usr/bin:/bin", LANG: process.env.LANG ?? "C.UTF-8" },
+    });
     const stdout = captureStream(child.stdout);
     const stderr = captureStream(child.stderr);
 
-    const onAbort = () => {
+    const killTree = () => {
       // Kill the whole tree — bash -c wrappers mean the interesting process is
       // often a grandchild; killing bash alone can leave it running.
       try {
@@ -71,11 +77,18 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
         child.kill("SIGKILL");
       }
     };
+    let timedOut = false;
+    const onAbort = () => killTree();
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      killTree();
+    }, RUN_COMMAND_TIMEOUT_MS);
     if (ctx.signal.aborted) onAbort();
     ctx.signal.addEventListener("abort", onAbort, { once: true });
 
     child.on("error", (err) => {
       ctx.signal.removeEventListener("abort", onAbort);
+      clearTimeout(timeout);
       stdout.stop();
       stderr.stop();
       resolve({
@@ -87,22 +100,28 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
 
     child.on("close", (code, signalName) => {
       ctx.signal.removeEventListener("abort", onAbort);
+      clearTimeout(timeout);
       stdout.stop();
       stderr.stop();
-      const aborted = ctx.signal.aborted || signalName != null;
+      const aborted = ctx.signal.aborted;
       resolve({
         output: {
           command,
           exitCode: code,
           killedBySignal: signalName,
           aborted,
+          timedOut,
           stdout: stdout.text,
           stderr: stderr.text,
           stdoutTruncated: stdout.truncated,
           stderrTruncated: stderr.truncated,
         },
-        isError: aborted || (code ?? 1) !== 0,
-        summary: aborted ? `Cancelled: ${command}` : `Ran: ${command} (exit ${code})`,
+        isError: aborted || timedOut || (code ?? 1) !== 0,
+        summary: aborted
+          ? `Cancelled: ${command}`
+          : timedOut
+            ? `Timed out after ${RUN_COMMAND_TIMEOUT_MS}ms: ${command}`
+            : `Ran: ${command} (exit ${code})`,
       });
     });
   });

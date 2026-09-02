@@ -1,6 +1,11 @@
 {
   "name": "@anvil/tui",
   "version": "0.1.0",
+  "description": "Ink terminal UI for the Anvil coding agent.",
+  "author": "mitravanu",
+  "license": "MIT",
+  "keywords": ["ai", "coding-agent", "terminal", "ink", "tui"],
+  "files": ["dist"],
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

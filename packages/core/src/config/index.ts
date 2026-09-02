@@ -68,6 +68,13 @@ export interface ProviderSelection {
   model: string;
 }
 
+export class ProviderSelectionError extends Error {
+  constructor(providerId: string) {
+    super(`Requested provider "${providerId}" is not configured. Add its API key with \`anvil config\` or choose a configured provider.`);
+    this.name = "ProviderSelectionError";
+  }
+}
+
 /**
  * Resolve which provider/model to boot with. Precedence (highest first):
  * CLI flag → env var → settings.json → first configured provider in
@@ -86,7 +93,10 @@ export function resolveProviderSelection(input: SelectionInput): ProviderSelecti
   const modelRaw = input.flagModel ?? input.envModel ?? input.settings?.defaultModel;
 
   let providerId: ProviderId | undefined;
-  if (providerRaw && configured.includes(providerRaw as ProviderId)) {
+  if (providerRaw) {
+    if (!configured.includes(providerRaw as ProviderId)) {
+      throw new ProviderSelectionError(providerRaw);
+    }
     providerId = providerRaw as ProviderId;
   } else {
     providerId = configured[0]; // hardcoded fallback: first configured provider

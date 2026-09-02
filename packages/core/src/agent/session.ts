@@ -21,6 +21,7 @@ export interface RestoreData {
 export class AgentSession {
   private history: ConversationMessage[] = [];
   private currentController: AbortController | null = null;
+  private isSending = false;
   private provider: ModelProvider;
   private options: AgentOptions;
   // The previous turn's input token count — compaction uses it reactively
@@ -89,6 +90,11 @@ export class AgentSession {
   }
 
   async *send(userText: string): AsyncGenerator<AgentEvent> {
+    if (this.isSending) {
+      yield { type: "error", message: "A turn is already in progress for this session." };
+      return;
+    }
+    this.isSending = true;
     this.history.push({ role: "user", content: [{ type: "text", text: userText }] });
     // Set a default title from the first user message so sessions aren't stuck
     // as "Untitled" without extra wiring.
@@ -115,7 +121,8 @@ export class AgentSession {
             modelInfo.contextWindow,
             this.lastInputTokens,
             this.provider,
-            this.options.model
+            this.options.model,
+            controller.signal
           );
           if (result.compacted) {
             this.history = compacted;
@@ -299,7 +306,8 @@ export class AgentSession {
       }
       yield { type: "error", message: err?.message ?? String(err) };
     } finally {
-      this.currentController = null;
+      if (this.currentController === controller) this.currentController = null;
+      this.isSending = false;
     }
   }
 }

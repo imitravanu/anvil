@@ -3,6 +3,8 @@ import path from "node:path";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 import { resolveWithinRoot } from "./paths.js";
 
+export const MAX_WRITE_BYTES = 512 * 1024;
+
 export const definition: ToolDefinition = {
   name: "write_file",
   description:
@@ -21,6 +23,14 @@ export const definition: ToolDefinition = {
 
 export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   const { path: relPath, content } = input as { path: string; content: string };
+  const bytes = Buffer.byteLength(content, "utf8");
+  if (bytes > MAX_WRITE_BYTES) {
+    return {
+      output: { error: `Content exceeds the ${MAX_WRITE_BYTES}-byte write limit.` },
+      isError: true,
+      summary: `write_file failed: content exceeds ${MAX_WRITE_BYTES} bytes`,
+    };
+  }
   const abs = resolveWithinRoot(ctx.projectRoot, relPath);
   let existed = false;
   let prevBytes = 0;
@@ -33,7 +43,6 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   await fs.mkdir(path.dirname(abs), { recursive: true });
   if (ctx.signal.aborted) throw new Error("Aborted before writing");
   await fs.writeFile(abs, content, "utf8");
-  const bytes = Buffer.byteLength(content, "utf8");
   return {
     output: { path: relPath, bytes, overwrote: existed },
     isError: false,

@@ -45,4 +45,15 @@ describe("write_file", () => {
     expect(result.isError).toBe(true);
     expect((result.output as { error: string }).error).toMatch(/escapes project root/);
   });
+
+  it("refuses content larger than the read-side safety limit", async () => {
+    const result = await executeTool(
+      "write_file",
+      { path: "too-large.txt", content: "x".repeat(writeFileTool.MAX_WRITE_BYTES + 1) },
+      ctx
+    );
+    expect(result.isError).toBe(true);
+    expect(result.summary).toContain("exceeds");
+    await expect(fs.access(path.join(root, "too-large.txt"))).rejects.toThrow();
+  });
 });

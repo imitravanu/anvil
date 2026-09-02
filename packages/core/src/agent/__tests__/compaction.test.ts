@@ -60,6 +60,18 @@ describe("compactIfNeeded", () => {
     expect(provider.calls[0].tools).toEqual([]);
   });
 
+  it("passes cancellation through to the summarization request", async () => {
+    const provider = new FakeProvider([
+      [
+        { type: "text_delta", text: "Summary" },
+        { type: "turn_end", stopReason: "end_turn" },
+      ],
+    ]);
+    const controller = new AbortController();
+    await compactIfNeeded(makeHistory(10), 1000, 990, provider, model, controller.signal);
+    expect(provider.calls[0].signal).toBe(controller.signal);
+  });
+
   it("above threshold but too little history to safely summarize: compacted: false", async () => {
     const provider = new FakeProvider([]); // must never be called
     const history = makeHistory(KEEP_RECENT_MESSAGES); // exactly the keep-limit

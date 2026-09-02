@@ -106,7 +106,7 @@ export function App({
     printSystemMessage(`Theme set to ${name}.`);
   };
 
-  /** Auto-save: called after every completed/cancelled turn and after /clear. */
+  /** Auto-save after every completed or cancelled turn. */
   const persist = useCallback(() => {
     try {
       saveSession(session.toStoredSession(activeProviderId, currentModel));
@@ -140,11 +140,28 @@ export function App({
       const command = COMMANDS.find((c) => c.name === parsed.name);
       const ctx: CommandContext = {
         clearHistory: () => {
-          session.clearHistory();
+          if (isBusy) {
+            printSystemMessage("Cannot clear the conversation while a turn is in flight.");
+            return;
+          }
+          // Keep the old session file intact so /clear is recoverable via
+          // /session resume, and give the cleared conversation a new session id.
+          const fresh = new AgentSession(providers[activeProviderId], {
+            ...sessionOptions,
+            model: currentModel,
+            permissionBroker: broker,
+          });
+          setSession(fresh);
           clearMessages();
-          persist(); // keep the stored file in sync with the cleared history
+          printSystemMessage("Conversation cleared. The previous session can be resumed with /session.");
         },
-        openModelPicker: () => setIsModelPickerOpen(true),
+        openModelPicker: () => {
+          if (isBusy) {
+            printSystemMessage("Cannot switch models while a turn is in flight.");
+            return;
+          }
+          setIsModelPickerOpen(true);
+        },
         printSystemMessage,
         sessionList: () => {
           const metas = listSessions();

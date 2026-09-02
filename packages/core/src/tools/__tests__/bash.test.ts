@@ -62,4 +62,11 @@ describe("run_command", () => {
     const result = await executeTool("run_command", { command: "pwd" }, ctx);
     expect((result.output as { stdout: string }).stdout.trim()).toBe(root);
   });
+
+  it("does not expose arbitrary parent environment variables to commands", async () => {
+    process.env.ANVIL_TEST_SECRET = "should-not-leak";
+    const result = await executeTool("run_command", { command: "printf '%s' \"$ANVIL_TEST_SECRET\"" }, ctx);
+    expect((result.output as { stdout: string }).stdout).toBe("");
+    delete process.env.ANVIL_TEST_SECRET;
+  });
 });

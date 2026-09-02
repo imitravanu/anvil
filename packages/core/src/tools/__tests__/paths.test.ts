@@ -1,8 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { PathEscapeError, resolveWithinRoot } from "../paths.js";
 
 const ROOT = path.resolve("/tmp/anvil-project");
+let symlinkRoot: string;
+let outside: string;
+
+beforeAll(async () => {
+  symlinkRoot = await fs.mkdtemp(path.join(os.tmpdir(), "anvil-paths-"));
+  outside = await fs.mkdtemp(path.join(os.tmpdir(), "anvil-outside-"));
+  await fs.symlink(outside, path.join(symlinkRoot, "escape"));
+});
+afterAll(() => fs.rm(symlinkRoot, { recursive: true, force: true }));
+afterAll(() => fs.rm(outside, { recursive: true, force: true }));
 
 describe("resolveWithinRoot", () => {
   it.each([
@@ -30,5 +42,9 @@ describe("resolveWithinRoot", () => {
 
   it("resolving the root itself is allowed", () => {
     expect(resolveWithinRoot(ROOT, ".")).toBe(ROOT);
+  });
+
+  it("rejects paths through symlinks that point outside the project", () => {
+    expect(() => resolveWithinRoot(symlinkRoot, "escape/secret.txt")).toThrow(PathEscapeError);
   });
 });

@@ -30,7 +30,7 @@ npm install -g ./anvil-cli-0.1.0.tgz
 cd ~/my-project && anvil
 ```
 
-Publishing to npm is a future option; the packed tarball is fully self-contained.
+The packages are prepared for npm publishing; inspect `npm pack --dry-run` before a release.
 
 ## First-run setup
 
@@ -51,13 +51,15 @@ ANVIL_PROVIDER=anthropic ANVIL_MODEL=claude-sonnet-5 anvil
 ```
 
 Selection precedence: CLI flag → env var → `~/.anvil/settings.json` → first configured provider.
+An explicitly selected provider that has no configured API key fails with an actionable error;
+it never silently falls back to another provider.
 
 ### Slash commands
 
 | Command | Effect |
 |---|---|
 | `/help` | list commands |
-| `/clear` | clear model history and the transcript |
+| `/clear` | start a fresh transcript; the prior saved session remains resumable |
 | `/model` | open the model/provider picker (cross-provider switches clear history) |
 | `/theme <name>` | switch theme (`dark`, `light`, `highContrast`); persisted |
 | `/session list` | list saved sessions |
@@ -70,8 +72,10 @@ an empty input recalls messages you sent this session.
 
 ## Safety notes
 
-- All file tools are contained to the directory Anvil was started in (lexical path checks;
-  symlinks are not resolved).
+- All file tools are contained to the directory Anvil was started in, including symlink-aware
+  checks on the deepest existing path component.
+- Reads and writes are capped at 512 KiB. Shell-command output is capped at about 20 KiB per
+  stream and commands are terminated after two minutes.
 - "Always allow" permission grants are in-memory, per session — never persisted, never restored
   on `/session resume`.
 - Compaction is reactive (based on the previous turn's token usage); a single enormous message

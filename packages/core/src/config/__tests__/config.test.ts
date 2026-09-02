@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveProviderSelection } from "../index.js";
+import { ProviderSelectionError, resolveProviderSelection } from "../index.js";
 import type { ProviderCredentials } from "../../providers/index.js";
 
 const geminiOnly: ProviderCredentials = { geminiApiKey: "g-key" };
@@ -46,5 +46,14 @@ describe("resolveProviderSelection", () => {
 
   it("returns null when nothing is configured", () => {
     expect(resolveProviderSelection({ creds: {} })).toBeNull();
+  });
+
+  it("rejects an explicitly selected provider that is not configured", () => {
+    expect(() =>
+      resolveProviderSelection({ flagProvider: "anthropic", creds: geminiOnly })
+    ).toThrow(ProviderSelectionError);
+    expect(() =>
+      resolveProviderSelection({ envProvider: "not-a-provider", creds: geminiOnly })
+    ).toThrow(/not configured/);
   });
 });
