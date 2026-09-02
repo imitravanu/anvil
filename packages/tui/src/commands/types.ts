@@ -9,6 +9,8 @@ export interface CommandContext {
   sessionRename: (title: string) => void;
   // /theme (Phase 6): switch + persist; handler validates the name
   setTheme: (name: string) => void;
+  // /connect: open the provider-key setup overlay (add/update a key in-app)
+  openConnect: () => void;
 }
 
 export interface Command {

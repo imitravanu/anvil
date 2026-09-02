@@ -55,6 +55,11 @@ export const COMMANDS: Command[] = [
     },
   },
   {
+    name: "connect",
+    description: "Add or update a provider API key",
+    run: (_args, ctx) => ctx.openConnect(),
+  },
+  {
     name: "theme",
     description: `Switch theme (${Object.keys(THEMES).join(" | ")})`,
     run: (args, ctx) => {

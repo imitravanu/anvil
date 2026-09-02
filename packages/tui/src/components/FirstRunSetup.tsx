@@ -13,10 +13,17 @@ const PROVIDERS: { id: ProviderId; label: string; field: keyof ProviderCredentia
 ];
 
 /**
- * First-run onboarding: pick a provider, paste an API key (masked), save it.
- * Used both for the very first run (no credentials at all) and `anvil config`.
+ * Provider connect/onboarding flow: pick a provider, paste an API key
+ * (masked), save it. Used for first-run onboarding, `anvil config`, and the
+ * in-app `/connect` command (where it renders as an overlay).
  */
-export function FirstRunSetup({ onDone }: { onDone: (providerId: ProviderId) => void }) {
+export function FirstRunSetup({
+  onDone,
+  title = "Welcome to Anvil. Configure at least one provider's API key to start.",
+}: {
+  onDone: (providerId: ProviderId) => void;
+  title?: string;
+}) {
   const theme = useTheme();
   const [selected, setSelected] = useState(0);
   const [apiKey, setApiKey] = useState("");
@@ -36,9 +43,7 @@ export function FirstRunSetup({ onDone }: { onDone: (providerId: ProviderId) => 
   if (step === "provider") {
     return (
       <Box flexDirection="column" paddingX={1}>
-        <Text color={theme.colors.primary}>
-          Welcome to Anvil. Configure at least one provider's API key to start.
-        </Text>
+        <Text color={theme.colors.primary}>{title}</Text>
         <Text dimColor>↑/↓ to choose a provider, Enter to continue:</Text>
         {PROVIDERS.map((p, i) => (
           <Text key={p.id} color={i === selected ? theme.colors.primary : undefined}>

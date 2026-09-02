@@ -63,6 +63,7 @@ fill. Or type the command directly:
 |---|---|
 | `/help` | list commands |
 | `/clear` | start a fresh transcript; the prior saved session remains resumable |
+| `/connect` | add or update a provider API key right inside the app (no restart) |
 | `/model` | open the model/provider picker (cross-provider switches clear history) |
 | `/theme <name>` | switch theme (`dark`, `light`, `highContrast`); persisted |
 | `/session list` | list saved sessions |

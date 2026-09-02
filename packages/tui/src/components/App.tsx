@@ -2,18 +2,20 @@ import { useCallback, useState } from "react";
 import { Box, useStdout } from "ink";
 import {
   AgentSession,
+  createProviders,
+  loadCredentials,
+  loadSettings,
+  loadSession,
+  listSessions,
+  renameSession,
+  saveSession,
+  saveSettings,
   type AgentOptions,
   type ConversationMessage,
   type ModelInfo,
   type ModelProvider,
   type ProviderId,
   type StoredSession,
-  listSessions,
-  loadSession,
-  loadSettings,
-  renameSession,
-  saveSession,
-  saveSettings,
 } from "@anvil/core";
 import type { TuiPermissionBroker } from "../permission/TuiPermissionBroker.js";
 import { useAgentController, type DisplayMessage } from "../hooks/useAgentController.js";
@@ -27,8 +29,16 @@ import { InputBar } from "./InputBar.js";
 import { MessageList } from "./MessageList.js";
 import { ModelPicker } from "./ModelPicker.js";
 import { PermissionPrompt } from "./PermissionPrompt.js";
+import { FirstRunSetup } from "./FirstRunSetup.js";
 import { SessionPicker } from "./SessionPicker.js";
 import { StatusBar } from "./StatusBar.js";
+
+const PROVIDER_LABELS: Record<string, string> = {
+  anthropic: "Anthropic",
+  openai: "OpenAI",
+  gemini: "Google Gemini",
+  openrouter: "OpenRouter",
+};
 
 export interface AppProps {
   session: AgentSession;
@@ -65,13 +75,14 @@ function seedFromHistory(history: ConversationMessage[]): DisplayMessage[] {
 export function App({
   session: initialSession,
   broker,
-  providers,
+  providers: initialProviders,
   providerId: initialProviderId,
   model,
   sessionOptions,
   initialTheme = "dark",
 }: AppProps) {
   const [session, setSession] = useState(initialSession);
+  const [providers, setProviders] = useState(initialProviders);
   const [activeProviderId, setActiveProviderId] = useState<ProviderId>(initialProviderId);
   const [currentModel, setCurrentModel] = useState(model);
 
@@ -92,6 +103,7 @@ export function App({
   const pendingPermission = usePermissionBroker(broker);
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isSessionPickerOpen, setIsSessionPickerOpen] = useState(false);
+  const [isConnectOpen, setIsConnectOpen] = useState(false);
   const [themeName, setThemeName] = useState<ThemeName>(initialTheme);
 
   const applyTheme = (name: string) => {
@@ -210,6 +222,13 @@ export function App({
           printSystemMessage(`Session renamed to "${title}".`);
         },
         setTheme: applyTheme,
+        openConnect: () => {
+          if (isBusy) {
+            printSystemMessage("Cannot connect a provider while a turn is in flight.");
+            return;
+          }
+          setIsConnectOpen(true);
+        },
       };
       if (command) command.run(parsed.args, ctx);
       else printSystemMessage(`Unknown command: /${parsed.name}. Try /help.`);
@@ -245,6 +264,22 @@ export function App({
     resumeFromStored(stored);
   };
 
+  // /connect finished: refresh provider instances from the freshly-written key
+  // and hot-apply it if it belongs to the active provider (same provider id,
+  // so switchModel keeps history while swapping the underlying API key).
+  const handleConnectDone = (providerId: ProviderId) => {
+    const refreshed = createProviders(loadCredentials());
+    setProviders(refreshed);
+    setIsConnectOpen(false);
+    const label = PROVIDER_LABELS[providerId] ?? providerId;
+    if (providerId === activeProviderId) {
+      session.switchModel(refreshed[providerId], currentModel);
+      printSystemMessage(`✓ ${label} reconnected with the new key.`);
+    } else {
+      printSystemMessage(`✓ ${label} connected. Use /model to switch to it.`);
+    }
+  };
+
   return (
     <ThemeContext.Provider value={THEMES[themeName]}>
       <Box flexDirection="column" height={rows} width={stdout?.columns ?? 80}>
@@ -265,6 +300,11 @@ export function App({
           <SessionPicker
             onSelect={handleSessionPick}
             onClose={() => setIsSessionPickerOpen(false)}
+          />
+        ) : isConnectOpen ? (
+          <FirstRunSetup
+            title="Connect a provider — pick one, paste its API key, done."
+            onDone={handleConnectDone}
           />
         ) : (
           <InputBar

@@ -42,7 +42,7 @@ Environment:
   ANVIL_PROVIDER, ANVIL_MODEL — same as the flags, lower precedence
 
 Config lives in ~/.anvil (credentials.json, settings.json, sessions/).
-Slash commands inside the app: /help /clear /model /theme /session.
+Slash commands inside the app: /help /clear /connect /model /theme /session.
 `;
 
 // --- Startup crash guard: never leave the terminal in a broken raw-mode state. ---
