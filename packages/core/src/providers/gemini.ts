@@ -34,6 +34,30 @@ export function mapGeminiFinishReason(
   return "unknown";
 }
 
+/**
+ * Gemini error messages sometimes arrive as one or two layers of nested JSON
+ * (e.g. a 429 quota error whose message is itself a JSON blob). Unwrap to the
+ * human-readable message instead of dumping the whole object into the chat.
+ */
+export function geminiErrorMessage(err: unknown): string {
+  const fallback = err instanceof Error ? err.message : String(err);
+  const unwrap = (text: string): string | null => {
+    try {
+      const parsed = JSON.parse(text);
+      const msg = parsed?.error?.message;
+      return typeof msg === "string" ? msg : null;
+    } catch {
+      return null;
+    }
+  };
+  const direct = unwrap(fallback);
+  if (direct !== null) {
+    const deeper = unwrap(direct); // the outer message may itself be a JSON blob
+    return deeper ?? direct;
+  }
+  return fallback.length > 600 ? fallback.slice(0, 600) + "…" : fallback;
+}
+
 export async function* translateGeminiChunkStream(
   raw: AsyncIterable<RawGeminiChunk>
 ): AsyncGenerator<StreamEvent> {
@@ -78,7 +102,7 @@ export async function* translateGeminiChunkStream(
       if (candidate?.finishReason) finishReason = candidate.finishReason;
     }
   } catch (err) {
-    yield { type: "error", message: err instanceof Error ? err.message : String(err) };
+    yield { type: "error", message: geminiErrorMessage(err) };
     return;
   }
 
@@ -188,7 +212,7 @@ export function createGeminiProvider(apiKey: string | undefined): ModelProvider 
           stream as unknown as AsyncIterable<RawGeminiChunk>
         );
       } catch (err) {
-        yield { type: "error", message: err instanceof Error ? err.message : String(err) };
+        yield { type: "error", message: geminiErrorMessage(err) };
       }
     },
   };

@@ -26,20 +26,24 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsVision: true,
   },
   {
-    // Live-verified 2026-09: gemini-2.5-pro is no longer available to new
-    // users; the API recommends gemini-3.1-pro-preview (not free-tier eligible).
-    id: "gemini-3.1-pro-preview",
+    // Default Gemini model. Live-verified 2026-09 with a free-tier key:
+    // streams correctly. Kept first so the no-settings fallback picks a
+    // free-tier-eligible model rather than the pro-preview below.
+    id: "gemini-3.6-flash",
     providerId: "gemini",
-    displayName: "Gemini 3.1 Pro (preview)",
+    displayName: "Gemini 3.6 Flash",
     contextWindow: 1_000_000,
     supportsTools: true,
     supportsVision: true,
   },
   {
-    // Live-verified 2026-09 with a free-tier key: streams correctly.
-    id: "gemini-3.6-flash",
+    // Live-verified 2026-09: gemini-2.5-pro is no longer available to new
+    // users; the API recommends gemini-3.1-pro-preview. NOTE: not eligible
+    // for the free tier (free-tier quota is 0) — the registry ordering keeps
+    // it after gemini-3.6-flash so it is never the implicit default.
+    id: "gemini-3.1-pro-preview",
     providerId: "gemini",
-    displayName: "Gemini 3.6 Flash",
+    displayName: "Gemini 3.1 Pro (preview)",
     contextWindow: 1_000_000,
     supportsTools: true,
     supportsVision: true,

@@ -40,7 +40,7 @@ describe("resolveProviderSelection", () => {
     expect(sel).toEqual({ providerId: "anthropic", model: "claude-opus-5" });
     expect(resolveProviderSelection({ creds: geminiOnly })).toEqual({
       providerId: "gemini",
-      model: "gemini-3.1-pro-preview", // first gemini entry in MODEL_REGISTRY
+      model: "gemini-3.6-flash", // first gemini entry in MODEL_REGISTRY (free-tier eligible)
     });
   });
 
