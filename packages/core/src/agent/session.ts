@@ -27,6 +27,27 @@ export class AgentSession {
     this.currentController?.abort();
   }
 
+  /**
+   * Switch the active provider/model mid-session. A provider CHANGE clears
+   * history: providerMetadata on tool calls (e.g. Gemini thoughtSignature) is
+   * vendor-opaque and must never be replayed through a different adapter.
+   * A same-provider model change keeps history.
+   */
+  switchModel(provider: ModelProvider, model: string): { historyCleared: boolean } {
+    const providerChanged = provider.id !== this.provider.id;
+    this.provider = provider;
+    this.options = { ...this.options, model };
+    if (providerChanged) {
+      this.history = [];
+    }
+    return { historyCleared: providerChanged };
+  }
+
+  /** Wipe conversation history (the `/clear` command). */
+  clearHistory(): void {
+    this.history = [];
+  }
+
   async *send(userText: string): AsyncGenerator<AgentEvent> {
     this.history.push({ role: "user", content: [{ type: "text", text: userText }] });
     // A fresh controller per send() call — cancelling one turn must not poison the next.

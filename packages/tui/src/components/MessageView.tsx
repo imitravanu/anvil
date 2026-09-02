@@ -13,6 +13,16 @@ export function MessageView({ message }: { message: DisplayMessage }) {
     );
   }
 
+  if (message.role === "system") {
+    return (
+      <Box flexDirection="column" marginBottom={0}>
+        <Text dimColor italic>
+          {message.text}
+        </Text>
+      </Box>
+    );
+  }
+
   // Two-pass rendering: plain (but colored) text while streaming; once the
   // turn settles, re-render once with fenced code blocks syntax-highlighted.
   // The highlighted form is rendered WITHOUT an outer color so the

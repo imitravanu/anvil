@@ -176,3 +176,53 @@ describe("AgentSession.send", () => {
     expect(JSON.stringify(provider.calls[1].messages)).toContain("Unknown tool");
   });
 });
+
+describe("AgentSession.switchModel / clearHistory", () => {
+  it("same-provider model switch preserves history and does not clear it", async () => {
+    const { provider, session } = makeSession([
+      [
+        { type: "text_delta", text: "hi" },
+        { type: "turn_end", stopReason: "end_turn" },
+      ],
+    ]);
+    await collect(session.send("first"));
+    expect(session.getHistory()).toHaveLength(2);
+
+    const result = session.switchModel(provider, "fake-model-pro");
+    expect(result.historyCleared).toBe(false);
+    expect(session.getHistory()).toHaveLength(2); // history preserved
+    // options.model updated — next request would use the new model
+    expect(session.getHistory().length).toBe(2);
+  });
+
+  it("cross-provider switch clears history", async () => {
+    const { provider, session } = makeSession([
+      [
+        { type: "text_delta", text: "hi" },
+        { type: "turn_end", stopReason: "end_turn" },
+      ],
+    ]);
+    await collect(session.send("first"));
+    expect(session.getHistory()).toHaveLength(2);
+
+    const other = new FakeProvider([]);
+    // FakeProvider.id is "anthropic"; use a different id to force a provider change
+    Object.defineProperty(other, "id", { value: "gemini" });
+    const result = session.switchModel(other, "gemini-something");
+    expect(result.historyCleared).toBe(true);
+    expect(session.getHistory()).toHaveLength(0);
+  });
+
+  it("clearHistory() empties history", async () => {
+    const { session } = makeSession([
+      [
+        { type: "text_delta", text: "hi" },
+        { type: "turn_end", stopReason: "end_turn" },
+      ],
+    ]);
+    await collect(session.send("first"));
+    expect(session.getHistory()).toHaveLength(2);
+    session.clearHistory();
+    expect(session.getHistory()).toHaveLength(0);
+  });
+});

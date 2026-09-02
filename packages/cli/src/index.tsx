@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import React from "react";
 import { render } from "ink";
-import { loadCredentials, createProviders, AgentSession, AUTO_APPROVE_BROKER } from "@anvil/core";
-import { App } from "@anvil/tui";
+import { loadCredentials, createProviders, AgentSession } from "@anvil/core";
+import { App, TuiPermissionBroker } from "@anvil/tui";
 
 const creds = loadCredentials();
 const providers = createProviders(creds);
+const broker = new TuiPermissionBroker();
 
 // Interactive TUI requires a real terminal (raw-mode keyboard input).
 if (!process.stdin.isTTY) {
@@ -13,7 +14,7 @@ if (!process.stdin.isTTY) {
   process.exit(1);
 }
 
-// Phase 3 default selection — Phase 4 replaces this with a real picker.
+// Initial selection — change models mid-session with /model.
 const providerId = process.env.ANVIL_PROVIDER || "gemini";
 const model = process.env.ANVIL_MODEL || "gemini-3.6-flash";
 const provider = providers[providerId as keyof typeof providers];
@@ -28,7 +29,7 @@ const session = new AgentSession(provider, {
   model,
   maxTokens: 8192,
   projectRoot: process.cwd(),
-  permissionBroker: AUTO_APPROVE_BROKER, // Phase 4 replaces this with an interactive broker
+  permissionBroker: broker, // interactive permission prompts (Phase 4)
 });
 
-render(<App session={session} model={model} />);
+render(<App session={session} broker={broker} providers={providers} model={model} />);

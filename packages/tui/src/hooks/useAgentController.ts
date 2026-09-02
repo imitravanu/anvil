@@ -12,7 +12,7 @@ export interface DisplayToolCall {
 
 export interface DisplayMessage {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   text: string; // accumulated so far; may still be mid-stream
   streaming: boolean;
   toolCalls: DisplayToolCall[];
@@ -72,7 +72,20 @@ export function useAgentController(session: AgentSession) {
 
   const cancel = useCallback(() => session.cancel(), [session]);
 
-  return { messages, isBusy, usage, send, cancel };
+  /** Append a system notice to the transcript — never sent to the model. */
+  const printSystemMessage = useCallback((text: string) => {
+    setMessages((prev) => [
+      ...prev,
+      { id: randomUUID(), role: "system" as const, text, streaming: false, toolCalls: [] },
+    ]);
+  }, []);
+
+  /** Clear the visible transcript (pairs with session.clearHistory() for /clear). */
+  const clearMessages = useCallback(() => {
+    setMessages([]);
+  }, []);
+
+  return { messages, isBusy, usage, send, cancel, printSystemMessage, clearMessages };
 }
 
 function applyEvent(
