@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 import type { DisplayToolCall } from "../hooks/useAgentController.js";
-import { theme } from "../theme/theme.js";
+import { useTheme } from "../theme/theme.js";
 
 function oneLine(text: string, max = 60): string {
   const first = text.split("\n")[0] ?? "";
@@ -13,6 +13,7 @@ function describeCall(call: DisplayToolCall): string {
 }
 
 export function ToolCallView({ call }: { call: DisplayToolCall }) {
+  const theme = useTheme();
   const symbol =
     call.status === "running" ? "⋯" : call.status === "done" ? "✓" : "✗";
   const color =

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { listSessions } from "@anvil/core";
-import { theme } from "../theme/theme.js";
+import { useTheme } from "../theme/theme.js";
 
 function relativeTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -24,6 +24,7 @@ export function SessionPicker({
   onSelect: (id: string) => void;
   onClose: () => void;
 }) {
+  const theme = useTheme();
   const sessions = listSessions(); // already sorted most-recent-first
   const [selected, setSelected] = useState(0);
 

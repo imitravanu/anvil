@@ -10,12 +10,16 @@ import {
   type StoredSession,
   listSessions,
   loadSession,
+  loadSettings,
   renameSession,
   saveSession,
+  saveSettings,
 } from "@anvil/core";
 import type { TuiPermissionBroker } from "../permission/TuiPermissionBroker.js";
 import { useAgentController, type DisplayMessage } from "../hooks/useAgentController.js";
 import { usePermissionBroker } from "../hooks/usePermissionBroker.js";
+import { ThemeContext } from "../theme/theme.js";
+import { THEMES, isThemeName, type ThemeName } from "../theme/themes.js";
 import { COMMANDS, parseCommand } from "../commands/registry.js";
 import type { CommandContext } from "../commands/types.js";
 import { Header } from "./Header.js";
@@ -34,6 +38,8 @@ export interface AppProps {
   model: string;
   // Options for constructing replacement sessions (/session new, resume).
   sessionOptions: Omit<AgentOptions, "permissionBroker" | "model">;
+  // Theme name from settings.json, validated by the caller (default dark).
+  initialTheme?: ThemeName;
 }
 
 /** Build display messages from a stored history (text parts only). */
@@ -63,6 +69,7 @@ export function App({
   providerId: initialProviderId,
   model,
   sessionOptions,
+  initialTheme = "dark",
 }: AppProps) {
   const [session, setSession] = useState(initialSession);
   const [activeProviderId, setActiveProviderId] = useState<ProviderId>(initialProviderId);
@@ -77,6 +84,7 @@ export function App({
     printSystemMessage,
     clearMessages,
     replaceMessages,
+    sentHistory,
   } = useAgentController(session);
   const { stdout } = useStdout();
   const rows = stdout?.rows ?? 24;
@@ -84,6 +92,19 @@ export function App({
   const pendingPermission = usePermissionBroker(broker);
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isSessionPickerOpen, setIsSessionPickerOpen] = useState(false);
+  const [themeName, setThemeName] = useState<ThemeName>(initialTheme);
+
+  const applyTheme = (name: string) => {
+    if (!isThemeName(name)) {
+      printSystemMessage(
+        `Unknown theme "${name}". Valid themes: ${Object.keys(THEMES).join(", ")}.`
+      );
+      return;
+    }
+    setThemeName(name);
+    saveSettings({ ...loadSettings(), theme: name }); // persists across restarts
+    printSystemMessage(`Theme set to ${name}.`);
+  };
 
   /** Auto-save: called after every completed/cancelled turn and after /clear. */
   const persist = useCallback(() => {
@@ -171,6 +192,7 @@ export function App({
           renameSession(session.id, title);
           printSystemMessage(`Session renamed to "${title}".`);
         },
+        setTheme: applyTheme,
       };
       if (command) command.run(parsed.args, ctx);
       else printSystemMessage(`Unknown command: /${parsed.name}. Try /help.`);
@@ -207,29 +229,36 @@ export function App({
   };
 
   return (
-    <Box flexDirection="column" height={rows} width={stdout?.columns ?? 80}>
-      <Header model={currentModel} />
-      <MessageList messages={messages} />
-      {/* Overlays take over keyboard input — InputBar is not rendered while one is open,
-          so keystrokes can never leak into it. */}
-      {pendingPermission ? (
-        <PermissionPrompt request={pendingPermission} broker={broker} />
-      ) : isModelPickerOpen ? (
-        <ModelPicker
-          providers={providers}
-          currentModelId={currentModel}
-          onSelect={handleModelSelect}
-          onClose={() => setIsModelPickerOpen(false)}
-        />
-      ) : isSessionPickerOpen ? (
-        <SessionPicker
-          onSelect={handleSessionPick}
-          onClose={() => setIsSessionPickerOpen(false)}
-        />
-      ) : (
-        <InputBar isBusy={isBusy} onSubmit={handleSubmit} onCancel={cancel} />
-      )}
-      <StatusBar model={currentModel} isBusy={isBusy} usage={usage} />
-    </Box>
+    <ThemeContext.Provider value={THEMES[themeName]}>
+      <Box flexDirection="column" height={rows} width={stdout?.columns ?? 80}>
+        <Header model={currentModel} />
+        <MessageList messages={messages} />
+        {/* Overlays take over keyboard input — InputBar is not rendered while one is open,
+            so keystrokes can never leak into it. */}
+        {pendingPermission ? (
+          <PermissionPrompt request={pendingPermission} broker={broker} />
+        ) : isModelPickerOpen ? (
+          <ModelPicker
+            providers={providers}
+            currentModelId={currentModel}
+            onSelect={handleModelSelect}
+            onClose={() => setIsModelPickerOpen(false)}
+          />
+        ) : isSessionPickerOpen ? (
+          <SessionPicker
+            onSelect={handleSessionPick}
+            onClose={() => setIsSessionPickerOpen(false)}
+          />
+        ) : (
+          <InputBar
+            isBusy={isBusy}
+            onSubmit={handleSubmit}
+            onCancel={cancel}
+            sentHistory={sentHistory}
+          />
+        )}
+        <StatusBar model={currentModel} isBusy={isBusy} usage={usage} />
+      </Box>
+    </ThemeContext.Provider>
   );
 }

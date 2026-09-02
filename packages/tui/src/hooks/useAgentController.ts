@@ -32,9 +32,12 @@ export function useAgentController(session: AgentSession) {
   const [isBusy, setIsBusy] = useState(false);
   const [usage, setUsage] = useState<UsageTotals>({ inputTokens: 0, outputTokens: 0 });
   const currentAssistantId = useRef<string | null>(null);
+  const [sentHistory, setSentHistory] = useState<string[]>([]);
+
   const send = useCallback(
     async (text: string) => {
       if (isBusy) return; // simplest policy for this phase: ignore input while busy
+      setSentHistory((prev) => [...prev, text]); // session-scoped recall history
       const userMsg: DisplayMessage = {
         id: randomUUID(),
         role: "user",
@@ -89,7 +92,7 @@ export function useAgentController(session: AgentSession) {
     setMessages(seed);
   }, []);
 
-  return { messages, isBusy, usage, send, cancel, printSystemMessage, clearMessages, replaceMessages };
+  return { messages, isBusy, usage, send, cancel, printSystemMessage, clearMessages, replaceMessages, sentHistory };
 }
 
 function systemMessage(text: string): DisplayMessage {

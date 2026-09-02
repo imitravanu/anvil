@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 import type { UsageTotals } from "../hooks/useAgentController.js";
-import { theme } from "../theme/theme.js";
+import { useTheme } from "../theme/theme.js";
 
 interface StatusBarProps {
   model: string;
@@ -9,6 +9,7 @@ interface StatusBarProps {
 }
 
 export function StatusBar({ model, isBusy, usage }: StatusBarProps) {
+  const theme = useTheme();
   return (
     <Box paddingX={theme.spacing.panelPaddingX}>
       <Text dimColor>

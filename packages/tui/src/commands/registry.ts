@@ -1,4 +1,5 @@
 import { Command } from "./types.js";
+import { THEMES } from "../theme/themes.js";
 
 export const COMMANDS: Command[] = [
   {
@@ -52,6 +53,18 @@ export const COMMANDS: Command[] = [
             `Unknown /session subcommand: ${sub}. Try /session list | new | resume [id] | rename <title>.`
           );
       }
+    },
+  },
+  {
+    name: "theme",
+    description: `Switch theme (${Object.keys(THEMES).join(" | ")})`,
+    run: (args, ctx) => {
+      const name = args[0];
+      if (!name) {
+        ctx.printSystemMessage(`Usage: /theme <name>. Valid themes: ${Object.keys(THEMES).join(", ")}`);
+        return;
+      }
+      ctx.setTheme(name);
     },
   },
 ];

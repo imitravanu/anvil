@@ -1,10 +1,11 @@
 import { Box, Text } from "ink";
 import type { DisplayMessage } from "../hooks/useAgentController.js";
 import { highlightCodeBlocks } from "../markdown/highlightCodeBlocks.js";
-import { theme } from "../theme/theme.js";
+import { useTheme } from "../theme/theme.js";
 import { ToolCallView } from "./ToolCallView.js";
 
 export function MessageView({ message }: { message: DisplayMessage }) {
+  const theme = useTheme();
   if (message.role === "user") {
     return (
       <Box flexDirection="column" marginBottom={0}>

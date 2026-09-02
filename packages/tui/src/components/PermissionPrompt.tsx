@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { PendingPermissionRequest } from "../permission/TuiPermissionBroker.js";
 import { ColorizedDiff } from "../diff/colorizeDiff.js";
-import { theme } from "../theme/theme.js";
+import { useTheme } from "../theme/theme.js";
 
 const DIFF_TOOLS = new Set(["edit_file", "write_file"]);
 
@@ -21,6 +21,7 @@ export function PermissionPrompt({
   request: PendingPermissionRequest;
   broker: { approveAlwaysForSession(toolName: string): void };
 }) {
+  const theme = useTheme();
   const [selected, setSelected] = useState(0);
   const options = optionsFor(request.toolName);
   const isDiff = DIFF_TOOLS.has(request.toolName);

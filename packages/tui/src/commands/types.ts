@@ -7,6 +7,8 @@ export interface CommandContext {
   sessionNew: () => void;
   sessionResume: (id?: string) => void; // no id → open the SessionPicker overlay
   sessionRename: (title: string) => void;
+  // /theme (Phase 6): switch + persist; handler validates the name
+  setTheme: (name: string) => void;
 }
 
 export interface Command {

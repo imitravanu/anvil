@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { ModelInfo, ModelProvider, ProviderId } from "@anvil/core";
 import { MODEL_REGISTRY } from "@anvil/core";
-import { theme } from "../theme/theme.js";
+import { useTheme } from "../theme/theme.js";
 
 interface PickerRow {
   model: ModelInfo;
@@ -26,6 +26,7 @@ export function ModelPicker({
   onSelect: (provider: ModelProvider, model: ModelInfo) => void;
   onClose: () => void;
 }) {
+  const theme = useTheme();
   const rows: PickerRow[] = useMemo(
     () =>
       MODEL_REGISTRY.map((m) => {
