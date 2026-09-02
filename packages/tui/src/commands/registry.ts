@@ -22,6 +22,38 @@ export const COMMANDS: Command[] = [
     description: "Switch model or provider",
     run: (_args, ctx) => ctx.openModelPicker(),
   },
+  {
+    name: "session",
+    description: "Sessions: list | new | resume [id] | rename <title>",
+    run: (args, ctx) => {
+      const [sub, ...rest] = args;
+      switch (sub) {
+        case undefined:
+        case "list":
+          ctx.sessionList();
+          break;
+        case "new":
+          ctx.sessionNew();
+          break;
+        case "resume":
+          ctx.sessionResume(rest[0]);
+          break;
+        case "rename": {
+          const title = rest.join(" ").trim();
+          if (!title) {
+            ctx.printSystemMessage("Usage: /session rename <title>");
+            break;
+          }
+          ctx.sessionRename(title);
+          break;
+        }
+        default:
+          ctx.printSystemMessage(
+            `Unknown /session subcommand: ${sub}. Try /session list | new | resume [id] | rename <title>.`
+          );
+      }
+    },
+  },
 ];
 
 export function parseCommand(input: string): { name: string; args: string[] } | null {

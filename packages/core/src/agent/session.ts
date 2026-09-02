@@ -1,5 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { ConversationMessage, ModelProvider, StreamEvent } from "../providers/types.js";
+import { MODEL_REGISTRY } from "../providers/registry.js";
 import { TOOL_DEFINITIONS, executeTool, describeToolInput } from "../tools/index.js";
+import { compactIfNeeded } from "./compaction.js";
+import { SessionMetadata, StoredSession } from "../session/types.js";
 import { AgentEvent, AgentOptions } from "./types.js";
 
 interface AccumulatedToolCall {
@@ -9,14 +13,35 @@ interface AccumulatedToolCall {
   providerMetadata?: Record<string, unknown>;
 }
 
+export interface RestoreData {
+  metadata: SessionMetadata;
+  history: ConversationMessage[];
+}
+
 export class AgentSession {
   private history: ConversationMessage[] = [];
   private currentController: AbortController | null = null;
+  private provider: ModelProvider;
+  private options: AgentOptions;
+  // The previous turn's input token count — compaction uses it reactively
+  // (see the known limitation in docs/PHASE-5-NOTES.md).
+  private lastInputTokens = 0;
+  readonly id: string;
+  title: string | null; // null until the first user message sets a default
+  readonly createdAt: string;
 
   constructor(
-    private provider: ModelProvider,
-    private options: AgentOptions
-  ) {}
+    provider: ModelProvider,
+    options: AgentOptions,
+    restore?: RestoreData
+  ) {
+    this.provider = provider;
+    this.options = options;
+    this.id = restore?.metadata.id ?? randomUUID();
+    this.title = restore?.metadata.title ?? null;
+    this.createdAt = restore?.metadata.createdAt ?? new Date().toISOString();
+    if (restore) this.history = [...restore.history];
+  }
 
   /** Read-only view of the conversation history (exposed for tests / future phases). */
   getHistory(): readonly ConversationMessage[] {
@@ -48,8 +73,28 @@ export class AgentSession {
     this.history = [];
   }
 
+  /** Snapshot for persistence — the CLI decides when to call saveSession(). */
+  toStoredSession(providerId: string, model: string): StoredSession {
+    return {
+      metadata: {
+        id: this.id,
+        title: this.title ?? "Untitled session",
+        providerId,
+        model,
+        createdAt: this.createdAt,
+        updatedAt: new Date().toISOString(),
+      },
+      history: [...this.history],
+    };
+  }
+
   async *send(userText: string): AsyncGenerator<AgentEvent> {
     this.history.push({ role: "user", content: [{ type: "text", text: userText }] });
+    // Set a default title from the first user message so sessions aren't stuck
+    // as "Untitled" without extra wiring.
+    if (this.title === null) {
+      this.title = userText.length > 50 ? userText.slice(0, 49) + "…" : userText;
+    }
     // A fresh controller per send() call — cancelling one turn must not poison the next.
     const controller = new AbortController();
     this.currentController = controller;
@@ -59,6 +104,23 @@ export class AgentSession {
         if (controller.signal.aborted) {
           yield { type: "cancelled" };
           return;
+        }
+
+        // Reactive compaction: if the previous turn's input tokens crossed the
+        // model's context-window threshold, summarize older history first.
+        const modelInfo = MODEL_REGISTRY.find((m) => m.id === this.options.model);
+        if (modelInfo && this.lastInputTokens > 0) {
+          const { history: compacted, result } = await compactIfNeeded(
+            this.history,
+            modelInfo.contextWindow,
+            this.lastInputTokens,
+            this.provider,
+            this.options.model
+          );
+          if (result.compacted) {
+            this.history = compacted;
+            yield { type: "compacted", summary: result.summary! };
+          }
         }
 
         const stream = this.provider.streamCompletion({
@@ -120,6 +182,7 @@ export class AgentSession {
               break;
             }
             case "usage":
+              this.lastInputTokens = event.inputTokens;
               yield { type: "usage", inputTokens: event.inputTokens, outputTokens: event.outputTokens };
               break;
             case "error":

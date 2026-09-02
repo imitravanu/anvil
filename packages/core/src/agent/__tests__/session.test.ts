@@ -225,4 +225,33 @@ describe("AgentSession.switchModel / clearHistory", () => {
     session.clearHistory();
     expect(session.getHistory()).toHaveLength(0);
   });
+
+  it("restores from a StoredSession and sets a default title from the first user message", async () => {
+    const { provider, session } = makeSession([
+      [
+        { type: "text_delta", text: "restored reply" },
+        { type: "turn_end", stopReason: "end_turn" },
+      ],
+    ]);
+    await collect(session.send("first message"));
+    const stored = session.toStoredSession("anthropic", "fake-model");
+    expect(stored.metadata.title).toBe("first message"); // default title set
+    expect(stored.metadata.id).toBe(session.id);
+
+    // Resume into a fresh session: history carries over, id/title/createdAt preserved
+    const resumed = new AgentSession(provider, {
+      systemPrompt: "test",
+      model: "fake-model",
+      maxTokens: 1024,
+      projectRoot: root,
+      permissionBroker: { async requestPermission() { return true; } },
+    }, stored);
+    expect(resumed.id).toBe(stored.metadata.id);
+    expect(resumed.title).toBe("first message");
+    expect(resumed.createdAt).toBe(stored.metadata.createdAt);
+    expect(resumed.getHistory()).toEqual(stored.history);
+    // Restored title is NOT overwritten by the next send
+    await collect(resumed.send("another message"));
+    expect(resumed.title).toBe("first message");
+  });
 });

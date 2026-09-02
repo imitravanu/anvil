@@ -19,6 +19,7 @@ export type AgentEvent =
   | { type: "tool_permission_denied"; id: string; name: string }
   | { type: "tool_finished"; id: string; name: string; result: ToolExecutionResult }
   | { type: "usage"; inputTokens: number; outputTokens: number }
+  | { type: "compacted"; summary: string }
   | { type: "turn_complete" }
   | { type: "cancelled" }
   | { type: "error"; message: string };

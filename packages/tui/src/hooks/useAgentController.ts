@@ -32,7 +32,6 @@ export function useAgentController(session: AgentSession) {
   const [isBusy, setIsBusy] = useState(false);
   const [usage, setUsage] = useState<UsageTotals>({ inputTokens: 0, outputTokens: 0 });
   const currentAssistantId = useRef<string | null>(null);
-
   const send = useCallback(
     async (text: string) => {
       if (isBusy) return; // simplest policy for this phase: ignore input while busy
@@ -58,7 +57,7 @@ export function useAgentController(session: AgentSession) {
 
       try {
         for await (const event of session.send(text)) {
-          applyEvent(event, updateAssistant, setUsage);
+          applyEvent(event, updateAssistant, setUsage, setMessages);
         }
       } finally {
         // Mark streaming done either way — completion, cancellation, or error.
@@ -85,13 +84,23 @@ export function useAgentController(session: AgentSession) {
     setMessages([]);
   }, []);
 
-  return { messages, isBusy, usage, send, cancel, printSystemMessage, clearMessages };
+  /** Seed the transcript (e.g. when resuming a stored session). */
+  const replaceMessages = useCallback((seed: DisplayMessage[]) => {
+    setMessages(seed);
+  }, []);
+
+  return { messages, isBusy, usage, send, cancel, printSystemMessage, clearMessages, replaceMessages };
+}
+
+function systemMessage(text: string): DisplayMessage {
+  return { id: randomUUID(), role: "system", text, streaming: false, toolCalls: [] };
 }
 
 function applyEvent(
   event: AgentEvent,
   update: (fn: (m: DisplayMessage) => DisplayMessage) => void,
-  setUsage: React.Dispatch<React.SetStateAction<UsageTotals>>
+  setUsage: React.Dispatch<React.SetStateAction<UsageTotals>>,
+  setMessages: React.Dispatch<React.SetStateAction<DisplayMessage[]>>
 ): void {
   switch (event.type) {
     case "text_delta":
@@ -137,6 +146,14 @@ function applyEvent(
       break;
     case "error":
       update((m) => ({ ...m, text: m.text + `\n[error: ${event.message}]` }));
+      break;
+    case "compacted":
+      setMessages((prev) => [
+        ...prev,
+        systemMessage(
+          `Conversation compacted to stay within context limits.\n\n${event.summary}`
+        ),
+      ]);
       break;
     // "turn_complete", "cancelled" — no per-message change; the for-await loop
     // ending triggers the finally block that flips streaming/isBusy.

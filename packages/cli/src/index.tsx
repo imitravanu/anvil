@@ -32,4 +32,17 @@ const session = new AgentSession(provider, {
   permissionBroker: broker, // interactive permission prompts (Phase 4)
 });
 
-render(<App session={session} broker={broker} providers={providers} model={model} />);
+render(
+  <App
+    session={session}
+    broker={broker}
+    providers={providers}
+    providerId={providerId as keyof typeof providers}
+    model={model}
+    sessionOptions={{
+      systemPrompt: "You are Anvil, a terminal coding agent. Be concise.",
+      maxTokens: 8192,
+      projectRoot: process.cwd(),
+    }}
+  />
+);
