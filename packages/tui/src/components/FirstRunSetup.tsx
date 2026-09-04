@@ -5,11 +5,16 @@ import type { ProviderCredentials, ProviderId } from "@anvil/core";
 import { saveCredential } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 
-const PROVIDERS: { id: ProviderId; label: string; field: keyof ProviderCredentials }[] = [
+const PROVIDERS: { id: ProviderId; label: string; field: keyof ProviderCredentials; placeholder?: string }[] = [
   { id: "anthropic", label: "Anthropic", field: "anthropicApiKey" },
   { id: "openai", label: "OpenAI", field: "openaiApiKey" },
-  { id: "gemini", label: "Google Gemini", field: "geminiApiKey" },
-  { id: "openrouter", label: "OpenRouter", field: "openrouterApiKey" },
+  { id: "gemini", label: "Google Gemini (Free Tier)", field: "geminiApiKey" },
+  { id: "openrouter", label: "OpenRouter (Free Models)", field: "openrouterApiKey" },
+  { id: "groq", label: "Groq (100% Free & Blazing Fast)", field: "groqApiKey", placeholder: "gsk_..." },
+  { id: "github", label: "GitHub Models (Free GPT-4o-mini with PAT)", field: "githubApiKey", placeholder: "ghp_..." },
+  { id: "cerebras", label: "Cerebras (1M Free Tokens/day)", field: "cerebrasApiKey", placeholder: "csk_..." },
+  { id: "mistral", label: "Mistral AI / Codestral (Free Tier)", field: "mistralApiKey" },
+  { id: "ollama", label: "Ollama (Local $0 Offline - localhost:11434)", field: "ollamaApiKey", placeholder: "Enter to connect" },
 ];
 
 /**
@@ -64,10 +69,10 @@ export function FirstRunSetup({
         <TextInput
           value={apiKey}
           onChange={setApiKey}
-          mask="*"
-          placeholder="sk-..."
+          mask={provider.id === "ollama" ? undefined : "*"}
+          placeholder={provider.placeholder ?? "sk-..."}
           onSubmit={(value) => {
-            const trimmed = value.trim();
+            const trimmed = value.trim() || (provider.id === "ollama" ? "ollama" : "");
             if (!trimmed) return;
             saveCredential(provider.field, trimmed);
             setStep("done");

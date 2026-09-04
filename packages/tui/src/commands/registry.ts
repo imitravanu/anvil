@@ -1,3 +1,4 @@
+import { syncOpenRouterModels } from "@anvil/core";
 import { Command } from "./types.js";
 import { THEMES } from "../theme/themes.js";
 
@@ -21,6 +22,22 @@ export const COMMANDS: Command[] = [
     name: "model",
     description: "Switch model or provider",
     run: (_args, ctx) => ctx.openModelPicker(),
+  },
+  {
+    name: "sync",
+    description: "Sync live free models from OpenRouter (auto-catches pricing & model changes)",
+    run: async (_args, ctx) => {
+      ctx.printSystemMessage("Checking OpenRouter for live free model updates...");
+      const res = await syncOpenRouterModels();
+      let msg = `✓ Synced with OpenRouter: ${res.freeCount} free models active.`;
+      if (res.newlyFree.length > 0) {
+        msg += ` Added ${res.newlyFree.length} new free model(s): ${res.newlyFree.join(", ")}.`;
+      }
+      if (res.noLongerFree.length > 0) {
+        msg += ` Note: ${res.noLongerFree.length} model(s) became paid and were marked [PAID]: ${res.noLongerFree.join(", ")}.`;
+      }
+      ctx.printSystemMessage(msg);
+    },
   },
   {
     name: "session",

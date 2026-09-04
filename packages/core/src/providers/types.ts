@@ -55,7 +55,16 @@ export type StreamEvent =
     }
   | { type: "error"; message: string };
 
-export type ProviderId = "anthropic" | "openai" | "gemini" | "openrouter";
+export type ProviderId =
+  | "anthropic"
+  | "openai"
+  | "gemini"
+  | "openrouter"
+  | "groq"
+  | "cerebras"
+  | "github"
+  | "mistral"
+  | "ollama";
 
 export interface CompletionRequest {
   model: string; // provider-specific model id, e.g. "claude-sonnet-5"
@@ -81,4 +90,5 @@ export interface ModelInfo {
   contextWindow: number;
   supportsTools: boolean;
   supportsVision: boolean;
+  isFree?: boolean;
 }

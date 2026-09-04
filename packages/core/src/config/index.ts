@@ -44,11 +44,23 @@ export function saveCredential(field: keyof ProviderCredentials, value: string):
   fs.chmodSync(CREDENTIALS_PATH, 0o600);
 }
 
+export { loadModelsCache, saveModelsCache } from "../providers/index.js";
+
 export function hasAnyConfiguredProvider(creds: ProviderCredentials): boolean {
   return Object.values(creds).some((v) => typeof v === "string" && v.length > 0);
 }
 
-const PROVIDER_ORDER: ProviderId[] = ["anthropic", "openai", "gemini", "openrouter"];
+const PROVIDER_ORDER: ProviderId[] = [
+  "anthropic",
+  "openai",
+  "gemini",
+  "openrouter",
+  "groq",
+  "github",
+  "cerebras",
+  "mistral",
+  "ollama",
+];
 
 export interface SelectionInput {
   // 1. CLI flags (highest)

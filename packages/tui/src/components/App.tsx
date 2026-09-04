@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Box, useStdout } from "ink";
+import { Box, Text, useStdout } from "ink";
 import {
   AgentSession,
   createProviders,
@@ -20,7 +20,7 @@ import {
 import type { TuiPermissionBroker } from "../permission/TuiPermissionBroker.js";
 import { useAgentController, type DisplayMessage } from "../hooks/useAgentController.js";
 import { usePermissionBroker } from "../hooks/usePermissionBroker.js";
-import { ThemeContext } from "../theme/theme.js";
+import { ThemeContext, useTheme } from "../theme/theme.js";
 import { THEMES, isThemeName, type ThemeName } from "../theme/themes.js";
 import { COMMANDS, parseCommand } from "../commands/registry.js";
 import type { CommandContext } from "../commands/types.js";
@@ -38,6 +38,11 @@ const PROVIDER_LABELS: Record<string, string> = {
   openai: "OpenAI",
   gemini: "Google Gemini",
   openrouter: "OpenRouter",
+  groq: "Groq",
+  github: "GitHub Models",
+  cerebras: "Cerebras",
+  mistral: "Mistral AI",
+  ollama: "Ollama",
 };
 
 export interface AppProps {
@@ -242,12 +247,13 @@ export function App({
 
   const handleModelSelect = (provider: ModelProvider, modelInfo: ModelInfo) => {
     const result = session.switchModel(provider, modelInfo.id);
+    const pricingTag = modelInfo.isFree ? " [FREE]" : modelInfo.isFree === false ? " [PAID]" : "";
     if (result.historyCleared) {
       printSystemMessage(
-        `Switched to ${provider.id}/${modelInfo.id} — conversation history was cleared (different provider).`
+        `Switched to ${provider.id}/${modelInfo.id}${pricingTag} — conversation history was cleared (different provider).`
       );
     } else {
-      printSystemMessage(`Switched to ${provider.id}/${modelInfo.id}.`);
+      printSystemMessage(`Switched to ${provider.id}/${modelInfo.id}${pricingTag}.`);
     }
     setActiveProviderId(provider.id);
     setCurrentModel(modelInfo.id);
@@ -282,9 +288,23 @@ export function App({
 
   return (
     <ThemeContext.Provider value={THEMES[themeName]}>
-      <Box flexDirection="column" height={rows} width={stdout?.columns ?? 80}>
-        <Header model={currentModel} />
-        <MessageList messages={messages} />
+      {/* One outer frame wraps every zone — header, messages, input/status — so
+          the app reads as a single window. The border color comes straight from
+          the theme object because App is the theme *provider*; everything below
+          this Box consumes the same colors via useTheme(). */}
+      <Box
+        flexDirection="column"
+        borderStyle="round"
+        borderColor={THEMES[themeName].colors.primary}
+        height={rows}
+        width={stdout?.columns ?? 80}
+      >
+        <Header model={currentModel} isBusy={isBusy} />
+        <Divider />
+        <Box flexDirection="column" flexGrow={1} minHeight={0}>
+          <MessageList messages={messages} model={currentModel} />
+        </Box>
+        <Divider />
         {/* Overlays take over keyboard input — InputBar is not rendered while one is open,
             so keystrokes can never leak into it. */}
         {pendingPermission ? (
@@ -318,4 +338,13 @@ export function App({
       </Box>
     </ThemeContext.Provider>
   );
+}
+
+/** Full-width horizontal rule separating the frame's zones. Width accounts for
+ * the outer frame's two border columns so the rule spans the content exactly. */
+function Divider() {
+  const { stdout } = useStdout();
+  const theme = useTheme();
+  const width = Math.max(0, (stdout?.columns ?? 80) - 2);
+  return <Text dimColor>{"─".repeat(width)}</Text>;
 }

@@ -3,15 +3,32 @@ import { createAnthropicProvider } from "./anthropic.js";
 import { createOpenAIProvider } from "./openai.js";
 import { createGeminiProvider } from "./gemini.js";
 import { createOpenRouterProvider } from "./openrouter.js";
+import { createGroqProvider } from "./groq.js";
+import { createCerebrasProvider } from "./cerebras.js";
+import { createGitHubModelsProvider } from "./github.js";
+import { createMistralProvider } from "./mistral.js";
+import { createOllamaProvider } from "./ollama.js";
 
 export * from "./types.js";
 export * from "./registry.js";
+export { OPENROUTER_BASE_URL, createOpenRouterProvider, fetchOpenRouterFreeModels, syncOpenRouterModels } from "./openrouter.js";
+export { GROQ_BASE_URL, createGroqProvider } from "./groq.js";
+export { CEREBRAS_BASE_URL, createCerebrasProvider } from "./cerebras.js";
+export { GITHUB_MODELS_BASE_URL, createGitHubModelsProvider } from "./github.js";
+export { MISTRAL_BASE_URL, createMistralProvider } from "./mistral.js";
+export { OLLAMA_DEFAULT_BASE_URL, createOllamaProvider } from "./ollama.js";
+export { loadModelsCache, saveModelsCache } from "./cache.js";
 
 export interface ProviderCredentials {
   anthropicApiKey?: string;
   openaiApiKey?: string;
   geminiApiKey?: string;
   openrouterApiKey?: string;
+  groqApiKey?: string;
+  cerebrasApiKey?: string;
+  githubApiKey?: string;
+  mistralApiKey?: string;
+  ollamaApiKey?: string;
 }
 
 export function createProviders(creds: ProviderCredentials): Record<ProviderId, ModelProvider> {
@@ -20,5 +37,10 @@ export function createProviders(creds: ProviderCredentials): Record<ProviderId, 
     openai: createOpenAIProvider(creds.openaiApiKey),
     gemini: createGeminiProvider(creds.geminiApiKey),
     openrouter: createOpenRouterProvider(creds.openrouterApiKey),
+    groq: createGroqProvider(creds.groqApiKey),
+    cerebras: createCerebrasProvider(creds.cerebrasApiKey),
+    github: createGitHubModelsProvider(creds.githubApiKey),
+    mistral: createMistralProvider(creds.mistralApiKey),
+    ollama: createOllamaProvider(creds.ollamaApiKey),
   };
 }

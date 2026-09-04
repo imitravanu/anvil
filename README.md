@@ -7,8 +7,13 @@ permission prompt with a real unified diff.
 
 ## Features
 
-- **Four providers, one interface**: Anthropic, OpenAI, Google Gemini, and OpenRouter, with
-  streaming responses and a model registry (`/model` picker to switch mid-conversation)
+- **Nine providers, one interface**: Anthropic, OpenAI, Google Gemini, OpenRouter, Groq,
+  GitHub Models, Cerebras, Mistral AI, and local Ollama — streaming responses, a model
+  registry (`/model` picker to switch mid-conversation), and automatic OpenRouter free-model
+  syncing
+- **Free & local models**: keep API spend at $0 with Groq's free tier, GitHub Models, Cerebras,
+  Mistral's experimentation tier, or Ollama (fully offline). Every model is tagged `[FREE]` or
+  `[PAID]` in the picker and header, so pricing is always visible.
 - **Agent loop with 6 tools**: `read_file`, `write_file`, `edit_file` (unified diffs),
   `list_files`, `grep`, `run_command` — with cancellation and path containment to the project root
 - **Interactive permissions**: every mutating tool call shows the diff or command before it runs
@@ -44,6 +49,11 @@ provider you're already chatting with, the active session hot-swaps onto the new
 (history is preserved, no restart). If it's a different provider, Anvil offers `/model` to
 switch to it.
 
+Picking **Ollama** needs no API key at all — it connects to `http://localhost:11434` and
+stores a placeholder so the config layer is satisfied. Free-tier providers (Gemini, Groq,
+GitHub Models, Cerebras, Mistral, OpenRouter's `:free` routes) are marked `[FREE]` in the
+model picker and header.
+
 ## Usage
 
 ```
@@ -70,6 +80,7 @@ fill. Or type the command directly:
 | `/help` | list commands |
 | `/clear` | start a fresh transcript; the prior saved session remains resumable |
 | `/connect` | add or update a provider API key right inside the app (no restart) |
+| `/sync` | sync OpenRouter's live free-model list now (also runs automatically at startup) |
 | `/model` | open the model/provider picker (cross-provider switches clear history) |
 | `/theme <name>` | switch theme (`dark`, `light`, `highContrast`); persisted |
 | `/session list` | list saved sessions |
@@ -103,6 +114,8 @@ file lists, interfaces, and acceptance criteria:
 - `Phase 4` — permissions, slash commands, model picker (spec `05-…`, notes `docs/PHASE-4-NOTES.md`)
 - `Phase 5` — session persistence & context compaction (spec `06-…`, notes `docs/PHASE-5-NOTES.md`)
 - `Phase 6` — polish & distribution (spec `07-…`)
+- `Phase 7` — free & local model providers + OpenRouter live free-model sync
+  (notes `docs/PHASE-7-NOTES.md`)
 
 ## Development
 

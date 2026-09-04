@@ -8,17 +8,18 @@ export function MessageView({ message }: { message: DisplayMessage }) {
   const theme = useTheme();
   if (message.role === "user") {
     return (
-      <Box flexDirection="column" marginBottom={0}>
-        <Text color={theme.colors.userText}>{"> " + message.text}</Text>
+      <Box flexDirection="column">
+        <Text dimColor>❯ you</Text>
+        <Text color={theme.colors.userText}>{message.text}</Text>
       </Box>
     );
   }
 
   if (message.role === "system") {
     return (
-      <Box flexDirection="column" marginBottom={0}>
+      <Box flexDirection="column">
         <Text dimColor italic>
-          {message.text}
+          ℹ {message.text}
         </Text>
       </Box>
     );
@@ -30,7 +31,10 @@ export function MessageView({ message }: { message: DisplayMessage }) {
   // highlighter's own ANSI colors are what the terminal shows.
   const body = message.streaming ? message.text : highlightCodeBlocks(message.text);
   return (
-    <Box flexDirection="column" marginTop={0} marginBottom={0}>
+    <Box flexDirection="column">
+      <Text bold color={theme.colors.primary}>
+        anvil
+      </Text>
       <Text color={message.streaming ? theme.colors.assistantText : undefined}>
         {body || (message.streaming ? "…" : "")}
       </Text>

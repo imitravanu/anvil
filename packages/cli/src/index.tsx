@@ -8,6 +8,9 @@ import {
   AgentSession,
   loadCredentials,
   loadSettings,
+  loadModelsCache,
+  registerModels,
+  syncOpenRouterModels,
   ProviderSelectionError,
   resolveProviderSelection,
 } from "@anvil/core";
@@ -42,7 +45,7 @@ Environment:
   ANVIL_PROVIDER, ANVIL_MODEL — same as the flags, lower precedence
 
 Config lives in ~/.anvil (credentials.json, settings.json, sessions/).
-Slash commands inside the app: /help /clear /connect /model /theme /session.
+Slash commands inside the app: /help /clear /connect /model /theme /session /sync.
 `;
 
 // --- Startup crash guard: never leave the terminal in a broken raw-mode state. ---
@@ -67,6 +70,11 @@ process.on("unhandledRejection", (reason) => {
 });
 
 function bootChat(): void {
+  const cachedModels = loadModelsCache();
+  if (cachedModels.length > 0) {
+    registerModels(cachedModels);
+  }
+
   const creds = loadCredentials();
   const settings = loadSettings();
   const flags = parseFlags(process.argv.slice(2));
@@ -94,6 +102,11 @@ function bootChat(): void {
   }
 
   const providers = createProviders(creds);
+  // Auto-sync live free models from OpenRouter in background
+  if (providers.openrouter?.isConfigured()) {
+    syncOpenRouterModels(creds.openrouterApiKey).catch(() => {});
+  }
+
   const provider = providers[selection.providerId];
   if (!provider.isConfigured()) {
     console.error(
