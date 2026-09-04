@@ -11,14 +11,14 @@ Items tied to Phase 9 (sub-agents) or Phase 10 (MCP) are built WITH those phases
 UI follows capability, never precedes it. Standalone items can form a small
 optional "Phase 8.5" polish release whenever the client wants a visible jump.
 
-## NEAR-TERM — quick wins (ride along Phase 9, or a Phase 8.5)
+## NEAR-TERM — ✅ DONE (Phase 8.5, client-approved "yes 8.5")
 
-| # | Item | Why | Source |
-|---|---|---|---|
-| U1 | **Persistent plan line** — show the agent's current plan collapsed (≤2 lines) above the input, updating live. Today the plan only appears as one-off system messages. | Completes the original A.1.4 intent; the plan is the agent's promise — it should stay visible | PHASE-8-SPEC A.1.4 |
-| U2 | **Streaming caret** — animated indicator at the end of in-flight assistant text (status-bar spinner exists; the text itself has none) | Makes "the model is typing" unmistakable | Phase 8 C4 leftover |
-| U3 | **NO_COLOR / terminal capability respect** — honor the standard NO_COLOR env and degrade gracefully on limited terminals | Accessibility + robustness; highContrast theme exists but env signals are ignored | new |
-| U4 | **Close the 3 open cosmetic choices** — header glyph (`▲` vs `◆`/inverse), `/theme` in the empty-state suggestions, `/help` examples style. Defaults currently stand | Trivial; clears the record's open questions | PRODUCT-POLISH-RECORD §13 |
+| # | Item | Status |
+|---|---|---|
+| U1 | **Persistent plan line** — `PlanLine` above the input, ≤2 width-fitting lines via `collapsePlan()` (pure, tested), live-updates from `plan_updated`, resets on session change/resume/clear | ✅ DONE |
+| U2 | **Streaming caret** — the interrupted concurrent session had already implemented this as a braille spinner after streaming text; KEPT as the single implementation (consistent with ToolCallView). Architect's blink-caret variant built, then removed as redundant | ✅ DONE |
+| U3 | **NO_COLOR support** — `highlightCodeBlocks` guards its raw-ANSI path (fences stripped, zero escapes, tested); `<Text>` colors already honor NO_COLOR via chalk | ✅ DONE |
+| U4 | **Open cosmetic choices closed** — defaults finalized as decisions: keep `▲` glyph; keep 4 empty-state suggestions (no `/theme`); `/help` inline examples (already shipped) | ✅ DONE |
 
 ## MID-TERM — visible quality jumps (a "Phase 8.5" candidate)
 
@@ -39,9 +39,8 @@ optional "Phase 8.5" polish release whenever the client wants a visible jump.
 | U12 | **TUI interaction test infra** — ink-testing-library component tests so UI refactors stop being risky (pure-function tests exist since Phase 8; component tests were deliberately deferred) | Post-9/10 reliability phase |
 | U13 | **Custom user themes** — user-defined theme file in ~/.anvil | low priority |
 
-## Decision needed from client (one line each)
+## Decision needed from client (RESOLVED)
 
-1. Approve this roadmap as the standing UI record? (yes/no/amend)
-2. Build U1–U4 as a small **Phase 8.5** before Phase 9, or fold them into Phase 9?
-   — Architect recommendation: **fold U1–U2 into Phase 9** (they touch the same
-   files as sub-agent UI), do U3–U4 opportunistically. No separate release needed.
+1. Roadmap approved as the standing UI record: **YES** (client, "yes 8.5").
+2. Client chose: **ship U1–U4 as Phase 8.5** (done). Architect's fold-into-9
+   recommendation was superseded by the client's explicit choice.

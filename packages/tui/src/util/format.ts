@@ -25,3 +25,22 @@ export function curtail(text: string, max: number): string {
   if (max === 1) return "…";
   return chars.slice(0, max - 1).join("") + "…";
 }
+
+/**
+ * Phase 8.5 (U1): collapse a (possibly multi-line) plan into at most `maxLines`
+ * display lines that fit the terminal width. Pure — PlanLine just renders it.
+ */
+export function collapsePlan(
+  plan: string,
+  width: number,
+  maxLines = 2
+): { lines: string[]; hidden: number } {
+  const avail = Math.max(20, width - 12); // budget for the "plan ▸" label + padding
+  const all = plan
+    .split("\n")
+    .map((l) => l.trimEnd())
+    .filter((l) => l.trim() !== "");
+  if (all.length === 0) return { lines: [], hidden: 0 };
+  const lines = all.slice(0, maxLines).map((l) => curtail(l, avail));
+  return { lines, hidden: Math.max(0, all.length - maxLines) };
+}

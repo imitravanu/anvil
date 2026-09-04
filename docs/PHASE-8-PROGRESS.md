@@ -2,7 +2,25 @@
 
 > Maintained by the architect during implementation. Other agents: read this
 > BEFORE continuing work. Status below is verified against the working tree,
-> not against anyone's report. Last verified: REVIEW pass 1.
+> not against anyone's report. Last verified: REVIEW pass 2 + PHASE 8.5.
+
+## 0. PHASE 8.5 — UI QUICK WINS (client-approved "yes 8.5"): ✅ COMPLETE
+
+Scope: UI-ROADMAP U1–U4. Verified: typecheck 0 errors, core 116/116,
+tui 17/17 (3 files), build OK.
+
+- **U1 persistent plan line**: `PlanLine` component + `collapsePlan()` pure
+  helper (tested) + `useAgentController` now tracks `plan` state (seeded from
+  session, live-updated on `plan_updated`, reset on session change).
+- **U2 streaming caret**: discovered the interrupted concurrent session had
+  ALREADY implemented it (braille spinner after streaming text). Kept theirs;
+  architect's blink-caret variant removed as redundant. LESSON: re-read the
+  current file before editing — concurrent sessions exist.
+- **U3 NO_COLOR**: guard in `highlightCodeBlocks` (raw-ANSI path); fenced code
+  still stripped; 2 tests. `<Text>` colors honor NO_COLOR via chalk.
+- **U4 cosmetic choices closed**: defaults finalized (see PRODUCT-POLISH-RECORD
+  §13). No code change.
+- Records updated: UI-ROADMAP (statuses), PRODUCT-POLISH-RECORD (§13 closed).
 
 ## 1. VERIFICATION SNAPSHOT (regression gate, run on current tree)
 

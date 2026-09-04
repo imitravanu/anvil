@@ -346,12 +346,9 @@ for the review):
   in `@anvil/tui` (vitest) are permitted; component/interaction test infra remains a
   later-phase item.* No other PHASE-8-SPEC decision is altered.
 
-## 13. OPEN QUESTIONS (owner: client; do not block implementation)
+## 13. OPEN QUESTIONS — CLOSED (Phase 8.5, U4)
 
-- None blocking. Optional preferences for the review pass:
-  1. Header style: keep `▲ ANVIL` mark or adopt `◆`/inverse-video? (default: keep `▲`.)
-  2. EmptyState suggestions: keep 4 commands or add `/theme`? (default: keep 4.)
-  3. Should `/help` print examples inline or a separate `/help <command>`? (default:
-     inline examples.)
-  These do not require a decision before implementation; the defaults stand unless the
-  client overrides at review.
+The three optional preferences were finalized as decisions when the client
+approved Phase 8.5: keep the `▲ ANVIL` glyph; keep the 4 empty-state
+suggestions (no `/theme` line); `/help` examples render inline. See
+`docs/UI-ROADMAP.md` for the live UI roadmap going forward.

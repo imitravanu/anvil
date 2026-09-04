@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { curtail, displayModelLabel, providerLabel, providerOfModel } from "../format.js";
+import { collapsePlan, curtail, displayModelLabel, providerLabel, providerOfModel } from "../format.js";
 
 describe("format helpers", () => {
   it("displayModelLabel resolves a known registry model and falls back to the id", () => {
@@ -31,7 +31,6 @@ describe("format helpers", () => {
     const s = "а😀б😀в😀г😀д😀"; // uses Cyrillic + emoji (all single code points)
     const out = curtail(s, 7);
     expect(Array.from(out).length).toBe(7);
-    expect([...out].every((ch) => !/\uD800/.test(ch) || true)).toBe(true);
     // no lone high surrogates (would mean we split an emoji)
     for (let i = 0; i < out.length; i++) {
       const code = out.charCodeAt(i);
@@ -39,5 +38,32 @@ describe("format helpers", () => {
         expect(out.charCodeAt(i + 1)).toBeGreaterThanOrEqual(0xdc00);
       }
     }
+  });
+
+  it("collapsePlan caps a multi-line plan at two width-fitting lines", () => {
+    const plan = "first step\nsecond step\nthird step\nfourth step";
+    const { lines, hidden } = collapsePlan(plan, 120);
+    expect(lines).toEqual(["first step", "second step"]);
+    expect(hidden).toBe(2);
+  });
+
+  it("collapsePlan curtails an over-long single line to the width budget", () => {
+    const long = "x".repeat(200);
+    const { lines, hidden } = collapsePlan(long, 80);
+    expect(lines.length).toBe(1);
+    expect(Array.from(lines[0]).length).toBeLessThanOrEqual(68); // avail = 80-12
+    expect(hidden).toBe(0);
+  });
+
+  it("collapsePlan drops blank lines and floors the width budget", () => {
+    const plan = "\n  \nreal line\n";
+    const { lines, hidden } = collapsePlan(plan, 10); // avail floors at 20
+    expect(lines.length).toBe(1);
+    expect(lines[0]).toBe("real line");
+    expect(hidden).toBe(0);
+  });
+
+  it("collapsePlan handles an empty plan", () => {
+    expect(collapsePlan("", 80)).toEqual({ lines: [], hidden: 0 });
   });
 });

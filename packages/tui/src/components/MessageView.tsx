@@ -7,6 +7,10 @@ import { ToolCallView } from "./ToolCallView.js";
 
 export function MessageView({ message }: { message: DisplayMessage }) {
   const theme = useTheme();
+  // U2 streaming caret: the interrupted session already implemented this as a
+  // braille spinner after the streaming text (consistent with ToolCallView) —
+  // kept as the single implementation; my blink-caret variant was removed as
+  // redundant (recorded in PHASE-8-PROGRESS.md §5).
   const spinner = useSpinnerFrame(message.streaming);
   if (message.role === "user") {
     return (

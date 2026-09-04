@@ -31,6 +31,7 @@ import { MessageList } from "./MessageList.js";
 import { ModelPicker } from "./ModelPicker.js";
 import { PermissionPrompt } from "./PermissionPrompt.js";
 import { FirstRunSetup } from "./FirstRunSetup.js";
+import { PlanLine } from "./PlanLine.js";
 import { SessionPicker } from "./SessionPicker.js";
 import { StatusBar } from "./StatusBar.js";
 
@@ -86,6 +87,7 @@ export function App({
     messages,
     isBusy,
     usage,
+    plan,
     send,
     cancel,
     printSystemMessage,
@@ -298,6 +300,9 @@ export function App({
           <MessageList messages={messages} model={currentModel} />
         </Box>
         <Divider />
+        {/* Phase 8.5 (U1): the agent's current plan stays visible above the
+            input until it changes or the session changes. */}
+        {plan && <PlanLine plan={plan} />}
         {/* Overlays take over keyboard input — InputBar is not rendered while one is open,
             so keystrokes can never leak into it. */}
         {pendingPermission ? (

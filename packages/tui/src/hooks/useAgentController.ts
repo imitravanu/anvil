@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { randomUUID } from "node:crypto";
 import { AgentSession, type AgentEvent } from "@anvil/core";
 
@@ -33,6 +33,12 @@ export function useAgentController(session: AgentSession) {
   const [usage, setUsage] = useState<UsageTotals>({ inputTokens: 0, outputTokens: 0 });
   const currentAssistantId = useRef<string | null>(null);
   const [sentHistory, setSentHistory] = useState<string[]>([]);
+  // Phase 8.5 (U1): the persistent plan — seeded from the session, updated live
+  // by plan_updated events, reset whenever the active session changes.
+  const [plan, setPlan] = useState<string | null>(session.plan ?? null);
+  useEffect(() => {
+    setPlan(session.plan ?? null);
+  }, [session]);
 
   const send = useCallback(
     async (text: string) => {
@@ -60,7 +66,7 @@ export function useAgentController(session: AgentSession) {
 
       try {
         for await (const event of session.send(text)) {
-          applyEvent(event, updateAssistant, setUsage, setMessages);
+          applyEvent(event, updateAssistant, setUsage, setMessages, setPlan);
         }
       } finally {
         // Mark streaming done either way — completion, cancellation, or error.
@@ -92,7 +98,18 @@ export function useAgentController(session: AgentSession) {
     setMessages(seed);
   }, []);
 
-  return { messages, isBusy, usage, send, cancel, printSystemMessage, clearMessages, replaceMessages, sentHistory };
+  return {
+    messages,
+    isBusy,
+    usage,
+    plan,
+    send,
+    cancel,
+    printSystemMessage,
+    clearMessages,
+    replaceMessages,
+    sentHistory,
+  };
 }
 
 function systemMessage(text: string): DisplayMessage {
@@ -103,7 +120,8 @@ function applyEvent(
   event: AgentEvent,
   update: (fn: (m: DisplayMessage) => DisplayMessage) => void,
   setUsage: React.Dispatch<React.SetStateAction<UsageTotals>>,
-  setMessages: React.Dispatch<React.SetStateAction<DisplayMessage[]>>
+  setMessages: React.Dispatch<React.SetStateAction<DisplayMessage[]>>,
+  setPlan: React.Dispatch<React.SetStateAction<string | null>>
 ): void {
   switch (event.type) {
     case "text_delta":
@@ -176,6 +194,8 @@ function applyEvent(
       ]);
       break;
     case "plan_updated":
+      // Phase 8.5 (U1): drive the persistent plan line, not just the transcript.
+      setPlan(event.plan || null);
       setMessages((prev) => [...prev, systemMessage(`Plan updated: ${event.plan}`)]);
       break;
     // "turn_complete", "cancelled" — no per-message change; the for-await loop
