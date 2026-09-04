@@ -198,6 +198,23 @@ function applyEvent(
       setPlan(event.plan || null);
       setMessages((prev) => [...prev, systemMessage(`Plan updated: ${event.plan}`)]);
       break;
+    // Phase 9: delegation surfaced as notices; usage flows into the totals.
+    case "subagent_started":
+      setMessages((prev) => [...prev, systemMessage(`Sub-agent started: ${event.task}`)]);
+      break;
+    case "subagent_finished":
+      setUsage((prev) => ({
+        inputTokens: prev.inputTokens + event.inputTokens,
+        outputTokens: prev.outputTokens + event.outputTokens,
+      }));
+      setMessages((prev) => [
+        ...prev,
+        systemMessage(
+          `Sub-agent finished — ${event.toolCalls} tool call${event.toolCalls === 1 ? "" : "s"}, ` +
+            `${event.inputTokens.toLocaleString()} in / ${event.outputTokens.toLocaleString()} out tokens.`
+        ),
+      ]);
+      break;
     // "turn_complete", "cancelled" — no per-message change; the for-await loop
     // ending triggers the finally block that flips streaming/isBusy.
   }

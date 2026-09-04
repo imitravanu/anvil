@@ -6,6 +6,7 @@ import * as listFiles from "./listFiles.js";
 import * as grep from "./grep.js";
 import * as bash from "./bash.js";
 import * as updatePlan from "./updatePlan.js"; // Phase 8 (A.1.4) plan scratchpad
+import * as delegateTask from "./delegateTask.js"; // Phase 9 sub-agent delegation
 
 interface RegisteredTool {
   definition: ToolDefinition;
@@ -28,6 +29,8 @@ const REGISTRY: RegisteredTool[] = [
   // Session intercepts this tool before the generic executor (sets session.plan
   // and emits plan_updated); the executor here is just a safe no-op.
   { definition: updatePlan.definition, execute: updatePlan.execute },
+  // Session intercepts delegate_task and runs a sub-agent (Phase 9).
+  { definition: delegateTask.definition, execute: delegateTask.execute },
 ];
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = REGISTRY.map((t) => t.definition);

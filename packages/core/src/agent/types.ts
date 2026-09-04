@@ -1,4 +1,5 @@
 import { ToolExecutionResult } from "../tools/types.js";
+import type { ToolDefinition } from "../tools/types.js";
 
 // The core loop never touches a terminal or a UI framework directly. It asks this interface
 // whenever a mutating tool is about to run, and the TUI (Phase 4) implements it with a real
@@ -26,7 +27,10 @@ export type AgentEvent =
   // Phase 8 (A.1): the truthful engine — budget, loop guard, plan scratchpad.
   | { type: "budget_exhausted" }
   | { type: "loop_detected"; tool: string }
-  | { type: "plan_updated"; plan: string };
+  | { type: "plan_updated"; plan: string }
+  // Phase 9: sub-agent delegation.
+  | { type: "subagent_started"; task: string }
+  | { type: "subagent_finished"; toolCalls: number; inputTokens: number; outputTokens: number };
 
 export interface AgentOptions {
   systemPrompt: string;
@@ -36,6 +40,17 @@ export interface AgentOptions {
   permissionBroker: PermissionBroker;
   /** Phase 8 (A.1.1): max tool-roundtrips per user turn. Default 20. */
   maxInnerIterations?: number;
+  /**
+   * Phase 9: tool-list override. Sub-agents exclude delegate_task (depth
+   * limit); MCP (Phase 10) will inject external tools through this seam.
+   * Defaults to the full global TOOL_DEFINITIONS.
+   */
+  tools?: ToolDefinition[];
+  /**
+   * Phase 9: delegation depth guard. False inside sub-agents — a misbehaving
+   * model's delegate_task call is refused instead of nesting. Default true.
+   */
+  allowDelegation?: boolean;
 }
 
 /** Phase 8 (A.1.1): when maxInnerIterations is not set. */

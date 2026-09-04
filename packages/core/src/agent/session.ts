@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto";
 import { ConversationMessage, ModelProvider, StreamEvent } from "../providers/types.js";
 import { MODEL_REGISTRY } from "../providers/registry.js";
 import { TOOL_DEFINITIONS, executeTool, describeToolInput } from "../tools/index.js";
-import type { ToolExecutionResult } from "../tools/types.js";
+import type { ToolExecutionResult, ToolDefinition } from "../tools/types.js";
 import { compactIfNeeded } from "./compaction.js";
 import { SessionMetadata, StoredSession } from "../session/types.js";
 import { AgentEvent, AgentOptions, DEFAULT_MAX_INNER_ITERATIONS } from "./types.js";
 import { canonicalInputHash } from "./canonical.js";
 import { RunLedgerEntry, capLedger, maxSeq } from "./ledger.js";
 import { isRateLimitMessage, noteRateLimited } from "../providers/freeModels.js";
+import { MAX_DELEGATIONS_PER_TURN, runSubAgent } from "./subagent.js";
 
 interface AccumulatedToolCall {
   id: string;
@@ -39,6 +40,9 @@ export class AgentSession {
   private ledger: RunLedgerEntry[] = [];
   private ledgerSeq = 0;
   private lastUsage: { inputTokens: number; outputTokens: number } | null = null;
+  // Phase 9: resolved tool list + per-turn delegation counter.
+  private toolDefs: ToolDefinition[];
+  private delegationsUsed = 0;
   readonly id: string;
   title: string | null; // null until the first user message sets a default
   readonly createdAt: string;
@@ -49,8 +53,13 @@ export class AgentSession {
     restore?: RestoreData
   ) {
     this.provider = provider;
-    this.options = options;
+    // Phase 9: delegation is ON unless explicitly disabled (sub-agents pass
+    // false — the real depth guard; a filtered tool list only stops a
+    // well-behaved model, per the PHASE-9 spec gotcha).
+    this.options = { ...options, allowDelegation: options.allowDelegation ?? true };
     this.maxInnerIterations = options.maxInnerIterations ?? DEFAULT_MAX_INNER_ITERATIONS;
+    // Phase 9: tool-list override (sub-agents exclude delegate_task; MCP seam).
+    this.toolDefs = options.tools ?? TOOL_DEFINITIONS;
     this.id = restore?.metadata.id ?? randomUUID();
     this.title = restore?.metadata.title ?? null;
     this.createdAt = restore?.metadata.createdAt ?? new Date().toISOString();
@@ -117,17 +126,19 @@ export class AgentSession {
   }
 
   private recordLedger(
-    entry: Omit<RunLedgerEntry, "seq" | "ts" | "tokens">
+    entry: Omit<RunLedgerEntry, "seq" | "ts">
   ): void {
     this.ledgerSeq += 1;
     this.ledger = capLedger([
       ...this.ledger,
       {
         ...entry,
-        // Measured usage rides along when available (record, never predict).
-        ...(this.lastUsage
-          ? { tokens: { in: this.lastUsage.inputTokens, out: this.lastUsage.outputTokens } }
-          : {}),
+        // Measured usage rides along when available (record, never predict) —
+        // explicit tokens (e.g. a sub-agent's own usage) take precedence.
+        ...(entry.tokens ??
+          (this.lastUsage
+            ? { tokens: { in: this.lastUsage.inputTokens, out: this.lastUsage.outputTokens } }
+            : {})),
         seq: this.ledgerSeq,
         ts: new Date().toISOString(),
       },
@@ -152,6 +163,7 @@ export class AgentSession {
 
     // Phase 8 (A.1): per-turn loop state starts clean on every send().
     this.iterationsUsed = 0;
+    this.delegationsUsed = 0;
     let lastToolKey: string | null = null;
     let toolStreak = 0;
     let loopNotified = false;
@@ -204,7 +216,7 @@ export class AgentSession {
           model: this.options.model,
           systemPrompt: this.options.systemPrompt,
           messages: [...this.history], // snapshot — never expose the live array to the provider
-          tools: TOOL_DEFINITIONS,
+          tools: this.toolDefs,
           maxTokens: this.options.maxTokens,
           signal: controller.signal,
         });
@@ -305,7 +317,7 @@ export class AgentSession {
         const turnNotes: string[] = [];
         type PreparedCall = {
           call: AccumulatedToolCall;
-          def: ReturnType<typeof TOOL_DEFINITIONS.find>;
+          def: ToolDefinition | undefined;
           key: string;
           refused: boolean;
           loopWarn: boolean;
@@ -313,7 +325,7 @@ export class AgentSession {
         // Classify in DECLARED order first: the consecutive same-key streak
         // (A.1.2) and the declared-order contract (F5) are order-sensitive.
         const prepared: PreparedCall[] = toolCalls.map((call) => {
-          const def = TOOL_DEFINITIONS.find((d) => d.name === call.name);
+          const def = this.toolDefs.find((d) => d.name === call.name);
           const key = `${call.name}:${canonicalInputHash(call.input)}`;
           if (key === lastToolKey) toolStreak += 1;
           else {
@@ -353,6 +365,75 @@ export class AgentSession {
                 summary: "update_plan: plan must be a string.",
               });
             }
+            continue;
+          }
+          if (p.call.name === "delegate_task") {
+            // Phase 9: sub-agent delegation — intercepted like update_plan and
+            // executed inline (serially, in declared order), never in a batch.
+            const task = (p.call.input as { task?: unknown } | undefined)?.task;
+            if (!this.options.allowDelegation) {
+              this.recordLedger({ eventType: "tool_finished", tool: "delegate_task", inputHash: p.key, outcome: "error", elapsedMs: 0 });
+              handled.set(p.call.id, {
+                output: { error: "delegate_task is not available to sub-agents (depth limit)." },
+                isError: true,
+                summary: "Delegation not allowed at this depth.",
+              });
+              continue;
+            }
+            if (typeof task !== "string" || !task.trim()) {
+              this.recordLedger({ eventType: "tool_finished", tool: "delegate_task", inputHash: p.key, outcome: "error", elapsedMs: 0 });
+              handled.set(p.call.id, {
+                output: { error: "delegate_task requires a string `task`." },
+                isError: true,
+                summary: "delegate_task: task must be a string.",
+              });
+              continue;
+            }
+            if (this.delegationsUsed >= MAX_DELEGATIONS_PER_TURN) {
+              this.recordLedger({ eventType: "tool_finished", tool: "delegate_task", inputHash: p.key, outcome: "error", elapsedMs: 0 });
+              handled.set(p.call.id, {
+                output: { error: `Delegation limit reached (${MAX_DELEGATIONS_PER_TURN} per turn).` },
+                isError: true,
+                summary: "Delegation limit reached.",
+              });
+              continue;
+            }
+            this.delegationsUsed += 1;
+            this.recordLedger({ eventType: "subagent_started", tool: "delegate_task", inputHash: p.key, outcome: "ok", elapsedMs: 0 });
+            yield { type: "subagent_started", task };
+            const subStartedAt = Date.now();
+            const run = await runSubAgent({
+              provider: this.provider,
+              model: this.options.model,
+              projectRoot: this.options.projectRoot,
+              permissionBroker: this.options.permissionBroker,
+              task,
+              signal: controller.signal,
+            });
+            if (run.aborted) {
+              this.recordLedger({ eventType: "cancelled", tool: "delegate_task", inputHash: p.key, outcome: "aborted", elapsedMs: Date.now() - subStartedAt });
+              yield { type: "cancelled" };
+              return;
+            }
+            this.recordLedger({
+              eventType: "subagent_finished",
+              tool: "delegate_task",
+              inputHash: p.key,
+              outcome: "ok",
+              tokens: run.usage,
+              elapsedMs: Date.now() - subStartedAt,
+            });
+            yield {
+              type: "subagent_finished",
+              toolCalls: run.toolCalls,
+              inputTokens: run.usage.in,
+              outputTokens: run.usage.out,
+            };
+            handled.set(p.call.id, {
+              output: { report: run.report },
+              isError: false,
+              summary: `Sub-agent report (${run.toolCalls} tool call${run.toolCalls === 1 ? "" : "s"}).`,
+            });
             continue;
           }
           if (p.refused) {

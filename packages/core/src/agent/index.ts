@@ -9,3 +9,14 @@ export {
   type LedgerOutcome,
 } from "./ledger.js";
 export { canonicalInputHash } from "./canonical.js";
+export {
+  runSubAgent,
+  subAgentTools,
+  capReport,
+  SUB_AGENT_MAX_ITERATIONS,
+  SUB_AGENT_REPORT_MAX_CHARS,
+  SUB_AGENT_MAX_TOKENS,
+  SUB_AGENT_SYSTEM_PROMPT,
+  MAX_DELEGATIONS_PER_TURN,
+  type SubAgentRun,
+} from "./subagent.js";
