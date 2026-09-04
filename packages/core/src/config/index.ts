@@ -44,7 +44,14 @@ export function saveCredential(field: keyof ProviderCredentials, value: string):
   fs.chmodSync(CREDENTIALS_PATH, 0o600);
 }
 
-export { loadModelsCache, saveModelsCache } from "../providers/index.js";
+export {
+  loadModelsCache,
+  saveModelsCache,
+  loadModelsCacheV2,
+  saveModelsCacheV2,
+  isModelsCacheFresh,
+  collectModelsFromCache,
+} from "../providers/index.js";
 
 export function hasAnyConfiguredProvider(creds: ProviderCredentials): boolean {
   return Object.values(creds).some((v) => typeof v === "string" && v.length > 0);

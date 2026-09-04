@@ -158,6 +158,26 @@ function applyEvent(
         ),
       ]);
       break;
+    // Phase 8 (A): truthful-engine events — surfaced, never silently dropped.
+    case "budget_exhausted":
+      setMessages((prev) => [
+        ...prev,
+        systemMessage(
+          'Turn stopped after reaching its step limit. Type "continue" to keep going, or revise the task.'
+        ),
+      ]);
+      break;
+    case "loop_detected":
+      setMessages((prev) => [
+        ...prev,
+        systemMessage(
+          `Loop guard: ${event.tool} was repeated 3× without progress. Further identical calls are blocked.`
+        ),
+      ]);
+      break;
+    case "plan_updated":
+      setMessages((prev) => [...prev, systemMessage(`Plan updated: ${event.plan}`)]);
+      break;
     // "turn_complete", "cancelled" — no per-message change; the for-await loop
     // ending triggers the finally block that flips streaming/isBusy.
   }

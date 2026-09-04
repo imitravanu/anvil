@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { ModelInfo, ModelProvider, ProviderId } from "@anvil/core";
-import { MODEL_REGISTRY, syncOpenRouterModels } from "@anvil/core";
+import {
+  DEFAULT_SYNC_TTL_MS,
+  MODEL_REGISTRY,
+  createOpenRouterFreeSource,
+  isModelsCacheFresh,
+  isRateLimited,
+  syncFreeModels,
+} from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 
 interface PickerRow {
@@ -31,14 +38,23 @@ export function ModelPicker({
 }) {
   const theme = useTheme();
   const [models, setModels] = useState<ModelInfo[]>(() => [...MODEL_REGISTRY]);
+  // Phase 8 (B): surface staleness instead of hiding it.
+  const [cacheNote, setCacheNote] = useState<string | null>(() =>
+    isModelsCacheFresh(DEFAULT_SYNC_TTL_MS) ? null : "Free-model list is stale — prices may be out of date."
+  );
 
-  // If OpenRouter is configured, sync live free models in background (auto-catches price & availability changes)
+  // Phase 8 (B): the coordinator is the single owner — single-flight + TTL mean
+  // this can never double-fetch; a failure is reported, never swallowed.
   useEffect(() => {
     let active = true;
     if (providers.openrouter?.isConfigured()) {
-      syncOpenRouterModels().then(() => {
+      syncFreeModels({ sources: [createOpenRouterFreeSource()] }).then((report) => {
         if (!active) return;
         setModels([...MODEL_REGISTRY]);
+        if (report.refreshedAt) setCacheNote(null);
+        else if (report.errors.length > 0) {
+          setCacheNote("Free-model sync failing — prices may be out of date.");
+        }
       });
     }
     return () => {
@@ -109,6 +125,7 @@ export function ModelPicker({
       <Text color={theme.colors.primary}>
         Select a model ({selected + 1}/{rows.length}) — models with [FREE] cost $0 — Enter to switch, Esc to cancel
       </Text>
+      {cacheNote && <Text dimColor>⚠ {cacheNote}</Text>}
       {hasAbove && (
         <Text dimColor>  ▲ {scrollOffset} more above...</Text>
       )}
@@ -120,13 +137,14 @@ export function ModelPicker({
         const isFree = row.model.isFree;
         const isPaid = row.model.isFree === false;
         const pricingTag = isFree ? " [FREE]" : isPaid ? " [PAID]" : "";
+        const limited = isRateLimited(row.model.providerId, row.model.id);
 
         if (!row.enabled) {
           return (
             <Text key={row.model.id} dimColor>
               {marker}
               {row.providerDisplayName} · {row.model.displayName}
-              {pricingTag} (no API key)
+              {pricingTag} {limited ? "[rate-limited] " : ""}(no API key)
             </Text>
           );
         }
@@ -139,6 +157,7 @@ export function ModelPicker({
             ) : isPaid ? (
               <Text dimColor> [PAID]</Text>
             ) : null}
+            {limited ? <Text dimColor> [rate-limited]</Text> : null}
             {isCurrent ? " (current)" : ""}
           </Text>
         );

@@ -21,6 +21,7 @@ import type { TuiPermissionBroker } from "../permission/TuiPermissionBroker.js";
 import { useAgentController, type DisplayMessage } from "../hooks/useAgentController.js";
 import { usePermissionBroker } from "../hooks/usePermissionBroker.js";
 import { ThemeContext, useTheme } from "../theme/theme.js";
+import { PROVIDER_LABELS } from "../util/labels.js";
 import { THEMES, isThemeName, type ThemeName } from "../theme/themes.js";
 import { COMMANDS, parseCommand } from "../commands/registry.js";
 import type { CommandContext } from "../commands/types.js";
@@ -33,17 +34,7 @@ import { FirstRunSetup } from "./FirstRunSetup.js";
 import { SessionPicker } from "./SessionPicker.js";
 import { StatusBar } from "./StatusBar.js";
 
-const PROVIDER_LABELS: Record<string, string> = {
-  anthropic: "Anthropic",
-  openai: "OpenAI",
-  gemini: "Google Gemini",
-  openrouter: "OpenRouter",
-  groq: "Groq",
-  github: "GitHub Models",
-  cerebras: "Cerebras",
-  mistral: "Mistral AI",
-  ollama: "Ollama",
-};
+// Provider labels live in util/labels.ts (Phase 8 C1) — single source of truth.
 
 export interface AppProps {
   session: AgentSession;
@@ -149,6 +140,8 @@ export function App({
     clearMessages();
     replaceMessages(seedFromHistory(stored.history));
     printSystemMessage(`Resumed "${stored.metadata.title}" (${stored.metadata.model}).`);
+    // Phase 8 (A.1.4): re-emit the persisted plan once so the user sees it.
+    if (restored.plan) printSystemMessage(`Plan: ${restored.plan}`);
   };
 
   const handleSubmit = async (text: string) => {
@@ -295,7 +288,7 @@ export function App({
       <Box
         flexDirection="column"
         borderStyle="round"
-        borderColor={THEMES[themeName].colors.primary}
+        borderColor={THEMES[themeName].colors.border}
         height={rows}
         width={stdout?.columns ?? 80}
       >

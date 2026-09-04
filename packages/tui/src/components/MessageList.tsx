@@ -1,19 +1,31 @@
 import { Box, Text, useStdout } from "ink";
+import { CORE_VERSION } from "@anvil/core";
 import type { DisplayMessage } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { MessageView } from "./MessageView.js";
+import { displayModelLabel, providerLabel, providerOfModel } from "../util/format.js";
 
 function EmptyState({ model }: { model: string }) {
   const theme = useTheme();
+  const provider = providerOfModel(model);
   return (
     <Box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1}>
       <Text color={theme.colors.primary} bold>▲ ANVIL</Text>
-      <Text dimColor>Terminal coding agent · {model}</Text>
+      <Text dimColor>Terminal coding agent</Text>
+      {provider && (
+        <Text dimColor>
+          {providerLabel(provider)} · {displayModelLabel(model)}
+        </Text>
+      )}
       <Box marginTop={1} flexDirection="column">
-        <Text dimColor>Type a request, or try:</Text>
+        <Text dimColor>Try:</Text>
         <Text><Text color={theme.colors.primary}>/help</Text><Text dimColor> — list commands</Text></Text>
         <Text><Text color={theme.colors.primary}>/model</Text><Text dimColor> — switch model or provider</Text></Text>
         <Text><Text color={theme.colors.primary}>/session</Text><Text dimColor> — resume a past conversation</Text></Text>
+        <Text><Text color={theme.colors.primary}>/connect</Text><Text dimColor> — add or update a provider API key</Text></Text>
+      </Box>
+      <Box marginTop={1}>
+        <Text dimColor>v{CORE_VERSION}</Text>
       </Box>
     </Box>
   );

@@ -22,7 +22,11 @@ export type AgentEvent =
   | { type: "compacted"; summary: string }
   | { type: "turn_complete" }
   | { type: "cancelled" }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  // Phase 8 (A.1): the truthful engine — budget, loop guard, plan scratchpad.
+  | { type: "budget_exhausted" }
+  | { type: "loop_detected"; tool: string }
+  | { type: "plan_updated"; plan: string };
 
 export interface AgentOptions {
   systemPrompt: string;
@@ -30,4 +34,9 @@ export interface AgentOptions {
   maxTokens: number;
   projectRoot: string;
   permissionBroker: PermissionBroker;
+  /** Phase 8 (A.1.1): max tool-roundtrips per user turn. Default 20. */
+  maxInnerIterations?: number;
 }
+
+/** Phase 8 (A.1.1): when maxInnerIterations is not set. */
+export const DEFAULT_MAX_INNER_ITERATIONS = 20;

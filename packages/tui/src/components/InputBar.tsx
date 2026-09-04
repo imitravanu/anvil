@@ -120,9 +120,9 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: Input
       )}
       <Box
         borderStyle="round"
-        // Bright while ready for input, dimmed while a turn streams (the box
-        // is non-interactive then) — state you can see without reading text.
-        borderColor={isBusy ? theme.colors.dim : theme.colors.primary}
+        // Bright (accent) while ready for input, dimmed while a turn streams
+        // (the box is non-interactive then) — state you can see without text.
+        borderColor={isBusy ? theme.colors.dim : theme.colors.accent}
         paddingX={theme.spacing.panelPaddingX}
       >
         <Text color={theme.colors.primary}>{"> "}</Text>

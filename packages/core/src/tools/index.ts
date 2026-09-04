@@ -5,6 +5,7 @@ import * as editFile from "./editFile.js";
 import * as listFiles from "./listFiles.js";
 import * as grep from "./grep.js";
 import * as bash from "./bash.js";
+import * as updatePlan from "./updatePlan.js"; // Phase 8 (A.1.4) plan scratchpad
 
 interface RegisteredTool {
   definition: ToolDefinition;
@@ -24,6 +25,9 @@ const REGISTRY: RegisteredTool[] = [
   { definition: listFiles.definition, execute: listFiles.execute },
   { definition: grep.definition, execute: grep.execute },
   { definition: bash.definition, execute: bash.execute, describe: bash.describe },
+  // Session intercepts this tool before the generic executor (sets session.plan
+  // and emits plan_updated); the executor here is just a safe no-op.
+  { definition: updatePlan.definition, execute: updatePlan.execute },
 ];
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = REGISTRY.map((t) => t.definition);

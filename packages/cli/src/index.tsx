@@ -8,9 +8,11 @@ import {
   AgentSession,
   loadCredentials,
   loadSettings,
-  loadModelsCache,
+  loadModelsCacheV2,
+  collectModelsFromCache,
   registerModels,
-  syncOpenRouterModels,
+  syncFreeModels,
+  createOpenRouterFreeSource,
   ProviderSelectionError,
   resolveProviderSelection,
 } from "@anvil/core";
@@ -70,7 +72,10 @@ process.on("unhandledRejection", (reason) => {
 });
 
 function bootChat(): void {
-  const cachedModels = loadModelsCache();
+  // Phase 8 (B): restore the persisted free-model snapshot (any source) before
+  // the model picker needs it. Staleness is surfaced, not hidden.
+  const cached = loadModelsCacheV2();
+  const cachedModels = collectModelsFromCache(cached);
   if (cachedModels.length > 0) {
     registerModels(cachedModels);
   }
@@ -102,9 +107,13 @@ function bootChat(): void {
   }
 
   const providers = createProviders(creds);
-  // Auto-sync live free models from OpenRouter in background
+  // Phase 8 (B): one owner for free-model syncing — the coordinator. Single-flight
+  // + TTL mean boot, picker, and /sync can never double-fetch or silently diverge.
   if (providers.openrouter?.isConfigured()) {
-    syncOpenRouterModels(creds.openrouterApiKey).catch(() => {});
+    void syncFreeModels({
+      sources: [createOpenRouterFreeSource()],
+      apiKeyBySource: { openrouter: creds.openrouterApiKey },
+    });
   }
 
   const provider = providers[selection.providerId];

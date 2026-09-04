@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { listSessions } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
+import { curtail, displayModelLabel } from "../util/format.js";
 
 function relativeTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -51,7 +52,7 @@ export function SessionPicker({
         sessions.map((meta, i) => (
           <Text key={meta.id} color={i === selected ? theme.colors.primary : undefined}>
             {i === selected ? "❯ " : "  "}
-            {meta.title} · {meta.model} · updated {relativeTime(meta.updatedAt)}
+            {curtail(meta.title, 40)} · {displayModelLabel(meta.model)} · updated {relativeTime(meta.updatedAt)}
           </Text>
         ))
       )}

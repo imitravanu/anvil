@@ -12,12 +12,32 @@ import { createOllamaProvider } from "./ollama.js";
 export * from "./types.js";
 export * from "./registry.js";
 export { OPENROUTER_BASE_URL, createOpenRouterProvider, fetchOpenRouterFreeModels, syncOpenRouterModels } from "./openrouter.js";
+export {
+  DEFAULT_SYNC_TTL_MS,
+  createOpenRouterFreeSource,
+  syncFreeModels,
+  noteRateLimited,
+  isRateLimited,
+  getRateLimitedModels,
+  isRateLimitMessage,
+  type FreeModelSource,
+  type SourceResult,
+  type SyncReport,
+} from "./freeModels.js";
+export {
+  loadModelsCache,
+  saveModelsCache,
+  loadModelsCacheV2,
+  saveModelsCacheV2,
+  isModelsCacheFresh,
+  collectModelsFromCache,
+  type ModelsCacheV2,
+} from "./cache.js";
 export { GROQ_BASE_URL, createGroqProvider } from "./groq.js";
 export { CEREBRAS_BASE_URL, createCerebrasProvider } from "./cerebras.js";
 export { GITHUB_MODELS_BASE_URL, createGitHubModelsProvider } from "./github.js";
 export { MISTRAL_BASE_URL, createMistralProvider } from "./mistral.js";
 export { OLLAMA_DEFAULT_BASE_URL, createOllamaProvider } from "./ollama.js";
-export { loadModelsCache, saveModelsCache } from "./cache.js";
 
 export interface ProviderCredentials {
   anthropicApiKey?: string;

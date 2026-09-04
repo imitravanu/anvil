@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 import type { DisplayMessage } from "../hooks/useAgentController.js";
-import { highlightCodeBlocks } from "../markdown/highlightCodeBlocks.js";
+import { MarkdownView, parseMarkdownText } from "../markdown/MarkdownView.js";
 import { useTheme } from "../theme/theme.js";
 import { ToolCallView } from "./ToolCallView.js";
 
@@ -25,19 +25,29 @@ export function MessageView({ message }: { message: DisplayMessage }) {
     );
   }
 
-  // Two-pass rendering: plain (but colored) text while streaming; once the
-  // turn settles, re-render once with fenced code blocks syntax-highlighted.
-  // The highlighted form is rendered WITHOUT an outer color so the
-  // highlighter's own ANSI colors are what the terminal shows.
-  const body = message.streaming ? message.text : highlightCodeBlocks(message.text);
+  // Two-pass rendering (Phase 8 C2): plain colored text while streaming —
+  // never markdown-parse mid-flight (flicker rule) — then ONE re-render
+  // through the bounded markdown renderer once the turn settles. Code fences
+  // are highlighted inside MarkdownView, so no direct highlighter call here.
+  if (message.streaming) {
+    return (
+      <Box flexDirection="column">
+        <Text bold color={theme.colors.primary}>
+          anvil
+        </Text>
+        <Text color={theme.colors.assistantText}>{message.text || "…"}</Text>
+        {message.toolCalls.map((call) => (
+          <ToolCallView key={call.id} call={call} />
+        ))}
+      </Box>
+    );
+  }
   return (
     <Box flexDirection="column">
       <Text bold color={theme.colors.primary}>
         anvil
       </Text>
-      <Text color={message.streaming ? theme.colors.assistantText : undefined}>
-        {body || (message.streaming ? "…" : "")}
-      </Text>
+      <MarkdownView blocks={parseMarkdownText(message.text)} />
       {message.toolCalls.map((call) => (
         <ToolCallView key={call.id} call={call} />
       ))}

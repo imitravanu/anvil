@@ -368,3 +368,14 @@ export function registerModels(models: ModelInfo[]): void {
     registerModel(m);
   }
 }
+
+/**
+ * Remove models by id. Used by tests to keep the registry pristine after
+ * registering synthetic phase-8 free models; not part of the hot path.
+ */
+export function unregisterModels(ids: string[]): void {
+  const set = new Set(ids);
+  for (let i = MODEL_REGISTRY.length - 1; i >= 0; i--) {
+    if (set.has(MODEL_REGISTRY[i].id)) MODEL_REGISTRY.splice(i, 1);
+  }
+}

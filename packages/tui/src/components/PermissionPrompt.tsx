@@ -6,6 +6,13 @@ import { useTheme } from "../theme/theme.js";
 
 const DIFF_TOOLS = new Set(["edit_file", "write_file"]);
 
+// Phase 8 (C5): active phrasing instead of the awkward tool-name split.
+const TOOL_LABELS: Record<string, string> = {
+  edit_file: "wants to edit a file",
+  write_file: "wants to write a file",
+  run_command: "wants to run a command",
+};
+
 function optionsFor(toolName: string): string[] {
   return ["Allow once", `Always allow '${toolName}' this session`, "Deny"];
 }
@@ -38,10 +45,7 @@ export function PermissionPrompt({
     }
   });
 
-  const label =
-    request.toolName === "run_command"
-      ? "wants to run:"
-      : `wants to ${request.toolName.replace("_", " ")}`;
+  const label = TOOL_LABELS[request.toolName] ?? `wants to ${request.toolName.replace(/_/g, " ")}`;
 
   return (
     <Box
