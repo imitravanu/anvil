@@ -26,7 +26,7 @@ export interface ModelsCacheV2 {
 export function loadModelsCacheV2(): ModelsCacheV2 {
   try {
     const raw = JSON.parse(fs.readFileSync(MODELS_CACHE_PATH(), "utf-8"));
-    if (raw && raw.version === 2 && typeof raw.sources === "object" && raw.sources !== null) {
+    if (raw && raw.version === 2 && typeof raw.sources === "object" && raw.sources !== null && !Array.isArray(raw.sources)) {
       return {
         version: 2,
         syncedAt: typeof raw.syncedAt === "string" ? raw.syncedAt : null,
@@ -66,7 +66,10 @@ export function collectModelsFromCache(cache: ModelsCacheV2): ModelInfo[] {
   const out: ModelInfo[] = [];
   const seen = new Set<string>();
   for (const id of Object.keys(cache.sources)) {
-    for (const m of cache.sources[id]) {
+    const list = cache.sources[id];
+    if (!Array.isArray(list)) continue;
+    for (const m of list) {
+      if (!m || typeof m !== "object" || !m.id || !m.providerId) continue;
       const key = `${m.providerId}:${m.id}`;
       if (seen.has(key)) continue;
       seen.add(key);

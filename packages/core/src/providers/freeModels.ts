@@ -34,18 +34,21 @@ export interface SyncReport {
 
 /** OpenRouter deliberately mimics chat-completions; its /models endpoint is public. */
 export async function fetchOpenRouterFreeModels(apiKey?: string): Promise<ModelInfo[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4000);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
     const headers: Record<string, string> = { "HTTP-Referer": REFERER, "X-Title": TITLE };
     if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
 
     const res = await fetch(`${OPENROUTER_BASE_URL}/models`, { signal: controller.signal, headers });
-    clearTimeout(timer);
-    if (!res.ok) return [];
+    if (!res.ok) {
+      throw new Error(`OpenRouter /models returned HTTP ${res.status}: ${res.statusText}`);
+    }
 
     const json = (await res.json()) as { data?: Array<any> };
-    if (!Array.isArray(json.data)) return [];
+    if (!Array.isArray(json?.data)) {
+      throw new Error("OpenRouter /models response missing data array");
+    }
 
     const freeModels: ModelInfo[] = [];
     for (const m of json.data) {
@@ -78,8 +81,8 @@ export async function fetchOpenRouterFreeModels(apiKey?: string): Promise<ModelI
       return a.displayName.localeCompare(b.displayName);
     });
     return freeModels;
-  } catch {
-    return [];
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -143,6 +146,12 @@ function mergeFreeModels(
   providerId: string,
   live: ModelInfo[]
 ): { newlyFree: string[]; noLongerFree: string[] } {
+  // Discovery #2: An empty live list cannot drive demotions. Demotion requires a
+  // non-empty list that omits the model. An empty list is a source glitch or
+  // network failure, not "everything became paid".
+  if (live.length === 0) {
+    return { newlyFree: [], noLongerFree: [] };
+  }
   const liveIds = new Set(live.map((m) => m.id));
   const newlyFree: string[] = [];
   const noLongerFree: string[] = [];

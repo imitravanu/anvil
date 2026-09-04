@@ -29,6 +29,9 @@ describe("bounded markdown renderer", () => {
     expect(code).toMatchObject({ language: "ts", code: "const x: number = 1;" });
     // fences content is NOT inline-parsed
     expect((blocks[0] as any).spans[0].text).toBe("before");
+
+    const cppBlocks = parseMarkdownText("```c++\nint x = 1;\n```");
+    expect(cppBlocks[0]).toMatchObject({ kind: "code", language: "c++", code: "int x = 1;" });
   });
 
   it("parses lists, quotes, and hr", () => {

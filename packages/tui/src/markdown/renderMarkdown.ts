@@ -19,7 +19,7 @@ export type MarkdownBlock =
   | { kind: "hr" };
 
 const INLINE_RE = /(\*\*\*([^*]+)\*\*\*|\*\*([^*]+)\*\*|`([^`]+)`|\*([^*\n]+)\*)/g;
-const FENCE_RE = /^```(\w*)\s*$/;
+const FENCE_RE = /^```([^\s`]*)\s*$/;
 const HEADING_RE = /^(#{1,6})\s+(.*)$/;
 const HR_RE = /^\s*(-{3,}|\*{3,}|_{3,})\s*$/;
 const QUOTE_RE = /^((?:>\s?)+)(.*)$/;

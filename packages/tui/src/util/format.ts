@@ -19,7 +19,9 @@ export function providerOfModel(modelId: string): string | null {
 
 /** Code-point-aware truncation ("…"). Never use String#length for this — CJK/emoji. */
 export function curtail(text: string, max: number): string {
+  if (max <= 0) return "";
   const chars = Array.from(text);
-  if (chars.length <= max || max <= 0) return text;
-  return chars.slice(0, Math.max(0, max - 1)).join("") + "…";
+  if (chars.length <= max) return text;
+  if (max === 1) return "…";
+  return chars.slice(0, max - 1).join("") + "…";
 }

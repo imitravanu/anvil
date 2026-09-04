@@ -21,6 +21,9 @@ describe("format helpers", () => {
     expect(curtail("1234567890", 8)).toBe("1234567…");
     expect(curtail("short", 8)).toBe("short");
     expect(curtail("", 4)).toBe("");
+    expect(curtail("hello", 0)).toBe("");
+    expect(curtail("hello", -1)).toBe("");
+    expect(curtail("hello", 1)).toBe("…");
   });
 
   it("curtail is code-point aware (emoji/CJK do not split surrogate pairs)", () => {

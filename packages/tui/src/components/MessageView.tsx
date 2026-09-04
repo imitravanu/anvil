@@ -2,10 +2,12 @@ import { Box, Text } from "ink";
 import type { DisplayMessage } from "../hooks/useAgentController.js";
 import { MarkdownView, parseMarkdownText } from "../markdown/MarkdownView.js";
 import { useTheme } from "../theme/theme.js";
+import { useSpinnerFrame } from "../util/useSpinner.js";
 import { ToolCallView } from "./ToolCallView.js";
 
 export function MessageView({ message }: { message: DisplayMessage }) {
   const theme = useTheme();
+  const spinner = useSpinnerFrame(message.streaming);
   if (message.role === "user") {
     return (
       <Box flexDirection="column">
@@ -35,7 +37,10 @@ export function MessageView({ message }: { message: DisplayMessage }) {
         <Text bold color={theme.colors.primary}>
           anvil
         </Text>
-        <Text color={theme.colors.assistantText}>{message.text || "…"}</Text>
+        <Text color={theme.colors.assistantText}>
+          {message.text ? `${message.text} ` : ""}
+          <Text color={theme.colors.accent}>{spinner}</Text>
+        </Text>
         {message.toolCalls.map((call) => (
           <ToolCallView key={call.id} call={call} />
         ))}

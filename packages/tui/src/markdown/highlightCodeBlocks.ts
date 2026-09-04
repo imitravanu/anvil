@@ -1,6 +1,6 @@
 import { highlight } from "cli-highlight";
 
-const FENCE_RE = /```(\w*)\n([\s\S]*?)```/g;
+const FENCE_RE = /```([^\s`]*)\n([\s\S]*?)```/g;
 
 /**
  * Second-pass rendering: applied ONCE when a message finishes streaming (never

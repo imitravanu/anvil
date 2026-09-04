@@ -12,11 +12,9 @@ function EmptyState({ model }: { model: string }) {
     <Box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1}>
       <Text color={theme.colors.primary} bold>▲ ANVIL</Text>
       <Text dimColor>Terminal coding agent</Text>
-      {provider && (
-        <Text dimColor>
-          {providerLabel(provider)} · {displayModelLabel(model)}
-        </Text>
-      )}
+      <Text dimColor>
+        {provider ? providerLabel(provider) : "Anvil"} · {displayModelLabel(model)}
+      </Text>
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>Try:</Text>
         <Text><Text color={theme.colors.primary}>/help</Text><Text dimColor> — list commands</Text></Text>

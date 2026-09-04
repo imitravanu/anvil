@@ -21,21 +21,26 @@ export function StatusBar({ model, isBusy, usage }: StatusBarProps) {
   const info = MODEL_REGISTRY.find((m) => m.id === model);
 
   const modelLabel = `${displayModelLabel(model)}${info?.isFree ? " [FREE]" : ""}`;
-  const state = isBusy ? `${busyFrame} busy` : "○ idle";
+  const state = isBusy ? (
+    <>
+      <Text color={theme.colors.accent}>{busyFrame}</Text> busy
+    </>
+  ) : (
+    "○ idle"
+  );
+  const statePlain = isBusy ? `${busyFrame} busy` : "○ idle";
   const tokens = `tokens ${fmt(usage.inputTokens)} in · ${fmt(usage.outputTokens)} out`;
   const hints = isBusy ? "esc cancel · ctrl+c cancel" : "ctrl+c exit · /help";
 
-  const left = `${curtail(modelLabel, 48)} │ ${state} │ ${tokens}`;
-  const budget = width - left.length - 6;
+  const leftPlain = `${curtail(modelLabel, 48)} │ ${statePlain} │ ${tokens}`;
+  const budget = width - leftPlain.length - 6;
   // Hints are hidden (never clipped/wrapped) when they cannot fit.
   return (
     <Box paddingX={theme.spacing.panelPaddingX} justifyContent="space-between">
-      <Text dimColor>{left}</Text>
-      {budget >= hints.length ? (
-        <Text dimColor>{hints}</Text>
-      ) : (
-        <Text dimColor>{curtail(hints, Math.max(0, budget))}</Text>
-      )}
+      <Text dimColor>
+        {curtail(modelLabel, 48)} │ {state} │ {tokens}
+      </Text>
+      {budget >= hints.length ? <Text dimColor>{hints}</Text> : null}
     </Box>
   );
 }

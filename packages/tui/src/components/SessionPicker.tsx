@@ -14,6 +14,8 @@ function relativeTime(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+const MAX_VISIBLE = 8;
+
 /**
  * Session picker overlay. Same "takes over input" pattern as
  * PermissionPrompt/ModelPicker — App renders it in place of InputBar.
@@ -43,18 +45,38 @@ export function SessionPicker({
     }
   });
 
+  const scrollOffset =
+    sessions.length <= MAX_VISIBLE
+      ? 0
+      : Math.max(0, Math.min(selected - Math.floor(MAX_VISIBLE / 2), sessions.length - MAX_VISIBLE));
+  const visibleSessions = sessions.slice(scrollOffset, scrollOffset + MAX_VISIBLE);
+  const hasAbove = scrollOffset > 0;
+  const hasBelow = scrollOffset + MAX_VISIBLE < sessions.length;
+
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={theme.colors.primary} paddingX={1}>
-      <Text color={theme.colors.primary}>Saved sessions — Enter to resume, Esc to cancel</Text>
+      <Text color={theme.colors.primary}>
+        Saved sessions{sessions.length > 0 ? ` (${selected + 1}/${sessions.length})` : ""} — Enter to resume, Esc to cancel
+      </Text>
       {sessions.length === 0 ? (
         <Text dimColor>No saved sessions yet.</Text>
       ) : (
-        sessions.map((meta, i) => (
-          <Text key={meta.id} color={i === selected ? theme.colors.primary : undefined}>
-            {i === selected ? "❯ " : "  "}
-            {curtail(meta.title, 40)} · {displayModelLabel(meta.model)} · updated {relativeTime(meta.updatedAt)}
-          </Text>
-        ))
+        <>
+          {hasAbove && <Text dimColor>  ▲ {scrollOffset} more above...</Text>}
+          {visibleSessions.map((meta, i) => {
+            const globalIndex = scrollOffset + i;
+            const isSelected = globalIndex === selected;
+            return (
+              <Text key={meta.id} color={isSelected ? theme.colors.primary : undefined}>
+                {isSelected ? "❯ " : "  "}
+                {curtail(meta.title, 40)} · {displayModelLabel(meta.model)} · updated {relativeTime(meta.updatedAt)}
+              </Text>
+            );
+          })}
+          {hasBelow && (
+            <Text dimColor>  ▼ {sessions.length - (scrollOffset + MAX_VISIBLE)} more below...</Text>
+          )}
+        </>
       )}
     </Box>
   );

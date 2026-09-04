@@ -141,10 +141,10 @@ export class AgentSession {
     }
     this.isSending = true;
     this.history.push({ role: "user", content: [{ type: "text", text: userText }] });
-    // Set a default title from the first user message so sessions aren't stuck
-    // as "Untitled" without extra wiring.
     if (this.title === null) {
-      this.title = userText.length > 50 ? userText.slice(0, 49) + "…" : userText;
+      const firstLine = userText.trim().split("\n")[0] ?? "";
+      const chars = Array.from(firstLine);
+      this.title = chars.length > 50 ? chars.slice(0, 49).join("") + "…" : firstLine;
     }
     // A fresh controller per send() call — cancelling one turn must not poison the next.
     const controller = new AbortController();
@@ -449,6 +449,11 @@ export class AgentSession {
             yield { type: "tool_finished", id: t.p.call.id, name: t.p.call.name, result };
             this.recordLedger({ eventType: "tool_finished", tool: t.p.call.name, inputHash: t.p.key, outcome: result.isError ? "error" : "ok", elapsedMs: Date.now() - t.startedAt });
             runResults.set(t.p.call.id, result);
+          }
+          if (controller.signal.aborted) {
+            this.recordLedger({ eventType: "cancelled", outcome: "aborted", elapsedMs: 0 });
+            yield { type: "cancelled" };
+            return;
           }
         }
 
