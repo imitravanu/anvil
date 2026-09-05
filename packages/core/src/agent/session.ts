@@ -10,6 +10,14 @@ import { canonicalInputHash } from "./canonical.js";
 import { RunLedgerEntry, capLedger, maxSeq } from "./ledger.js";
 import { isRateLimitMessage, noteRateLimited } from "../providers/freeModels.js";
 import { MAX_DELEGATIONS_PER_TURN, runSubAgent } from "./subagent.js";
+import {
+  Checkpoint,
+  capCheckpoints,
+  checkpointMeta,
+  takeSnapshot,
+  restoreCheckpoint,
+  type CheckpointMeta,
+} from "./checkpoints.js";
 
 interface AccumulatedToolCall {
   id: string;
@@ -43,6 +51,9 @@ export class AgentSession {
   // Phase 9: resolved tool list + per-turn delegation counter.
   private toolDefs: ToolDefinition[];
   private delegationsUsed = 0;
+  // Rewind: in-memory ring of pre-mutation file snapshots (never persisted).
+  private checkpoints: Checkpoint[] = [];
+  private checkpointSeq = 0;
   readonly id: string;
   title: string | null; // null until the first user message sets a default
   readonly createdAt: string;
@@ -125,6 +136,45 @@ export class AgentSession {
     return this.ledger;
   }
 
+  /** Rewind: metadata view of in-memory checkpoints (contents never exposed). */
+  getCheckpoints(): CheckpointMeta[] {
+    return this.checkpoints.map(checkpointMeta);
+  }
+
+  /**
+   * Rewind: restore a checkpoint's files (originals written back, creations
+   * deleted). The explicit call IS the consent — no permission prompt — and
+   * the restore is ledger-recorded. Never creates a checkpoint itself.
+   */
+  async rewind(id: number): Promise<{
+    ok: boolean;
+    restored: string[];
+    deleted: string[];
+    errors: string[];
+    message: string;
+  }> {
+    const cp = this.checkpoints.find((c) => c.id === id);
+    if (!cp) {
+      this.recordLedger({ eventType: "rewind", outcome: "error", elapsedMs: 0 });
+      return {
+        ok: false,
+        restored: [],
+        deleted: [],
+        errors: [`No checkpoint #${id} in this session.`],
+        message: `No checkpoint #${id} in this session.`,
+      };
+    }
+    const startedAt = Date.now();
+    const result = await restoreCheckpoint(this.options.projectRoot, cp);
+    const ok = result.errors.length === 0;
+    this.recordLedger({ eventType: "rewind", outcome: ok ? "ok" : "error", elapsedMs: Date.now() - startedAt });
+    const parts: string[] = [];
+    if (result.restored.length > 0) parts.push(`restored ${result.restored.length}: ${result.restored.join(", ")}`);
+    if (result.deleted.length > 0) parts.push(`deleted ${result.deleted.length} created: ${result.deleted.join(", ")}`);
+    if (result.errors.length > 0) parts.push(`errors: ${result.errors.join("; ")}`);
+    return { ...result, ok, message: parts.length > 0 ? parts.join(" ") : "Checkpoint was empty — nothing to restore." };
+  }
+
   private recordLedger(
     entry: Omit<RunLedgerEntry, "seq" | "ts">
   ): void {
@@ -167,6 +217,8 @@ export class AgentSession {
     let lastToolKey: string | null = null;
     let toolStreak = 0;
     let loopNotified = false;
+    // Total per-key counts this turn, for the non-consecutive repeat guard.
+    const totalCounts = new Map<string, number>();
 
     try {
       while (true) {
@@ -321,6 +373,7 @@ export class AgentSession {
           key: string;
           refused: boolean;
           loopWarn: boolean;
+          repeatWarn: boolean;
         };
         // Classify in DECLARED order first: the consecutive same-key streak
         // (A.1.2) and the declared-order contract (F5) are order-sensitive.
@@ -334,7 +387,16 @@ export class AgentSession {
           }
           const loopWarn = toolStreak === 3 && !loopNotified;
           if (loopWarn) loopNotified = true;
-          return { call, def, key, refused: toolStreak >= 4, loopWarn };
+          // Non-consecutive repeat (A-B-A-B-A ping-pong the streak guard cannot
+          // see): 3rd TOTAL occurrence with other calls in between. Warn once
+          // per turn, never refuse — interleaved repeats are often legitimate
+          // re-reads, so this stays advisory while the consecutive guard stays
+          // the enforcing one.
+          const total = (totalCounts.get(key) ?? 0) + 1;
+          totalCounts.set(key, total);
+          const repeatWarn = total === 3 && !loopWarn && toolStreak < 3 && !loopNotified;
+          if (repeatWarn) loopNotified = true;
+          return { call, def, key, refused: toolStreak >= 4, loopWarn, repeatWarn };
         });
 
         // update_plan is handled by the session (sets this.plan + emits
@@ -348,6 +410,13 @@ export class AgentSession {
             yield { type: "loop_detected", tool: p.call.name };
             turnNotes.push(
               `[Loop guard] ${p.call.name} was repeated 3 times without progress. Stop repeating it and try a different approach.`
+            );
+          }
+          if (p.repeatWarn) {
+            this.recordLedger({ eventType: "loop_detected", tool: p.call.name, inputHash: p.key, outcome: "error", elapsedMs: 0 });
+            yield { type: "loop_detected", tool: p.call.name };
+            turnNotes.push(
+              `[Loop guard] ${p.call.name} was repeated 3 times this turn (with other calls in between) without progress. Stop repeating it and try a different approach.`
             );
           }
           if (p.call.name === "update_plan") {
@@ -409,6 +478,9 @@ export class AgentSession {
               permissionBroker: this.options.permissionBroker,
               task,
               signal: controller.signal,
+              // Phase 10: sub-agents inherit the main session's tools (incl.
+              // MCP) minus delegate_task, under the same shared broker.
+              tools: this.toolDefs,
             });
             if (run.aborted) {
               this.recordLedger({ eventType: "cancelled", tool: "delegate_task", inputHash: p.key, outcome: "aborted", elapsedMs: Date.now() - subStartedAt });
@@ -428,6 +500,7 @@ export class AgentSession {
               toolCalls: run.toolCalls,
               inputTokens: run.usage.in,
               outputTokens: run.usage.out,
+              report: run.report,
             };
             handled.set(p.call.id, {
               output: { report: run.report },
@@ -446,6 +519,25 @@ export class AgentSession {
             continue;
           }
           toRun.push({ p, startedAt: Date.now() });
+        }
+        // Rewind: snapshot write_file/edit_file targets BEFORE any permission
+        // prompt or execution. Matched by NAME, pre-permission — a denied tool
+        // changes nothing, so restoring over it stays correct. Batches with no
+        // file writes (reads, run_command-only) snapshot nothing.
+        const rewindTargets: string[] = [];
+        for (const p of prepared) {
+          if (p.call.name !== "write_file" && p.call.name !== "edit_file") continue;
+          const target = (p.call.input as { path?: unknown } | undefined)?.path;
+          if (typeof target === "string" && target.length > 0) rewindTargets.push(target);
+        }
+        if (rewindTargets.length > 0) {
+          const cp = takeSnapshot(this.options.projectRoot, this.checkpointSeq + 1, rewindTargets);
+          if (cp.files.length > 0) {
+            this.checkpointSeq = cp.id;
+            this.checkpoints = capCheckpoints([...this.checkpoints, cp]);
+            this.recordLedger({ eventType: "checkpoint_created", outcome: "ok", elapsedMs: 0 });
+            yield { type: "checkpoint", id: cp.id, files: cp.files.length };
+          }
         }
         // A.1.3 declared parallel policy: any mutating call forces the WHOLE batch
         // serial (single-flight permission prompts; no file/command races). An

@@ -1,10 +1,10 @@
 export type Role = "user" | "assistant";
 
-export interface ToolDefinition {
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>; // JSON schema
-}
+// Single ToolDefinition for the whole core (tools flavor, with `mutating`).
+// Providers only read name/description/inputSchema; the extra flag flows
+// through structurally. See FINDING-2 in docs/PHASE-10-PROGRESS.md.
+import type { ToolDefinition } from "../tools/types.js";
+export type { ToolDefinition };
 
 export interface ToolCallRequest {
   id: string;

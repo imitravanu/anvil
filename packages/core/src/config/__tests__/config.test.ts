@@ -1,5 +1,16 @@
-import { describe, expect, it } from "vitest";
-import { ProviderSelectionError, resolveProviderSelection } from "../index.js";
+import { describe, expect, it, afterEach } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import {
+  ProviderSelectionError,
+  anvilHome,
+  loadCredentials,
+  loadSettings,
+  resolveProviderSelection,
+  saveCredential,
+  saveSettings,
+} from "../index.js";
 import type { ProviderCredentials } from "../../providers/index.js";
 
 const geminiOnly: ProviderCredentials = { geminiApiKey: "g-key" };
@@ -55,5 +66,34 @@ describe("resolveProviderSelection", () => {
     expect(() =>
       resolveProviderSelection({ envProvider: "not-a-provider", creds: geminiOnly })
     ).toThrow(/not configured/);
+  });
+});
+
+describe("anvilHome relocation", () => {
+  const saved = process.env.ANVIL_HOME;
+  let tmp: string;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.ANVIL_HOME;
+    else process.env.ANVIL_HOME = saved;
+    if (tmp) fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it("credentials and settings live under ANVIL_HOME when set", () => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-home-"));
+    process.env.ANVIL_HOME = tmp;
+    expect(anvilHome()).toBe(path.resolve(tmp));
+
+    saveCredential("geminiApiKey", "test-key");
+    saveSettings({ defaultModel: "gemini-3.6-flash" });
+
+    expect(fs.existsSync(path.join(tmp, "credentials.json"))).toBe(true);
+    expect(fs.existsSync(path.join(tmp, "settings.json"))).toBe(true);
+    expect(loadCredentials()).toEqual({ geminiApiKey: "test-key" });
+    expect(loadSettings()).toEqual({ defaultModel: "gemini-3.6-flash" });
+  });
+
+  it("falls back to ~/.anvil when ANVIL_HOME is unset", () => {
+    delete process.env.ANVIL_HOME;
+    expect(anvilHome()).toBe(path.join(os.homedir(), ".anvil"));
   });
 });

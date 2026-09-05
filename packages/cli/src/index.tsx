@@ -3,20 +3,34 @@ import React from "react";
 import { render } from "ink";
 import {
   CORE_VERSION,
+  McpServerConnection,
+  TOOL_DEFINITIONS,
+  connectAllMcpServers,
+  createMcpExecutor,
   createProviders,
+  describeMcpInput,
+  dropCollidingMcpTools,
   hasAnyConfiguredProvider,
   AgentSession,
+  killAllMcpServers,
   loadCredentials,
   loadSettings,
   loadModelsCacheV2,
   collectModelsFromCache,
+  registerExternalExecutor,
   registerModels,
   syncFreeModels,
   createOpenRouterFreeSource,
+  toToolDefinitions,
+  MCP_TOOL_PREFIX,
   ProviderSelectionError,
   resolveProviderSelection,
+  type ToolDefinition,
 } from "@anvil/core";
-import { App, FirstRunSetup, TuiPermissionBroker } from "@anvil/tui";
+import { App, FirstRunSetup, TuiPermissionBroker, isThemeName, loadCustomThemes } from "@anvil/tui";
+
+// Detached MCP server children would outlive Anvil — SIGKILL them on exit.
+process.on("exit", killAllMcpServers);
 
 const VERSION = CORE_VERSION;
 
@@ -47,7 +61,8 @@ Environment:
   ANVIL_PROVIDER, ANVIL_MODEL — same as the flags, lower precedence
 
 Config lives in ~/.anvil (credentials.json, settings.json, sessions/).
-Slash commands inside the app: /help /clear /connect /model /theme /session /sync.
+Set ANVIL_HOME to relocate the data dir (credentials, settings, sessions, cache).
+Slash commands inside the app: /help /clear /connect /expand /ledger /mcp /model /rewind /theme /session /sync.
 `;
 
 // --- Startup crash guard: never leave the terminal in a broken raw-mode state. ---
@@ -71,7 +86,7 @@ process.on("unhandledRejection", (reason) => {
   process.exitCode = 1;
 });
 
-function bootChat(): void {
+async function bootChat(): Promise<void> {
   // Phase 8 (B): restore the persisted free-model snapshot (any source) before
   // the model picker needs it. Staleness is surfaced, not hidden.
   const cached = loadModelsCacheV2();
@@ -124,18 +139,54 @@ function bootChat(): void {
     process.exit(1);
   }
 
+  // Phase 10: connect MCP servers (10s cap each). Dead servers warn once
+  // and never block chat; the executor reads this map live, so /mcp
+  // reconnect refreshes routing with no stale state.
+  const mcpConns = new Map<string, McpServerConnection>();
+  const mcpNotices: string[] = [];
+  const mcpDefs: ToolDefinition[] = [];
+  try {
+    const mcp = await connectAllMcpServers(mcpConns, { timeoutMs: 10_000 });
+    for (const problem of mcp.problems) mcpNotices.push(`MCP ${problem}`);
+    if (mcp.connected > 0 || mcpNotices.length > 0) {
+      const allMcpDefs = [...mcpConns.values()].flatMap((c) =>
+        c.status === "ready" ? toToolDefinitions(c.id, c.tools) : []
+      );
+      const collision = dropCollidingMcpTools(
+        TOOL_DEFINITIONS.map((d) => d.name),
+        allMcpDefs
+      );
+      mcpDefs.push(...collision.kept);
+      for (const d of collision.dropped) mcpNotices.push(`MCP dropped tool ${d.name} (name collision)`);
+      registerExternalExecutor(
+        MCP_TOOL_PREFIX,
+        createMcpExecutor(() => mcpConns),
+        describeMcpInput
+      );
+      if (mcp.connected > 0) {
+        console.error(`MCP: ${mcp.tools} tool(s) from ${mcp.connected} server(s).`);
+      }
+    }
+  } catch (err: any) {
+    mcpNotices.push(`MCP connect failed: ${err?.message ?? String(err)}`);
+  }
+  for (const notice of mcpNotices) console.error(`⚠ ${notice}`);
+
   const broker = new TuiPermissionBroker();
+  const mcpTools = mcpDefs.length > 0 ? [...TOOL_DEFINITIONS, ...mcpDefs] : undefined;
   const session = new AgentSession(provider, {
     systemPrompt: "You are Anvil, a terminal coding agent. Be concise.",
     model: selection.model,
     maxTokens: 8192,
     projectRoot: process.cwd(),
     permissionBroker: broker,
+    ...(mcpTools !== undefined ? { tools: mcpTools } : {}),
   });
 
   const rawTheme = settings.theme;
+  const customThemeNames = loadCustomThemes().themes;
   const initialTheme =
-    rawTheme === "dark" || rawTheme === "light" || rawTheme === "highContrast"
+    (rawTheme !== undefined && (isThemeName(rawTheme) || rawTheme in customThemeNames))
       ? rawTheme
       : undefined;
 
@@ -151,6 +202,12 @@ function bootChat(): void {
         systemPrompt: "You are Anvil, a terminal coding agent. Be concise.",
         maxTokens: 8192,
         projectRoot: process.cwd(),
+        ...(mcpDefs.length > 0 ? { tools: [...TOOL_DEFINITIONS, ...mcpDefs] } : {}),
+      }}
+      mcp={{
+        list: () => [...mcpConns.values()],
+        notices: mcpNotices,
+        reconnect: () => connectAllMcpServers(mcpConns, { timeoutMs: 10_000 }),
       }}
     />,
     { exitOnCtrlC: false }
@@ -168,7 +225,7 @@ function runSetup(thenChat: boolean): void {
     <FirstRunSetup
       onDone={() => {
         instance?.unmount();
-        if (thenChat) bootChat();
+        if (thenChat) void bootChat();
       }}
     />,
     { exitOnCtrlC: false }
@@ -199,5 +256,5 @@ if (first === "config") {
     console.error("Anvil needs an interactive terminal (stdin is not a TTY).");
     process.exit(1);
   }
-  bootChat();
+  void bootChat();
 }

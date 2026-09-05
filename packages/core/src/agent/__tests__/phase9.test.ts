@@ -92,6 +92,8 @@ describe("Phase 9: sub-agent delegation", () => {
       toolCalls: 0,
       inputTokens: 40,
       outputTokens: 9,
+      // U10: the finished event carries the (capped) report for the transcript.
+      report: "Found it: providers/registry.ts",
     });
     expect(types.indexOf("subagent_started")).toBeLessThan(types.indexOf("subagent_finished"));
     expect(types[types.length - 1]).toBe("turn_complete");
@@ -240,6 +242,23 @@ describe("Phase 9: sub-agent delegation", () => {
     expect(sub).toHaveLength(TOOL_DEFINITIONS.length - 1);
     expect(sub.map((t) => t.name)).toEqual(
       TOOL_DEFINITIONS.filter((t) => t.name !== "delegate_task").map((t) => t.name)
+    );
+  });
+
+  it("U10: finished event carries the capped report; cap still enforced", async () => {
+    const long = "r".repeat(SUB_AGENT_REPORT_MAX_CHARS + 100);
+    const { session } = makeSession([
+      [...delegateCall("d1", "write a novel"), { type: "turn_end", stopReason: "tool_use" }],
+      subTurn(long, { in: 10, out: 9000 }),
+      [{ type: "text_delta", text: "summarized" }, { type: "turn_end", stopReason: "end_turn" }],
+    ]);
+    const events = await collect(session.send("go"));
+    const fin = events.find((e) => e.type === "subagent_finished");
+    expect(fin?.type).toBe("subagent_finished");
+    if (fin?.type !== "subagent_finished") throw new Error("unreachable");
+    expect(fin.report.endsWith("[report truncated]")).toBe(true);
+    expect(fin.report.length).toBeLessThanOrEqual(
+      SUB_AGENT_REPORT_MAX_CHARS + "\n[report truncated]".length
     );
   });
 });

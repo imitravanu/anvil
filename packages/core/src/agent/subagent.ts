@@ -25,8 +25,8 @@ export const SUB_AGENT_SYSTEM_PROMPT =
   "and factual.";
 
 /** Sub-agents never see delegate_task — the depth-1 guard for well-behaved models. */
-export function subAgentTools(): ToolDefinition[] {
-  return TOOL_DEFINITIONS.filter((t) => t.name !== "delegate_task");
+export function subAgentTools(from: ToolDefinition[] = TOOL_DEFINITIONS): ToolDefinition[] {
+  return from.filter((t) => t.name !== "delegate_task");
 }
 
 export function capReport(report: string): string {
@@ -49,6 +49,8 @@ export async function runSubAgent(opts: {
   task: string;
   signal: AbortSignal;
   maxInnerIterations?: number;
+  /** Parent tool list (incl. MCP tools) — delegate_task still filtered. */
+  tools?: ToolDefinition[];
 }): Promise<SubAgentRun> {
   const sub = new AgentSession(opts.provider, {
     systemPrompt: SUB_AGENT_SYSTEM_PROMPT,
@@ -56,7 +58,7 @@ export async function runSubAgent(opts: {
     maxTokens: SUB_AGENT_MAX_TOKENS,
     projectRoot: opts.projectRoot,
     permissionBroker: opts.permissionBroker,
-    tools: subAgentTools(),
+    tools: subAgentTools(opts.tools),
     allowDelegation: false,
     maxInnerIterations: opts.maxInnerIterations ?? SUB_AGENT_MAX_ITERATIONS,
   });

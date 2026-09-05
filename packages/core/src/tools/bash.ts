@@ -42,7 +42,9 @@ export const definition: ToolDefinition = {
   name: "run_command",
   description:
     "Run a shell command (bash -c) in the project root and capture stdout/stderr. " +
-    "This is a mutating action — it requires permission. Output is capped at ~20KB per stream.",
+    "This is a mutating action — it requires permission. Output is capped at ~20KB per stream. " +
+    "Commands that would destroy the filesystem outside the project (e.g. rm -rf /, " +
+    "fork bombs, mkfs, writes to /dev devices) are refused without executing.",
   inputSchema: {
     type: "object",
     properties: {
@@ -53,8 +55,70 @@ export const definition: ToolDefinition = {
   mutating: true,
 };
 
+// Defense in depth behind the permission prompt: a model can bury
+// `rm -rf ~` inside a chained command (`npm run build && rm -rf ~`) that a
+// hurried user might Allow. These patterns never spawn a child — the turn
+// gets an isError tool_result explaining the refusal instead.
+// A command segment is one `&&`/`;`/`|`-separated piece: flags in one segment
+// must not be able to reach a target in another (`rm -rf ./build && rm -rf /`
+// is still blocked because the second segment matches on its own).
+function segments(command: string): string[] {
+  return command.split(/[|;&]+/);
+}
+
+// rm with recursive+force flags whose target is the filesystem root, a
+// top-level glob, or the user's home dir. Plain `rm -rf ./build` inside the
+// project stays allowed — the permission prompt remains the gate for those.
+function isRootWipe(segment: string): boolean {
+  const m = segment.match(/\brm\b(.*)$/);
+  if (!m) return false;
+  const rest = m[1];
+  const shortFlags = [...rest.matchAll(/(^|\s)-([a-zA-Z]+)/g)].map((x) => x[2]).join("");
+  const longFlags = [...rest.matchAll(/--([a-z-]+)/g)].map((x) => x[1]);
+  const recursive =
+    shortFlags.includes("r") ||
+    shortFlags.includes("R") ||
+    longFlags.some((f) => f.startsWith("recursive"));
+  const force = shortFlags.includes("f") || longFlags.some((f) => f.startsWith("force"));
+  if (!(recursive && force)) return false;
+  return /(^|\s)(\/(\s|$|\*)|~(\s|$|\/)|\$HOME(\s|$|\/))/.test(rest);
+}
+
+const WHOLE_COMMAND_CHECKS: { test: (cmd: string) => boolean; reason: string }[] = [
+  // Must see the full string: the segment splitter below would shred it.
+  { test: (s) => /:\(\)\s*\{\s*:\|:&\s*\};:/.test(s), reason: "fork bomb" },
+];
+
+const SEGMENT_CHECKS: { test: (seg: string) => boolean; reason: string }[] = [
+  { test: isRootWipe, reason: "recursive delete of filesystem root / home directory" },
+  { test: (s) => /\bmkfs(\s|\.)/.test(s), reason: "filesystem formatting (mkfs)" },
+  { test: (s) => /\bdd\b.*\bof=\/dev\//.test(s), reason: "raw write to a /dev device (dd)" },
+  { test: (s) => />(>)?\s*\/dev\/sd[a-z]/.test(s), reason: "raw write to a block device" },
+  { test: (s) => /\bchmod\s+[^\s]*-R/.test(s) && /(^|\s)\/(\s|$)/.test(s), reason: "recursive permission change on filesystem root" },
+];
+
+export function isBlockedCommand(command: string): string | null {
+  for (const { test, reason } of WHOLE_COMMAND_CHECKS) {
+    if (test(command)) return reason;
+  }
+  for (const seg of segments(command)) {
+    for (const { test, reason } of SEGMENT_CHECKS) {
+      if (test(seg)) return reason;
+    }
+  }
+  return null;
+}
+
 export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   const { command } = input as { command: string };
+  const blocked = isBlockedCommand(command);
+  if (blocked) {
+    return {
+      output: { command, blocked, error: `Refused to run: ${blocked}.` },
+      isError: true,
+      summary: `Blocked destructive command: ${command} (${blocked})`,
+    };
+  }
   return new Promise((resolve) => {
     // detached: true puts the child in its own process group, which is what
     // makes process.kill(-pid) below kill the entire command tree (bash -c

@@ -4,8 +4,16 @@
   "description": "Ink terminal UI for the Anvil coding agent.",
   "author": "mitravanu",
   "license": "MIT",
-  "keywords": ["ai", "coding-agent", "terminal", "ink", "tui"],
-  "files": ["dist"],
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "terminal",
+    "ink",
+    "tui"
+  ],
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -23,6 +31,7 @@
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
+    "ink-testing-library": "^4.0.0",
     "typescript": "^5.7.2",
     "vitest": "^4.1.11"
   }

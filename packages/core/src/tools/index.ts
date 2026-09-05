@@ -35,6 +35,34 @@ const REGISTRY: RegisteredTool[] = [
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = REGISTRY.map((t) => t.definition);
 
+// Phase 10: external tool executors (MCP). The built-in registry stays
+// closed; unknown names fall through to registered prefixes in order.
+export interface ExternalToolResult {
+  /** True when this executor owns the name (it must then provide result). */
+  claimed: boolean;
+  result?: ToolExecutionResult;
+}
+
+export type ExternalToolExecutor = (
+  name: string,
+  input: unknown,
+  ctx: ToolContext
+) => Promise<ExternalToolResult>;
+
+export type ExternalToolDescribe = (input: unknown, ctx: ToolContext) => Promise<string>;
+
+const externalExecutors: { prefix: string; exec: ExternalToolExecutor; describe?: ExternalToolDescribe }[] = [];
+
+export function registerExternalExecutor(
+  prefix: string,
+  exec: ExternalToolExecutor,
+  describe?: ExternalToolDescribe
+): void {
+  if (!externalExecutors.some((e) => e.prefix === prefix)) {
+    externalExecutors.push({ prefix, exec, describe });
+  }
+}
+
 export async function executeTool(
   name: string,
   input: unknown,
@@ -42,6 +70,19 @@ export async function executeTool(
 ): Promise<ToolExecutionResult> {
   const tool = REGISTRY.find((t) => t.definition.name === name);
   if (!tool) {
+    for (const ext of externalExecutors) {
+      if (!name.startsWith(ext.prefix)) continue;
+      try {
+        const r = await ext.exec(name, input, ctx);
+        if (r.claimed && r.result) return r.result;
+      } catch (err: any) {
+        return {
+          output: { error: err.message ?? String(err) },
+          isError: true,
+          summary: `${name} failed`,
+        };
+      }
+    }
     return {
       output: { error: `Unknown tool: ${name}` },
       isError: true,
@@ -71,5 +112,8 @@ export async function describeToolInput(
 ): Promise<string> {
   const tool = REGISTRY.find((t) => t.definition.name === name);
   if (tool?.describe) return tool.describe(input, ctx);
+  for (const ext of externalExecutors) {
+    if (name.startsWith(ext.prefix) && ext.describe) return ext.describe(input, ctx);
+  }
   return `${name}(${JSON.stringify(input).slice(0, 200)})`;
 }

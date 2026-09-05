@@ -1,5 +1,8 @@
-export const CORE_VERSION = "0.1.0";
+export { CORE_VERSION } from "./version.js";
 export * from "./providers/index.js";
 export * from "./agent/index.js";
 export * from "./session/index.js";
 export * from "./config/index.js";
+export * from "./mcp/index.js";
+export { registerExternalExecutor, TOOL_DEFINITIONS } from "./tools/index.js";
+export * from "./tools/mcpTools.js";

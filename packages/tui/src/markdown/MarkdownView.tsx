@@ -8,9 +8,56 @@ function Spans({ spans }: { spans: MarkdownSpan[] }) {
   return (
     <>
       {spans.map((s, i) => (
-        <Text key={i} bold={s.bold} italic={s.italic} color={s.code ? theme.colors.toolName : undefined}>
+        <Text
+          key={i}
+          bold={s.bold}
+          italic={s.italic}
+          dimColor={s.strike ? true : undefined}
+          color={s.code ? theme.colors.toolName : undefined}
+        >
           {s.text}
+          {s.linkN != null && <Text dimColor> [{s.linkN}]</Text>}
         </Text>
+      ))}
+    </>
+  );
+}
+
+/** Code-point-aware width (never String#length — CJK/emoji safety). */
+function cellWidth(text: string): number {
+  return Array.from(text).length;
+}
+
+function plainText(spans: MarkdownSpan[]): string {
+  return spans.map((s) => s.text).join("");
+}
+
+function TableView({ headers, rows }: { headers: MarkdownSpan[][]; rows: MarkdownSpan[][][] }) {
+  const colCount = Math.max(headers.length, ...rows.map((r) => r.length));
+  const widths: number[] = [];
+  for (let c = 0; c < colCount; c++) {
+    const cells = [
+      headers[c] ? [headers[c]] : [],
+      ...rows.map((r) => (r[c] ? [r[c]] : [])),
+    ].flat();
+    widths.push(Math.max(1, ...cells.map((spans) => cellWidth(plainText(spans)))));
+  }
+  const pad = (spans: MarkdownSpan[], w: number) => {
+    const text = plainText(spans);
+    return text + " ".repeat(Math.max(0, w - cellWidth(text)));
+  };
+  // NOTE: padded table cells intentionally drop inline styling — alignment
+  // needs plain strings, and footnotes still resolve via the links block.
+  const line = (cells: MarkdownSpan[][]) =>
+    cells
+      .map((_, c) => pad(cells[c] ?? [{ text: "" }], widths[c]))
+      .join(" | ");
+  return (
+    <>
+      <Text bold>{line(headers)}</Text>
+      <Text dimColor>{widths.map((w) => "-".repeat(w)).join("-+-")}</Text>
+      {rows.map((row, i) => (
+        <Text key={i}>{line(row)}</Text>
       ))}
     </>
   );
@@ -43,7 +90,7 @@ export function MarkdownView({ blocks }: { blocks: MarkdownBlock[] }) {
           case "list":
             return (
               <Text key={i}>
-                {"  • "}
+                {"  ".repeat(Math.min(block.depth, 4))}{"  • "}
                 <Spans spans={block.spans} />
               </Text>
             );
@@ -58,6 +105,22 @@ export function MarkdownView({ blocks }: { blocks: MarkdownBlock[] }) {
               <Text key={i} dimColor>
                 {"─".repeat(40)}
               </Text>
+            );
+          case "table":
+            return (
+              <Box key={i} flexDirection="column">
+                <TableView headers={block.headers} rows={block.rows} />
+              </Box>
+            );
+          case "links":
+            return (
+              <Box key={i} flexDirection="column">
+                {block.links.map((l) => (
+                  <Text key={l.n} dimColor>
+                    [{l.n}] {l.text !== l.url ? `${l.text} → ` : ""}{l.url}
+                  </Text>
+                ))}
+              </Box>
             );
           case "code": {
             const fenced = `\`\`\`${block.language}\n${block.code}\`\`\``;

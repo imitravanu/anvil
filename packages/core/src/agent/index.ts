@@ -10,6 +10,19 @@ export {
 } from "./ledger.js";
 export { canonicalInputHash } from "./canonical.js";
 export {
+  CHECKPOINT_KEEP,
+  CHECKPOINT_FILE_MAX,
+  CHECKPOINT_TOTAL_MAX,
+  takeSnapshot,
+  capCheckpoints,
+  restoreCheckpoint,
+  checkpointMeta,
+  type Checkpoint,
+  type CheckpointMeta,
+  type FileSnapshot,
+  type RestoreResult,
+} from "./checkpoints.js";
+export {
   runSubAgent,
   subAgentTools,
   capReport,

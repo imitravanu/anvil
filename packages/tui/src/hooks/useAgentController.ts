@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { randomUUID } from "node:crypto";
 import { AgentSession, type AgentEvent } from "@anvil/core";
+import { retainReport, type SubAgentRecord } from "../util/subagent.js";
+
+export type DisplaySubAgent = SubAgentRecord;
 
 export interface DisplayToolCall {
   id: string;
@@ -8,6 +11,22 @@ export interface DisplayToolCall {
   input: unknown;
   status: "running" | "done" | "error";
   summary?: string;
+  /** Full tool result output, retained capped (see OUTPUT_RETAIN_MAX) for /expand. */
+  output?: unknown;
+}
+
+/** Cap retained output so long sessions can't bloat React state. */
+export const OUTPUT_RETAIN_MAX = 6000;
+
+export function retainOutput(output: unknown): unknown {
+  let text: string;
+  try {
+    text = JSON.stringify(output) ?? String(output);
+  } catch {
+    return { note: "[output not serializable for display]" };
+  }
+  if (text.length <= OUTPUT_RETAIN_MAX) return output;
+  return { truncated: text.slice(0, OUTPUT_RETAIN_MAX), note: "[output truncated for display]" };
 }
 
 export interface DisplayMessage {
@@ -16,6 +35,7 @@ export interface DisplayMessage {
   text: string; // accumulated so far; may still be mid-stream
   streaming: boolean;
   toolCalls: DisplayToolCall[];
+  subAgents: DisplaySubAgent[]; // U10: delegation cards live on the assistant turn
 }
 
 export interface UsageTotals {
@@ -50,13 +70,14 @@ export function useAgentController(session: AgentSession) {
         text,
         streaming: false,
         toolCalls: [],
+        subAgents: [],
       };
       const assistantId = randomUUID();
       currentAssistantId.current = assistantId;
       setMessages((prev) => [
         ...prev,
         userMsg,
-        { id: assistantId, role: "assistant", text: "", streaming: true, toolCalls: [] },
+        { id: assistantId, role: "assistant", text: "", streaming: true, toolCalls: [], subAgents: [] },
       ]);
       setIsBusy(true);
 
@@ -84,7 +105,7 @@ export function useAgentController(session: AgentSession) {
   const printSystemMessage = useCallback((text: string) => {
     setMessages((prev) => [
       ...prev,
-      { id: randomUUID(), role: "system" as const, text, streaming: false, toolCalls: [] },
+      { id: randomUUID(), role: "system" as const, text, streaming: false, toolCalls: [], subAgents: [] },
     ]);
   }, []);
 
@@ -113,7 +134,7 @@ export function useAgentController(session: AgentSession) {
 }
 
 function systemMessage(text: string): DisplayMessage {
-  return { id: randomUUID(), role: "system", text, streaming: false, toolCalls: [] };
+  return { id: randomUUID(), role: "system", text, streaming: false, toolCalls: [], subAgents: [] };
 }
 
 function applyEvent(
@@ -145,6 +166,7 @@ function applyEvent(
                 ...t,
                 status: (event.result.isError ? "error" : "done") as DisplayToolCall["status"],
                 summary: event.result.summary,
+                output: retainOutput(event.result.output),
               }
             : t
         ),
@@ -198,24 +220,58 @@ function applyEvent(
       setPlan(event.plan || null);
       setMessages((prev) => [...prev, systemMessage(`Plan updated: ${event.plan}`)]);
       break;
-    // Phase 9: delegation surfaced as notices; usage flows into the totals.
-    case "subagent_started":
-      setMessages((prev) => [...prev, systemMessage(`Sub-agent started: ${event.task}`)]);
+    case "checkpoint":
+      setMessages((prev) => [
+        ...prev,
+        systemMessage(
+          `Checkpoint #${event.id}: ${event.files} file${event.files === 1 ? "" : "s"} snapshotted — /rewind ${event.id} to undo.`
+        ),
+      ]);
       break;
-    case "subagent_finished":
+    // Phase 9 + U10: delegation renders as cards on the assistant turn —
+    // the started card is the live progress, the finished card carries the
+    // report (expandable via /expand). Replaces the old system notices.
+    case "subagent_started":
+      update((m) => ({
+        ...m,
+        subAgents: [
+          ...m.subAgents,
+          { task: event.task, status: "running", toolCalls: 0, inputTokens: 0, outputTokens: 0, report: "" },
+        ],
+      }));
+      break;
+    case "subagent_finished": {
       setUsage((prev) => ({
         inputTokens: prev.inputTokens + event.inputTokens,
         outputTokens: prev.outputTokens + event.outputTokens,
       }));
-      setMessages((prev) => [
-        ...prev,
-        systemMessage(
-          `Sub-agent finished — ${event.toolCalls} tool call${event.toolCalls === 1 ? "" : "s"}, ` +
-            `${event.inputTokens.toLocaleString()} in / ${event.outputTokens.toLocaleString()} out tokens.`
-        ),
-      ]);
+      const done: DisplaySubAgent = {
+        task: "",
+        status: "done",
+        toolCalls: event.toolCalls,
+        inputTokens: event.inputTokens,
+        outputTokens: event.outputTokens,
+        report: retainReport(event.report),
+      };
+      update((m) => {
+        const idx = m.subAgents.findIndex((s) => s.status === "running");
+        if (idx === -1) return { ...m, subAgents: [...m.subAgents, done] };
+        const subAgents = m.subAgents.map((s, i) =>
+          i === idx ? { ...s, ...done, task: s.task } : s
+        );
+        return { ...m, subAgents };
+      });
       break;
-    // "turn_complete", "cancelled" — no per-message change; the for-await loop
-    // ending triggers the finally block that flips streaming/isBusy.
+    }
+    case "cancelled":
+      // A cancelled turn can strand running cards — mark them honestly.
+      // (The for-await loop ending still flips streaming/isBusy as before.)
+      update((m) => ({
+        ...m,
+        subAgents: m.subAgents.map((s) => (s.status === "running" ? { ...s, status: "cancelled" } : s)),
+      }));
+      break;
+    // "turn_complete" — no per-message change; the for-await loop ending
+    // triggers the finally block that flips streaming/isBusy.
   }
 }

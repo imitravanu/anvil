@@ -5,9 +5,19 @@ import { ProviderCredentials, ProviderId, MODEL_REGISTRY } from "../providers/in
 import { AnvilSettings } from "./types.js";
 
 export type { AnvilSettings } from "./types.js";
+export * from "./mcp.js";
 
-const CREDENTIALS_PATH = path.join(os.homedir(), ".anvil", "credentials.json");
-const SETTINGS_PATH = path.join(os.homedir(), ".anvil", "settings.json");
+// ANVIL_HOME relocates the data dir (tests use a temp dir); resolved lazily
+// because the env can be set after this module is imported. Falls back to
+// ~/.anvil so existing installs are unaffected.
+export function anvilHome(): string {
+  return process.env.ANVIL_HOME
+    ? path.resolve(process.env.ANVIL_HOME)
+    : path.join(os.homedir(), ".anvil");
+}
+
+const CREDENTIALS_PATH = (): string => path.join(anvilHome(), "credentials.json");
+const SETTINGS_PATH = (): string => path.join(anvilHome(), "settings.json");
 
 /**
  * Minimal credential loading — just enough for the TUI phase to run for real.
@@ -16,7 +26,7 @@ const SETTINGS_PATH = path.join(os.homedir(), ".anvil", "settings.json");
  */
 export function loadCredentials(): ProviderCredentials {
   try {
-    const raw = fs.readFileSync(CREDENTIALS_PATH, "utf-8");
+    const raw = fs.readFileSync(CREDENTIALS_PATH(), "utf-8");
     return JSON.parse(raw) as ProviderCredentials;
   } catch {
     return {};
@@ -25,23 +35,23 @@ export function loadCredentials(): ProviderCredentials {
 
 export function loadSettings(): AnvilSettings {
   try {
-    return JSON.parse(fs.readFileSync(SETTINGS_PATH, "utf-8"));
+    return JSON.parse(fs.readFileSync(SETTINGS_PATH(), "utf-8"));
   } catch {
     return {};
   }
 }
 
 export function saveSettings(settings: AnvilSettings): void {
-  fs.mkdirSync(path.dirname(SETTINGS_PATH), { recursive: true });
-  fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf-8");
+  fs.mkdirSync(path.dirname(SETTINGS_PATH()), { recursive: true });
+  fs.writeFileSync(SETTINGS_PATH(), JSON.stringify(settings, null, 2), "utf-8");
 }
 
 export function saveCredential(field: keyof ProviderCredentials, value: string): void {
   const current = loadCredentials();
   const updated = { ...current, [field]: value };
-  fs.mkdirSync(path.dirname(CREDENTIALS_PATH), { recursive: true });
-  fs.writeFileSync(CREDENTIALS_PATH, JSON.stringify(updated, null, 2), "utf-8");
-  fs.chmodSync(CREDENTIALS_PATH, 0o600);
+  fs.mkdirSync(path.dirname(CREDENTIALS_PATH()), { recursive: true });
+  fs.writeFileSync(CREDENTIALS_PATH(), JSON.stringify(updated, null, 2), "utf-8");
+  fs.chmodSync(CREDENTIALS_PATH(), 0o600);
 }
 
 export {

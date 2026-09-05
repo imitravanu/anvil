@@ -53,7 +53,21 @@ export const THEMES = {
 } as const;
 
 export type ThemeName = keyof typeof THEMES;
-export type Theme = (typeof THEMES)[ThemeName];
+
+export type ThemeColorKey =
+  | "primary" | "userText" | "assistantText" | "toolName" | "toolRunning"
+  | "toolDone" | "toolError" | "dim" | "border" | "accent" | "surface";
+
+/** Structural theme shape — built-ins satisfy it, and so do validated custom themes (U13). */
+export interface Theme {
+  colors: Record<ThemeColorKey, string>;
+  spacing: { panelPaddingX: number; panelPaddingY: number };
+}
+
+export const REQUIRED_COLOR_KEYS: readonly ThemeColorKey[] = [
+  "primary", "userText", "assistantText", "toolName", "toolRunning",
+  "toolDone", "toolError", "dim", "border", "accent", "surface",
+];
 
 export function isThemeName(name: string): name is ThemeName {
   return name in THEMES;

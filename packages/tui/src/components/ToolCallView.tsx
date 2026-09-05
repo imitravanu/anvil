@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 import type { DisplayToolCall } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
+import { formatToolOutput } from "../util/toolOutput.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
 
 function oneLine(text: string, max = 60): string {
@@ -13,7 +14,7 @@ function describeCall(call: DisplayToolCall): string {
   return oneLine(JSON.stringify(call.input));
 }
 
-export function ToolCallView({ call }: { call: DisplayToolCall }) {
+export function ToolCallView({ call, expanded }: { call: DisplayToolCall; expanded?: boolean }) {
   const theme = useTheme();
   const spinner = useSpinnerFrame(call.status === "running");
   const symbol = call.status === "running" ? spinner : call.status === "done" ? "✓" : "✗";
@@ -24,10 +25,21 @@ export function ToolCallView({ call }: { call: DisplayToolCall }) {
         ? theme.colors.toolDone
         : theme.colors.toolError;
   return (
-    <Box paddingLeft={3}>
-      <Text color={color}>{symbol} </Text>
-      <Text color={theme.colors.toolName}>{call.name}</Text>
-      <Text dimColor> {describeCall(call)}</Text>
+    <Box flexDirection="column">
+      <Box paddingLeft={3}>
+        <Text color={color}>{symbol} </Text>
+        <Text color={theme.colors.toolName}>{call.name}</Text>
+        <Text dimColor> {describeCall(call)}</Text>
+      </Box>
+      {expanded && call.status !== "running" && (
+        <Box paddingLeft={5} flexDirection="column">
+          {formatToolOutput(call.output).map((line, i) => (
+            <Text key={i} dimColor>
+              {line}
+            </Text>
+          ))}
+        </Box>
+      )}
     </Box>
   );
 }

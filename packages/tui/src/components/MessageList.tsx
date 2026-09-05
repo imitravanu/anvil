@@ -29,7 +29,7 @@ function EmptyState({ model }: { model: string }) {
   );
 }
 
-export function MessageList({ messages, model }: { messages: DisplayMessage[]; model: string }) {
+export function MessageList({ messages, model, expandTools }: { messages: DisplayMessage[]; model: string; expandTools?: boolean }) {
   const { stdout } = useStdout();
   const rows = stdout?.rows ?? 24;
   if (messages.length === 0) {
@@ -45,7 +45,7 @@ export function MessageList({ messages, model }: { messages: DisplayMessage[]; m
     <Box flexDirection="column" flexGrow={1} paddingX={1} justifyContent="flex-end">
       {visible.map((message, index) => (
         <Box key={message.id} marginTop={index > 0 ? 1 : 0}>
-          <MessageView message={message} />
+          <MessageView message={message} expandTools={expandTools} />
         </Box>
       ))}
     </Box>

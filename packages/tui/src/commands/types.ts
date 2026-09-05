@@ -11,6 +11,14 @@ export interface CommandContext {
   setTheme: (name: string) => void;
   // /connect: open the provider-key setup overlay (add/update a key in-app)
   openConnect: () => void;
+  // /ledger (U7): print this session's run-ledger audit report
+  showLedger: () => void;
+  // /expand (U6): toggle full tool-output display in the transcript
+  toggleExpand: () => void;
+  // /rewind (checkpoints): no id → list; id → restore that checkpoint
+  rewind: (idText?: string) => void;
+  // /mcp (Phase 10): no arg → server status; "reconnect" → refresh all
+  mcp: (sub?: string) => void;
 }
 
 export interface Command {

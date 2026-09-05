@@ -4,8 +4,9 @@ import { MarkdownView, parseMarkdownText } from "../markdown/MarkdownView.js";
 import { useTheme } from "../theme/theme.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
 import { ToolCallView } from "./ToolCallView.js";
+import { SubAgentView } from "./SubAgentView.js";
 
-export function MessageView({ message }: { message: DisplayMessage }) {
+export function MessageView({ message, expandTools }: { message: DisplayMessage; expandTools?: boolean }) {
   const theme = useTheme();
   // U2 streaming caret: the interrupted session already implemented this as a
   // braille spinner after the streaming text (consistent with ToolCallView) —
@@ -46,7 +47,10 @@ export function MessageView({ message }: { message: DisplayMessage }) {
           <Text color={theme.colors.accent}>{spinner}</Text>
         </Text>
         {message.toolCalls.map((call) => (
-          <ToolCallView key={call.id} call={call} />
+          <ToolCallView key={call.id} call={call} expanded={expandTools} />
+        ))}
+        {message.subAgents.map((sub, i) => (
+          <SubAgentView key={`${sub.task}-${i}`} sub={sub} expanded={expandTools} />
         ))}
       </Box>
     );
@@ -58,7 +62,10 @@ export function MessageView({ message }: { message: DisplayMessage }) {
       </Text>
       <MarkdownView blocks={parseMarkdownText(message.text)} />
       {message.toolCalls.map((call) => (
-        <ToolCallView key={call.id} call={call} />
+        <ToolCallView key={call.id} call={call} expanded={expandTools} />
+      ))}
+      {message.subAgents.map((sub, i) => (
+        <SubAgentView key={`${sub.task}-${i}`} sub={sub} expanded={expandTools} />
       ))}
     </Box>
   );

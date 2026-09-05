@@ -28,9 +28,11 @@ export type AgentEvent =
   | { type: "budget_exhausted" }
   | { type: "loop_detected"; tool: string }
   | { type: "plan_updated"; plan: string }
-  // Phase 9: sub-agent delegation.
+  // Phase 9: sub-agent delegation (+U10: finished carries the capped report).
   | { type: "subagent_started"; task: string }
-  | { type: "subagent_finished"; toolCalls: number; inputTokens: number; outputTokens: number };
+  | { type: "subagent_finished"; toolCalls: number; inputTokens: number; outputTokens: number; report: string }
+  // Rewind: pre-mutation file snapshot taken this turn.
+  | { type: "checkpoint"; id: number; files: number };
 
 export interface AgentOptions {
   systemPrompt: string;

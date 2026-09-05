@@ -243,4 +243,33 @@ describe("Phase 8 (A) — durable loop", () => {
   it("default iteration budget is exported at 20", () => {
     expect(DEFAULT_MAX_INNER_ITERATIONS).toBe(20);
   });
+
+  it("non-consecutive repeat (A-B-A-B-A) warns once but still executes", async () => {
+    const fileA = path.join(tmp, "a.txt");
+    const fileB = path.join(tmp, "b.txt");
+    fs.writeFileSync(fileA, "a");
+    fs.writeFileSync(fileB, "b");
+    const script: StreamEvent[][] = [
+      readTurn(fileA, "r0"),
+      readTurn(fileB, "r1"),
+      readTurn(fileA, "r2"),
+      readTurn(fileB, "r3"),
+      readTurn(fileA, "r4"),
+      readTurn(fileB, "r5"),
+      textTurn(),
+    ];
+    const provider = new FakeProvider(script);
+    const { session, events } = await collect(provider, tmp);
+
+    // Advisory only: one loop_detected, zero refusals — all 6 calls executed.
+    expect(events.filter((e) => e.type === "loop_detected").length).toBe(1);
+    expect(events.filter((e) => e.type === "tool_finished").length).toBe(6);
+    expect(
+      session.getHistory().some(
+        (m) =>
+          m.role === "user" &&
+          m.content.some((c) => c.type === "text" && c.text.includes("in between"))
+      )
+    ).toBe(true);
+  });
 });

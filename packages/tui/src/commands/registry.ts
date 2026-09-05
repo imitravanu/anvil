@@ -1,6 +1,5 @@
 import { createOpenRouterFreeSource, syncFreeModels } from "@anvil/core";
 import { Command } from "./types.js";
-import { THEMES } from "../theme/themes.js";
 
 export const COMMANDS: Command[] = [
   {
@@ -11,10 +10,14 @@ export const COMMANDS: Command[] = [
       const EXAMPLES: Record<string, string> = {
         clear: "e.g. /clear — fresh transcript; the old session stays resumable",
         connect: "e.g. /connect — pick a provider, paste its API key",
+        expand: "e.g. /expand — toggle full tool output on/off",
+        ledger: "e.g. /ledger — what ran, what failed, tokens spent",
+        mcp: "e.g. /mcp reconnect — refresh all servers",
         model: "e.g. /model — Enter switches, Esc cancels",
+        rewind: "e.g. /rewind 2 — restore checkpoint #2 (plain /rewind lists them)",
         session: "e.g. /session resume — with no id it opens the picker",
         sync: "e.g. /sync — force a free-model refresh now",
-        theme: "e.g. /theme dark | light | highContrast",
+        theme: "e.g. /theme — lists built-in + your custom names",
       };
       const lines = COMMANDS.map(
         (c) => `/${c.name} — ${c.description}${EXAMPLES[c.name] ? `\n    ${EXAMPLES[c.name]}` : ""}`
@@ -104,12 +107,32 @@ export const COMMANDS: Command[] = [
     run: (_args, ctx) => ctx.openConnect(),
   },
   {
+    name: "ledger",
+    description: "Show this session's run ledger (what ran, tokens spent)",
+    run: (_args, ctx) => ctx.showLedger(),
+  },
+  {
+    name: "expand",
+    description: "Toggle full tool output in the transcript",
+    run: (_args, ctx) => ctx.toggleExpand(),
+  },
+  {
+    name: "rewind",
+    description: "List file checkpoints, or restore one: /rewind <n>",
+    run: (args, ctx) => ctx.rewind(args[0]),
+  },
+  {
+    name: "mcp",
+    description: "MCP servers: status, or refresh all: /mcp reconnect",
+    run: (args, ctx) => ctx.mcp(args[0]),
+  },
+  {
     name: "theme",
-    description: `Switch theme (${Object.keys(THEMES).join(" | ")})`,
+    description: "Switch theme (built-in or ~/.anvil/themes.json custom)",
     run: (args, ctx) => {
       const name = args[0];
       if (!name) {
-        ctx.printSystemMessage(`Usage: /theme <name>. Valid themes: ${Object.keys(THEMES).join(", ")}`);
+        ctx.setTheme("");
         return;
       }
       ctx.setTheme(name);

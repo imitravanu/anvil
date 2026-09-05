@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { executeTool } from "../index.js";
+import { isBlockedCommand } from "../bash.js";
 import type { ToolContext } from "../types.js";
 
 let root: string;
@@ -68,5 +69,67 @@ describe("run_command", () => {
     const result = await executeTool("run_command", { command: "printf '%s' \"$ANVIL_TEST_SECRET\"" }, ctx);
     expect((result.output as { stdout: string }).stdout).toBe("");
     delete process.env.ANVIL_TEST_SECRET;
+  });
+});
+
+describe("run_command destructive-command guard", () => {
+  it("blocks filesystem-root / home wipes, chained or direct", () => {
+    for (const cmd of [
+      "rm -rf /",
+      "rm -rf /*",
+      "rm -rf ~",
+      "rm -rf $HOME",
+      "rm -fr /",
+      "rm -r -f /",
+      "rm --recursive --force /",
+      "npm run build && rm -rf ~",
+      "echo hi; rm -rf /",
+    ]) {
+      expect(isBlockedCommand(cmd), cmd).not.toBeNull();
+    }
+  });
+
+  it("blocks fork bombs, mkfs, raw device writes, root chmod", () => {
+    expect(isBlockedCommand(":(){ :|:& };:")).not.toBeNull();
+    expect(isBlockedCommand("mkfs.ext4 /dev/sda1")).not.toBeNull();
+    expect(isBlockedCommand("dd if=/dev/zero of=/dev/sda bs=1M")).not.toBeNull();
+    expect(isBlockedCommand("echo x > /dev/sda")).not.toBeNull();
+    expect(isBlockedCommand("chmod -R 777 /")).not.toBeNull();
+  });
+
+  it("allows ordinary commands including project-local rm -rf", () => {
+    for (const cmd of [
+      "echo hello",
+      "npm run build",
+      "rm -rf ./build",
+      "rm -rf dist",
+      "rm file.txt",
+      "grep -r foo .",
+      "dd if=input of=output bs=1M",
+    ]) {
+      expect(isBlockedCommand(cmd), cmd).toBeNull();
+    }
+  });
+
+  it("refuses without spawning: no side effects, isError result", async () => {
+    const marker = path.join(root, "should-not-exist");
+    const result = await executeTool(
+      "run_command",
+      { command: `touch ${marker} && rm -rf /` },
+      ctx
+    );
+    expect(result.isError).toBe(true);
+    expect(result.summary).toContain("Blocked");
+    expect((result.output as { blocked: string }).blocked).toContain("filesystem root");
+    expect(await fs.stat(marker).then(() => true).catch(() => false)).toBe(false);
+  });
+
+  it("still executes a project-local recursive delete", async () => {
+    const dir = path.join(root, "build-out");
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, "f.txt"), "x");
+    const result = await executeTool("run_command", { command: "rm -rf ./build-out" }, ctx);
+    expect(result.isError).toBe(false);
+    expect(await fs.stat(dir).then(() => true).catch(() => false)).toBe(false);
   });
 });
