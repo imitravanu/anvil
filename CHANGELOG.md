@@ -6,6 +6,12 @@ All notable changes to Anvil are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The "Rate limited — waiting Ns, retrying automatically…" notice is rewritten
+  when the automatic retry also fails, so the transcript no longer implies a
+  retry is still pending next to the final error.
+
 ### Planned
 
 - Live verification against the seven unit-tested-only providers (blocked on

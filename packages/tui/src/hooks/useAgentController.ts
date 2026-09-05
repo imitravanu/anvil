@@ -282,6 +282,16 @@ function applyEvent(
       }));
       break;
     case "error":
+      // If an automatic rate-limit retry already ran this turn, its "waiting…
+      // retrying" notice is now stale — rewrite it so the transcript never
+      // implies a retry is still pending after the final error landed.
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.role === "system" && m.text.startsWith("Rate limited — waiting")
+            ? { ...m, text: "Rate limited — the automatic retry also hit the limit (error above)." }
+            : m
+        )
+      );
       // Compact + actionable in the transcript (raw provider error walls are
       // multi-line dumps); the error is rendered as its own styled block.
       update((m) => ({

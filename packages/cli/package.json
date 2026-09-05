@@ -1,6 +1,6 @@
 {
   "name": "@anvil/cli",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "A terminal-based AI coding agent with interactive permission prompts.",
   "author": "mitravanu",
   "license": "MIT",
@@ -20,8 +20,8 @@
     "typecheck": "tsc -p . --noEmit"
   },
   "devDependencies": {
-    "@anvil/core": "0.5.0",
-    "@anvil/tui": "0.5.0",
+    "@anvil/core": "0.5.1",
+    "@anvil/tui": "0.5.1",
     "ink": "^5.1.0",
     "react": "^18.3.1",
     "esbuild": "^0.28.2",
