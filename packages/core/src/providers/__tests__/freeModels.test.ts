@@ -21,12 +21,15 @@ import {
 
 describe("Phase 8 (B) — free-model coordinator", () => {
   let tmp: string;
+  let savedHome: string | undefined;
   beforeEach(() => {
+    savedHome = process.env.ANVIL_HOME;
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-p8b-"));
     process.env.ANVIL_HOME = tmp;
   });
   afterEach(() => {
-    delete process.env.ANVIL_HOME;
+    if (savedHome === undefined) delete process.env.ANVIL_HOME;
+    else process.env.ANVIL_HOME = savedHome;
     try {
       fs.rmSync(tmp, { recursive: true, force: true });
     } catch {

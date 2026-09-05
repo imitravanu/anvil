@@ -67,4 +67,39 @@ describe("session store", () => {
     deleteSession("d1", dir);
     expect(loadSession("d1", dir)).toBeNull();
   });
+
+  it("rejects path-traversal ids without touching the filesystem", async () => {
+    const outside = path.join(path.dirname(dir), "anvil-traversal-probe.txt");
+    await fs.writeFile(outside, "probe", "utf-8");
+    try {
+      expect(loadSession("../anvil-traversal-probe", dir)).toBeNull();
+      expect(loadSession("..", dir)).toBeNull();
+      expect(loadSession("", dir)).toBeNull();
+      deleteSession("../anvil-traversal-probe", dir); // no-op, must not delete
+      expect(await fs.readFile(outside, "utf-8")).toBe("probe");
+      expect(() =>
+        saveSession(makeStored("../../evil", "Evil", "2026-01-01T00:00:00.000Z"), dir)
+      ).toThrow(/unsafe id/);
+    } finally {
+      await fs.rm(outside, { force: true });
+    }
+  });
+
+  it("valid JSON with the wrong shape loads as null and never bricks the list", async () => {
+    await fs.writeFile(path.join(dir, "shapeless.json"), JSON.stringify({ hello: "world" }), "utf-8");
+    await fs.writeFile(
+      path.join(dir, "nometa.json"),
+      JSON.stringify({ metadata: { id: "nometa" }, history: "not-an-array" }),
+      "utf-8"
+    );
+    await fs.writeFile(
+      path.join(dir, "nodate.json"),
+      JSON.stringify({ metadata: { id: "nodate", title: "T" }, history: [] }),
+      "utf-8"
+    );
+    expect(loadSession("shapeless", dir)).toBeNull();
+    expect(loadSession("nometa", dir)).toBeNull();
+    expect(() => listSessions(dir)).not.toThrow(); // missing updatedAt must not crash sort
+    expect(listSessions(dir).map((m) => m.id)).toContain("nodate");
+  });
 });

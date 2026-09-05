@@ -6,7 +6,7 @@ import type { McpTransport } from "../transport.js";
  * `neverAnswer` simulates a hung server for timeout tests.
  */
 export class FakeMcpTransport implements McpTransport {
-  sent: { jsonrpc: string; id?: number; method: string; params: unknown }[] = [];
+  sent: { jsonrpc: string; id?: number | string; method: string; params: unknown }[] = [];
   private queue: string[] = [];
   private waiters: ((line: string | null) => void)[] = [];
   private ended = false;
@@ -17,7 +17,7 @@ export class FakeMcpTransport implements McpTransport {
   ) {}
 
   send(msg: string): void {
-    const parsed = JSON.parse(msg) as { id?: number; method: string; params: unknown };
+    const parsed = JSON.parse(msg) as { id?: number | string; method: string; params: unknown };
     this.sent.push(
       parsed.id === undefined
         ? { jsonrpc: "2.0", method: parsed.method, params: parsed.params }
@@ -29,7 +29,7 @@ export class FakeMcpTransport implements McpTransport {
     this.emit(JSON.stringify({ jsonrpc: "2.0", id: parsed.id, result: reply }));
   }
 
-  /** Inject a server-initiated line (notification or late response). */
+  /** Inject a server-initiated line (notification, late or string-id response). */
   emit(line: string): void {
     const waiter = this.waiters.shift();
     if (waiter) waiter(line);

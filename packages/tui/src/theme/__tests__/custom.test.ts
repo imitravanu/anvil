@@ -29,6 +29,7 @@ describe("custom themes", () => {
   });
 
   function writeThemes(content: string): void {
+    if (tmp) fs.rmSync(tmp, { recursive: true, force: true }); // helper may run twice per test
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-theme-"));
     process.env.ANVIL_HOME = tmp;
     fs.writeFileSync(path.join(tmp, "themes.json"), content, "utf-8");

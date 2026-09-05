@@ -5,12 +5,13 @@ import type { McpServerConnection } from "@anvil/core";
 const ready: McpServerConnection = {
   id: "fs",
   status: "ready",
+  timeoutMs: 1000,
   tools: [
     { serverId: "fs", name: "read", description: "", inputSchema: {}, readOnly: true },
     { serverId: "fs", name: "write", description: "", inputSchema: {}, readOnly: false },
   ],
 };
-const broken: McpServerConnection = { id: "db", status: "error", error: "spawn ENOENT", tools: [] };
+const broken: McpServerConnection = { id: "db", status: "error", error: "spawn ENOENT", tools: [], timeoutMs: 1000 };
 
 describe("formatMcpStatus", () => {
   it("reports empty config with guidance", () => {

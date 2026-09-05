@@ -27,6 +27,7 @@ function liveConn(): { conns: Map<string, McpServerConnection>; transport: FakeM
   const conn: McpServerConnection = {
     id: "srv",
     status: "ready",
+    timeoutMs: 1000,
     tools: [
       { serverId: "srv", name: "lookup", description: "Look things up", inputSchema: { type: "object" }, readOnly: true },
       { serverId: "srv", name: "store it!", description: "Store", inputSchema: { type: "object" }, readOnly: false },

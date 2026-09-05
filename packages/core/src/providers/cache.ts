@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { atomicWriteJson } from "../atomicWrite.js";
 import type { ModelInfo } from "./types.js";
 
 // ANVIL_HOME lets tests (and future users) relocate the data dir; it must be
@@ -45,8 +46,7 @@ export function loadModelsCacheV2(): ModelsCacheV2 {
 
 export function saveModelsCacheV2(cache: ModelsCacheV2): void {
   try {
-    fs.mkdirSync(anvilHome(), { recursive: true });
-    fs.writeFileSync(MODELS_CACHE_PATH(), JSON.stringify(cache, null, 2), "utf-8");
+    atomicWriteJson(MODELS_CACHE_PATH(), cache);
   } catch {
     // Non-fatal
   }

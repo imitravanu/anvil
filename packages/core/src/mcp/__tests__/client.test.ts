@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getEventListeners } from "node:events";
 import { FakeMcpTransport } from "./fakeMcpTransport.js";
 import { McpClient, callTool, connectServer } from "../client.js";
 import type { ValidatedMcpServer } from "../../config/mcp.js";
@@ -131,6 +132,56 @@ describe("mcp client", () => {
     controller.abort();
     const result = await pending;
     expect(result.isError).toBe(true);
+  });
+
+  it("stray string-id lines neither resolve calls nor corrupt routing", async () => {
+    const transport = handshakeFake();
+    const origSend = transport.send.bind(transport);
+    transport.send = (msg: string) => {
+      origSend(msg);
+      // A server-initiated request (string id) mid-handshake: v1 ignores it.
+      transport.emit(JSON.stringify({ jsonrpc: "2.0", id: "srv-1", method: "ping" }));
+    };
+    const conn = await connectServer("srv", CFG, transport);
+    expect(conn.status).toBe("ready");
+    expect(conn.tools).toHaveLength(2);
+    const call = await callTool(conn, "read", {});
+    expect(call.isError).toBe(false);
+  });
+
+  it("connection timeoutMs is the call default when no override is given", async () => {
+    const transport = handshakeFake();
+    transport.hangMethods.add("tools/call");
+    const base = await connectServer("srv", CFG, transport);
+    const conn = { ...base, timeoutMs: 30 };
+    const timed = await callTool(conn, "read", {});
+    expect(timed.isError).toBe(true);
+    expect(JSON.stringify(timed.output)).toContain("timed out after 30ms");
+  });
+
+  it("abort listeners are removed after success (no leak on shared signals)", async () => {
+    const transport = handshakeFake();
+    const conn = await connectServer("srv", CFG, transport);
+    const controller = new AbortController();
+    expect(getEventListeners(controller.signal, "abort")).toHaveLength(0);
+    await callTool(conn, "read", {}, { signal: controller.signal });
+    await callTool(conn, "read", {}, { signal: controller.signal });
+    expect(getEventListeners(controller.signal, "abort")).toHaveLength(0);
+  });
+
+  it("a repeating tools/list cursor terminates instead of looping forever", async () => {
+    let lists = 0;
+    const transport = new FakeMcpTransport((method) => {
+      if (method === "initialize") return { protocolVersion: "x" };
+      if (method === "tools/list") {
+        lists += 1;
+        return { tools: [{ name: `t${lists}` }], nextCursor: "same" };
+      }
+      return {};
+    });
+    const conn = await connectServer("srv", CFG, transport);
+    expect(conn.status).toBe("ready");
+    expect(conn.tools.map((t) => t.name)).toEqual(["t1", "t2"]);
   });
 
   it("stdio smoke: real child process handshake + list + call + close", async () => {

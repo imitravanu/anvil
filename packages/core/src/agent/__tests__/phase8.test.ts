@@ -244,6 +244,76 @@ describe("Phase 8 (A) — durable loop", () => {
     expect(DEFAULT_MAX_INNER_ITERATIONS).toBe(20);
   });
 
+  it("unknown tools take the serial path and error cleanly in declared order", async () => {
+    const file = path.join(tmp, "a.txt");
+    fs.writeFileSync(file, "x");
+    const script: StreamEvent[][] = [
+      [
+        { type: "tool_call_end", id: "r0", name: "read_file", input: { path: file } },
+        { type: "tool_call_end", id: "x0", name: "mystery_tool", input: {} },
+        { type: "turn_end", stopReason: "tool_use" as const },
+      ],
+      textTurn(),
+    ];
+    const provider = new FakeProvider(script);
+    const { session, events } = await collect(provider, tmp);
+
+    // Serial branch never yields tool_started for unknown tools (the
+    // concurrent branch would). Unknown names stay on the safe path even
+    // though they only ever error today.
+    expect(events.some((e) => e.type === "tool_started" && e.name === "mystery_tool")).toBe(false);
+    const finished = events.filter((e) => e.type === "tool_finished");
+    expect(finished.map((e) => e.id)).toEqual(["r0", "x0"]);
+    expect(finished[1].result.isError).toBe(true);
+    expect(JSON.stringify(finished[1].result.output)).toContain("Unknown tool");
+    expect(
+      session.getRunLedger().some((e) => e.eventType === "tool_finished" && e.tool === "mystery_tool" && e.outcome === "error")
+    ).toBe(true);
+  });
+
+  it("cancel during an open permission prompt ends the turn cancelled", async () => {
+    const outFile = path.join(tmp, "out.txt");
+    let release!: (approved: boolean) => void;
+    const hangingBroker = {
+      requestPermission: () => new Promise<boolean>((resolve) => {
+        release = resolve;
+      }),
+    };
+    const script: StreamEvent[][] = [
+      [
+        { type: "tool_call_end", id: "w0", name: "write_file", input: { path: outFile, content: "NEW" } },
+        { type: "turn_end", stopReason: "tool_use" as const },
+      ],
+    ];
+    const provider = new FakeProvider(script);
+    const session = new AgentSession(provider, { ...BASE_OPTIONS, projectRoot: tmp, permissionBroker: hangingBroker });
+    const events: AgentEvent[] = [];
+    const done = (async () => {
+      for await (const event of session.send("Write it.")) events.push(event);
+    })();
+    await new Promise((r) => setTimeout(r, 50)); // let the turn reach the prompt
+    session.cancel();
+    await done;
+    expect(events.some((e) => e.type === "cancelled")).toBe(true);
+    expect(events.some((e) => e.type === "tool_started")).toBe(false);
+    expect(fs.existsSync(outFile)).toBe(false);
+    release(true); // hygiene: settle the orphaned broker promise
+  });
+
+  it("control ledger entries carry no fabricated token attribution", async () => {
+    const missing = path.join(tmp, "nope.txt");
+    const one = readTurn(missing, "x0");
+    const script: StreamEvent[][] = [one, one, one, one, textTurn()];
+    const provider = new FakeProvider(script);
+    const { session } = await collect(provider, tmp);
+    const ledger = session.getRunLedger();
+    for (const e of ledger.filter((l) => l.eventType === "loop_detected" || l.eventType === "loop_refused")) {
+      expect(e.tokens).toBeUndefined();
+    }
+    // Completion entries keep measured tokens.
+    expect(ledger.filter((e) => e.eventType === "tool_finished" && e.tokens !== undefined).length).toBeGreaterThan(0);
+  });
+
   it("non-consecutive repeat (A-B-A-B-A) warns once but still executes", async () => {
     const fileA = path.join(tmp, "a.txt");
     const fileB = path.join(tmp, "b.txt");

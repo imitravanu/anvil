@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ProviderCredentials, ProviderId, MODEL_REGISTRY } from "../providers/index.js";
+import { atomicWriteJson } from "../atomicWrite.js";
 import { AnvilSettings } from "./types.js";
 
 export type { AnvilSettings } from "./types.js";
@@ -19,15 +20,21 @@ export function anvilHome(): string {
 const CREDENTIALS_PATH = (): string => path.join(anvilHome(), "credentials.json");
 const SETTINGS_PATH = (): string => path.join(anvilHome(), "settings.json");
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
 /**
  * Minimal credential loading — just enough for the TUI phase to run for real.
  * Missing/unreadable file is not an error: it yields an empty credentials
  * object, and provider.isConfigured() reports what's actually usable.
+ * Non-object JSON is also treated as empty (never half-trusted).
  */
 export function loadCredentials(): ProviderCredentials {
   try {
-    const raw = fs.readFileSync(CREDENTIALS_PATH(), "utf-8");
-    return JSON.parse(raw) as ProviderCredentials;
+    const raw = JSON.parse(fs.readFileSync(CREDENTIALS_PATH(), "utf-8"));
+    if (!isRecord(raw)) return {};
+    return raw as ProviderCredentials;
   } catch {
     return {};
   }
@@ -35,23 +42,24 @@ export function loadCredentials(): ProviderCredentials {
 
 export function loadSettings(): AnvilSettings {
   try {
-    return JSON.parse(fs.readFileSync(SETTINGS_PATH(), "utf-8"));
+    const raw = JSON.parse(fs.readFileSync(SETTINGS_PATH(), "utf-8"));
+    if (!isRecord(raw)) return {};
+    return raw as AnvilSettings;
   } catch {
     return {};
   }
 }
 
 export function saveSettings(settings: AnvilSettings): void {
-  fs.mkdirSync(path.dirname(SETTINGS_PATH()), { recursive: true });
-  fs.writeFileSync(SETTINGS_PATH(), JSON.stringify(settings, null, 2), "utf-8");
+  atomicWriteJson(SETTINGS_PATH(), settings);
 }
 
 export function saveCredential(field: keyof ProviderCredentials, value: string): void {
   const current = loadCredentials();
   const updated = { ...current, [field]: value };
-  fs.mkdirSync(path.dirname(CREDENTIALS_PATH()), { recursive: true });
-  fs.writeFileSync(CREDENTIALS_PATH(), JSON.stringify(updated, null, 2), "utf-8");
-  fs.chmodSync(CREDENTIALS_PATH(), 0o600);
+  // Mode applied BEFORE the rename inside atomicWriteJson — no world-readable
+  // window for API keys (the old write-then-chmod had one).
+  atomicWriteJson(CREDENTIALS_PATH(), updated, { mode: 0o600 });
 }
 
 export {

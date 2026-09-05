@@ -59,6 +59,7 @@ function fakeServer(answer: unknown = { content: "mcp-answer" }): {
   const conn: McpServerConnection = {
     id: "srv",
     status: "ready",
+    timeoutMs: 1000,
     tools: [
       { serverId: "srv", name: "lookup", description: "Look up", inputSchema: { type: "object" }, readOnly: true },
       { serverId: "srv", name: "store", description: "Store", inputSchema: { type: "object" }, readOnly: false },

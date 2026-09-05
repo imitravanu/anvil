@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import { createTwoFilesPatch } from "diff";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
+import { MAX_WRITE_BYTES } from "./writeFile.js";
 import { resolveWithinRoot } from "./paths.js";
 
 interface EditInput {
@@ -36,6 +37,12 @@ async function computeEdit(
   ctx: ToolContext
 ): Promise<{ abs: string; current: string; updated: string; diff: string }> {
   const abs = resolveWithinRoot(ctx.projectRoot, input.path);
+  // Same cap as read/write: editing a multi-megabyte file would blow the
+  // model's context (and this read happens in describe(), pre-permission).
+  const stat = await fs.stat(abs);
+  if (stat.size > MAX_WRITE_BYTES) {
+    throw new Error(`File exceeds the ${MAX_WRITE_BYTES}-byte edit limit (${stat.size} bytes).`);
+  }
   const current = await fs.readFile(abs, "utf8");
   const updated = current.replace(input.old_str, () => input.new_str);
   const diff = createTwoFilesPatch(

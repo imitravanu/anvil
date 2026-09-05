@@ -24,13 +24,16 @@ const model = (id: string, providerId: string): ModelInfo => ({
 describe("Phase 8 (B) — cache v2", () => {
   let tmp: string;
   let cachePath: string;
+  let savedHome: string | undefined;
   beforeEach(() => {
+    savedHome = process.env.ANVIL_HOME;
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-p8c-"));
     process.env.ANVIL_HOME = tmp;
     cachePath = path.join(tmp, "models-cache.json");
   });
   afterEach(() => {
-    delete process.env.ANVIL_HOME;
+    if (savedHome === undefined) delete process.env.ANVIL_HOME;
+    else process.env.ANVIL_HOME = savedHome;
     try {
       fs.rmSync(tmp, { recursive: true, force: true });
     } catch {

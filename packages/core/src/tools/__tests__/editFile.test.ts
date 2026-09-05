@@ -5,6 +5,7 @@ import path from "node:path";
 import { executeTool } from "../index.js";
 import type { ToolContext } from "../types.js";
 import * as editFileTool from "../editFile.js";
+import { MAX_WRITE_BYTES } from "../writeFile.js";
 
 let root: string;
 let ctx: ToolContext;
@@ -80,5 +81,19 @@ describe("edit_file", () => {
     await expect(fs.readFile(path.join(root, "poem.txt"), "utf8")).resolves.toBe(
       "alpha\nBETA\ngamma\n"
     );
+  });
+
+  it("refuses files over the size cap without reading them fully", async () => {
+    const big = "z".repeat(MAX_WRITE_BYTES + 1024);
+    await fs.writeFile(path.join(root, "big.txt"), big);
+    const result = await executeTool(
+      "edit_file",
+      { path: "big.txt", old_str: "z", new_str: "y" },
+      ctx
+    );
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.output)).toContain("exceeds");
+    // untouched
+    await expect(fs.readFile(path.join(root, "big.txt"), "utf8")).resolves.toBe(big);
   });
 });

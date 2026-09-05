@@ -30,7 +30,19 @@ import {
 import { App, FirstRunSetup, TuiPermissionBroker, isThemeName, loadCustomThemes } from "@anvil/tui";
 
 // Detached MCP server children would outlive Anvil — SIGKILL them on exit.
+// `exit` alone misses real signals (kill, terminal close), so hook those too.
+// NOTE: process-group kill is Unix-only; on Windows each child is killed
+// individually as a best effort (see transport fallbacks).
 process.on("exit", killAllMcpServers);
+for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]] as const) {
+  process.on(sig, () => {
+    try {
+      killAllMcpServers();
+    } finally {
+      process.exit(code);
+    }
+  });
+}
 
 const VERSION = CORE_VERSION;
 
@@ -40,6 +52,9 @@ function parseFlags(argv: string[]): Record<string, string> {
     const arg = argv[i];
     if (arg === "--provider" || arg === "--model") {
       flags[arg.slice(2)] = argv[++i] ?? "";
+    } else if (arg === "--no-mcp") {
+      // Skip MCP server startup entirely (fast boot, no child processes).
+      flags["no-mcp"] = "1";
     }
   }
   return flags;
@@ -56,6 +71,7 @@ Usage:
 Options:
   --provider <id>           Override the provider for this run
   --model <id>              Override the model for this run
+  --no-mcp                  Skip MCP server startup (fast boot)
 
 Environment:
   ANVIL_PROVIDER, ANVIL_MODEL — same as the flags, lower precedence
@@ -66,7 +82,20 @@ Slash commands inside the app: /help /clear /connect /expand /ledger /mcp /model
 `;
 
 // --- Startup crash guard: never leave the terminal in a broken raw-mode state. ---
+let appInstance: { unmount: () => void } | null = null;
+
 function crash(err: unknown): never {
+  try {
+    appInstance?.unmount();
+  } catch {
+    // unmount is best-effort during a fatal crash
+  }
+  try {
+    // Ink owns raw mode while mounted; make sure a fatal crash can't strand it.
+    (process.stdin as NodeJS.ReadStream).setRawMode?.(false);
+  } catch {
+    // not a TTY — nothing to restore
+  }
   process.stderr.write(
     "Anvil hit an unexpected error:\n" +
       (err instanceof Error ? (err.stack ?? err.message) : String(err)) +
@@ -145,6 +174,9 @@ async function bootChat(): Promise<void> {
   const mcpConns = new Map<string, McpServerConnection>();
   const mcpNotices: string[] = [];
   const mcpDefs: ToolDefinition[] = [];
+  if (flags["no-mcp"]) {
+    mcpNotices.push("MCP disabled by --no-mcp.");
+  } else {
   try {
     const mcp = await connectAllMcpServers(mcpConns, { timeoutMs: 10_000 });
     for (const problem of mcp.problems) mcpNotices.push(`MCP ${problem}`);
@@ -170,6 +202,7 @@ async function bootChat(): Promise<void> {
   } catch (err: any) {
     mcpNotices.push(`MCP connect failed: ${err?.message ?? String(err)}`);
   }
+  } // end --no-mcp else
   for (const notice of mcpNotices) console.error(`⚠ ${notice}`);
 
   const broker = new TuiPermissionBroker();
@@ -190,7 +223,7 @@ async function bootChat(): Promise<void> {
       ? rawTheme
       : undefined;
 
-  render(
+  appInstance = render(
     <App
       session={session}
       broker={broker}
@@ -225,11 +258,13 @@ function runSetup(thenChat: boolean): void {
     <FirstRunSetup
       onDone={() => {
         instance?.unmount();
+        appInstance = null;
         if (thenChat) void bootChat();
       }}
     />,
     { exitOnCtrlC: false }
   );
+  appInstance = instance;
 }
 
 // --- Argument dispatch, before any TUI rendering. ---

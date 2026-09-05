@@ -96,4 +96,21 @@ describe("anvilHome relocation", () => {
     delete process.env.ANVIL_HOME;
     expect(anvilHome()).toBe(path.join(os.homedir(), ".anvil"));
   });
+
+  it("non-object JSON loads as empty, never half-trusted", () => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-home-"));
+    process.env.ANVIL_HOME = tmp;
+    fs.writeFileSync(path.join(tmp, "credentials.json"), `["not", "an", "object"]`, "utf-8");
+    fs.writeFileSync(path.join(tmp, "settings.json"), `"just a string"`, "utf-8");
+    expect(loadCredentials()).toEqual({});
+    expect(loadSettings()).toEqual({});
+  });
+
+  it("saved credentials are mode 0600 from creation (no readable window)", () => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-home-"));
+    process.env.ANVIL_HOME = tmp;
+    saveCredential("geminiApiKey", "k");
+    const mode = fs.statSync(path.join(tmp, "credentials.json")).mode & 0o777;
+    expect(mode).toBe(0o600);
+  });
 });

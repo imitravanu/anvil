@@ -33,6 +33,8 @@ export interface McpServerConnection {
   transport?: McpTransport;
   /** Live client for ready connections (absent otherwise). */
   client?: McpClient;
+  /** Per-call timeout default, from the server's config (P0: was dead). */
+  timeoutMs: number;
 }
 
 export interface McpCallResult {
@@ -60,7 +62,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
  */
 export class McpClient {
   private seq = 0;
-  private pending = new Map<number, (msg: Record<string, unknown>) => void>();
+  private pending = new Map<number | string, (msg: Record<string, unknown>) => void>();
   private pumping = false;
 
   constructor(private readonly transport: McpTransport) {}
@@ -75,6 +77,11 @@ export class McpClient {
         }
       } catch {
         // stream ended unexpectedly — pending calls fail via their own paths
+      } finally {
+        // Restartable: after transport death the next request() spins a fresh
+        // pump, which drains to {closed:true} immediately → fast McpError
+        // instead of hanging to timeout.
+        this.pumping = false;
       }
       for (const resolve of this.pending.values()) resolve({ closed: true });
       this.pending.clear();
@@ -90,10 +97,11 @@ export class McpClient {
     }
     if (!isRecord(msg)) return;
     // Server notifications have no id — v1 reads and ignores them (§3.2).
-    if (msg.id === undefined || msg.id === null) return;
-    const resolve = this.pending.get(msg.id as number);
+    // JSON-RPC ids may be numbers OR strings — both must route.
+    if (typeof msg.id !== "number" && typeof msg.id !== "string") return;
+    const resolve = this.pending.get(msg.id);
     if (resolve) {
-      this.pending.delete(msg.id as number);
+      this.pending.delete(msg.id);
       resolve(msg);
     }
   }
@@ -108,12 +116,14 @@ export class McpClient {
     if (opts?.signal?.aborted) throw new McpError("aborted");
     const id = ++this.seq;
     const timeoutMs = opts?.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    const signal = opts?.signal;
     const reply = new Promise<Record<string, unknown>>((resolve) => {
       this.pending.set(id, resolve);
     });
     this.transport.send(JSON.stringify({ jsonrpc: "2.0", id, method, params: params ?? {} }));
 
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let onAbort: (() => void) | null = null;
     const settle = (marker: Record<string, unknown>) => {
       this.pending.delete(id);
       return marker;
@@ -121,17 +131,23 @@ export class McpClient {
     const timeout = new Promise<Record<string, unknown>>((resolve) => {
       timer = setTimeout(() => resolve(settle({ __timeout: true })), timeoutMs);
     });
-    const aborted = new Promise<Record<string, unknown>>((resolve) => {
-      if (opts?.signal?.aborted) {
-        resolve(settle({ __aborted: true }));
-      } else {
-        opts?.signal?.addEventListener("abort", () => resolve(settle({ __aborted: true })), {
-          once: true,
-        });
-      }
-    });
+    const racers: Promise<Record<string, unknown>>[] = [reply, timeout];
+    if (signal) {
+      racers.push(
+        new Promise<Record<string, unknown>>((resolve) => {
+          if (signal.aborted) {
+            resolve(settle({ __aborted: true }));
+          } else {
+            // Named handler so finally can remove it: every request on a
+            // shared long-lived signal leaked one listener before this fix.
+            onAbort = () => resolve(settle({ __aborted: true }));
+            signal.addEventListener("abort", onAbort, { once: true });
+          }
+        })
+      );
+    }
     try {
-      const msg = await Promise.race([reply, timeout, aborted]);
+      const msg = await Promise.race(racers);
       if ((msg as { __aborted?: boolean }).__aborted) throw new McpError("aborted");
       if ((msg as { __timeout?: boolean }).__timeout) throw new McpError(`request timed out after ${timeoutMs}ms: ${method}`);
       if ((msg as { closed?: boolean }).closed) throw new McpError("transport closed");
@@ -142,6 +158,7 @@ export class McpClient {
       return (msg.result !== undefined ? msg.result : {}) as Record<string, unknown>;
     } finally {
       if (timer) clearTimeout(timer);
+      if (onAbort && signal) signal.removeEventListener("abort", onAbort);
       this.pending.delete(id);
     }
   }
@@ -151,6 +168,9 @@ export class McpClient {
     this.transport.send(JSON.stringify({ jsonrpc: "2.0", method, params: params ?? {} }));
   }
 }
+
+/** Cap on tools/list pages per connection (a cursor loop must not hang boot). */
+export const MAX_LIST_PAGES = 20;
 
 function toToolDef(serverId: string, t: unknown): McpToolDef | null {
   if (!isRecord(t) || typeof t.name !== "string" || t.name.length === 0) return null;
@@ -180,11 +200,14 @@ export async function connectServer(
     } catch {
       // ignore cleanup failures
     }
-    return { id, status: "error", error, tools: [] };
+    return { id, status: "error", error, tools: [], timeoutMs: cfg.timeoutMs };
   };
   try {
     const client = new McpClient(transport);
-    const timeoutMs = opts?.timeoutMs;
+    // Boot passes an explicit connect cap; otherwise the server's own
+    // configured timeout applies (P0: cfg.timeoutMs was validated but never
+    // read — the field is now the default everywhere below).
+    const timeoutMs = opts?.timeoutMs ?? cfg.timeoutMs;
     const init = await client.request(
       "initialize",
       {
@@ -202,21 +225,30 @@ export async function connectServer(
       typeof init.protocolVersion === "string" ? init.protocolVersion : undefined;
     client.notify("notifications/initialized", {});
     const tools: McpToolDef[] = [];
+    // A buggy or hostile server that repeats nextCursor forever must not hang
+    // boot: cap pages and stop on a repeated cursor.
+    const seenCursors = new Set<string>();
     let cursor: string | undefined;
+    let pages = 0;
     do {
+      if (pages >= MAX_LIST_PAGES) break;
+      pages += 1;
       const page = await client.request(
         "tools/list",
         cursor !== undefined ? { cursor } : {},
-        timeoutMs !== undefined ? { timeoutMs } : undefined
+        { timeoutMs }
       );
       const listed = Array.isArray(page.tools) ? page.tools : [];
       for (const t of listed) {
         const def = toToolDef(id, t);
         if (def) tools.push(def);
       }
-      cursor = typeof page.nextCursor === "string" ? page.nextCursor : undefined;
+      const next = typeof page.nextCursor === "string" ? page.nextCursor : undefined;
+      if (next !== undefined && seenCursors.has(next)) break;
+      if (next !== undefined) seenCursors.add(next);
+      cursor = next;
     } while (cursor !== undefined);
-    return { id, status: "ready", tools, serverVersion, transport, client };
+    return { id, status: "ready", tools, serverVersion, transport, client, timeoutMs };
   } catch (err: any) {
     return fail(err?.message ?? String(err));
   }
@@ -242,7 +274,7 @@ export async function connectAllMcpServers(
       try {
         transport = createStdioTransport(srv.command, srv.args, srv.env);
       } catch (err: any) {
-        conns.set(srv.id, { id: srv.id, status: "error", error: err?.message ?? String(err), tools: [] });
+        conns.set(srv.id, { id: srv.id, status: "error", error: err?.message ?? String(err), tools: [], timeoutMs: srv.timeoutMs });
         return;
       }
       const old = conns.get(srv.id);
@@ -298,7 +330,8 @@ export async function callTool(
     const result = await conn.client.request(
       "tools/call",
       { name: toolName, arguments: isRecord(args) ? args : {} },
-      { signal: opts?.signal, timeoutMs: opts?.timeoutMs }
+      // The connection's configured timeout is the default; explicit overrides win.
+      { signal: opts?.signal, timeoutMs: opts?.timeoutMs ?? conn.timeoutMs }
     );
     return { output: result, isError: (result as { isError?: unknown }).isError === true };
   } catch (err: any) {

@@ -183,10 +183,12 @@ export class AgentSession {
       ...this.ledger,
       {
         ...entry,
-        // Measured usage rides along when available (record, never predict) —
-        // explicit tokens (e.g. a sub-agent's own usage) take precedence.
+        // Measured usage rides along ONLY on completion entries (record,
+        // never predict) — control events (loop_detected, budget_exhausted,
+        // cancelled, checkpoint_created, …) must not fabricate attribution.
+        // Explicit tokens (e.g. a sub-agent's own usage) always win.
         ...(entry.tokens ??
-          (this.lastUsage
+          (entry.eventType === "tool_finished" && this.lastUsage
             ? { tokens: { in: this.lastUsage.inputTokens, out: this.lastUsage.outputTokens } }
             : {})),
         seq: this.ledgerSeq,
@@ -542,7 +544,10 @@ export class AgentSession {
         // A.1.3 declared parallel policy: any mutating call forces the WHOLE batch
         // serial (single-flight permission prompts; no file/command races). An
         // all-read-only batch runs concurrently, then results are re-ordered.
-        const anyMutating = toRun.some((t) => t.p.def?.mutating);
+        // Unknown tools (no definition) default to the mutating policy:
+        // serial execution through the permission path. Today they error,
+        // but any future side-effecting executor inherits the safe policy.
+        const anyMutating = toRun.some((t) => t.p.def?.mutating ?? true);
         const runResults = new Map<string, ToolExecutionResult>();
         if (anyMutating || toRun.length <= 1) {
           for (const t of toRun) {
@@ -572,7 +577,28 @@ export class AgentSession {
               }
               let approved = false;
               try {
-                approved = await this.options.permissionBroker.requestPermission(def.name, summary);
+                // Race the broker against cancel: without this, cancel() during
+                // an open prompt hangs the turn until the user answers it.
+                approved = await new Promise<boolean>((resolve) => {
+                  if (controller.signal.aborted) {
+                    resolve(false);
+                    return;
+                  }
+                  const onAbort = () => resolve(false);
+                  controller.signal.addEventListener("abort", onAbort, { once: true });
+                  this.options.permissionBroker
+                    .requestPermission(def.name, summary)
+                    .then(
+                      (v) => {
+                        controller.signal.removeEventListener("abort", onAbort);
+                        resolve(v);
+                      },
+                      () => {
+                        controller.signal.removeEventListener("abort", onAbort);
+                        resolve(false); // a broken broker denies by default
+                      }
+                    );
+                });
               } catch {
                 approved = false; // a broken broker denies by default
               }
