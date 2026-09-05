@@ -133,3 +133,28 @@ describe("run_command destructive-command guard", () => {
     expect(await fs.stat(dir).then(() => true).catch(() => false)).toBe(false);
   });
 });
+
+describe("run_command read-only safe-list", () => {
+  it("positively recognizes plain read-only commands", async () => {
+    const { isReadOnlyCommand } = await import("../bash.js");
+    for (const cmd of [
+      "ls", "ls -la", "pwd", "cat file.txt", "head -n 5 log.txt", "wc -l src/index.ts",
+      "git status", "git log --oneline", "git diff", "node --version", "npm ls",
+      "python3 --version", "echo hello world", "date", "uname -a",
+    ]) {
+      expect(isReadOnlyCommand(cmd), cmd).toBe(true);
+    }
+  });
+
+  it("gates everything not positively read-only", async () => {
+    const { isReadOnlyCommand } = await import("../bash.js");
+    for (const cmd of [
+      "rm file.txt", "mv a b", "git push", "git commit -m x", "git branch feat",
+      "npm run build", "npm test", "python3 -c 'import os'", "npx whatever",
+      "cat a > b", "ls; rm -rf /", "echo hi && evil", "cat `cat f`", "echo $HOME",
+      "find . -delete", "ls *.txt", "", "  ",
+    ]) {
+      expect(isReadOnlyCommand(cmd), cmd).toBe(false);
+    }
+  });
+});

@@ -2,19 +2,9 @@ import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { listSessions } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
-import { curtail, displayModelLabel } from "../util/format.js";
+import { curtail, displayModelLabel, relativeTime } from "../util/format.js";
 import { SESSION_TITLE_MAX, MAX_VISIBLE_ROWS } from "../util/displayLimits.js";
 import { useWindowedList } from "../hooks/useWindowedList.js";
-
-function relativeTime(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
 
 const MAX_VISIBLE = MAX_VISIBLE_ROWS;
 

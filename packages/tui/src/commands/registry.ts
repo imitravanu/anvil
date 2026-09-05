@@ -10,6 +10,8 @@ import { Command, CommandContext, CommandHandlerDeps } from "./types.js";
 import { formatLedger } from "../util/ledger.js";
 import { formatMcpStatus } from "../util/mcp.js";
 import { formatRewindList, formatRewindResult } from "../util/rewind.js";
+import { curtail, relativeTime } from "../util/format.js";
+import { SESSION_TITLE_MAX } from "../util/displayLimits.js";
 
 export const COMMANDS: Command[] = [
   {
@@ -214,9 +216,14 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
         printSystemMessage("No saved sessions.");
         return;
       }
+      // Human scale: title, model, age, and a short id — full UUIDs and raw
+      // ISO timestamps are machine noise in a chat transcript.
       printSystemMessage(
         metas
-          .map((m) => `${m.id}  ${m.title}  (${m.model}, updated ${m.updatedAt})`)
+          .map(
+            (m) =>
+              `${m.id.slice(0, 8)}  ${curtail(m.title, SESSION_TITLE_MAX)}  ·  ${m.model}  ·  ${relativeTime(m.updatedAt)}`
+          )
           .join("\n")
       );
     },

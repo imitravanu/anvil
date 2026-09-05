@@ -1,4 +1,5 @@
 import type { CheckpointMeta } from "@anvil/core";
+import { relativeTime } from "./format.js";
 
 /** Rewind UI copy: list + restore results. Pure — App just prints them. */
 
@@ -8,7 +9,7 @@ export function formatRewindList(checkpoints: readonly CheckpointMeta[]): string
   }
   const lines = checkpoints.map(
     (c) =>
-      `#${c.id}  ${c.files} file${c.files === 1 ? "" : "s"}  (${c.ts})` +
+      `#${c.id}  ${c.files} file${c.files === 1 ? "" : "s"}  ·  ${relativeTime(c.ts)}` +
       (c.skipped > 0 ? `  [${c.skipped} skipped]` : "")
   );
   return [

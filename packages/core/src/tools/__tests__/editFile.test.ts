@@ -19,18 +19,23 @@ beforeAll(async () => {
 afterAll(() => fs.rm(root, { recursive: true, force: true }));
 
 describe("edit_file", () => {
-  it("replaces a unique occurrence and its summary is a real unified diff", async () => {
+  it("replaces a unique occurrence, card summary is one line, diff rides in output", async () => {
     const result = await executeTool(
       "edit_file",
       { path: "poem.txt", old_str: "beta", new_str: "BETA" },
       ctx
     );
     expect(result.isError).toBe(false);
-    // A unified diff, not a plain-English description:
-    expect(result.summary).toMatch(/^--- a\//m);
-    expect(result.summary).toMatch(/^\+\+\+ b\//m);
-    expect(result.summary).toContain("-beta");
-    expect(result.summary).toContain("+BETA");
+    // The transcript card gets a short human summary (NOT the raw diff, whose
+    // first line is the "===" separator); the unified diff rides in output.
+    expect(result.summary).toMatch(/^Edited poem\.txt \(\+\d+ −\d+\)$/);
+    const output = result.output as { diff: string; added: number; removed: number };
+    expect(output.added).toBe(1);
+    expect(output.removed).toBe(1);
+    expect(output.diff).toMatch(/^--- a\//m);
+    expect(output.diff).toMatch(/^\+\+\+ b\//m);
+    expect(output.diff).toContain("-beta");
+    expect(output.diff).toContain("+BETA");
     const content = await fs.readFile(path.join(root, "poem.txt"), "utf8");
     expect(content).toBe("alpha\nBETA\ngamma\n");
   });

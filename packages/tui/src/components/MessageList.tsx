@@ -4,6 +4,7 @@ import type { DisplayMessage } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { MessageView } from "./MessageView.js";
 import { displayModelLabel, providerLabel, providerOfModel } from "../util/format.js";
+import { hiddenMessageCount } from "../util/transcriptWindow.js";
 
 function EmptyState({ model }: { model: string }) {
   const theme = useTheme();
@@ -15,6 +16,9 @@ function EmptyState({ model }: { model: string }) {
       <Text dimColor>
         {provider ? providerLabel(provider) : "Anvil"} · {displayModelLabel(model)}
       </Text>
+      <Box marginTop={1} flexDirection="column">
+        <Text>Just type a task — I can read, edit, and run code in this project.</Text>
+      </Box>
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>Try:</Text>
         <Text><Text color={theme.colors.primary}>/help</Text><Text dimColor> — list commands</Text></Text>
@@ -30,6 +34,7 @@ function EmptyState({ model }: { model: string }) {
 }
 
 export function MessageList({ messages, model, expandTools, height }: { messages: DisplayMessage[]; model: string; expandTools?: boolean; height: number }) {
+  const { stdout } = useStdout();
   // Shared bounded container for both states: bottom-anchored, clipped at the
   // top exactly like terminal scrollback. Before the flex fix, unbounded
   // content overflowed the fixed-height frame and Ink's default flex-shrink:1
@@ -64,6 +69,13 @@ export function MessageList({ messages, model, expandTools, height }: { messages
       paddingX={1}
       justifyContent="flex-end"
     >
+      {(() => {
+        const width = stdout?.columns ?? 80;
+        const hidden = hiddenMessageCount(messages, width, height);
+        return hidden > 0 ? (
+          <Text dimColor>… {hidden} earlier message{hidden === 1 ? "" : "s"} above — full history in the session file</Text>
+        ) : null;
+      })()}
       {messages.map((message, index) => (
         <Box key={message.id} marginTop={index > 0 ? 1 : 0} flexShrink={0}>
           <MessageView message={message} expandTools={expandTools} />

@@ -79,6 +79,17 @@ class EditValidationError extends Error {
   }
 }
 
+/** Count added/removed lines in a unified diff (skips +++/--- headers). Pure. */
+function diffChurn(diff: string): { added: number; removed: number } {
+  let added = 0;
+  let removed = 0;
+  for (const line of diff.split("\n")) {
+    if (line.startsWith("+") && !line.startsWith("+++")) added += 1;
+    else if (line.startsWith("-") && !line.startsWith("---")) removed += 1;
+  }
+  return { added, removed };
+}
+
 export const execute: ToolExecutor = async (rawInput, ctx: ToolContext) => {
   const input = rawInput as EditInput;
   let result: Awaited<ReturnType<typeof computeEdit>>;
@@ -96,11 +107,14 @@ export const execute: ToolExecutor = async (rawInput, ctx: ToolContext) => {
   }
   if (ctx.signal.aborted) throw new Error("Aborted before writing");
   await fs.writeFile(result.abs, result.updated, "utf8");
+  const { added, removed } = diffChurn(result.diff);
   return {
-    output: { path: input.path, changed: true },
+    // The diff itself rides in output (visible via /expand); the card shows a
+    // one-liner — the raw diff's first line was the "===" separator, which
+    // rendered as "✓ edit_file ====…" in the transcript.
+    output: { path: input.path, changed: true, added, removed, diff: result.diff },
     isError: false,
-    // Real unified diff — this is what the Phase 4 permission prompt renders.
-    summary: result.diff,
+    summary: `Edited ${input.path} (+${added} −${removed})`,
   };
 };
 

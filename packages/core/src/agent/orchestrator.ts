@@ -1,5 +1,6 @@
 import type { ToolExecutionResult } from "../tools/types.js";
 import { describeToolInput, executeTool } from "../tools/index.js";
+import { isReadOnlyCommand } from "../tools/bash.js";
 import type { AgentEvent } from "./types.js";
 import type { RunLedgerEntry } from "./ledger.js";
 import type { PreparedCall } from "./loopGuard.js";
@@ -67,6 +68,24 @@ export class ToolOrchestrator {
         continue;
       }
       if (def.mutating) {
+        // Read-only safe-list: `ls`, `git status`, `cat` and friends are
+        // positively recognized as harmless (no metacharacters, no globs —
+        // see isReadOnlyCommand) and skip the prompt; everything else,
+        // including anything not positively known, still gates. The ledger
+        // records the auto-allow so the bypass is never silent.
+        if (call.name === "run_command") {
+          const command = (call.input as { command?: unknown } | undefined)?.command;
+          if (typeof command === "string" && isReadOnlyCommand(command)) {
+            this.deps.recordLedger({ eventType: "tool_auto_allowed", tool: call.name, inputHash: t.p.key, outcome: "ok", elapsedMs: 0 });
+            yield { type: "tool_started", id: call.id, name: call.name, input: call.input };
+            this.deps.recordLedger({ eventType: "tool_started", tool: call.name, inputHash: t.p.key, outcome: "ok", elapsedMs: 0 });
+            const autoResult = await executeTool(call.name, call.input, { projectRoot, signal });
+            yield { type: "tool_finished", id: call.id, name: call.name, result: autoResult };
+            this.deps.recordLedger({ eventType: "tool_finished", tool: call.name, inputHash: t.p.key, outcome: autoResult.isError ? "error" : "ok", elapsedMs: Date.now() - t.startedAt });
+            runResults.set(call.id, autoResult);
+            continue;
+          }
+        }
         let summary = `${call.name}`;
         try {
           summary = await describeToolInput(call.name, call.input, {

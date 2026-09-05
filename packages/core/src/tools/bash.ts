@@ -109,6 +109,50 @@ export function isBlockedCommand(command: string): string | null {
   return null;
 }
 
+// --- Read-only safe-list: known-harmless commands skip the permission prompt. ---
+
+// First word must be exactly one of these binaries (no shell variables, globs,
+// or metacharacters can smuggle a second command past the check — see below).
+const READ_ONLY_BINARIES = new Set([
+  "ls", "pwd", "cat", "head", "tail", "wc", "file", "stat", "du", "df",
+  "tree", "which", "whoami", "date", "uname", "echo",
+]);
+
+// For multi-mode binaries, only these subcommands are considered read-only —
+// `git status` is safe, `git push`/`git branch foo` are not.
+const READ_ONLY_SUBCOMMANDS: Record<string, Set<string>> = {
+  git: new Set(["status", "log", "diff", "show", "rev-parse"]),
+  npm: new Set(["ls", "list", "view", "search", "outdated"]),
+  node: new Set(["--version", "-v"]),
+  python3: new Set(["--version", "-V"]),
+  python: new Set(["--version", "-V"]),
+  pip3: new Set(["list", "show", "freeze"]),
+  pip: new Set(["list", "show", "freeze"]),
+};
+
+// Any redirection, pipe, chain, substitution, or expansion means the command
+// is not the plain read-only invocation it claims to be (`cat a > b` writes,
+// `echo hi; rm -rf x` chains). The permission prompt remains the gate there.
+const SHELL_METACHARS = /[|;&<>()`$\\\n]/;
+
+/**
+ * True iff the command is a plain single invocation of a known read-only
+ * binary (with an allowed subcommand where relevant) and contains no shell
+ * metacharacters or globs. Conservative by construction: anything not
+ * positively recognized stays permission-gated.
+ */
+export function isReadOnlyCommand(command: string): boolean {
+  const trimmed = command.trim();
+  if (!trimmed || SHELL_METACHARS.test(trimmed)) return false;
+  if (/[*?[]/.test(trimmed)) return false;
+  const parts = trimmed.split(/\s+/);
+  const bin = parts[0];
+  const sub = READ_ONLY_SUBCOMMANDS[bin];
+  if (sub) return parts.length > 1 && sub.has(parts[1]);
+  if (!READ_ONLY_BINARIES.has(bin)) return false;
+  return true; // pure printers — arguments are inert (metachars/globs already rejected)
+}
+
 export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   const { command } = input as { command: string };
   const blocked = isBlockedCommand(command);

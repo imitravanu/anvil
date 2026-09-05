@@ -228,6 +228,7 @@ export function App({
             onSubmit={handleSubmit}
             onCancel={cancel}
             sentHistory={sentHistory}
+            notify={printSystemMessage}
           />
         )}
         <StatusBar model={currentModel} isBusy={isBusy} usage={usage} />

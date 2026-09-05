@@ -39,6 +39,9 @@ export function MessageView({ message, expandTools }: { message: DisplayMessage;
     <Text color={theme.colors.assistantText}>
       {message.text ? `${message.text} ` : ""}
       <Text color={theme.colors.accent}>{spinner}</Text>
+      {!message.text && message.toolCalls.length === 0 && (
+        <Text dimColor> thinking…</Text>
+      )}
     </Text>
   ) : (
     <MarkdownView blocks={parseMarkdownText(message.text)} />
@@ -48,7 +51,10 @@ export function MessageView({ message, expandTools }: { message: DisplayMessage;
       <Text bold color={theme.colors.primary}>
         anvil
       </Text>
-      {textBlock}
+      {(message.text || message.streaming) && textBlock}
+      {message.errorText && (
+        <Text color={theme.colors.toolError}>✗ {message.errorText}</Text>
+      )}
       {message.toolCalls.map((call) => (
         <ToolCallView key={call.id} call={call} expanded={expandTools} />
       ))}

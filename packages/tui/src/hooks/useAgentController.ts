@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { randomUUID } from "node:crypto";
 import { AgentSession, type AgentEvent } from "@anvil/core";
 import { retainReport, type SubAgentRecord } from "../util/subagent.js";
+import { friendlyError } from "../util/errors.js";
 import { HISTORY_RECALL_CAP, TRANSCRIPT_STATE_CAP } from "../util/displayLimits.js";
 
 export type DisplaySubAgent = SubAgentRecord;
@@ -55,6 +56,8 @@ export interface DisplayMessage {
   streaming: boolean;
   toolCalls: DisplayToolCall[];
   subAgents: DisplaySubAgent[]; // U10: delegation cards live on the assistant turn
+  /** Friendly, compact turn-failure line (raw provider walls are remapped). */
+  errorText?: string;
 }
 
 export interface UsageTotals {
@@ -228,9 +231,11 @@ function applyEvent(
       }));
       break;
     case "error":
+      // Compact + actionable in the transcript (raw provider error walls are
+      // multi-line dumps); the error is rendered as its own styled block.
       update((m) => ({
         ...m,
-        text: m.text + `\n[error: ${event.message}]`,
+        errorText: friendlyError(event.message),
         toolCalls: m.toolCalls.map((t) =>
           t.status === "running" ? { ...t, status: "error" as const, summary: "Turn failed" } : t
         ),

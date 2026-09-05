@@ -44,6 +44,10 @@ export function ModelPicker({
 }) {
   const theme = useTheme();
   const [models, setModels] = useState<ModelInfo[]>(() => [...MODEL_REGISTRY]);
+  // Type-to-filter: a registry of 40+ models is un-navigable with arrows
+  // alone. Printable keys extend the filter, Backspace retracts, Esc clears
+  // it first and closes only when empty.
+  const [filter, setFilter] = useState("");
   // Phase 8 (B): surface staleness instead of hiding it.
   const [cacheNote, setCacheNote] = useState<string | null>(() =>
     isModelsCacheFresh(DEFAULT_SYNC_TTL_MS) ? null : "Free-model list is stale — prices may be out of date."
@@ -68,9 +72,19 @@ export function ModelPicker({
     };
   }, [providers]);
 
+  // Filter after the live-sync state, before grouping/navigation.
+  const filteredModels = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return models;
+    return models.filter(
+      (m) =>
+        m.displayName.toLowerCase().includes(q) || m.id.toLowerCase().includes(q) || m.providerId.toLowerCase().includes(q)
+    );
+  }, [models, filter]);
+
   const rows: PickerRow[] = useMemo(
     () =>
-      models.map((m) => {
+      filteredModels.map((m) => {
         const provider = providers[m.providerId as ProviderId];
         return {
           model: m,
@@ -79,7 +93,7 @@ export function ModelPicker({
           providerDisplayName: provider?.displayName ?? m.providerId,
         };
       }),
-    [models, providers]
+    [filteredModels, providers]
   );
 
   // U9: canonical display order — provider sections, free-first within each.
@@ -96,17 +110,32 @@ export function ModelPicker({
     );
   }, [rows]);
 
-  // Focus current model if enabled, otherwise first enabled row
-  const [selected, setSelected] = useState(() => {
-    const currentIdx = ordered.findIndex((o) => o.row.model.id === currentModelId && o.row.enabled);
-    if (currentIdx !== -1) return currentIdx;
-    const first = ordered.findIndex((o) => o.row.enabled);
-    return first === -1 ? 0 : first;
-  });
+  const [selected, setSelected] = useState(0);
 
-  useInput((_input, key) => {
+  // Focus the current model if enabled, otherwise the first enabled row.
+  // Re-runs when the filter changes so the highlight lands on a visible row.
+  useEffect(() => {
+    const currentIdx = ordered.findIndex((o) => o.row.model.id === currentModelId && o.row.enabled);
+    if (currentIdx !== -1) {
+      setSelected(currentIdx);
+      return;
+    }
+    const first = ordered.findIndex((o) => o.row.enabled);
+    setSelected(first === -1 ? 0 : first);
+  }, [ordered, currentModelId]);
+
+  useInput((input, key) => {
     if (key.escape) {
-      onClose();
+      if (filter) setFilter(""); // filter first, close second
+      else onClose();
+      return;
+    }
+    if (key.backspace) {
+      setFilter((f) => f.slice(0, -1));
+      return;
+    }
+    if (!key.upArrow && !key.downArrow && !key.return && !key.tab && input && input.length === 1 && input >= " " && !key.ctrl && !key.meta) {
+      setFilter((f) => f + input);
       return;
     }
     if (key.upArrow || key.downArrow) {
@@ -138,7 +167,9 @@ export function ModelPicker({
     const isCurrent = row.model.id === currentModelId;
     const marker = isSelected ? "❯ " : "  ";
     const kind = pricingKind(row.model.isFree);
-    const pricingTag = formatPricingTag(row.model.isFree);
+    // The live sync names include "(Free)" — the [FREE] tag would duplicate it.
+    const nameAlreadySaysFree = /\(free\)/i.test(row.model.displayName);
+    const pricingTag = nameAlreadySaysFree ? "" : formatPricingTag(row.model.isFree);
     const limited = isRateLimited(row.model.providerId, row.model.id);
 
     if (!row.enabled) {
@@ -184,8 +215,13 @@ export function ModelPicker({
   return (
     <Box flexDirection="column" flexShrink={0} borderStyle="round" borderColor={theme.colors.primary} paddingX={1}>
       <Text color={theme.colors.primary}>
-        Select a model ({selected + 1}/{ordered.length}) — models with [FREE] cost $0 — Enter to switch, Esc to cancel
+        Select a model ({selected + 1}/{ordered.length}) — type to filter, Enter to switch, Esc to cancel
       </Text>
+      {filter && (
+        <Text dimColor>
+          filter: <Text color={theme.colors.toolName}>{filter}</Text> — Backspace to erase, Esc to clear
+        </Text>
+      )}
       {cacheNote && <Text dimColor>⚠ {cacheNote}</Text>}
       {hasAbove && (
         <Text dimColor>  ▲ {scrollOffset} more above...</Text>
