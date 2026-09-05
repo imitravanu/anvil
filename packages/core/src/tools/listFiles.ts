@@ -42,16 +42,29 @@ export const definition: ToolDefinition = {
   name: "list_files",
   description:
     "List files in the project, excluding node_modules/.git/dist. Optionally filter with a " +
-    "glob pattern (** matches any depth, * within a segment, ? single char).",
+    "glob pattern (** matches any depth, * within a segment, ? single char, e.g. \"src/**/*.ts\") " +
+    "or a plain name, which matches as a case-insensitive substring of the path " +
+    "(e.g. \"calc\" finds calc.py, \"session\" finds src/session/store.ts).",
   inputSchema: {
     type: "object",
     properties: {
       path: { type: "string", description: "Subdirectory to start from (default: project root)" },
-      pattern: { type: "string", description: 'Optional glob, e.g. "src/**/*.ts"' },
+      pattern: { type: "string", description: 'Optional glob ("src/**/*.ts") or plain name ("calc") to filter by' },
     },
   },
   mutating: false,
 };
+
+/**
+ * Real globs stay exact; a pattern without glob metacharacters is a
+ * case-insensitive substring match on the root-relative path. Models pass
+ * bare file names ("calc") far more often than globs — treating those as
+ * exact-name globs finds nothing and sends the agent guessing.
+ */
+function matchesPattern(file: string, pattern: string): boolean {
+  if (/[*?[]/.test(pattern)) return globToRegex(pattern).test(file);
+  return file.toLowerCase().includes(pattern.toLowerCase());
+}
 
 export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   const { path: relDir = ".", pattern } = input as { path?: string; pattern?: string };
@@ -60,10 +73,12 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   // Walk from absDir, but report paths relative to the PROJECT ROOT — the model
   // feeds these straight into other tools, all of which are root-relative.
   await walk(absDir, ctx.projectRoot, all);
-  const files = (pattern ? all.filter((f) => globToRegex(pattern).test(f)) : all).sort();
+  const files = (pattern ? all.filter((f) => matchesPattern(f, pattern)) : all).sort();
   return {
-    output: { files, count: files.length },
+    output: { files, count: files.length, pattern },
     isError: false,
-    summary: `Listed ${files.length} file${files.length === 1 ? "" : "s"} under ${relDir}`,
+    summary: pattern
+      ? `Found ${files.length} file${files.length === 1 ? "" : "s"} matching "${pattern}"`
+      : `Listed ${files.length} file${files.length === 1 ? "" : "s"} under ${relDir}`,
   };
 };

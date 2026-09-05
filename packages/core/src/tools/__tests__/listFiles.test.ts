@@ -34,7 +34,19 @@ describe("list_files", () => {
 
   it("filters with a glob pattern", async () => {
     const result = await executeTool("list_files", { pattern: "src/**/*.ts" }, ctx);
-    expect(result.output).toEqual({ files: ["src/a.ts", "src/sub/b.ts"], count: 2 });
+    expect(result.output).toEqual({ files: ["src/a.ts", "src/sub/b.ts"], count: 2, pattern: "src/**/*.ts" });
+  });
+
+  it("treats a plain (non-glob) pattern as a case-insensitive path substring", async () => {
+    const byStem = await executeTool("list_files", { pattern: "a.ts" }, ctx);
+    expect(byStem.output).toEqual({ files: ["src/a.ts"], count: 1, pattern: "a.ts" });
+
+    const byDirName = await executeTool("list_files", { pattern: "SUB" }, ctx);
+    expect(byDirName.output).toEqual({ files: ["src/sub/b.ts"], count: 1, pattern: "SUB" });
+
+    // Bare file name without extension — the exact failure mode models hit.
+    const byBareName = await executeTool("list_files", { pattern: "readme" }, ctx);
+    expect(byBareName.output).toEqual({ files: ["README.md"], count: 1, pattern: "readme" });
   });
 
   it("can list a subdirectory only", async () => {

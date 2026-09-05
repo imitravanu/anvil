@@ -15,14 +15,54 @@ permission prompt with a real unified diff.
   Mistral's experimentation tier, or Ollama (fully offline). Every model is tagged `[FREE]` or
   `[PAID]` in the picker and header, so pricing is always visible.
 - **Agent loop with 6 tools**: `read_file`, `write_file`, `edit_file` (unified diffs),
-  `list_files`, `grep`, `run_command` — with cancellation and path containment to the project root
+  `list_files` (glob or plain-name search), `grep`, `run_command` — with cancellation and path
+  containment to the project root
 - **Interactive permissions**: every mutating tool call shows the diff or command before it runs
-  (Allow once / Always allow this session / Deny)
+  (Allow once / Always allow this session / Deny — or just press **Esc** to deny). Known
+  read-only commands (`ls`, `cat`, `git status`, `node --version`, …) run without prompting;
+  anything with shell metacharacters, globs, or mutating subcommands always prompts.
+- **Model picker with type-to-filter**: 40+ models — including live-synced OpenRouter free
+  models — are searchable by name; free models sort first.
+- **Honest UI everywhere**: real unified diffs in permission prompts, bounded transcript with a
+  "… N earlier messages above" scrollback indicator, compact actionable error messages (rate
+  limits include the retry time), a per-session run ledger (`/ledger`), and file checkpoints you
+  can rewind (`/rewind`).
 - **Session persistence**: conversations auto-save to `~/.anvil/sessions/` and can be listed,
   resumed, and renamed (`/session`)
 - **Context compaction**: when usage nears the model's context window, older history is
-  summarized automatically so long sessions keep working
+  summarized automatically — proactively on resume (estimated) and reactively between turns —
+  so long sessions keep working
 - **Theming**: `/theme dark | light | highContrast` (or your own names from `~/.anvil/themes.json`), persisted in settings
+
+## What it looks like
+
+```
+╭──────────────────────────────────────────────────────────────────────────────────╮
+│ ▲ ANVIL                            Ollama · Qwen 2.5 Coder (Local) [FREE] · idle │
+│──────────────────────────────────────────────────────────────────────────────────│
+│ ❯ you                                                                            │
+│ add a multiply function to calc.py                                               │
+│                                                                                  │
+│ anvil                                                                            │
+│ Reading calc.py first.                                                           │
+│    ✓ read_file Read calc.py (29 bytes)                                           │
+│    ✓ edit_file Edited calc.py (+4 −0)                                            │
+│                                                                                  │
+│ ℹ Checkpoint #1: 1 file snapshotted — /rewind 1 to undo.                         │
+│──────────────────────────────────────────────────────────────────────────────────│
+│╭────────────────────────────────────────────────────────────────────────────────╮│
+││ ⚠ edit_file wants to edit a file                                              ││
+││    1  1 │ def add(a,b):                                                       ││
+││ +  3    │                                                                     ││
+││ +  4    │ def multiply(a, b):                                                 ││
+││ ❯ Allow once                                                                    ││
+││   Always allow 'edit_file' this session                                         ││
+││   Deny                                                                          ││
+││  ↑/↓ to move · Enter to confirm · Esc to deny                                   ││
+│╰────────────────────────────────────────────────────────────────────────────────╯│
+│ Qwen 2.5 Coder (Local) [FREE] │ ○ idle │ tokens 1,842 in · 96 out │ ctrl+c exit │
+╰──────────────────────────────────────────────────────────────────────────────────╯
+```
 
 ## Install
 
@@ -84,7 +124,7 @@ fill. Or type the command directly:
 | `/ledger` | show this session's run ledger (what ran, what failed, tokens spent) |
 | `/rewind` | list file checkpoints, or restore one (`/rewind <n>`); shell commands can't be rewound |
 | `/sync` | sync OpenRouter's live free-model list now (also runs automatically at startup) |
-| `/model` | open the model/provider picker (cross-provider switches clear history) |
+| `/model` | open the model/provider picker (type to filter; cross-provider switches clear history) |
 | `/theme <name>` | switch theme (built-in or custom); persisted |
 | `/session list` | list saved sessions |
 | `/session new` | start a fresh session |
@@ -98,6 +138,11 @@ an empty input recalls messages you sent this session; typing **/** opens the co
 
 ## Safety notes
 
+- **Read-only commands don't prompt.** `run_command` auto-allows a conservative safe-list of
+  plain, positively-recognized read-only invocations (`ls`, `pwd`, `cat`, `git status`,
+  `node --version`, …). Anything not on the list — and any command containing a shell
+  metacharacter (`|`, `&&`, `>`, `$()`, globs) — goes through the normal permission prompt.
+  Auto-allows are recorded in the run ledger (`/ledger`), never silent.
 - All file tools are contained to the directory Anvil was started in, including symlink-aware
   checks on the deepest existing path component.
 - Reads and writes are capped at 512 KiB. Shell-command output is capped at about 20 KiB per
@@ -112,8 +157,9 @@ an empty input recalls messages you sent this session; typing **/** opens the co
   it defaults to `~/.anvil`.
 - "Always allow" permission grants are in-memory, per session — never persisted, never restored
   on `/session resume`.
-- Compaction is reactive (based on the previous turn's token usage); a single enormous message
-  can still exceed the context window in one hop.
+- Compaction is proactive on resume (a chars/4 estimate decides whether to summarize before the
+  first request) and reactive between turns; a single enormous message can still exceed the
+  context window in one hop.
 
 ## How this was built
 
