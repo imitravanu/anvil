@@ -29,9 +29,11 @@ export class HistoryStore {
     this.messages.forEach((m, i) => {
       if (
         m.role === "user" &&
-        m.content[0]?.type === "text" &&
         !m.content.some((c) => c.type === "tool_result") &&
-        !(m.content[0] as { text: string }).text.startsWith("[Earlier conversation summary")
+        m.content.some((c) => c.type === "text") &&
+        !(m.content.find((c) => c.type === "text") as { text: string }).text.startsWith(
+          "[Earlier conversation summary"
+        )
       ) {
         this.userTurnIndices.push(i);
       }
@@ -60,9 +62,15 @@ export class HistoryStore {
     return this.messages.length;
   }
 
-  pushUserText(text: string): void {
+  pushUserText(text: string, images: { mediaType: string; data: string }[] = []): void {
     this.userTurnIndices.push(this.messages.length);
-    this.messages.push({ role: "user", content: [{ type: "text", text }] });
+    this.messages.push({
+      role: "user",
+      content: [
+        ...images.map((img) => ({ type: "image" as const, mediaType: img.mediaType, data: img.data })),
+        { type: "text", text },
+      ],
+    });
   }
 
   /**

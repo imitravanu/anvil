@@ -111,6 +111,11 @@ export function toAnthropicMessages(messages: ConversationMessage[]): Anthropic.
     for (const c of m.content) {
       if (c.type === "text") {
         content.push({ type: "text", text: c.text });
+      } else if (c.type === "image") {
+        content.push({
+          type: "image",
+          source: { type: "base64", media_type: c.mediaType as "image/png", data: c.data },
+        });
       } else if (c.type === "tool_call") {
         let input: unknown = c.call.input;
         if (typeof input === "string") {

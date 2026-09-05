@@ -14,6 +14,12 @@ export function MessageView({ message, expandTools }: { message: DisplayMessage;
     return (
       <Box flexDirection="column">
         <Text dimColor>❯ you</Text>
+        {message.images?.map((img) => (
+          <Text key={img.path} dimColor>
+            {"  🖼 "}
+            {img.path}
+          </Text>
+        ))}
         <Text color={theme.colors.userText}>{message.text}</Text>
       </Box>
     );

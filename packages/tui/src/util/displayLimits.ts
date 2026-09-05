@@ -8,6 +8,7 @@ export const LEDGER_MAX_ROWS = 15; // /ledger recent rows
 export const TRANSCRIPT_STATE_CAP = 1000; // DisplayMessage[] bound
 export const HISTORY_RECALL_CAP = 100; // sentHistory bound
 export const MESSAGE_QUEUE_CAP = 10; // messages typed while a turn runs
+export const IMAGE_MAX_BYTES = 5 * 1024 * 1024; // /image attachment cap
 
 /** "… N more line(s) omitted" suffix shared by expanded viewers. */
 export function omittedLine(total: number, shown: number): string {

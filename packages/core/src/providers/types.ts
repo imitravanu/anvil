@@ -29,7 +29,9 @@ export interface ToolResultInput {
 export type MessageContent =
   | { type: "text"; text: string }
   | { type: "tool_call"; call: ToolCallRequest }
-  | { type: "tool_result"; result: ToolResultInput };
+  | { type: "tool_result"; result: ToolResultInput }
+  /** Inline base64 image attached by the user (/image). Data is raw base64, no data: URL. */
+  | { type: "image"; mediaType: string; data: string };
 
 export interface ConversationMessage {
   role: Role;

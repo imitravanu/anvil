@@ -326,13 +326,16 @@ export class AgentSession {
     this.history.pushToolResults(prepared, outcomes, turnNotes);
   }
 
-  async *send(userText: string): AsyncGenerator<AgentEvent> {
+  async *send(
+    userText: string,
+    images: { mediaType: string; data: string }[] = []
+  ): AsyncGenerator<AgentEvent> {
     if (this.isSending) {
       yield { type: "error", message: "A turn is already in progress for this session." };
       return;
     }
     this.isSending = true;
-    this.history.pushUserText(userText);
+    this.history.pushUserText(userText, images);
     if (this.title === null) {
       const firstLine = userText.trim().split("\n")[0] ?? "";
       const chars = Array.from(firstLine);

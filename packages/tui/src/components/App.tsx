@@ -83,6 +83,7 @@ export function App({
     replaceMessages,
     sentHistory,
     queued,
+    addPendingImage,
   } = useAgentController(session, {
     // Persist after every settled turn — including queued ones that drain
     // inside the controller, after handleSubmit has already returned.
@@ -150,6 +151,7 @@ export function App({
     setIsThemePickerOpen,
     setExpandTools,
     send,
+    addPendingImage,
   });
   persistRef.current = persist;
 

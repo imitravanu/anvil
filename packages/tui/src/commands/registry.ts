@@ -1,5 +1,8 @@
+import fs from "node:fs";
+import path from "node:path";
 import {
   AgentSession,
+  MODEL_REGISTRY,
   TOOL_DEFINITIONS,
   collectMcpToolDefs,
   createOpenRouterFreeSource,
@@ -12,7 +15,7 @@ import { Command, CommandContext, CommandHandlerDeps } from "./types.js";
 import { formatLedger } from "../util/ledger.js";
 import { formatMcpStatus } from "../util/mcp.js";
 import { formatRewindList, formatRewindResult } from "../util/rewind.js";
-import { capLines } from "../util/displayLimits.js";
+import { capLines, IMAGE_MAX_BYTES } from "../util/displayLimits.js";
 import { curtail, relativeTime } from "../util/format.js";
 import { SESSION_TITLE_MAX } from "../util/displayLimits.js";
 
@@ -26,8 +29,9 @@ export const COMMANDS: Command[] = [
         clear: "e.g. /clear — fresh transcript; the old session stays resumable",
         connect: "e.g. /connect — pick a provider, paste its API key",
         expand: "e.g. /expand — toggle full tool output on/off",
+        image: "e.g. /image diagram.png — then ask about it",
         ledger: "e.g. /ledger — what ran, what failed, tokens spent",
-        retry: "e.g. /retry — ask your last message again, fresh",
+        retry: "e.g. /retry actually use python 3.12 — retry with corrected wording",
         diff: "e.g. /diff — see every file the session touched",
         mcp: "e.g. /mcp reconnect — refresh all servers",
         model: "e.g. /model — Enter switches, Esc cancels",
@@ -119,6 +123,11 @@ export const COMMANDS: Command[] = [
     },
   },
   {
+    name: "image",
+    description: "Attach an image (png/jpeg/webp/gif) to your next message",
+    run: (args, ctx) => ctx.attachImage(args.join(" ").trim()),
+  },
+  {
     name: "connect",
     description: "Add or update a provider API key",
     run: (_args, ctx) => ctx.openConnect(),
@@ -136,7 +145,7 @@ export const COMMANDS: Command[] = [
   {
     name: "retry",
     description: "Re-run your last message (drops the previous answer first)",
-    run: (_args, ctx) => ctx.retryLast(),
+    run: (args, ctx) => ctx.retryLast(args.join(" ").trim() || undefined),
   },
   {
     name: "diff",
@@ -202,6 +211,7 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
     setIsConnectOpen,
     setIsThemePickerOpen,
     setExpandTools,
+    addPendingImage,
   } = deps;
   return {
     clearHistory: () => {
@@ -335,21 +345,62 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
         printSystemMessage(`Rewind failed: ${err instanceof Error ? err.message : String(err)}`);
       });
     },
-    retryLast: () => {
+    attachImage: (rawPath: string) => {
+      if (isBusy) {
+        printSystemMessage("Cannot attach images while a turn is in flight.");
+        return;
+      }
+      const p = rawPath.trim();
+      if (!p) {
+        printSystemMessage("Usage: /image <path> — the image sends with your next message.");
+        return;
+      }
+      const MEDIA_BY_EXT: Record<string, string> = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+      };
+      const mediaType = MEDIA_BY_EXT[path.extname(p).toLowerCase()];
+      if (!mediaType) {
+        printSystemMessage("Unsupported image type — use png, jpeg, webp, or gif.");
+        return;
+      }
+      try {
+        const buf = fs.readFileSync(p);
+        if (buf.length > IMAGE_MAX_BYTES) {
+          printSystemMessage(`Image too large (${Math.ceil(buf.length / 1024)} KB) — max 5 MB.`);
+          return;
+        }
+        addPendingImage({ mediaType, data: buf.toString("base64"), path: p });
+        const supportsVision = MODEL_REGISTRY.find((m) => m.id === currentModel)?.supportsVision;
+        const note = supportsVision === false ? " (note: this model may not support vision)" : "";
+        printSystemMessage(
+          `Image attached (${Math.ceil(buf.length / 1024)} KB) — it sends with your next message.${note}`
+        );
+      } catch (err: unknown) {
+        printSystemMessage(`Could not read image: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    },
+    retryLast: (replacement?: string) => {
       if (isBusy) {
         printSystemMessage("Cannot retry while a turn is in flight.");
         return;
       }
-      const text = session.popLastUserTurn();
-      if (text === null) {
+      const previous = session.popLastUserTurn();
+      if (previous === null && !replacement) {
         printSystemMessage("Nothing to retry yet.");
         return;
       }
+      // /retry alone re-sends the same request; /retry <text> re-asks with
+      // corrected wording — the previous exchange is dropped either way.
+      const text = replacement || previous || "";
       // Drop the old exchange from the transcript too — the retry re-renders
       // it fresh (new answer, new tool cards).
       const lastUserIdx = messages.map((m) => m.role).lastIndexOf("user");
       replaceMessages(lastUserIdx > 0 ? messages.slice(0, lastUserIdx) : []);
-      printSystemMessage("Retrying your last message.");
+      printSystemMessage(replacement ? "Retrying with your corrected message." : "Retrying your last message.");
       void send(text);
     },
     showDiff: () => {

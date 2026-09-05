@@ -8,9 +8,27 @@ All notable changes to Anvil are documented here. The format follows
 
 ### Planned
 
-- Image/vision input for vision-capable models
-- Live verification against the seven unit-tested-only providers
-- Message editing (re-run with modified text, not just identical retry)
+- Live verification against the seven unit-tested-only providers (blocked on
+  API keys — only Gemini and OpenRouter credentials exist)
+
+## [0.5.0] — 2026-09-06
+
+### Added
+
+- **Vision input**: `/image <path>` attaches a png/jpeg/webp/gif (max 5 MB) to
+  your next message; the attachment shows in the transcript and travels as a
+  native image part through every adapter (Anthropic base64 blocks, OpenAI
+  data-URL content parts, Gemini `inlineData`). Models flagged non-vision get
+  a warning at attach time.
+- **`/retry <text>`**: retry with corrected wording — the previous exchange is
+  dropped and your revised message is sent instead of the original.
+
+### Fixed
+
+- Gemini image parts use the `@google/genai` camelCase shape (`inlineData`/
+  `mimeType`); the wire-format `inline_data` shape was rejected with
+  "required oneof field 'data'". Verified live: the payload now passes API
+  validation (failures become quota errors, not format errors).
 
 ## [0.4.0] — 2026-09-06
 
@@ -113,7 +131,8 @@ loop with six tools and path containment, interactive permission prompts with
 unified diffs, session persistence, context compaction, theming, first-run
 onboarding, sub-agent delegation, and MCP (stdio) support.
 
-[Unreleased]: https://github.com/mitravanu/anvil/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/mitravanu/anvil/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/mitravanu/anvil/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/mitravanu/anvil/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mitravanu/anvil/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mitravanu/anvil/compare/v0.1.0...v0.2.0

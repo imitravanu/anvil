@@ -36,6 +36,7 @@ export interface UseSessionCommandsDeps {
   setIsThemePickerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setExpandTools: React.Dispatch<React.SetStateAction<boolean>>;
   send: (text: string) => Promise<void>;
+  addPendingImage: (img: { mediaType: string; data: string; path: string }) => void;
 }
 
 export interface UseSessionCommandsResult {
@@ -95,6 +96,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     setIsThemePickerOpen,
     setExpandTools,
     send,
+    addPendingImage,
   } = deps;
 
   /** Auto-save after every completed or cancelled turn. */
@@ -150,6 +152,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     setIsThemePickerOpen,
     setExpandTools,
     send,
+    addPendingImage,
   });
 
   const handleSubmit = async (text: string) => {

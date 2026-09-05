@@ -56,6 +56,8 @@ export interface DisplayMessage {
   streaming: boolean;
   toolCalls: DisplayToolCall[];
   subAgents: DisplaySubAgent[]; // delegation cards live on the assistant turn
+  /** Attached image paths (/image) shown under the user turn. */
+  images?: { path: string }[];
   /** Friendly, compact turn-failure line (raw provider walls are remapped). */
   errorText?: string;
 }
@@ -83,6 +85,8 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
   const queueRef = useRef<string[]>([]);
   const [queued, setQueued] = useState<string[]>([]);
   const busyRef = useRef(false);
+  // /image attachments waiting for the next send (consumed by runTurn).
+  const pendingImagesRef = useRef<{ mediaType: string; data: string; path: string }[]>([]);
   const onTurnSettledRef = useRef(opts.onTurnSettled);
   onTurnSettledRef.current = opts.onTurnSettled;
   const currentAssistantId = useRef<string | null>(null);
@@ -98,11 +102,14 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     // Queued messages belong to the conversation they were typed in.
     queueRef.current = [];
     setQueued([]);
+    pendingImagesRef.current = [];
   }, [session]);
 
   const runTurn = useCallback(
     async (text: string) => {
       busyRef.current = true;
+      const attached = pendingImagesRef.current;
+      pendingImagesRef.current = [];
       // Bounded state: recall needs dozens, not thousands; the transcript window
       // renders a handful while history truth lives in the session file.
       setSentHistory((prev) => [...prev, text].slice(-HISTORY_RECALL_CAP));
@@ -113,6 +120,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         streaming: false,
         toolCalls: [],
         subAgents: [],
+        ...(attached.length > 0 ? { images: attached.map((a) => ({ path: a.path })) } : {}),
       };
       const assistantId = randomUUID();
       currentAssistantId.current = assistantId;
@@ -137,7 +145,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
       // them reads as the paragraphs the model actually produced.
       let textNeedsBreak = false;
       try {
-        for await (const event of session.send(text)) {
+        for await (const event of session.send(text, attached)) {
           if (event.type === "text_delta" && textNeedsBreak) {
             updateAssistant((m) => ({ ...m, text: m.text + "\n\n" }));
             textNeedsBreak = false;
@@ -178,6 +186,11 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     [runTurn]
   );
 
+  /** Stage an image for the next message (/image). Capped at 4 pending. */
+  const addPendingImage = useCallback((img: { mediaType: string; data: string; path: string }) => {
+    pendingImagesRef.current = [...pendingImagesRef.current, img].slice(-4);
+  }, []);
+
   const cancel = useCallback(() => session.cancel(), [session]);
 
   /** Append a system notice to the transcript — never sent to the model. */
@@ -205,6 +218,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     plan,
     queued,
     send,
+    addPendingImage,
     cancel,
     printSystemMessage,
     clearMessages,

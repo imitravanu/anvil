@@ -32,7 +32,9 @@ export interface CommandContext {
   // /rewind (checkpoints): no id → list; id → restore that checkpoint
   rewind: (idText?: string) => void;
   // /retry: drop the last user turn and re-send it
-  retryLast: () => void;
+  retryLast: (replacement?: string) => void;
+  // /image: stage an image file for the next message
+  attachImage: (path: string) => void;
   // /diff: review every file change the session made (vs pre-change snapshots)
   showDiff: () => void;
   // /mcp: no arg → server status; "reconnect" → refresh all
@@ -74,6 +76,7 @@ export interface CommandHandlerDeps {
   setIsThemePickerOpen: Dispatch<SetStateAction<boolean>>;
   setExpandTools: Dispatch<SetStateAction<boolean>>;
   send: (text: string) => Promise<void>;
+  addPendingImage: (img: { mediaType: string; data: string; path: string }) => void;
 }
 
 export type CommandHandlerFactory = (deps: CommandHandlerDeps) => CommandContext;

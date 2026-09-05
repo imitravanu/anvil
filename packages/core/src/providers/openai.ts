@@ -132,7 +132,22 @@ export function toOpenAIMessages(messages: ConversationMessage[]): Record<string
           : {}),
       });
     } else {
-      if (text) out.push({ role: "user", content: text });
+      // Vision: user turns with attachments become content-part arrays
+      // (data URL for the image); plain turns stay string content.
+      const images = m.content.filter((c) => c.type === "image") as Array<{
+        mediaType: string;
+        data: string;
+      }>;
+      if (images.length > 0) {
+        const parts: Record<string, unknown>[] = [];
+        if (text) parts.push({ type: "text", text });
+        for (const img of images) {
+          parts.push({ type: "image_url", image_url: { url: `data:${img.mediaType};base64,${img.data}` } });
+        }
+        out.push({ role: "user", content: parts });
+      } else if (text) {
+        out.push({ role: "user", content: text });
+      }
       for (const c of m.content) {
         if (c.type === "tool_result") {
           out.push({

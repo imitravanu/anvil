@@ -160,6 +160,10 @@ export function toGeminiContents(messages: ConversationMessage[]): Record<string
     for (const c of m.content) {
       if (c.type === "text") {
         parts.push({ text: c.text });
+      } else if (c.type === "image") {
+        // @google/genai expects camelCase here (unlike the functionCall/
+        // functionResponse parts, which it accepts in wire format).
+        parts.push({ inlineData: { mimeType: c.mediaType, data: c.data } });
       } else if (c.type === "tool_call") {
         const signature = c.call.providerMetadata?.thoughtSignature;
         parts.push({
