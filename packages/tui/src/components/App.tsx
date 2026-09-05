@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useReducer, useState } from "react";
 import { Box, Text, useStdout } from "ink";
 import {
   AgentSession,
@@ -84,6 +84,18 @@ export function App({
   } = useAgentController(session);
   const { stdout } = useStdout();
   const rows = stdout?.rows ?? 24;
+  // Ink does not re-render on terminal resize by itself, and every zone here
+  // reads rows/columns during render — so without this the frame stays
+  // frozen at whatever size the terminal was at boot (fullscreening left the
+  // app stuck in a small corner). The TTY emits "resize" on SIGWINCH.
+  const [, resizeTick] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    if (!stdout) return;
+    stdout.on("resize", resizeTick);
+    return () => {
+      stdout.off("resize", resizeTick);
+    };
+  }, [stdout]);
   // Basis height for the message list: everything that is ALWAYS on screen —
   // outer frame border (2), header (1), two dividers (2), status bar (1),
   // bordered input (3) — leaves the rest for the transcript. PlanLine and the
