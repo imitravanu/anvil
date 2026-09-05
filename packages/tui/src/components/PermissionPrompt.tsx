@@ -6,7 +6,7 @@ import { useTheme } from "../theme/theme.js";
 
 const DIFF_TOOLS = new Set(["edit_file", "write_file"]);
 
-// Phase 8 (C5): active phrasing instead of the awkward tool-name split.
+// active phrasing instead of the awkward tool-name split.
 const TOOL_LABELS: Record<string, string> = {
   edit_file: "wants to edit a file",
   write_file: "wants to write a file",

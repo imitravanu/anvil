@@ -56,7 +56,7 @@ export function relativeTime(iso: string): string {
 }
 
 /**
- * Phase 8.5 (U1): collapse a (possibly multi-line) plan into at most `maxLines`
+ * : collapse a (possibly multi-line) plan into at most `maxLines`
  * display lines that fit the terminal width. Pure — PlanLine just renders it.
  */export function collapsePlan(
   plan: string,

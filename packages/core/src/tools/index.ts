@@ -5,8 +5,8 @@ import * as editFile from "./editFile.js";
 import * as listFiles from "./listFiles.js";
 import * as grep from "./grep.js";
 import * as bash from "./bash.js";
-import * as updatePlan from "./updatePlan.js"; // Phase 8 (A.1.4) plan scratchpad
-import * as delegateTask from "./delegateTask.js"; // Phase 9 sub-agent delegation
+import * as updatePlan from "./updatePlan.js"; // plan scratchpad
+import * as delegateTask from "./delegateTask.js"; // sub-agent delegation tool
 
 interface RegisteredTool {
   definition: ToolDefinition;
@@ -29,13 +29,13 @@ const REGISTRY: RegisteredTool[] = [
   // Session intercepts this tool before the generic executor (sets session.plan
   // and emits plan_updated); the executor here is just a safe no-op.
   { definition: updatePlan.definition, execute: updatePlan.execute },
-  // Session intercepts delegate_task and runs a sub-agent (Phase 9).
+  // Session intercepts delegate_task and runs a sub-agent.
   { definition: delegateTask.definition, execute: delegateTask.execute },
 ];
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = REGISTRY.map((t) => t.definition);
 
-// Phase 10: external tool executors (MCP). The built-in registry stays
+// external tool executors (MCP). The built-in registry stays
 // closed; unknown names fall through to registered prefixes in order.
 export interface ExternalToolResult {
   /** True when this executor owns the name (it must then provide result). */

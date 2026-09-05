@@ -3,7 +3,7 @@ import { useTheme } from "../theme/theme.js";
 import { collapsePlan } from "../util/format.js";
 
 /**
- * Phase 8.5 (U1): the agent's current plan, always visible above the input,
+ * : the agent's current plan, always visible above the input,
  * collapsed to at most two width-fitting lines. Hidden entirely when no plan
  * is set. Updates live via plan_updated events.
  */

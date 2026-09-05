@@ -8,7 +8,7 @@ import { SubAgentView } from "./SubAgentView.js";
 
 export function MessageView({ message, expandTools }: { message: DisplayMessage; expandTools?: boolean }) {
   const theme = useTheme();
-  // Streaming caret: single braille-spinner implementation (see PHASE-8-PROGRESS.md §5).
+  // Streaming caret: a single braille-spinner implementation.
   const spinner = useSpinnerFrame(message.streaming);
   if (message.role === "user") {
     return (
@@ -29,7 +29,7 @@ export function MessageView({ message, expandTools }: { message: DisplayMessage;
     );
   }
 
-  // Two-pass rendering (Phase 8 C2): plain colored text while streaming —
+  // Two-pass rendering: plain colored text while streaming —
   // never markdown-parse mid-flight (flicker rule) — then ONE re-render
   // through the bounded markdown renderer once the turn settles. Code fences
   // are highlighted inside MarkdownView, so no direct highlighter call here.

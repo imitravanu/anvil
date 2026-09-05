@@ -116,7 +116,7 @@ process.on("unhandledRejection", (reason) => {
 });
 
 async function bootChat(): Promise<void> {
-  // Phase 8 (B): restore the persisted free-model snapshot (any source) before
+  // restore the persisted free-model snapshot (any source) before
   // the model picker needs it. Staleness is surfaced, not hidden.
   const cached = loadModelsCacheV2();
   const cachedModels = collectModelsFromCache(cached);
@@ -151,7 +151,7 @@ async function bootChat(): Promise<void> {
   }
 
   const providers = createProviders(creds);
-  // Phase 8 (B): one owner for free-model syncing — the coordinator. Single-flight
+  // one owner for free-model syncing — the coordinator. Single-flight
   // + TTL mean boot, picker, and /sync can never double-fetch or silently diverge.
   if (providers.openrouter?.isConfigured()) {
     void syncFreeModels({
@@ -168,7 +168,7 @@ async function bootChat(): Promise<void> {
     process.exit(1);
   }
 
-  // Phase 10: connect MCP servers (10s cap each). Dead servers warn once
+  // connect MCP servers (10s cap each). Dead servers warn once
   // and never block chat; the executor reads this map live, so /mcp
   // reconnect refreshes routing with no stale state.
   const mcpConns = new Map<string, McpServerConnection>();

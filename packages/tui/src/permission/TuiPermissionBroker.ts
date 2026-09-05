@@ -11,7 +11,7 @@ type Listener = (req: PendingPermissionRequest | null) => void;
 /**
  * Implements core's PermissionBroker, bridging pending permission requests
  * into React via a tiny pub-sub. "Always allow" is per TOOL NAME, for the
- * rest of this process only — never persisted (Phase 6+ may revisit).
+ * rest of this process only — never persisted.
  *
  * Requests are served FIFO through a queue: concurrent callers no longer
  * clobber each other (the second request used to overwrite `current`,

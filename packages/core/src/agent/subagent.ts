@@ -6,7 +6,7 @@ import type { PermissionBroker } from "./types.js";
 import type { Checkpoint } from "./checkpoints.js";
 
 // ---------------------------------------------------------------------------
-// Phase 9: sub-agent runner. A sub-agent is a real AgentSession with a fresh
+// sub-agent runner. A sub-agent is a real AgentSession with a fresh
 // context, a focused system prompt, its own step budget, NO delegate_task
 // (depth limit 1), and the SAME permission broker (shared grants; mutating
 // sub-agent actions still prompt the user).
@@ -40,7 +40,7 @@ export interface SubAgentRun {
   usage: { in: number; out: number };
   toolCalls: number;
   aborted: boolean;
-  /** The sub-agent's own checkpoints, for the parent to merge (P1). */
+  /** The sub-agent's own checkpoints, for the parent to merge . */
   checkpoints: Checkpoint[];
 }
 
@@ -66,7 +66,7 @@ export async function runSubAgent(opts: {
     maxInnerIterations: opts.maxInnerIterations ?? SUB_AGENT_MAX_ITERATIONS,
   });
 
-  // The parent turn's AbortSignal covers the sub-run (spec: no wall-clock
+  // The parent turn's AbortSignal covers the sub-run (no wall-clock
   // timer — user cancel propagates). Registered BEFORE send() starts so no
   // abort can slip in between; removed on exit so the session can't leak.
   if (opts.signal.aborted) {

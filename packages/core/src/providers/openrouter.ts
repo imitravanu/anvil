@@ -6,7 +6,7 @@ import {
   syncFreeModels,
 } from "./freeModels.js";
 
-// Backward-compat re-exports (Phase 7 names). The fetch implementation lives in
+// Backward-compat re-exports. The fetch implementation lives in
 // freeModels.ts so the coordinator is the single owner of free-model syncing.
 export { OPENROUTER_BASE_URL, fetchOpenRouterFreeModels } from "./freeModels.js";
 
@@ -17,7 +17,7 @@ export interface SyncResult {
 }
 
 /**
- * Phase 7 compatibility wrapper. The coordinator (syncFreeModels) is authoritative;
+ * Compatibility wrapper. The coordinator (syncFreeModels) is authoritative;
  * this maps its report back to the old SyncResult shape.
  */
 export async function syncOpenRouterModels(apiKey?: string): Promise<SyncResult> {

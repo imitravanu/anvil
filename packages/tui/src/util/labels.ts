@@ -1,5 +1,5 @@
 // Single source of truth for human provider names (used in chrome, pickers,
-// and /connect). Phase 8 (C1) — previously defined inside App.tsx.
+// and /connect). — previously defined inside App.tsx.
 export const PROVIDER_LABELS: Record<string, string> = {
   anthropic: "Anthropic",
   openai: "OpenAI",

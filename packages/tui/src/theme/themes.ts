@@ -1,5 +1,5 @@
 // Registry of named themes. Components read colors via useTheme() — never
-// import a theme object directly (Phase 6).
+// import a theme object directly.
 export const THEMES = {
   dark: {
     colors: {
@@ -12,7 +12,7 @@ export const THEMES = {
       toolError: "red",
       dim: "gray",
       border: "cyan",
-      // Phase 8 (C6): surface hierarchy tokens.
+      // surface hierarchy tokens.
       accent: "cyan",
       surface: "gray",
     },
@@ -58,7 +58,7 @@ export type ThemeColorKey =
   | "primary" | "userText" | "assistantText" | "toolName" | "toolRunning"
   | "toolDone" | "toolError" | "dim" | "border" | "accent" | "surface";
 
-/** Structural theme shape — built-ins satisfy it, and so do validated custom themes (U13). */
+/** Structural theme shape — built-ins satisfy it, and so do validated custom themes . */
 export interface Theme {
   colors: Record<ThemeColorKey, string>;
   spacing: { panelPaddingX: number; panelPaddingY: number };

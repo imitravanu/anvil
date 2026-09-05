@@ -27,7 +27,7 @@ const MAX_VISIBLE = MAX_VISIBLE_ROWS;
 /**
  * Model/provider picker overlay. Takes over keyboard input while open.
  * Providers without a configured key are dimmed and skipped on navigation.
- * U9: rows render grouped under provider headers (canonical provider order,
+ * rows render grouped under provider headers (canonical provider order,
  * free-first inside each group); navigation follows display order. Windowed
  * with scrolling to accommodate large model registries cleanly.
  */
@@ -48,12 +48,12 @@ export function ModelPicker({
   // alone. Printable keys extend the filter, Backspace retracts, Esc clears
   // it first and closes only when empty.
   const [filter, setFilter] = useState("");
-  // Phase 8 (B): surface staleness instead of hiding it.
+  // surface staleness instead of hiding it.
   const [cacheNote, setCacheNote] = useState<string | null>(() =>
     isModelsCacheFresh(DEFAULT_SYNC_TTL_MS) ? null : "Free-model list is stale — prices may be out of date."
   );
 
-  // Phase 8 (B): the coordinator is the single owner — single-flight + TTL mean
+  // the coordinator is the single owner — single-flight + TTL mean
   // this can never double-fetch; a failure is reported, never swallowed.
   useEffect(() => {
     let active = true;
@@ -96,7 +96,7 @@ export function ModelPicker({
     [filteredModels, providers]
   );
 
-  // U9: canonical display order — provider sections, free-first within each.
+  // canonical display order — provider sections, free-first within each.
   // Navigation, selection, and windowing all run over this order so the
   // highlight always matches what is on screen.
   const ordered = useMemo(() => {

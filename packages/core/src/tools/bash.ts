@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 
-const MAX_STREAM_BYTES = 20 * 1024; // per stream, same cap as the prototype
+const MAX_STREAM_BYTES = 20 * 1024; // per stream
 export const RUN_COMMAND_TIMEOUT_MS = 120_000;
 
 interface CapturedStream {

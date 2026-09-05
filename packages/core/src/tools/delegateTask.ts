@@ -1,7 +1,7 @@
 import { ToolDefinition, ToolExecutionResult } from "./types.js";
 
 /**
- * Phase 9: delegation tool. The AgentSession intercepts delegate_task before
+ * Delegation tool. The AgentSession intercepts delegate_task before
  * the generic executor and runs a sub-agent; this executor is a defensive
  * no-op for direct executeTool calls.
  */

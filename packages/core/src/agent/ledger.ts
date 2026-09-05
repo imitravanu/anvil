@@ -1,4 +1,4 @@
-// Phase 8 (A.1.5): append-only run ledger that records what the loop actually did.
+// append-only run ledger that records what the loop actually did.
 // Capped so session files stay growth-bounded. The entry shape is serial:
 // {seq, ts, eventType, tool?, inputHash?, outcome, tokens?, elapsedMs}.
 

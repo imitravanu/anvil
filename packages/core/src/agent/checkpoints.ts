@@ -4,8 +4,7 @@ import { resolveWithinRoot } from "../tools/paths.js";
 
 // ---------------------------------------------------------------------------
 // Rewind checkpoints: pre-mutation snapshots of write_file/edit_file targets.
-// Memory-only, ring-bounded. See docs/REWIND-SPEC.md.
-// ---------------------------------------------------------------------------
+// Memory-only, ring-bounded. // ---------------------------------------------------------------------------
 
 export interface FileSnapshot {
   /** Project-root-relative path as the tool call gave it. */

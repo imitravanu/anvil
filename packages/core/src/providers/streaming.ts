@@ -1,7 +1,7 @@
 import type { StreamEvent } from "./types.js";
 
 // ---------------------------------------------------------------------------
-// Shared stream plumbing (P1): the three translators hand-rolled the same
+// Shared stream plumbing the three translators hand-rolled the same
 // buffering with three different bugs. Common invariants live here, once.
 // ---------------------------------------------------------------------------
 

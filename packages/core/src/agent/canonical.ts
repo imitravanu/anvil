@@ -1,4 +1,4 @@
-// Phase 8 (A.1.2): canonical, provider-order-independent hash of a tool input.
+// canonical, provider-order-independent hash of a tool input.
 // Providers do NOT emit tool-call arguments with stable key order, so a plain
 // JSON.stringify would create false "different call" keys for identical inputs.
 // Recursively sorts object keys before hashing. Returns a fixed 64-hex digest

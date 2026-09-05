@@ -2,7 +2,7 @@ import type { RunLedgerEntry } from "@anvil/core";
 import { LEDGER_MAX_ROWS } from "./displayLimits.js";
 
 /**
- * U7 run-ledger UI: render the Phase 8 (A.1.5) append-only ledger as a
+ * U7 run-ledger UI: render the append-only ledger as a
  * plain-text report for the /ledger command. Pure — App just prints it.
  */
 export function formatLedger(entries: readonly RunLedgerEntry[]): string {

@@ -55,7 +55,7 @@ export interface DisplayMessage {
   text: string; // accumulated so far; may still be mid-stream
   streaming: boolean;
   toolCalls: DisplayToolCall[];
-  subAgents: DisplaySubAgent[]; // U10: delegation cards live on the assistant turn
+  subAgents: DisplaySubAgent[]; // delegation cards live on the assistant turn
   /** Friendly, compact turn-failure line (raw provider walls are remapped). */
   errorText?: string;
 }
@@ -75,7 +75,7 @@ export function useAgentController(session: AgentSession) {
   const [usage, setUsage] = useState<UsageTotals>({ inputTokens: 0, outputTokens: 0 });
   const currentAssistantId = useRef<string | null>(null);
   const [sentHistory, setSentHistory] = useState<string[]>([]);
-  // Phase 8.5 (U1): the persistent plan — seeded from the session, updated live
+  // the persistent plan — seeded from the session, updated live
   // by plan_updated events, reset whenever the active session changes.
   const [plan, setPlan] = useState<string | null>(session.plan ?? null);
   useEffect(() => {
@@ -249,7 +249,7 @@ function applyEvent(
         ),
       ]);
       break;
-    // Phase 8 (A): truthful-engine events — surfaced, never silently dropped.
+    // truthful-engine events — surfaced, never silently dropped.
     case "budget_exhausted":
       setMessages((prev) => [
         ...prev,
@@ -267,7 +267,7 @@ function applyEvent(
       ]);
       break;
     case "plan_updated":
-      // Phase 8.5 (U1): drive the persistent plan line, not just the transcript.
+      // drive the persistent plan line, not just the transcript.
       setPlan(event.plan || null);
       setMessages((prev) => [...prev, systemMessage(`Plan updated: ${event.plan}`)]);
       break;
@@ -279,7 +279,7 @@ function applyEvent(
         ),
       ]);
       break;
-    // Phase 9 + U10: delegation renders as cards on the assistant turn —
+    // Delegation renders as cards on the assistant turn —
     // the started card is the live progress, the finished card carries the
     // report (expandable via /expand). Replaces the old system notices.
     case "subagent_started":

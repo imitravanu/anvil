@@ -1,7 +1,7 @@
 import { ToolDefinition, ToolExecutionResult } from "./types.js";
 
 /**
- * Phase 8 (A.1.4): the plan scratchpad tool. Defined here so models see it in
+ * : the plan scratchpad tool. Defined here so models see it in
  * TOOL_DEFINITIONS and so it NEVER enters the permission path (non-mutating).
  * The AgentSession intercepts update_plan before the generic executor so it can
  * set session.plan and emit the plan_updated event; this executor is a safe

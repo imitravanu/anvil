@@ -1,5 +1,5 @@
 /**
- * Bounded markdown parser — pure, no React, no deps. Round 2 (U8) adds links
+ * Bounded markdown parser — pure, no React, no deps. Round 2  adds links
  * (safe: text + footnotes, never clickable), nested lists (depth), tables,
  * and strikethrough on top of the round-1 set (headings, text, lists,
  * quotes, code fences, hr with **bold** / *italic* / `code` / ***both***).

@@ -6,7 +6,7 @@ import type { ModelInfo } from "./types.js";
 const MODELS_CACHE_PATH = (): string => path.join(anvilHome(), "models-cache.json");
 
 /**
- * Cache v2 — the Phase 8 (B) truth format: versioned, timestamped, per-source.
+ * Cache v2 — the truth format: versioned, timestamped, per-source.
  * `isModelsCacheFresh` answers "how old is this data" without hiding staleness.
  */
 export interface ModelsCacheV2 {
@@ -70,7 +70,7 @@ export function collectModelsFromCache(cache: ModelsCacheV2): ModelInfo[] {
   return out;
 }
 
-// --- Phase 7 legacy API (v1 flat list) kept for backward compatibility. ---
+// --- v1 flat-list API, kept for backward compatibility. ---
 
 export function loadModelsCache(): ModelInfo[] {
   return collectModelsFromCache(loadModelsCacheV2());

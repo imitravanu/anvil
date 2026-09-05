@@ -5,7 +5,7 @@ import { capReportLines, formatSubAgentLine } from "../util/subagent.js";
 import { ExpandedLines } from "./ExpandedLines.js";
 
 /**
- * U10 sub-agent card: collapsed one-liner always, report body under /expand.
+ * Sub-agent card: collapsed one-liner always, report body under /expand.
  * Reports already finished render even while the turn streams (they arrived
  * as complete events); running cards show live until finished/cancelled.
  */

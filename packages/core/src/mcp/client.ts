@@ -5,9 +5,9 @@ import type { ValidatedMcpServer } from "../config/mcp.js";
 import { CORE_VERSION } from "../version.js";
 
 // ---------------------------------------------------------------------------
-// MCP client: minimal JSON-RPC 2.0 over an McpTransport (Phase 10).
+// MCP client: minimal JSON-RPC 2.0 over an McpTransport.
 // Handshake: initialize → notifications/initialized → tools/list (paginated).
-// See docs/PHASE-10-SPEC.md §3.2.
+// 2.
 // ---------------------------------------------------------------------------
 
 /** Protocol version we declare. Recorded; see version-negotiation note below. */
@@ -33,7 +33,7 @@ export interface McpServerConnection {
   transport?: McpTransport;
   /** Live client for ready connections (absent otherwise). */
   client?: McpClient;
-  /** Per-call timeout default, from the server's config (P0: was dead). */
+  /** Per-call timeout default, from the server's config. */
   timeoutMs: number;
 }
 
@@ -58,7 +58,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 /**
  * One client per connection: multiplexes concurrent requests by JSON-RPC id
  * over a single line pump. Late responses (after timeout/abort) have no
- * pending entry and are ignored — the transport stays usable (M7).
+ * pending entry and are ignored — the transport stays usable .
  */
 export class McpClient {
   private seq = 0;
@@ -96,7 +96,7 @@ export class McpClient {
       return; // malformed line — ignore (framing is newline-delimited JSON)
     }
     if (!isRecord(msg)) return;
-    // Server notifications have no id — v1 reads and ignores them (§3.2).
+    // Server notifications have no id — v1 reads and ignores them ().
     // JSON-RPC ids may be numbers OR strings — both must route.
     if (typeof msg.id !== "number" && typeof msg.id !== "string") return;
     const resolve = this.pending.get(msg.id);
@@ -217,10 +217,9 @@ export async function connectServer(
       },
       timeoutMs !== undefined ? { timeoutMs } : undefined
     );
-    // Version negotiation (APPROVED DEVIATION from SPEC §3.2 echo-check, see
-    // PHASE-10-PROGRESS: servers answer with their own version; strict echo
-    // would brick interop on any drift while tools/list+tools/call are
-    // stable across versions. The reported version is recorded, not enforced.
+    // Version negotiation: servers answer with their own version. A strict
+    // echo-check would brick interop on any drift, and tools/list +
+    // tools/call are stable across versions — so we record it, not enforce it.
     const serverVersion =
       typeof init.protocolVersion === "string" ? init.protocolVersion : undefined;
     client.notify("notifications/initialized", {});
@@ -309,7 +308,7 @@ export async function connectAllMcpServers(
 
 /**
  * Call a server tool. Transport stays open on every outcome (timeouts and
- * errors resolve as results) — a failed call never poisons later calls (M7).
+ * errors resolve as results) — a failed call never poisons later calls .
  */
 export async function callTool(
   conn: McpServerConnection,

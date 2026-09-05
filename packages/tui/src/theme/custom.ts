@@ -4,7 +4,7 @@ import { anvilHome } from "@anvil/core";
 import { REQUIRED_COLOR_KEYS, type Theme } from "./themes.js";
 
 // ---------------------------------------------------------------------------
-// U13 custom user themes (~/.anvil/themes.json, ANVIL_HOME-honoring).
+// custom user themes (~/.anvil/themes.json, ANVIL_HOME-honoring).
 // { "<name>": { "colors": {<every REQUIRED_COLOR_KEYS entry>}, "spacing"? } }
 // ---------------------------------------------------------------------------
 

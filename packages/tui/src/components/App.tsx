@@ -29,9 +29,9 @@ import { PlanLine } from "./PlanLine.js";
 import { SessionPicker } from "./SessionPicker.js";
 import { StatusBar } from "./StatusBar.js";
 
-// Provider labels live in util/labels.ts (Phase 8 C1) — single source of truth.
+// Provider labels live in util/labels.ts — single source of truth.
 
-// Phase 10: live MCP state, owned by the CLI boot (connections mutate in
+// live MCP state, owned by the CLI boot (connections mutate in
 // place on reconnect so the executor never goes stale).
 export interface McpAppState {
   list: () => McpServerConnection[];
@@ -95,7 +95,7 @@ export function App({
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isSessionPickerOpen, setIsSessionPickerOpen] = useState(false);
   const [isConnectOpen, setIsConnectOpen] = useState(false);
-  // U6: full tool-output display, toggled by /expand. Session-scoped,
+  // full tool-output display, toggled by /expand. Session-scoped,
   // never persisted — a resumed session starts compact.
   const [expandTools, setExpandTools] = useState(false);
 
@@ -198,7 +198,7 @@ export function App({
         <Box flexShrink={0}>
           <Divider />
         </Box>
-        {/* Phase 8.5 (U1): the agent's current plan stays visible above the
+        {/* : the agent's current plan stays visible above the
             input until it changes or the session changes. */}
         {plan && <PlanLine plan={plan} />}
         {/* Overlays take over keyboard input — InputBar is not rendered while one is open,

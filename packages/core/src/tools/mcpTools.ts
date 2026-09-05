@@ -4,8 +4,8 @@ import type { McpServerConnection, McpToolDef } from "../mcp/client.js";
 import { callTool } from "../mcp/client.js";
 
 // ---------------------------------------------------------------------------
-// MCP tool adapter (Phase 10): namespaced definitions + dispatch.
-// See docs/PHASE-10-SPEC.md §3.3.
+// MCP tool adapter: namespaced definitions + dispatch.
+// 3.
 // ---------------------------------------------------------------------------
 
 export const MCP_TOOL_PREFIX = "mcp_";
@@ -23,7 +23,7 @@ export function mcpToolName(serverId: string, toolName: string): string {
 /**
  * Convert server tools to session ToolDefinitions. Unknown external tools
  * are mutating BY DEFAULT (permission prompts gate them) unless the server
- * marks readOnlyHint — the safe direction (§8 decision log).
+ * marks readOnlyHint — the safe direction ( decision log).
  */
 export function toToolDefinitions(serverId: string, tools: McpToolDef[]): ToolDefinition[] {
   return tools.map((t) => ({
@@ -59,8 +59,8 @@ export function dropCollidingMcpTools(
 
 /**
  * Permission-prompt preview for MCP calls: server-qualified input JSON.
- * (U11 "schema + input shown": the model already receives the full JSON
- * schema via the provider adapters; the human sees name + truncated input.)
+ * The model already receives the full JSON schema via the provider
+ * adapters; the human sees the tool name plus truncated input.
  */
 export function describeMcpInput(input: unknown): Promise<string> {
   return Promise.resolve(`MCP call input: ${JSON.stringify(input).slice(0, 200)}`);

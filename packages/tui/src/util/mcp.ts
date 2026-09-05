@@ -1,6 +1,6 @@
 import type { McpServerConnection } from "@anvil/core";
 
-/** U11 server health: /mcp status output. Pure — App just prints it. */
+/** server health: /mcp status output. Pure — App just prints it. */
 export function formatMcpStatus(
   conns: readonly McpServerConnection[],
   notices: readonly string[] = []

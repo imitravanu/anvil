@@ -34,16 +34,16 @@ export class AgentSession {
   private provider: ModelProvider;
   private options: AgentOptions;
   // The previous turn's input token count — compaction uses it reactively
-  // (see the known limitation in docs/PHASE-5-NOTES.md).
+  //.
   private lastInputTokens = 0;
-  // Phase 8 (A.1): durable-loop state.
+  // durable-loop state.
   readonly maxInnerIterations: number;
   /** Current plan, set by the update_plan tool; persists on save. */
   plan: string | null = null;
   private ledger: RunLedgerEntry[] = [];
   private ledgerSeq = 0;
   private lastUsage: { inputTokens: number; outputTokens: number } | null = null;
-  // Phase 9: resolved tool list (sub-agents exclude delegate_task; MCP seam).
+  // resolved tool list (sub-agents exclude delegate_task; MCP seam).
   // Per-turn counters (iterations, delegations, loop streaks) live in
   // TurnState, fresh per send() — never as session fields.
   private toolDefs: ToolDefinition[];
@@ -60,12 +60,12 @@ export class AgentSession {
     restore?: RestoreData
   ) {
     this.provider = provider;
-    // Phase 9: delegation is ON unless explicitly disabled (sub-agents pass
+    // delegation is ON unless explicitly disabled (sub-agents pass
     // false — the real depth guard; a filtered tool list only stops a
-    // well-behaved model, per the PHASE-9 spec gotcha).
+    // well-behaved model).
     this.options = { ...options, allowDelegation: options.allowDelegation ?? true };
     this.maxInnerIterations = options.maxInnerIterations ?? DEFAULT_MAX_INNER_ITERATIONS;
-    // Phase 9: tool-list override (sub-agents exclude delegate_task; MCP seam).
+    // tool-list override (sub-agents exclude delegate_task; MCP seam).
     this.toolDefs = options.tools ?? TOOL_DEFINITIONS;
     this.id = restore?.metadata.id ?? randomUUID();
     this.title = restore?.metadata.title ?? null;
@@ -129,7 +129,7 @@ export class AgentSession {
         model,
         createdAt: this.createdAt,
         updatedAt: new Date().toISOString(),
-        // Phase 8 (A.1.4/A.1.5): plan + run ledger persist so a resumed session
+        // plan + run ledger persist so a resumed session
         // tells the truth about what the previous run did.
         ...(this.plan !== null ? { plan: this.plan } : {}),
         ...(this.ledger.length > 0 ? { runLedger: capLedger(this.ledger) } : {}),
@@ -138,7 +138,7 @@ export class AgentSession {
     };
   }
 
-  /** Phase 8 (A.1.5): read-only view of this session's run ledger. */
+  /** read-only view of this session's run ledger. */
   getRunLedger(): readonly RunLedgerEntry[] {
     return [...this.ledger];
   }
@@ -271,7 +271,7 @@ export class AgentSession {
     const controller = new AbortController();
     this.currentController = controller;
 
-    // Phase 8 (A.1): per-turn loop state starts clean on every send().
+    // per-turn loop state starts clean on every send().
     // A fresh TurnState per call — budget and loop-guard state must never
     // leak across turns (a reused instance would instantly budget_exhaust).
     const turn = new TurnState(this.maxInnerIterations);
@@ -283,10 +283,10 @@ export class AgentSession {
           return;
         }
 
-        // Phase 8 (A.1.1): iteration budget — never run unbounded, never truncate
+        // iteration budget — never run unbounded, never truncate
         // silently. The notice is an assistant-role message because the history
         // model has no "system" role and role alternation must stay valid for every
-        // provider (recorded in docs/PHASE-8-PROGRESS.md).
+        // provider .
         if (turn.checkBudget()) {
           this.recordLedger({ eventType: "budget_exhausted", outcome: "aborted", elapsedMs: 0 });
           yield { type: "budget_exhausted" };
@@ -395,7 +395,7 @@ export class AgentSession {
               yield { type: "usage", inputTokens: event.inputTokens, outputTokens: event.outputTokens };
               break;
             case "error":
-              // Phase 8 (B): record rate-limit/quota signals — NO backoff yet.
+              // record rate-limit/quota signals — NO backoff yet.
               if (isRateLimitMessage(event.message)) {
                 noteRateLimited(this.provider.id, this.options.model);
               }
@@ -422,12 +422,12 @@ export class AgentSession {
           return;
         }
 
-        // Phase 8 (A.1): bounded, loop-safe, ordered tool orchestration.
+        // bounded, loop-safe, ordered tool orchestration.
         turn.markIteration();
 
         const turnNotes: string[] = [];
         // Classify in DECLARED order first: the consecutive same-key streak
-        // (A.1.2) and the declared-order contract (F5) are order-sensitive.
+        // and the declared-order contract are order-sensitive.
         const prepared: PreparedCall[] = LoopGuard.classify(toolCalls, this.toolDefs, turn);
 
         // update_plan is handled by the session (sets this.plan + emits
@@ -464,7 +464,7 @@ export class AgentSession {
             continue;
           }
           if (p.call.name === "delegate_task") {
-            // Phase 9: sub-agent delegation — intercepted like update_plan and
+            // sub-agent delegation — intercepted like update_plan and
             // executed inline (serially, in declared order), never in a batch.
             const task = (p.call.input as { task?: unknown } | undefined)?.task;
             if (!this.options.allowDelegation) {
@@ -504,7 +504,7 @@ export class AgentSession {
               permissionBroker: this.options.permissionBroker,
               task,
               signal: controller.signal,
-              // Phase 10: sub-agents inherit the main session's tools (incl.
+              // sub-agents inherit the main session's tools (incl.
               // MCP) minus delegate_task, under the same shared broker.
               tools: this.toolDefs,
             });
@@ -570,7 +570,7 @@ export class AgentSession {
         }
         // Declared parallel policy + execution live in the orchestrator;
         // results merge here with intercepted outcomes (handled wins) and
-        // rebuild into history in EXACTLY declared call order (F5).
+        // rebuild into history in EXACTLY declared call order .
         const orchestrator = new ToolOrchestrator({
           projectRoot: this.options.projectRoot,
           permissionBroker: this.options.permissionBroker,
@@ -590,7 +590,7 @@ export class AgentSession {
         const outcomes = new Map<string, ToolExecutionResult>([...runResults, ...handled]);
 
         // Loop-guard demands lead the results message as a user-role text part
-        // (the data model has no "system" role; recorded in PHASE-8-PROGRESS.md).
+        // (the data model has no "system" role).
         this.history.pushToolResults(prepared, outcomes, turnNotes);
       }
     } catch (err: any) {

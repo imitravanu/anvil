@@ -21,7 +21,7 @@ export interface OrchestratorDeps {
  * Tool-batch execution: declared parallel policy (any mutating call forces
  * the WHOLE batch serially for single-flight prompts and no file/command
  * races; all-read-only batches run concurrently with results re-ordered).
- * Owns NOTHING except the deps above — no history, no TurnState, no checkpoints.
+ * Owns only execution — no history, no TurnState, no checkpoints.
  * `startedAt` timestamps are borrowed from the caller (stamped at
  * classification); re-stamping here would corrupt ledger elapsedMs.
  */

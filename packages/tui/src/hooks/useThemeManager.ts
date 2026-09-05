@@ -20,7 +20,7 @@ export interface UseThemeManagerResult {
  */
 export function useThemeManager(opts: UseThemeManagerOptions): UseThemeManagerResult {
   const [themeName, setThemeName] = useState<string>(opts.initialTheme);
-  // U13: user themes from ~/.anvil/themes.json, loaded once. Built-ins win
+  // user themes from ~/.anvil/themes.json, loaded once. Built-ins win
   // on name conflicts (the loader rejects shadows; this is belt-and-braces).
   const [customThemes, setCustomThemes] = useState(() => loadCustomThemes());
 

@@ -2,8 +2,8 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 
 // ---------------------------------------------------------------------------
-// MCP transport seam (Phase 10). Newline-delimited JSON-RPC 2.0 over stdio.
-// See docs/PHASE-10-SPEC.md §3.2.
+// MCP transport seam. Newline-delimited JSON-RPC 2.0 over stdio.
+// 2.
 // ---------------------------------------------------------------------------
 
 export interface McpTransport {

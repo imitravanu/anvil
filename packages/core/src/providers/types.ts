@@ -2,7 +2,7 @@ export type Role = "user" | "assistant";
 
 // Single ToolDefinition for the whole core (tools flavor, with `mutating`).
 // Providers only read name/description/inputSchema; the extra flag flows
-// through structurally. See FINDING-2 in docs/PHASE-10-PROGRESS.md.
+// through structurally.
 import type { ToolDefinition } from "../tools/types.js";
 export type { ToolDefinition };
 

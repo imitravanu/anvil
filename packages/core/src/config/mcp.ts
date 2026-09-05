@@ -4,8 +4,7 @@ import { anvilHome } from "../atomicWrite.js";
 
 // ---------------------------------------------------------------------------
 // MCP server configuration (~/.anvil/mcp.json, ANVIL_HOME-honoring).
-// Phase 10: local stdio servers only. See docs/PHASE-10-SPEC.md.
-// ---------------------------------------------------------------------------
+// local stdio servers only. // ---------------------------------------------------------------------------
 
 export interface McpServerConfig {
   command: string;

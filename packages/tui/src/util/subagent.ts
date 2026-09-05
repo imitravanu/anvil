@@ -1,4 +1,4 @@
-/** U10 sub-agent cards: collapsed line + capped report lines. Pure. */
+/** sub-agent cards: collapsed line + capped report lines. Pure. */
 import { SUBAGENT_TASK_MAX, capLines } from "./displayLimits.js";
 export { EXPANDED_MAX_LINES as MAX_REPORT_LINES } from "./displayLimits.js";
 

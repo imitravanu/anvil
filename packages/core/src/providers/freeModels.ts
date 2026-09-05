@@ -4,7 +4,7 @@ import { MODEL_REGISTRY, registerModel } from "./registry.js";
 import { loadModelsCacheV2, saveModelsCacheV2, ModelsCacheV2 } from "./cache.js";
 
 // ---------------------------------------------------------------------------
-// Phase 8 (B): one owner for free-model discovery. Any provider that publishes
+// one owner for free-model discovery. Any provider that publishes
 // a free-model list implements FreeModelSource; OpenRouter is the sole ship.
 // ---------------------------------------------------------------------------
 
@@ -120,7 +120,7 @@ export function getRateLimitedModels(): Readonly<Record<string, readonly string[
 export function isRateLimitMessage(message: string): boolean {
   return /\b429\b|rate\s*[- ]?limit|quota|too many requests/i.test(message);
 }
-// --- The single owner of free-model sync (B.2). ---
+// --- The single owner of free-model sync . ---
 
 // Per-key flight + freshness state. The old code shared ONE global promise
 // and clock across all callers (wrong creds shared, import-time ANVIL_HOME
@@ -254,9 +254,9 @@ export async function syncFreeModels(opts: {
   const ttlMs = opts.ttlMs ?? DEFAULT_SYNC_TTL_MS;
   const key = flightKey(opts.sources, opts.apiKeyBySource);
 
-  // Single-flight PER KEY: concurrent callers with the same sources/ttl/keys
-  // share one sync; different options fly separately (the old global shared
-  // across different creds).
+  // Single-flight per key: callers with the same sources/ttl/keys share one
+  // sync; different options fly separately, so wrong creds never poison a
+  // shared flight.
   const flying = flights.get(key);
   if (flying) return flying;
 

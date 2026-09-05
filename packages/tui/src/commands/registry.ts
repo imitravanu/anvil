@@ -18,7 +18,7 @@ export const COMMANDS: Command[] = [
     name: "help",
     description: "List available commands",
     run: (_args, ctx) => {
-      // Phase 8 (C5): one concrete usage example per command.
+      // one concrete usage example per command.
       const EXAMPLES: Record<string, string> = {
         clear: "e.g. /clear — fresh transcript; the old session stays resumable",
         connect: "e.g. /connect — pick a provider, paste its API key",
@@ -54,7 +54,7 @@ export const COMMANDS: Command[] = [
     description: "Sync live free models (auto-catches pricing & model changes)",
     run: async (_args, ctx) => {
       ctx.printSystemMessage("Checking free-model sources for live updates...");
-      // Phase 8 (B): force through the single coordinator; errors are reported,
+      // force through the single coordinator; errors are reported,
       // never swallowed.
       const report = await syncFreeModels({
         sources: [createOpenRouterFreeSource()],

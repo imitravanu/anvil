@@ -119,7 +119,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     clearMessages();
     replaceMessages(seedFromHistory(stored.history));
     printSystemMessage(`Resumed "${stored.metadata.title}" (${stored.metadata.model}).`);
-    // Phase 8 (A.1.4): re-emit the persisted plan once so the user sees it.
+    // re-emit the persisted plan once so the user sees it.
     if (restored.plan) printSystemMessage(`Plan: ${restored.plan}`);
   };
 
