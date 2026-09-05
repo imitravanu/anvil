@@ -31,6 +31,10 @@ export interface CommandContext {
   toggleExpand: () => void;
   // /rewind (checkpoints): no id → list; id → restore that checkpoint
   rewind: (idText?: string) => void;
+  // /retry: drop the last user turn and re-send it
+  retryLast: () => void;
+  // /diff: review every file change the session made (vs pre-change snapshots)
+  showDiff: () => void;
   // /mcp: no arg → server status; "reconnect" → refresh all
   mcp: (sub?: string) => void;
 }
@@ -56,6 +60,7 @@ export interface CommandHandlerDeps {
   broker: TuiPermissionBroker;
   mcp?: McpAppState;
   isBusy: boolean;
+  messages: DisplayMessage[];
   printSystemMessage: (text: string) => void;
   clearMessages: () => void;
   replaceMessages: (seed: DisplayMessage[]) => void;
@@ -68,6 +73,7 @@ export interface CommandHandlerDeps {
   setIsConnectOpen: Dispatch<SetStateAction<boolean>>;
   setIsThemePickerOpen: Dispatch<SetStateAction<boolean>>;
   setExpandTools: Dispatch<SetStateAction<boolean>>;
+  send: (text: string) => Promise<void>;
 }
 
 export type CommandHandlerFactory = (deps: CommandHandlerDeps) => CommandContext;

@@ -9,12 +9,9 @@ interface InputBarProps {
   onSubmit: (text: string) => void;
   onCancel: () => void;
   sentHistory?: string[]; // this session's sent messages, for Up/Down recall
-  /** Called when a submit is suppressed because a turn is in flight — the
-   * user must never wonder whether their input vanished (it used to). */
-  notify?: (text: string) => void;
 }
 
-export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [], notify }: InputBarProps) {
+export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: InputBarProps) {
   const theme = useTheme();
   const { exit } = useApp();
   const [value, setValue] = useState("");
@@ -148,10 +145,8 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [], notify 
             }
             const trimmed = text.trim();
             if (!trimmed) return;
-            if (isBusy) {
-              notify?.("A turn is already running — press Esc to cancel it first, then resend.");
-              return;
-            }
+            // Busy is fine: handleSubmit routes to the queue and the drain
+            // sends it when the turn settles.
             onSubmit(trimmed);
             setValue("");
             historyIndex.current = -1;

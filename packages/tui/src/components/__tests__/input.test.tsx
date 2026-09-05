@@ -83,7 +83,7 @@ describe("InputBar", () => {
     app.unmount();
   });
 
-  it("Esc while busy cancels; Enter while busy never submits", async () => {
+  it("Esc while busy cancels; Enter while busy submits (caller queues)", async () => {
     const onSubmit = vi.fn();
     const onCancel = vi.fn();
     const app = renderThemed(<InputBar isBusy onSubmit={onSubmit} onCancel={onCancel} />);
@@ -92,7 +92,9 @@ describe("InputBar", () => {
     await tick();
     app.stdin.write(ENTER);
     await tick();
-    expect(onSubmit).not.toHaveBeenCalled();
+    // Busy routing moved upstream: the bar always submits, handleSubmit
+    // decides whether it runs now or queues.
+    expect(onSubmit).toHaveBeenCalledWith("typed-while-busy");
     app.stdin.write(ESC);
     await tick();
     expect(onCancel).toHaveBeenCalledTimes(1);

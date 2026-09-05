@@ -8,10 +8,25 @@ All notable changes to Anvil are documented here. The format follows
 
 ### Planned
 
-- Message queueing while a turn is busy; re-run/edit last message
-- `/diff` session review (all file changes made this conversation)
 - Image/vision input for vision-capable models
 - Live verification against the seven unit-tested-only providers
+- Message editing (re-run with modified text, not just identical retry)
+
+## [0.4.0] — 2026-09-06
+
+### Added
+
+- **Message queueing**: typing while the agent is busy now queues the message
+  (visible as "⏳ N queued" above the input) and sends it automatically when
+  the turn settles — instead of bouncing with "cancel first". Slash commands
+  keep their busy-guards; the queue belongs to the conversation and clears
+  with /clear or /session switches.
+- **`/retry`**: drops your last exchange (answer, tool calls and results
+  included) and re-sends the request fresh — history and transcript unwind
+  together.
+- **`/diff`**: reviews every file the session touched as unified diffs
+  against their pre-change snapshots (write_file/edit_file edits; deletions
+  and creations included), capped for display.
 
 ## [0.3.0] — 2026-09-06
 
@@ -98,7 +113,8 @@ loop with six tools and path containment, interactive permission prompts with
 unified diffs, session persistence, context compaction, theming, first-run
 onboarding, sub-agent delegation, and MCP (stdio) support.
 
-[Unreleased]: https://github.com/mitravanu/anvil/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/mitravanu/anvil/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/mitravanu/anvil/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mitravanu/anvil/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mitravanu/anvil/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mitravanu/anvil/releases/tag/v0.1.0

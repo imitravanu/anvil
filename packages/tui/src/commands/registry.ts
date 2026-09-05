@@ -12,6 +12,7 @@ import { Command, CommandContext, CommandHandlerDeps } from "./types.js";
 import { formatLedger } from "../util/ledger.js";
 import { formatMcpStatus } from "../util/mcp.js";
 import { formatRewindList, formatRewindResult } from "../util/rewind.js";
+import { capLines } from "../util/displayLimits.js";
 import { curtail, relativeTime } from "../util/format.js";
 import { SESSION_TITLE_MAX } from "../util/displayLimits.js";
 
@@ -26,6 +27,8 @@ export const COMMANDS: Command[] = [
         connect: "e.g. /connect — pick a provider, paste its API key",
         expand: "e.g. /expand — toggle full tool output on/off",
         ledger: "e.g. /ledger — what ran, what failed, tokens spent",
+        retry: "e.g. /retry — ask your last message again, fresh",
+        diff: "e.g. /diff — see every file the session touched",
         mcp: "e.g. /mcp reconnect — refresh all servers",
         model: "e.g. /model — Enter switches, Esc cancels",
         rewind: "e.g. /rewind 2 — restore checkpoint #2 (plain /rewind lists them)",
@@ -131,6 +134,16 @@ export const COMMANDS: Command[] = [
     run: (_args, ctx) => ctx.toggleExpand(),
   },
   {
+    name: "retry",
+    description: "Re-run your last message (drops the previous answer first)",
+    run: (_args, ctx) => ctx.retryLast(),
+  },
+  {
+    name: "diff",
+    description: "Review file changes made this session (vs pre-change snapshots)",
+    run: (_args, ctx) => ctx.showDiff(),
+  },
+  {
     name: "rewind",
     description: "List file checkpoints, or restore one: /rewind <n>",
     run: (args, ctx) => ctx.rewind(args[0]),
@@ -175,10 +188,13 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
     broker,
     mcp,
     isBusy,
+    messages,
     printSystemMessage,
     clearMessages,
+    replaceMessages,
     persist,
     resumeFromStored,
+    send,
     applyTheme,
     setSession,
     setIsModelPickerOpen,
@@ -318,6 +334,48 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
       }).catch((err: unknown) => {
         printSystemMessage(`Rewind failed: ${err instanceof Error ? err.message : String(err)}`);
       });
+    },
+    retryLast: () => {
+      if (isBusy) {
+        printSystemMessage("Cannot retry while a turn is in flight.");
+        return;
+      }
+      const text = session.popLastUserTurn();
+      if (text === null) {
+        printSystemMessage("Nothing to retry yet.");
+        return;
+      }
+      // Drop the old exchange from the transcript too — the retry re-renders
+      // it fresh (new answer, new tool cards).
+      const lastUserIdx = messages.map((m) => m.role).lastIndexOf("user");
+      replaceMessages(lastUserIdx > 0 ? messages.slice(0, lastUserIdx) : []);
+      printSystemMessage("Retrying your last message.");
+      void send(text);
+    },
+    showDiff: () => {
+      if (isBusy) {
+        printSystemMessage("Cannot diff while a turn is in flight.");
+        return;
+      }
+      void session.summarizeChanges()
+        .then((changes) => {
+          if (changes.length === 0) {
+            printSystemMessage("No file changes this session yet — /diff reviews write_file and edit_file edits.");
+            return;
+          }
+          const shown = changes.slice(0, 8);
+          const parts = shown.map((c) => {
+            const mark = c.kind === "created" ? "+" : c.kind === "deleted" ? "−" : "~";
+            const body = c.diff === null ? "(file deleted)" : capLines(c.diff.split("\n")).join("\n");
+            return `${mark} ${c.path} (${c.kind})\n${body}`;
+          });
+          let msg = parts.join("\n\n");
+          if (changes.length > shown.length) msg += `\n\n… +${changes.length - shown.length} more file(s)`;
+          printSystemMessage(msg);
+        })
+        .catch((err: unknown) => {
+          printSystemMessage(`Diff failed: ${err instanceof Error ? err.message : String(err)}`);
+        });
     },
     mcp: (sub?: string) => {
       const conns = mcp?.list() ?? [];

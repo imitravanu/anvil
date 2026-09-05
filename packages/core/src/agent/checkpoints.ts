@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { createTwoFilesPatch } from "diff";
 import { resolveWithinRoot } from "../tools/paths.js";
 
 // ---------------------------------------------------------------------------
@@ -139,4 +140,62 @@ export async function restoreCheckpoint(
     }
   }
   return { restored, deleted, errors };
+}
+
+// ---------------------------------------------------------------------------
+// /diff session review: what did this conversation change? The ring stores
+// pre-change snapshots, so the OLDEST snapshot per path is the session
+// baseline — diffing it against current disk shows everything the session
+// did to that file, not just the last hop.
+// ---------------------------------------------------------------------------
+
+export interface SessionFileChange {
+  path: string;
+  kind: "modified" | "created" | "deleted";
+  /** Unified diff vs the session baseline; null for deletions. */
+  diff: string | null;
+}
+
+export async function summarizeSessionChanges(
+  projectRoot: string,
+  checkpoints: readonly Checkpoint[]
+): Promise<SessionFileChange[]> {
+  const baseline = new Map<string, Buffer | null>();
+  for (const cp of checkpoints) {
+    for (const f of cp.files) {
+      if (!baseline.has(f.path)) baseline.set(f.path, f.content);
+    }
+  }
+  const out: SessionFileChange[] = [];
+  for (const [p, original] of baseline) {
+    let abs: string;
+    try {
+      abs = resolveWithinRoot(projectRoot, p);
+    } catch {
+      continue; // hostile path in a snapshot — never becomes a review vector
+    }
+    let current: Buffer | null = null;
+    try {
+      current = await fs.readFile(abs);
+    } catch {
+      current = null; // missing now = created-then-deleted, or deleted
+    }
+    if (original === null && current === null) continue;
+    if (original !== null && current !== null && original.equals(current)) continue;
+    const kind = original === null ? "created" : current === null ? "deleted" : "modified";
+    const diff =
+      kind === "deleted"
+        ? null
+        : createTwoFilesPatch(
+            `a/${p}`,
+            `b/${p}`,
+            original === null ? "" : original.toString("utf8"),
+            (current ?? Buffer.alloc(0)).toString("utf8"),
+            undefined,
+            undefined,
+            { context: 2 }
+          );
+    out.push({ path: p, kind, diff });
+  }
+  return out;
 }

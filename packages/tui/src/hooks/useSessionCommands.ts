@@ -22,6 +22,7 @@ export interface UseSessionCommandsDeps {
   broker: TuiPermissionBroker;
   mcp?: McpAppState;
   isBusy: boolean;
+  messages: DisplayMessage[];
   printSystemMessage: (text: string) => void;
   clearMessages: () => void;
   replaceMessages: (seed: DisplayMessage[]) => void;
@@ -80,6 +81,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     broker,
     mcp,
     isBusy,
+    messages,
     printSystemMessage,
     clearMessages,
     replaceMessages,
@@ -134,6 +136,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     broker,
     mcp,
     isBusy,
+    messages,
     printSystemMessage,
     clearMessages,
     replaceMessages,
@@ -146,6 +149,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     setIsConnectOpen,
     setIsThemePickerOpen,
     setExpandTools,
+    send,
   });
 
   const handleSubmit = async (text: string) => {

@@ -10,9 +10,32 @@ import type { AccumulatedToolCall, PreparedCall } from "./loopGuard.js";
  */
 export class HistoryStore {
   private messages: ConversationMessage[];
+  /** Indices of messages pushed via pushUserText — the anchors /retry unwinds to. */
+  private userTurnIndices: number[] = [];
 
   constructor(initial?: ConversationMessage[]) {
     this.messages = initial ? [...initial] : [];
+    if (initial) this.rescanUserTurns();
+  }
+
+  /**
+   * A "user turn" is a user message with leading text and no tool_result
+   * parts (turn-notes messages ride with tool results; the compaction
+   * summary is context, not a request). Rebuilt by scan for restored
+   * histories where push-order bookkeeping is gone.
+   */
+  private rescanUserTurns(): void {
+    this.userTurnIndices = [];
+    this.messages.forEach((m, i) => {
+      if (
+        m.role === "user" &&
+        m.content[0]?.type === "text" &&
+        !m.content.some((c) => c.type === "tool_result") &&
+        !(m.content[0] as { text: string }).text.startsWith("[Earlier conversation summary")
+      ) {
+        this.userTurnIndices.push(i);
+      }
+    });
   }
 
   /** Read-only snapshot for provider requests (never the live array). */
@@ -30,6 +53,7 @@ export class HistoryStore {
 
   clear(): void {
     this.messages = [];
+    this.userTurnIndices = [];
   }
 
   get length(): number {
@@ -37,6 +61,7 @@ export class HistoryStore {
   }
 
   pushUserText(text: string): void {
+    this.userTurnIndices.push(this.messages.length);
     this.messages.push({ role: "user", content: [{ type: "text", text }] });
   }
 
@@ -75,6 +100,28 @@ export class HistoryStore {
 
   applyCompacted(compacted: ConversationMessage[]): void {
     this.messages = mergeSummaryIntoHistory(compacted);
+    this.rescanUserTurns();
+  }
+
+  /**
+   * /retry: drop the last user turn AND everything after it (its answer, any
+   * tool calls/results in between), returning the request text so the caller
+   * can re-send it. Null when there is no user turn to unwind.
+   */
+  popLastUserTurn(): string | null {
+    while (this.userTurnIndices.length > 0) {
+      const idx = this.userTurnIndices.pop()!;
+      if (idx < this.messages.length) {
+        const text = this.messages[idx].content
+          .filter((c) => c.type === "text")
+          .map((c) => (c as { text: string }).text)
+          .join("\n");
+        this.messages.length = idx;
+        this.userTurnIndices = this.userTurnIndices.filter((i) => i < idx);
+        return text;
+      }
+    }
+    return null;
   }
 
   /**

@@ -15,6 +15,8 @@ import { ToolOrchestrator, type RunnableCall } from "./orchestrator.js";
 import { HistoryStore } from "./historyStore.js";
 import {
   Checkpoint,
+  summarizeSessionChanges,
+  type SessionFileChange,
   capCheckpoints,
   checkpointMeta,
   takeSnapshot,
@@ -110,6 +112,20 @@ export class AgentSession {
     }
   }
 
+  /** Project root the session operates on (for /diff review). */
+  get projectRoot(): string {
+    return this.options.projectRoot;
+  }
+
+  /**
+   * /diff review: file changes this session made, diffed against the
+   * pre-change snapshots. Contents never leave the session — the caller
+   * gets finished diffs, not snapshot bytes.
+   */
+  summarizeChanges(): Promise<SessionFileChange[]> {
+    return summarizeSessionChanges(this.options.projectRoot, this.checkpoints);
+  }
+
   /** Read-only view of the conversation history (exposed for tests / future phases). */
   getHistory(): readonly ConversationMessage[] {
     return this.history.get();
@@ -150,6 +166,15 @@ export class AgentSession {
       this.lastUsage = null;
     }
     return { historyCleared: providerChanged };
+  }
+
+  /**
+   * /retry: drop the last user turn (plus its answer and any tool exchange
+   * after it) and return the request text for re-sending. Null if nothing
+   * to unwind.
+   */
+  popLastUserTurn(): string | null {
+    return this.history.popLastUserTurn();
   }
 
   /** Wipe conversation history (the `/clear` command). */

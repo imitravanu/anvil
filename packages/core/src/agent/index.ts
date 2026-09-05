@@ -26,6 +26,8 @@ export {
   type CheckpointMeta,
   type FileSnapshot,
   type RestoreResult,
+  summarizeSessionChanges,
+  type SessionFileChange,
 } from "./checkpoints.js";
 export {
   runSubAgent,

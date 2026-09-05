@@ -82,7 +82,13 @@ export function App({
     clearMessages,
     replaceMessages,
     sentHistory,
-  } = useAgentController(session);
+    queued,
+  } = useAgentController(session, {
+    // Persist after every settled turn — including queued ones that drain
+    // inside the controller, after handleSubmit has already returned.
+    onTurnSettled: () => persistRef.current(),
+  });
+  const persistRef = useRef<() => void>(() => undefined);
   const { stdout } = useStdout();
   const rows = stdout?.rows ?? 24;
   // Ink does not re-render on terminal resize by itself, and every zone here
@@ -121,7 +127,7 @@ export function App({
     if (!isThemePickerOpen) themeBeforePicker.current = themeName;
   }, [isThemePickerOpen, themeName]);
 
-  const { handleSubmit, resumeFromStored } = useSessionCommands({
+  const { handleSubmit, resumeFromStored, persist } = useSessionCommands({
     session,
     providers,
     activeProviderId,
@@ -130,6 +136,7 @@ export function App({
     broker,
     mcp,
     isBusy,
+    messages,
     printSystemMessage,
     clearMessages,
     replaceMessages,
@@ -144,6 +151,7 @@ export function App({
     setExpandTools,
     send,
   });
+  persistRef.current = persist;
 
 
 
@@ -222,6 +230,13 @@ export function App({
         {/* : the agent's current plan stays visible above the
             input until it changes or the session changes. */}
         {plan && <PlanLine plan={plan} />}
+        {queued.length > 0 && (
+          <Box flexShrink={0} paddingX={2}>
+            <Text dimColor>
+              ⏳ {queued.length} message{queued.length === 1 ? "" : "s"} queued — sends when the current turn finishes
+            </Text>
+          </Box>
+        )}
         {/* Overlays take over keyboard input — InputBar is not rendered while one is open,
             so keystrokes can never leak into it. */}
         {pendingPermission ? (
@@ -261,7 +276,6 @@ export function App({
             onSubmit={handleSubmit}
             onCancel={cancel}
             sentHistory={sentHistory}
-            notify={printSystemMessage}
           />
         )}
         <StatusBar model={currentModel} isBusy={isBusy} usage={usage} />

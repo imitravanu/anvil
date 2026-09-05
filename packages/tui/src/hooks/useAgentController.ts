@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { AgentSession, type AgentEvent } from "@anvil/core";
 import { retainReport, type SubAgentRecord } from "../util/subagent.js";
 import { friendlyError } from "../util/errors.js";
-import { HISTORY_RECALL_CAP, TRANSCRIPT_STATE_CAP } from "../util/displayLimits.js";
+import { HISTORY_RECALL_CAP, TRANSCRIPT_STATE_CAP, MESSAGE_QUEUE_CAP } from "../util/displayLimits.js";
 
 export type DisplaySubAgent = SubAgentRecord;
 
@@ -69,10 +69,22 @@ export interface UsageTotals {
  * Bridges AgentSession's async generator into React state. Every event handler
  * does a full setMessages map (never in-place mutation) so React re-renders.
  */
-export function useAgentController(session: AgentSession) {
+export interface UseAgentControllerOptions {
+  /** Called after every settled turn (completion, cancel, or error) — used to persist. */
+  onTurnSettled?: () => void;
+}
+
+export function useAgentController(session: AgentSession, opts: UseAgentControllerOptions = {}) {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [isBusy, setIsBusy] = useState(false);
   const [usage, setUsage] = useState<UsageTotals>({ inputTokens: 0, outputTokens: 0 });
+  // Messages typed while a turn runs queue here and drain automatically
+  // when the turn settles — typing ahead used to bounce off with a notice.
+  const queueRef = useRef<string[]>([]);
+  const [queued, setQueued] = useState<string[]>([]);
+  const busyRef = useRef(false);
+  const onTurnSettledRef = useRef(opts.onTurnSettled);
+  onTurnSettledRef.current = opts.onTurnSettled;
   const currentAssistantId = useRef<string | null>(null);
   const [sentHistory, setSentHistory] = useState<string[]>([]);
   // the persistent plan — seeded from the session, updated live
@@ -83,11 +95,14 @@ export function useAgentController(session: AgentSession) {
     // Usage totals belong to the session too — a fresh/cleared transcript
     // must not show the previous session's spend in the StatusBar.
     setUsage({ inputTokens: 0, outputTokens: 0 });
+    // Queued messages belong to the conversation they were typed in.
+    queueRef.current = [];
+    setQueued([]);
   }, [session]);
 
-  const send = useCallback(
+  const runTurn = useCallback(
     async (text: string) => {
-      if (isBusy) return; // simplest policy for this phase: ignore input while busy
+      busyRef.current = true;
       // Bounded state: recall needs dozens, not thousands; the transcript window
       // renders a handful while history truth lives in the session file.
       setSentHistory((prev) => [...prev, text].slice(-HISTORY_RECALL_CAP));
@@ -136,10 +151,31 @@ export function useAgentController(session: AgentSession) {
         // Mark streaming done either way — completion, cancellation, or error.
         updateAssistant((m) => ({ ...m, streaming: false }));
         setIsBusy(false);
+        busyRef.current = false;
         currentAssistantId.current = null;
+          onTurnSettledRef.current?.();
       }
     },
-    [session, isBusy]
+    [session]
+  );
+
+  /** Drain queued messages after the current turn settles. */
+  const send = useCallback(
+    async (text: string) => {
+      if (busyRef.current) {
+        queueRef.current = [...queueRef.current, text].slice(-MESSAGE_QUEUE_CAP);
+        setQueued([...queueRef.current]);
+        return;
+      }
+      await runTurn(text);
+      while (queueRef.current.length > 0) {
+        const [next, ...rest] = queueRef.current;
+        queueRef.current = rest;
+        setQueued(rest);
+        await runTurn(next);
+      }
+    },
+    [runTurn]
   );
 
   const cancel = useCallback(() => session.cancel(), [session]);
@@ -167,6 +203,7 @@ export function useAgentController(session: AgentSession) {
     isBusy,
     usage,
     plan,
+    queued,
     send,
     cancel,
     printSystemMessage,
