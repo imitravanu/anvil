@@ -4,7 +4,16 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 (major.minor.patch — breaking features bump minor while pre-1.0).
 
-## [Unreleased] — 0.3.0
+## [Unreleased]
+
+### Planned
+
+- Message queueing while a turn is busy; re-run/edit last message
+- `/diff` session review (all file changes made this conversation)
+- Image/vision input for vision-capable models
+- Live verification against the seven unit-tested-only providers
+
+## [0.3.0] — 2026-09-06
 
 ### Added
 
@@ -89,6 +98,7 @@ loop with six tools and path containment, interactive permission prompts with
 unified diffs, session persistence, context compaction, theming, first-run
 onboarding, sub-agent delegation, and MCP (stdio) support.
 
-[Unreleased]: https://github.com/mitravanu/anvil/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/mitravanu/anvil/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/mitravanu/anvil/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mitravanu/anvil/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mitravanu/anvil/releases/tag/v0.1.0
