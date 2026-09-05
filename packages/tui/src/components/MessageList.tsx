@@ -29,28 +29,43 @@ function EmptyState({ model }: { model: string }) {
   );
 }
 
-export function MessageList({ messages, model, expandTools }: { messages: DisplayMessage[]; model: string; expandTools?: boolean }) {
-  const { stdout } = useStdout();
-  const rows = stdout?.rows ?? 24;
+export function MessageList({ messages, model, expandTools, height }: { messages: DisplayMessage[]; model: string; expandTools?: boolean; height: number }) {
+  // Shared bounded container for both states: bottom-anchored, clipped at the
+  // top exactly like terminal scrollback. Before the flex fix, unbounded
+  // content overflowed the fixed-height frame and Ink's default flex-shrink:1
+  // squashed EVERY zone at once — chrome vanished, turns merged onto shared
+  // rows, status bar overran the border (seen in real captures at 30 rows).
+  // The chrome around this list is flexShrink={0}; overlays taller than the
+  // basis (slash menu, permission prompt) borrow rows from here via
+  // flexShrink instead of breaking the frame.
   if (messages.length === 0) {
-    return <EmptyState model={model} />;
+    return (
+      <Box
+        flexDirection="column"
+        flexGrow={1}
+        flexShrink={1}
+        minHeight={0}
+        height={height}
+        overflow="hidden"
+        justifyContent="center"
+      >
+        <EmptyState model={model} />
+      </Box>
+    );
   }
-  // Ink has no native scroll — approximate "last N that fit" by capping the
-  // number of rendered messages relative to the terminal height. With the
-  // outer frame's chrome (borders, header, dividers, input, status bar) each
-  // turn now costs ~3 rows: role label, text, and the blank line between turns.
-  // Hidden history is stated, never silent (the full truth lives in the
-  // session file + /ledger).
-  const maxMessages = Math.max(1, Math.floor((rows - 9) / 3));
-  const hidden = Math.max(0, messages.length - maxMessages);
-  const visible = messages.slice(-maxMessages);
   return (
-    <Box flexDirection="column" flexGrow={1} paddingX={1} justifyContent="flex-end">
-      {hidden > 0 && (
-        <Text dimColor>… {hidden} earlier message{hidden === 1 ? "" : "s"} hidden (terminal height)</Text>
-      )}
-      {visible.map((message, index) => (
-        <Box key={message.id} marginTop={index > 0 ? 1 : 0}>
+    <Box
+      flexDirection="column"
+      flexGrow={1}
+      flexShrink={1}
+      minHeight={0}
+      height={height}
+      overflow="hidden"
+      paddingX={1}
+      justifyContent="flex-end"
+    >
+      {messages.map((message, index) => (
+        <Box key={message.id} marginTop={index > 0 ? 1 : 0} flexShrink={0}>
           <MessageView message={message} expandTools={expandTools} />
         </Box>
       ))}

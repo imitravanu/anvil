@@ -34,13 +34,16 @@ export class ToolOrchestrator {
 
   async *run(
     toRun: readonly RunnableCall[]
-  ): AsyncGenerator<AgentEvent, Map<string, ToolExecutionResult>> {
+  ): AsyncGenerator<AgentEvent, Map<string, ToolExecutionResult> | undefined> {
     const runResults = new Map<string, ToolExecutionResult>();
     if (this.isSerialBatch(toRun)) {
       yield* this.runSerial(toRun, runResults);
     } else {
       yield* this.runConcurrent(toRun, runResults);
     }
+    // Undefined iff the batch was abandoned mid-flight on abort. The session
+    // owns the `cancelled` event and repairs history afterwards — this class
+    // owns nothing but tool execution.
     return runResults;
   }
 
@@ -53,7 +56,6 @@ export class ToolOrchestrator {
       const { call, def } = t.p;
       if (signal.aborted) {
         this.deps.recordLedger({ eventType: "cancelled", tool: call.name, inputHash: t.p.key, outcome: "aborted", elapsedMs: 0 });
-        yield { type: "cancelled" };
         return;
       }
       if (!def) {
@@ -101,7 +103,6 @@ export class ToolOrchestrator {
         }
         if (signal.aborted) {
           this.deps.recordLedger({ eventType: "cancelled", tool: call.name, inputHash: t.p.key, outcome: "aborted", elapsedMs: 0 });
-          yield { type: "cancelled" };
           return;
         }
         if (!approved) {
@@ -151,11 +152,6 @@ export class ToolOrchestrator {
       yield { type: "tool_finished", id: t.p.call.id, name: t.p.call.name, result };
       this.deps.recordLedger({ eventType: "tool_finished", tool: t.p.call.name, inputHash: t.p.key, outcome: result.isError ? "error" : "ok", elapsedMs: Date.now() - t.startedAt });
       runResults.set(t.p.call.id, result);
-    }
-    if (signal.aborted) {
-      this.deps.recordLedger({ eventType: "cancelled", outcome: "aborted", elapsedMs: 0 });
-      yield { type: "cancelled" };
-      return;
     }
   }
 }

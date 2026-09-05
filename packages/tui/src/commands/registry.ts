@@ -251,6 +251,10 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
       resumeFromStored(stored);
     },
     sessionRename: (title: string) => {
+      if (isBusy) {
+        printSystemMessage("Cannot rename the session while a turn is in flight.");
+        return;
+      }
       renameSession(session.id, title);
       printSystemMessage(`Session renamed to "${title}".`);
     },

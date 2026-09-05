@@ -51,7 +51,7 @@ export function SessionPicker({
   const visibleSessions = sessions.slice(scrollOffset, scrollOffset + MAX_VISIBLE);
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.colors.primary} paddingX={1}>
+    <Box flexDirection="column" flexShrink={0} borderStyle="round" borderColor={theme.colors.primary} paddingX={1}>
       <Text color={theme.colors.primary}>
         Saved sessions{sessions.length > 0 ? ` (${selected + 1}/${sessions.length})` : ""} — Enter to resume, Esc to cancel
       </Text>

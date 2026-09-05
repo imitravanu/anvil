@@ -182,7 +182,7 @@ export function ModelPicker({
   }
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.colors.primary} paddingX={1}>
+    <Box flexDirection="column" flexShrink={0} borderStyle="round" borderColor={theme.colors.primary} paddingX={1}>
       <Text color={theme.colors.primary}>
         Select a model ({selected + 1}/{ordered.length}) — models with [FREE] cost $0 — Enter to switch, Esc to cancel
       </Text>

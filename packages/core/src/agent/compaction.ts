@@ -30,6 +30,25 @@ export function mergeSummaryIntoHistory(
   return compacted;
 }
 
+/**
+ * Rough token floor for a history the session has no measured usage for
+ * (resumed sessions). ~4 chars/token is a conservative underestimate for
+ * prose and code alike — good enough to decide "this history is dangerously
+ * large, compact BEFORE the first request", which the reactive path cannot
+ * see because it only acts on measured counts from a completed stream.
+ */
+export function estimateTokens(messages: ConversationMessage[]): number {
+  let chars = 0;
+  for (const m of messages) {
+    for (const c of m.content) {
+      if (c.type === "text") chars += c.text.length;
+      else if (c.type === "tool_call") chars += JSON.stringify(c.call.input ?? {}).length;
+      else if (c.type === "tool_result") chars += c.result.content.length;
+    }
+  }
+  return Math.ceil(chars / 4);
+}
+
 export async function compactIfNeeded(
   history: ConversationMessage[],
   contextWindow: number,

@@ -66,8 +66,17 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
       truncated = true;
       break;
     }
+    // Size-gate BEFORE reading: readFile would pull the whole file (any size)
+    // into memory just to skip it — a multi-gigabyte log or artifact would
+    // spike the heap on every scan.
+    try {
+      const stat = await fs.stat(abs);
+      if (!stat.isFile() || stat.size > MAX_FILE_BYTES) continue;
+    } catch {
+      continue; // raced unlink/permission — same policy as read failures below
+    }
     const buf = await fs.readFile(abs);
-    if (buf.length > MAX_FILE_BYTES || buf.includes(0)) continue; // skip big/binary files
+    if (buf.includes(0)) continue; // skip binary files
     const rel = path.relative(ctx.projectRoot, abs).split(path.sep).join("/");
     const lines = buf.toString("utf8").split("\n");
     for (let i = 0; i < lines.length && matches.length < maxResults; i++) {

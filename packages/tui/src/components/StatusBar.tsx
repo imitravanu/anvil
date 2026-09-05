@@ -36,7 +36,7 @@ export function StatusBar({ model, isBusy, usage }: StatusBarProps) {
   const budget = width - leftPlain.length - 6;
   // Hints are hidden (never clipped/wrapped) when they cannot fit.
   return (
-    <Box paddingX={theme.spacing.panelPaddingX} justifyContent="space-between">
+    <Box justifyContent="space-between" flexShrink={0} paddingX={theme.spacing.panelPaddingX}>
       <Text dimColor>
         {curtail(modelLabel, 48)} │ {state} │ {tokens}
       </Text>

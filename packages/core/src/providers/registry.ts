@@ -282,7 +282,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
   {
     id: "llama3.3-70b",
     providerId: "cerebras",
-    displayName: "Llama 3.3 70B",
+    displayName: "Llama 3.3 70B (via Cerebras)",
     contextWindow: 128_000,
     supportsTools: true,
     supportsVision: false,
@@ -291,7 +291,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
   {
     id: "llama3.1-8b",
     providerId: "cerebras",
-    displayName: "Llama 3.1 8B",
+    displayName: "Llama 3.1 8B (via Cerebras)",
     contextWindow: 128_000,
     supportsTools: true,
     supportsVision: false,

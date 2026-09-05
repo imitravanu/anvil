@@ -1,5 +1,6 @@
 export * from "./types.js";
 export { AgentSession } from "./session.js";
+export type { RestoreData } from "./session.js";
 export { DEFAULT_MAX_INNER_ITERATIONS } from "./types.js";
 export {
   LEDGER_CAP,

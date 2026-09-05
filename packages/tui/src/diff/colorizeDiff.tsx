@@ -44,12 +44,18 @@ export function ColorizedDiff({ diff }: { diff: string }) {
   const theme = useTheme();
   const { stdout } = useStdout();
   const width = stdout?.columns ?? 80;
+  const termRows = stdout?.rows ?? 24;
   // Overlay frame (border + padding) eats ~6 columns; gutter eats ~12.
   const maxText = Math.max(20, width - 20);
-  const rows = React.useMemo(() => parseDiff(diff), [diff]);
-  const words = React.useMemo(() => pairRows(rows, (r) => r.text), [rows]);
-  const visible = rows.slice(0, MAX_DIFF_ROWS);
-  const omitted = rows.length - visible.length;
+  // The permission overlay must fit the frame: title, options, and hint cost
+  // ~10 rows besides the border, so the diff gets whatever is left — never
+  // the full MAX_DIFF_ROWS on a short terminal (that overflow squashed the
+  // whole app before the flex fix).
+  const maxRows = Math.max(3, Math.min(MAX_DIFF_ROWS, termRows - 12));
+  const parsed = React.useMemo(() => parseDiff(diff), [diff]);
+  const words = React.useMemo(() => pairRows(parsed, (r) => r.text), [parsed]);
+  const visible = parsed.slice(0, maxRows);
+  const omitted = parsed.length - visible.length;
   const addColor = theme.colors.toolDone;
   const delColor = theme.colors.toolError;
   const hunkColor = theme.colors.accent;

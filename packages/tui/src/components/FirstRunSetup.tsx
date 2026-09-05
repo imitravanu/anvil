@@ -38,7 +38,7 @@ export function FirstRunSetup({
 
   if (step === "provider") {
     return (
-      <Box flexDirection="column" paddingX={1}>
+      <Box flexDirection="column" flexShrink={0} paddingX={1}>
         <Text color={theme.colors.primary}>{title}</Text>
         <Text dimColor>Step 1 of 2 — choose a provider, Enter to continue:</Text>
         {PROVIDERS.map((p, i) => (
@@ -53,7 +53,7 @@ export function FirstRunSetup({
 
   if (step === "key") {
     return (
-      <Box flexDirection="column" paddingX={1}>
+      <Box flexDirection="column" flexShrink={0} paddingX={1}>
         <Text dimColor>Step 2 of 2 — paste the key (↑/↓ won't work here)</Text>
         <Text color={theme.colors.primary}>
           Paste your {provider.marketLabel} API key (input is hidden):
@@ -76,7 +76,7 @@ export function FirstRunSetup({
 
   // done — wait for Enter, then hand off to the caller
   return (
-    <Box flexDirection="column" paddingX={1}>
+    <Box flexDirection="column" flexShrink={0} paddingX={1}>
       <Text color={theme.colors.toolDone}>✓ {provider.marketLabel} API key saved.</Text>
       <Text dimColor>Add more providers or press Enter to continue.</Text>
     </Box>

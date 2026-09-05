@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput, useStdout } from "ink";
 import type { PendingPermissionRequest } from "../permission/TuiPermissionBroker.js";
 import { ColorizedDiff } from "../diff/colorizeDiff.js";
 import { useTheme } from "../theme/theme.js";
@@ -34,6 +34,12 @@ export function PermissionPrompt({
   const isDiff = DIFF_TOOLS.has(request.toolName);
 
   useInput((_input, key) => {
+    if (key.escape) {
+      // Esc = Deny: the overlay must always be escapable with one key,
+      // matching every other overlay's Esc-to-dismiss contract.
+      request.resolve(false);
+      return;
+    }
     if (key.upArrow) setSelected((s) => Math.max(0, s - 1));
     else if (key.downArrow) setSelected((s) => Math.min(options.length - 1, s + 1));
     else if (key.return) {
@@ -50,6 +56,7 @@ export function PermissionPrompt({
   return (
     <Box
       flexDirection="column"
+      flexShrink={0}
       borderStyle="round"
       borderColor={theme.colors.toolRunning}
       paddingX={1}
@@ -71,7 +78,7 @@ export function PermissionPrompt({
           {option}
         </Text>
       ))}
-      <Text dimColor> ↑/↓ to move · Enter to confirm</Text>
+      <Text dimColor> ↑/↓ to move · Enter to confirm · Esc to deny</Text>
     </Box>
   );
 }

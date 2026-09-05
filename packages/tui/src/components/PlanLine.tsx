@@ -14,7 +14,7 @@ export function PlanLine({ plan }: { plan: string }) {
   const { lines, hidden } = collapsePlan(plan, width);
   if (lines.length === 0) return null;
   return (
-    <Box flexDirection="column" paddingX={theme.spacing.panelPaddingX}>
+    <Box flexDirection="column" flexShrink={0} paddingX={theme.spacing.panelPaddingX}>
       {lines.map((line, i) => (
         <Text key={i}>
           {i === 0 ? (

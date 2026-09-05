@@ -101,7 +101,7 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: Input
   });
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" flexShrink={0}>
       {/* Slash-command autocomplete menu — appears on "/" */}
       {showCommandMenu && (
         <Box flexDirection="column" paddingX={1}>

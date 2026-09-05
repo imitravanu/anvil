@@ -112,8 +112,21 @@ export function useAgentController(session: AgentSession) {
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? fn(m) : m)));
       };
 
+      // One display message carries the whole turn, but the turn can be
+      // several loop iterations (text → tools → text). Without a separator
+      // each iteration's prose concatenates directly onto the previous
+      // ("Let me look around first.All checks pass…"); a blank line between
+      // them reads as the paragraphs the model actually produced.
+      let textNeedsBreak = false;
       try {
         for await (const event of session.send(text)) {
+          if (event.type === "text_delta" && textNeedsBreak) {
+            updateAssistant((m) => ({ ...m, text: m.text + "\n\n" }));
+            textNeedsBreak = false;
+          }
+          if (event.type === "tool_finished" || event.type === "tool_permission_denied") {
+            textNeedsBreak = true;
+          }
           applyEvent(event, updateAssistant, setUsage, setMessages, setPlan);
         }
       } finally {

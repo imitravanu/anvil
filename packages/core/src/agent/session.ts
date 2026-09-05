@@ -3,7 +3,7 @@ import { ConversationMessage, ModelProvider, StreamEvent } from "../providers/ty
 import { MODEL_REGISTRY } from "../providers/registry.js";
 import { TOOL_DEFINITIONS } from "../tools/index.js";
 import type { ToolExecutionResult, ToolDefinition } from "../tools/types.js";
-import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded } from "./compaction.js";
+import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded, estimateTokens } from "./compaction.js";
 import { SessionMetadata, StoredSession } from "../session/types.js";
 import { AgentEvent, AgentOptions, DEFAULT_MAX_INNER_ITERATIONS } from "./types.js";
 import { RunLedgerEntry, capLedger, maxSeq } from "./ledger.js";
@@ -75,6 +75,11 @@ export class AgentSession {
       this.plan = restore.metadata.plan ?? null;
       this.ledger = capLedger(restore.metadata.runLedger ?? []);
       this.ledgerSeq = maxSeq(this.ledger);
+      // Proactive compaction seed: a resumed session has no measured usage,
+      // so the reactive loop-top check would sail past an oversized history
+      // and the first request would die on the provider's context limit.
+      // The estimate is a floor; the first real usage event replaces it.
+      this.lastInputTokens = estimateTokens(restore.history);
     }
   }
 
@@ -221,6 +226,33 @@ export class AgentSession {
         ts: new Date().toISOString(),
       },
     ]);
+  }
+
+  /**
+   * Cancellation between pushAssistant(tool_calls) and pushToolResults would
+   * strand the assistant's tool calls with no tool_result reply — providers
+   * reject that history on the next turn (Anthropic: "tool_use ids without
+   * corresponding tool_result"; Gemini: missing functionResponse). Fill every
+   * call that has no real outcome with a synthetic cancelled result, then
+   * close the turn so the history stays replayable whatever the user does next.
+   */
+  private pushCancelledToolResults(
+    prepared: readonly PreparedCall[],
+    handled: ReadonlyMap<string, ToolExecutionResult>,
+    runResults: ReadonlyMap<string, ToolExecutionResult> | undefined,
+    turnNotes: readonly string[]
+  ): void {
+    const outcomes = new Map<string, ToolExecutionResult>([...(runResults ?? []), ...handled]);
+    for (const p of prepared) {
+      if (!outcomes.has(p.call.id)) {
+        outcomes.set(p.call.id, {
+          output: { error: "Cancelled by user before this tool could run." },
+          isError: true,
+          summary: "Cancelled.",
+        });
+      }
+    }
+    this.history.pushToolResults(prepared, outcomes, turnNotes);
   }
 
   async *send(userText: string): AsyncGenerator<AgentEvent> {
@@ -480,6 +512,9 @@ export class AgentSession {
               // Merge even on abort: files changed before the stop persist.
               this.mergeSubCheckpoints(run.checkpoints);
               this.recordLedger({ eventType: "cancelled", tool: "delegate_task", inputHash: p.key, outcome: "aborted", elapsedMs: Date.now() - subStartedAt });
+              // Close the tool batch honestly before stopping — sibling calls
+              // and the delegation itself need tool_results in history.
+              this.pushCancelledToolResults(prepared, handled, undefined, turnNotes);
               yield { type: "cancelled" };
               return;
             }
@@ -543,6 +578,15 @@ export class AgentSession {
           recordLedger: (entry) => this.recordLedger(entry),
         });
         const runResults = yield* orchestrator.run(toRun);
+        // Abandoned batch (orchestrator returned early on abort): repair the
+        // history first so the NEXT turn replays valid tool_call/tool_result
+        // pairs, then surface the cancellation. Whatever the orchestrator did
+        // complete is preserved as the real result.
+        if (!runResults || controller.signal.aborted) {
+          this.pushCancelledToolResults(prepared, handled, runResults, turnNotes);
+          yield { type: "cancelled" };
+          return;
+        }
         const outcomes = new Map<string, ToolExecutionResult>([...runResults, ...handled]);
 
         // Loop-guard demands lead the results message as a user-role text part

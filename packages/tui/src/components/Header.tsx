@@ -19,7 +19,7 @@ export function Header({ model, isBusy }: HeaderProps) {
   const right = `${provider} · ${modelName}${formatPricingTag(info?.isFree)}`;
   const maxRight = Math.max(12, width - 20);
   return (
-    <Box justifyContent="space-between" paddingX={theme.spacing.panelPaddingX}>
+    <Box justifyContent="space-between" flexShrink={0} paddingX={theme.spacing.panelPaddingX}>
       <Text bold color={theme.colors.primary}>▲ ANVIL</Text>
       <Text dimColor>
         {curtail(right, maxRight)}
