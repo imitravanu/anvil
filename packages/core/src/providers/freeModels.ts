@@ -120,6 +120,23 @@ export function getRateLimitedModels(): Readonly<Record<string, readonly string[
 export function isRateLimitMessage(message: string): boolean {
   return /\b429\b|rate\s*[- ]?limit|quota|too many requests/i.test(message);
 }
+
+const MIN_RETRY_WAIT_S = 1;
+const MAX_RETRY_WAIT_S = 120;
+const DEFAULT_RETRY_WAIT_S = 20;
+
+/**
+ * Wait seconds before an automatic retry, parsed from the provider message
+ * ("Please retry in 53.2s"). Providers that don't advertise a window get a
+ * conservative default; everything clamps to [1, 120] so a hostile value can
+ * neither busy-loop the turn nor park it for an hour.
+ */
+export function rateLimitRetrySeconds(message: string): number {
+  const m = message.match(/retry in ([\d.]+)\s*s/i);
+  const parsed = m ? Math.ceil(parseFloat(m[1])) : DEFAULT_RETRY_WAIT_S;
+  if (!Number.isFinite(parsed) || parsed < MIN_RETRY_WAIT_S) return MIN_RETRY_WAIT_S;
+  return Math.min(parsed, MAX_RETRY_WAIT_S);
+}
 // --- The single owner of free-model sync . ---
 
 // Per-key flight + freshness state. The old code shared ONE global promise

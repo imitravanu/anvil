@@ -9,6 +9,8 @@ export interface SubAgentRecord {
   inputTokens: number;
   outputTokens: number;
   report: string;
+  /** The tool the sub-agent is using right now (live progress; cleared on finish). */
+  lastTool?: string;
 }
 
 /** Heap guard: full reports stay in history for the model; the card keeps this much. */
@@ -21,13 +23,13 @@ export function retainReport(report: string): string {
 }
 
 /** One-line collapsed summary: `◈ sub-agent: <task> — N calls, X in/Y out`. */
-export function formatSubAgentLine(sub: Pick<SubAgentRecord, "task" | "status" | "toolCalls" | "inputTokens" | "outputTokens">): string {
+export function formatSubAgentLine(sub: Pick<SubAgentRecord, "task" | "status" | "toolCalls" | "inputTokens" | "outputTokens" | "lastTool">): string {
   const first = (sub.task.split("\n")[0] ?? "").trim();
   const task =
     first.length > SUBAGENT_TASK_MAX ? first.slice(0, SUBAGENT_TASK_MAX - 1) + "…" : first || "(no task)";
   const counts =
     sub.status === "running"
-      ? "running…"
+      ? `running…${sub.lastTool ? ` ${sub.lastTool} (${sub.toolCalls} call${sub.toolCalls === 1 ? "" : "s"} so far)` : ""}`
       : sub.status === "cancelled"
         ? "cancelled"
         : `${sub.toolCalls} call${sub.toolCalls === 1 ? "" : "s"}, ` +

@@ -4,16 +4,28 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 (major.minor.patch — breaking features bump minor while pre-1.0).
 
-## [Unreleased] — 0.3.0 scope
+## [Unreleased] — 0.3.0
 
-### Planned
+### Added
 
-- Live sub-agent progress while delegation runs (currently only the final report card)
-- MCP: newly connected tools enter the running session without a restart
-- Persistent checkpoints (`/rewind` currently forgets snapshots on app exit)
-- Context gauge in the status bar (`ctx 34%`) from real per-turn token counts
-- Automatic rate-limit recovery: wait out the retry window with a visible
-  countdown and retry the turn once, instead of surfacing the error
+- **Context gauge in the status bar**: `ctx 34%` from the provider's real
+  per-turn token counts vs the model's window; turns amber as compaction
+  territory (75%) approaches. Hidden for models unknown to the registry.
+- **Automatic rate-limit recovery**: a 429 mid-turn waits out the provider's
+  retry window (parsed from the message, clamped 1–120s) and retries the
+  request once automatically — a notice appears in the transcript, Esc still
+  cancels during the wait, and a second 429 surfaces as a normal error.
+- **Live sub-agent progress**: delegation cards now show what the sub-agent
+  is doing as it happens ("running… read_file (2 calls so far)") instead of
+  freezing until the final report.
+- **Persistent checkpoints**: `/rewind` history survives app restarts
+  (stored per-session under `ANVIL_HOME/checkpoints/`, mode 0600, ring-capped).
+
+### Changed
+
+- `/mcp reconnect` hot-loads newly connected tools into the running session —
+  no restart needed. Sub-agents inherit them too; only mid-turn reloads are
+  refused (the in-flight batch classified against the old list).
 
 ### Deferred to 0.4.0
 

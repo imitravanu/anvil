@@ -278,3 +278,40 @@ describe("AgentSession.switchModel / clearHistory", () => {
     expect(resumed.title).toBe("first message");
   });
 });
+
+describe("AgentSession.setTools (MCP hot-reload)", () => {
+  it("swaps the tool list for the next turn", async () => {
+    const script: StreamEvent[] = [
+      { type: "text_delta", text: "ok" },
+      { type: "turn_end", stopReason: "end_turn" },
+    ];
+    const { provider, session } = makeSession([script]);
+    const extra = {
+      name: "mcp_srv__lookup",
+      description: "external lookup",
+      inputSchema: { type: "object" as const, properties: {} },
+      mutating: false,
+    };
+    session.setTools([...(await import("../../tools/index.js")).TOOL_DEFINITIONS, extra]);
+
+    await collect(session.send("go"));
+    const sentTools = provider.calls[0].tools.map((t: { name: string }) => t.name);
+    expect(sentTools).toContain("mcp_srv__lookup");
+  });
+
+  it("refuses mid-turn (the in-flight batch classified against the old list)", async () => {
+    const { session } = makeSession([
+      [
+        { type: "tool_call_start", id: "t1", name: "read_file" },
+        { type: "tool_call_end", id: "t1", name: "read_file", input: { path: "x" } },
+        { type: "turn_end", stopReason: "tool_use" },
+      ],
+      [{ type: "turn_end", stopReason: "end_turn" }],
+    ]);
+    const gen = session.send("go");
+    await gen.next(); // start the turn — it will pause inside tool orchestration
+    expect(() => session.setTools([])).toThrow(/turn is in progress/);
+    const rest = await collect(gen);
+    expect(rest.map((e) => e.type)).toContain("turn_complete");
+  });
+});

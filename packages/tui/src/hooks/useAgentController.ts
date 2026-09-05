@@ -250,6 +250,12 @@ function applyEvent(
       ]);
       break;
     // truthful-engine events — surfaced, never silently dropped.
+    case "rate_limit_wait":
+      setMessages((prev) => [
+        ...prev,
+        systemMessage(`Rate limited — waiting ${event.seconds}s, retrying automatically…`),
+      ]);
+      break;
     case "budget_exhausted":
       setMessages((prev) => [
         ...prev,
@@ -291,6 +297,16 @@ function applyEvent(
         ],
       }));
       break;
+    case "subagent_progress":
+      update((m) => {
+        const idx = m.subAgents.findIndex((s) => s.status === "running");
+        if (idx === -1) return m;
+        const subAgents = m.subAgents.map((s, i) =>
+          i === idx ? { ...s, toolCalls: s.toolCalls + 1, lastTool: event.tool } : s
+        );
+        return { ...m, subAgents };
+      });
+      break;
     case "subagent_finished": {
       setUsage((prev) => ({
         inputTokens: prev.inputTokens + event.inputTokens,
@@ -303,6 +319,7 @@ function applyEvent(
         inputTokens: event.inputTokens,
         outputTokens: event.outputTokens,
         report: retainReport(event.report),
+        lastTool: undefined,
       };
       update((m) => {
         const idx = m.subAgents.findIndex((s) => s.status === "running");

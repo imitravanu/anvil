@@ -39,6 +39,19 @@ export function toToolDefinitions(serverId: string, tools: McpToolDef[]): ToolDe
  * Drop MCP definitions that collide with built-in tool names (built-in wins,
  * first-in-list wins among MCP). Returns kept + dropped for startup warnings.
  */
+/**
+ * Live tool list from every ready MCP connection, with name collisions
+ * against the built-in tools dropped. Shared by CLI boot and `/mcp
+ * reconnect` so hot-reload builds the list exactly like boot did.
+ */
+export function collectMcpToolDefs(
+  conns: readonly McpServerConnection[],
+  baseNames: readonly string[]
+): ToolDefinition[] {
+  const all = conns.flatMap((c) => (c.status === "ready" ? toToolDefinitions(c.id, c.tools) : []));
+  return dropCollidingMcpTools(baseNames, all).kept;
+}
+
 export function dropCollidingMcpTools(
   builtInNames: readonly string[],
   mcpDefs: ToolDefinition[]

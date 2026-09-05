@@ -13,6 +13,8 @@ export class TurnState {
   readonly totalCounts = new Map<string, number>();
   /** Compaction runs at most once per turn (history thrash guard). */
   compactedThisTurn = false;
+  /** One automatic rate-limit retry per turn — a second 429 surfaces. */
+  rateLimitRetried = false;
 
   constructor(readonly maxInnerIterations: number) {}
 

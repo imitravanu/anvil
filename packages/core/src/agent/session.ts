@@ -7,8 +7,8 @@ import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded, estimateTo
 import { SessionMetadata, StoredSession } from "../session/types.js";
 import { AgentEvent, AgentOptions, DEFAULT_MAX_INNER_ITERATIONS } from "./types.js";
 import { RunLedgerEntry, capLedger, maxSeq } from "./ledger.js";
-import { isRateLimitMessage, noteRateLimited } from "../providers/freeModels.js";
-import { MAX_DELEGATIONS_PER_TURN, runSubAgent } from "./subagent.js";
+import { isRateLimitMessage, noteRateLimited, rateLimitRetrySeconds } from "../providers/freeModels.js";
+import { MAX_DELEGATIONS_PER_TURN, runSubAgentLive } from "./subagent.js";
 import { TurnState } from "./turnState.js";
 import { LoopGuard, type AccumulatedToolCall, type PreparedCall } from "./loopGuard.js";
 import { ToolOrchestrator, type RunnableCall } from "./orchestrator.js";
@@ -21,6 +21,30 @@ import {
   restoreCheckpoint,
   type CheckpointMeta,
 } from "./checkpoints.js";
+import { loadCheckpoints, saveCheckpoints } from "./checkpointStore.js";
+
+/**
+ * Abortable wait for the automatic rate-limit retry. Rejects on abort so the
+ * turn resolves as cancelled instead of waking up and hammering a rate-limited
+ * endpoint after the user asked to stop.
+ */
+function sleepAbortable(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new Error("aborted"));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new Error("aborted"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 export interface RestoreData {
   metadata: SessionMetadata;
@@ -75,6 +99,9 @@ export class AgentSession {
       this.plan = restore.metadata.plan ?? null;
       this.ledger = capLedger(restore.metadata.runLedger ?? []);
       this.ledgerSeq = maxSeq(this.ledger);
+      // Persistent rewind ring: resumed sessions keep their undo history.
+      this.checkpoints = loadCheckpoints(this.id);
+      this.checkpointSeq = this.checkpoints.reduce((m, cp) => Math.max(m, cp.id), 0);
       // Proactive compaction seed: a resumed session has no measured usage,
       // so the reactive loop-top check would sail past an oversized history
       // and the first request would die on the provider's context limit.
@@ -90,6 +117,19 @@ export class AgentSession {
 
   cancel(): void {
     this.currentController?.abort();
+  }
+
+  /**
+   * Hot-swap the tool list (MCP reconnect). Rejected mid-turn: the batch in
+   * flight classified against the old list, and mixing would corrupt the
+   * declared-order replay. The /mcp handler busy-guards anyway; this is the
+   * session-side guarantee.
+   */
+  setTools(defs: readonly ToolDefinition[]): void {
+    if (this.isSending) {
+      throw new Error("Cannot change tools while a turn is in progress.");
+    }
+    this.toolDefs = [...defs];
   }
 
   /**
@@ -169,6 +209,7 @@ export class AgentSession {
         { ...cp, id: this.checkpointSeq },
       ]);
     }
+    this.persistCheckpoints();
     this.recordLedger({ eventType: "checkpoint_merged", outcome: "ok", elapsedMs: 0 });
   }
 
@@ -226,6 +267,11 @@ export class AgentSession {
         ts: new Date().toISOString(),
       },
     ]);
+  }
+
+  /** Best-effort persist of the rewind ring (never breaks the turn). */
+  private persistCheckpoints(): void {
+    saveCheckpoints(this.id, this.checkpoints);
   }
 
   /**
@@ -345,6 +391,7 @@ export class AgentSession {
         const toolCalls: AccumulatedToolCall[] = [];
         const openCalls = new Map<string, { name: string; inputJson: string }>();
         let stopReason: string | undefined;
+        let rateLimitRetry: number | null = null;
 
         for await (const event of stream) {
           switch (event.type) {
@@ -394,17 +441,37 @@ export class AgentSession {
               this.lastUsage = { inputTokens: event.inputTokens, outputTokens: event.outputTokens };
               yield { type: "usage", inputTokens: event.inputTokens, outputTokens: event.outputTokens };
               break;
-            case "error":
-              // record rate-limit/quota signals — NO backoff yet.
+            case "error": {
+              // Rate limits get ONE automatic retry per turn: wait out the
+              // window, then re-issue the request. Nothing has been pushed
+              // to history on this path, so the retry replays cleanly. A
+              // second 429 in the same turn surfaces as a normal error.
               if (isRateLimitMessage(event.message)) {
                 noteRateLimited(this.provider.id, this.options.model);
+                if (!turn.rateLimitRetried) {
+                  turn.rateLimitRetried = true;
+                  rateLimitRetry = rateLimitRetrySeconds(event.message);
+                  break; // leave the switch; the loop breaks out below
+                }
               }
               yield { type: "error", message: event.message };
               return;
+            }
             case "turn_end":
               stopReason = event.stopReason;
               break;
           }
+        }
+
+        if (rateLimitRetry !== null) {
+          yield { type: "rate_limit_wait", seconds: rateLimitRetry };
+          try {
+            await sleepAbortable(rateLimitRetry * 1000, controller.signal);
+          } catch {
+            yield { type: "cancelled" };
+            return;
+          }
+          continue;
         }
 
         if (controller.signal.aborted) {
@@ -497,7 +564,10 @@ export class AgentSession {
             this.recordLedger({ eventType: "subagent_started", tool: "delegate_task", inputHash: p.key, outcome: "ok", elapsedMs: 0 });
             yield { type: "subagent_started", task };
             const subStartedAt = Date.now();
-            const run = await runSubAgent({
+            // Live delegation: relay the sub-agent's tool activity as
+            // subagent_progress events while the run is in flight, then take
+            // the final run (generator return value).
+            const subGen = runSubAgentLive({
               provider: this.provider,
               model: this.options.model,
               projectRoot: this.options.projectRoot,
@@ -508,6 +578,12 @@ export class AgentSession {
               // MCP) minus delegate_task, under the same shared broker.
               tools: this.toolDefs,
             });
+            let subStep = await subGen.next();
+            while (!subStep.done) {
+              yield subStep.value;
+              subStep = await subGen.next();
+            }
+            const run = subStep.value;
             if (run.aborted) {
               // Merge even on abort: files changed before the stop persist.
               this.mergeSubCheckpoints(run.checkpoints);
@@ -564,6 +640,7 @@ export class AgentSession {
           if (cp.files.length > 0) {
             this.checkpointSeq = cp.id;
             this.checkpoints = capCheckpoints([...this.checkpoints, cp]);
+            this.persistCheckpoints();
             this.recordLedger({ eventType: "checkpoint_created", outcome: "ok", elapsedMs: 0 });
             yield { type: "checkpoint", id: cp.id, files: cp.files.length };
           }

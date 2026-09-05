@@ -1,5 +1,7 @@
 import {
   AgentSession,
+  TOOL_DEFINITIONS,
+  collectMcpToolDefs,
   createOpenRouterFreeSource,
   listSessions,
   loadSession,
@@ -335,10 +337,24 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
         }
         printSystemMessage("Reconnecting MCP servers...");
         void mcp.reconnect().then((report) => {
+          // Hot-reload: rebuild the session's tool list from the live
+          // connections so new servers work without a restart. Sub-agents
+          // inherit the parent list, so delegation sees them too.
+          const kept = collectMcpToolDefs(
+            mcp.list(),
+            TOOL_DEFINITIONS.map((d) => d.name)
+          );
+          let hotReloaded = "";
+          try {
+            session.setTools([...TOOL_DEFINITIONS, ...kept]);
+            hotReloaded = ` ${kept.length} MCP tool(s) live in this session.`;
+          } catch (err: unknown) {
+            hotReloaded = ` (Tools NOT hot-loaded: ${err instanceof Error ? err.message : String(err)})`;
+          }
           const fresh = [...notices, ...report.problems.map((p) => `MCP ${p}`)];
           printSystemMessage(
-            `Reconnected: ${report.connected} server(s), ${report.tools} tool(s). ` +
-            `(New tools need a restart to enter this session.)\n` +
+            `Reconnected: ${report.connected} server(s), ${report.tools} tool(s).` +
+            `${hotReloaded}\n` +
             formatMcpStatus(mcp.list(), fresh)
           );
         }).catch((err: unknown) => {

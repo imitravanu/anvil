@@ -44,7 +44,19 @@ export interface SubAgentRun {
   checkpoints: Checkpoint[];
 }
 
-export async function runSubAgent(opts: {
+/**
+ * Progress event relayed while the sub-run executes: the tool it is using
+ * right now. Raw sub-agent text is NOT relayed — the report lands in full on
+ * subagent_finished, and duplicating it mid-run would double-render.
+ */
+export interface SubAgentProgress {
+  type: "subagent_progress";
+  tool: string;
+  detail: string;
+}
+
+/** Live variant: yields SubAgentProgress while the run executes, returns the final run. */
+export async function* runSubAgentLive(opts: {
   provider: ModelProvider;
   model: string;
   projectRoot: string;
@@ -54,7 +66,7 @@ export async function runSubAgent(opts: {
   maxInnerIterations?: number;
   /** Parent tool list (incl. MCP tools) — delegate_task still filtered. */
   tools?: ToolDefinition[];
-}): Promise<SubAgentRun> {
+}): AsyncGenerator<SubAgentProgress, SubAgentRun> {
   const sub = new AgentSession(opts.provider, {
     systemPrompt: SUB_AGENT_SYSTEM_PROMPT,
     model: opts.model,
@@ -90,9 +102,13 @@ export async function runSubAgent(opts: {
           inTokens += event.inputTokens;
           outTokens += event.outputTokens;
           break;
-        case "tool_started":
+        case "tool_started": {
           toolCalls += 1;
+          const input = (event.input ?? {}) as { command?: string; path?: string };
+          const detail = input.command ?? input.path ?? "";
+          yield { type: "subagent_progress", tool: event.name, detail };
           break;
+        }
         case "cancelled":
           aborted = true;
           break;
@@ -115,4 +131,10 @@ export async function runSubAgent(opts: {
     // changed before stopping still exist, so rewind must still reach them.
     checkpoints: sub.drainCheckpoints(),
   };
+}
+export async function runSubAgent(opts: Parameters<typeof runSubAgentLive>[0]): Promise<SubAgentRun> {
+  const gen = runSubAgentLive(opts);
+  let next = await gen.next();
+  while (!next.done) next = await gen.next();
+  return next.value;
 }

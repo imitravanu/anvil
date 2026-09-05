@@ -24,6 +24,9 @@ export type AgentEvent =
   | { type: "turn_complete" }
   | { type: "cancelled" }
   | { type: "error"; message: string }
+  // Rate limit hit mid-turn: the session waits out the retry window (once
+  // per turn) and re-issues the request automatically.
+  | { type: "rate_limit_wait"; seconds: number }
   // the truthful engine — budget, loop guard, plan scratchpad.
   | { type: "budget_exhausted" }
   | { type: "loop_detected"; tool: string }
@@ -31,6 +34,8 @@ export type AgentEvent =
   // sub-agent delegation (finished carries the capped report).
   | { type: "subagent_started"; task: string }
   | { type: "subagent_finished"; toolCalls: number; inputTokens: number; outputTokens: number; report: string }
+  // live delegation progress: the tool the sub-agent is using right now
+  | { type: "subagent_progress"; tool: string; detail: string }
   // Rewind: pre-mutation file snapshot taken this turn.
   | { type: "checkpoint"; id: number; files: number };
 
