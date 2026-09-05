@@ -9,11 +9,21 @@ import { ThemeContext, THEMES } from "../theme/theme.js";
 export interface ThemedRender {
   lastFrame: () => string | undefined;
   unmount: () => void;
+  stdin: { write: (data: string) => void };
 }
 
 export function renderThemed(ui: React.ReactElement): ThemedRender {
   const rendered = inkRender(<ThemeContext.Provider value={THEMES.dark}>{ui}</ThemeContext.Provider>);
-  return { lastFrame: () => rendered.lastFrame(), unmount: () => rendered.unmount() };
+  return {
+    lastFrame: () => rendered.lastFrame(),
+    unmount: () => rendered.unmount(),
+    stdin: rendered.stdin,
+  };
+}
+
+/** Let Ink flush a stdin write through React state before asserting. */
+export function tick(ms = 60): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**

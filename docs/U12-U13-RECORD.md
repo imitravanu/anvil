@@ -21,6 +21,8 @@
 - Deliberately OUT (still): `useInput` components (InputBar, pickers,
   PermissionPrompt, overlays) — stdin simulation is timing-flaky; their
   logic stays covered via pure helpers (parseCommand, grouping, formatters).
+  (SUPERSEDED same-day — see §6. Pickers/overlays remain out; the two
+  safety-critical surfaces are now covered.)
 - KEY LIMITATION, verified: test stdout is not a TTY, so chalk emits zero
   ANSI codes — **colors/styles are unassertable** in this harness. Tests
   assert structure and text. A visual regression pass still needs eyes.
@@ -76,7 +78,26 @@ git status --porcelain           # only §3 files (+ prior slices' files)
 
 Result on 2026-09-05: ALL GREEN.
 
-## 5. PROJECT STATE (head-of-project closeout)
+## 6. U12 FOLLOW-UP — interaction tests (same day)
+
+Stdin simulation proved stable (60ms ticks, zero flakes across runs), so the
+two safety-critical `useInput` surfaces got covered after all:
+
+- `components/__tests__/permission.test.tsx` (+4): diff-vs-command
+  rendering, Enter→allow-once (no always-grant), second-row→always-allow
+  (broker called with tool name), third-row→deny (with bidirectional arrow
+  proof). The permission decision matrix — the single most safety-critical
+  UI in the app — is now pinned by tests.
+- `components/__tests__/input.test.tsx` (+6): echo, trimmed submit+clear,
+  empty-submit ignored, menu open/filter/dismiss, Enter-runs-highlighted,
+  history Up/Up/Down walk, busy Esc→cancel + busy Enter→never-submit.
+  (Idle Ctrl+C→exit deliberately untested — it tears down the app host.)
+
+Still out: pickers + SessionPicker/ModelPicker overlays and FirstRunSetup
+(multi-step flows; pure helpers cover their logic). Counts update: TUI
+76/76 across 15 files (was 66/13 at §4).
+
+## 7. PROJECT STATE (head-of-project closeout)
 
 Every numbered phase (0–10) and every roadmap item (U1–U13) is built,
 tested, and recorded. The remaining known risks live in the records, not in

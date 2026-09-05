@@ -36,7 +36,7 @@ optional "Phase 8.5" polish release whenever the client wants a visible jump.
 |---|---|---|
 | U10 | **Sub-agent UI** ✅ DONE 2026-09-05 (assistant-attached cards replace the two system notices: running card = live progress, done card = counts + expandable capped report via /expand; cancelled turns mark cards honestly) — collapsed live progress for delegated tasks, expandable final reports, per-sub-agent token counters | Phase 9 |
 | U11 | **MCP tool UX** — permission prompts for unknown external tools (schema + input shown), server health indicators | Phase 10 |
-| U12 | **TUI interaction test infra** ✅ DONE 2026-09-05 (`ink-testing-library@4` devDep + `test-utils/testRender` themed harness + 15 render tests over ToolCallView/SubAgentView/ColorizedDiff/Header/PlanLine/StatusBar/MessageView; ANSI unassertable — non-TTY chalk emits none) — ink-testing-library component tests so UI refactors stop being risky (pure-function tests exist since Phase 8; component tests were deliberately deferred) | Post-9/10 reliability phase |
+| U12 | **TUI interaction test infra** ✅ DONE 2026-09-05 (`ink-testing-library@4` devDep + `test-utils/testRender` themed harness + 15 render tests + 10 interaction tests over PermissionPrompt/InputBar; ANSI unassertable — non-TTY chalk emits none; pickers/overlays still on pure-helper coverage) — ink-testing-library component tests so UI refactors stop being risky (pure-function tests exist since Phase 8; component tests were deliberately deferred) | Post-9/10 reliability phase |
 | U13 | **Custom user themes** ✅ DONE 2026-09-05 (`~/.anvil/themes.json`, validated loader, structural Theme interface, /theme lists + persists customs) — user-defined theme file in ~/.anvil | low priority |
 
 ## Decision needed from client (RESOLVED)
