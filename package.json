@@ -1,7 +1,9 @@
 {
   "name": "anvil",
   "private": true,
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "build": "npm run build -w @anvil/core && npm run build -w @anvil/tui && npm run build -w @anvil/cli",
     "dev": "npm run dev --workspace=packages/cli",
@@ -12,5 +14,22 @@
     "typescript": "^5.7.2",
     "@types/node": "^22.10.2"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "description": "Anvil \u2014 a terminal-based AI coding agent (monorepo: core, tui, cli)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mitravanu/anvil.git"
+  },
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "terminal",
+    "ink",
+    "tui",
+    "cli",
+    "llm"
+  ],
+  "license": "MIT"
 }
