@@ -90,8 +90,8 @@ describe("translateAnthropicStream", () => {
     expect(events).toEqual([
       { type: "text_delta", text: "Reading the file..." },
       { type: "tool_call_start", id: "toolu_1", name: "read_file" },
-      { type: "tool_call_delta", id: "toolu_1", partialInputJson: '{"path":' },
-      { type: "tool_call_delta", id: "toolu_1", partialInputJson: '{"path": "src/app.ts"}' },
+      { type: "tool_call_delta", id: "toolu_1", cumulativeInputJson: '{"path":' },
+      { type: "tool_call_delta", id: "toolu_1", cumulativeInputJson: '{"path": "src/app.ts"}' },
       { type: "tool_call_end", id: "toolu_1", name: "read_file", input: { path: "src/app.ts" } },
       { type: "usage", inputTokens: 10, outputTokens: 20 },
       { type: "turn_end", stopReason: "tool_use" },
@@ -133,8 +133,28 @@ describe("translateAnthropicStream", () => {
     ]);
   });
 
-  it("produces exactly one error event (no throw) when the stream fails", async () => {
-    async function* failing(): AsyncGenerator<RawAnthropicStreamEvent> {
+  it("skips id-less tool blocks entirely instead of emitting orphan starts", async () => {
+    const events = await collect(
+      translateAnthropicStream(
+        of([
+          {
+            type: "content_block_start",
+            index: 0,
+            content_block: { type: "tool_use", name: "read_file" },
+          },
+          {
+            type: "content_block_delta",
+            index: 0,
+            delta: { type: "input_json_delta", partial_json: '{"path":"x"}' },
+          },
+          { type: "content_block_stop", index: 0 },
+        ])
+      )
+    );
+    expect(events).toEqual([]);
+  });
+
+  it("produces exactly one error event (no throw) when the stream fails", async () => {    async function* failing(): AsyncGenerator<RawAnthropicStreamEvent> {
       yield { type: "message_start", message: { usage: { input_tokens: 1 } } };
       throw new Error("boom");
     }

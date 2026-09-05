@@ -1,21 +1,12 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { ProviderCredentials, ProviderId, MODEL_REGISTRY } from "../providers/index.js";
-import { atomicWriteJson } from "../atomicWrite.js";
+import { atomicWriteJson, anvilHome } from "../atomicWrite.js";
 import { AnvilSettings } from "./types.js";
 
 export type { AnvilSettings } from "./types.js";
 export * from "./mcp.js";
-
-// ANVIL_HOME relocates the data dir (tests use a temp dir); resolved lazily
-// because the env can be set after this module is imported. Falls back to
-// ~/.anvil so existing installs are unaffected.
-export function anvilHome(): string {
-  return process.env.ANVIL_HOME
-    ? path.resolve(process.env.ANVIL_HOME)
-    : path.join(os.homedir(), ".anvil");
-}
+export { anvilHome }; // single home-dir resolver (see atomicWrite.ts)
 
 const CREDENTIALS_PATH = (): string => path.join(anvilHome(), "credentials.json");
 const SETTINGS_PATH = (): string => path.join(anvilHome(), "settings.json");
@@ -112,6 +103,16 @@ export class ProviderSelectionError extends Error {
   }
 }
 
+export class UnknownProviderError extends ProviderSelectionError {
+  constructor(providerId: string) {
+    super(providerId);
+    this.name = "UnknownProviderError";
+    this.message =
+      `Unknown provider "${providerId}". Known providers: ${PROVIDER_ORDER.join(", ")}. ` +
+      `Check for typos (this used to misreport as "not configured").`;
+  }
+}
+
 /**
  * Resolve which provider/model to boot with. Precedence (highest first):
  * CLI flag → env var → settings.json → first configured provider in
@@ -131,6 +132,13 @@ export function resolveProviderSelection(input: SelectionInput): ProviderSelecti
 
   let providerId: ProviderId | undefined;
   if (providerRaw) {
+    // Unknown ids (typos) are a different mistake from "no API key yet" —
+    // report them distinctly instead of the old misleading "not configured".
+    // The model id stays free-form on purpose: OpenRouter-style providers
+    // accept arbitrary model ids the registry can never enumerate.
+    if (!(PROVIDER_ORDER as readonly string[]).includes(providerRaw)) {
+      throw new UnknownProviderError(providerRaw);
+    }
     if (!configured.includes(providerRaw as ProviderId)) {
       throw new ProviderSelectionError(providerRaw);
     }

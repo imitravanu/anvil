@@ -3,6 +3,7 @@ import { TOOL_DEFINITIONS } from "../tools/index.js";
 import type { ToolDefinition } from "../tools/types.js";
 import { AgentSession } from "./session.js";
 import type { PermissionBroker } from "./types.js";
+import type { Checkpoint } from "./checkpoints.js";
 
 // ---------------------------------------------------------------------------
 // Phase 9: sub-agent runner. A sub-agent is a real AgentSession with a fresh
@@ -39,6 +40,8 @@ export interface SubAgentRun {
   usage: { in: number; out: number };
   toolCalls: number;
   aborted: boolean;
+  /** The sub-agent's own checkpoints, for the parent to merge (P1). */
+  checkpoints: Checkpoint[];
 }
 
 export async function runSubAgent(opts: {
@@ -67,7 +70,7 @@ export async function runSubAgent(opts: {
   // timer — user cancel propagates). Registered BEFORE send() starts so no
   // abort can slip in between; removed on exit so the session can't leak.
   if (opts.signal.aborted) {
-    return { report: "", usage: { in: 0, out: 0 }, toolCalls: 0, aborted: true };
+    return { report: "", usage: { in: 0, out: 0 }, toolCalls: 0, aborted: true, checkpoints: [] };
   }
   const onAbort = () => sub.cancel();
   opts.signal.addEventListener("abort", onAbort, { once: true });
@@ -108,5 +111,8 @@ export async function runSubAgent(opts: {
     usage: { in: inTokens, out: outTokens },
     toolCalls,
     aborted,
+    // Hand the sub-ring to the parent even on abort/crash: files the sub
+    // changed before stopping still exist, so rewind must still reach them.
+    checkpoints: sub.drainCheckpoints(),
   };
 }

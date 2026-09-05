@@ -56,4 +56,13 @@ describe("write_file", () => {
     expect(result.summary).toContain("exceeds");
     await expect(fs.access(path.join(root, "too-large.txt"))).rejects.toThrow();
   });
+
+  it("preserves file mode bits across overwrites", async () => {
+    const target = path.join(root, "run.sh");
+    await fs.writeFile(target, "#!/bin/sh\necho hi\n");
+    await fs.chmod(target, 0o755);
+    const result = await executeTool("write_file", { path: "run.sh", content: "#!/bin/sh\necho yo\n" }, ctx);
+    expect(result.isError).toBe(false);
+    expect((await fs.stat(target)).mode & 0o777).toBe(0o755);
+  });
 });

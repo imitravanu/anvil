@@ -1,35 +1,24 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { Box, Text, useStdout } from "ink";
 import {
   AgentSession,
   createProviders,
   loadCredentials,
-  loadSettings,
   loadSession,
-  listSessions,
-  renameSession,
-  saveSession,
-  saveSettings,
   type AgentOptions,
-  type ConversationMessage,
   type McpServerConnection,
   type ModelInfo,
   type ModelProvider,
   type ProviderId,
-  type StoredSession,
 } from "@anvil/core";
 import type { TuiPermissionBroker } from "../permission/TuiPermissionBroker.js";
-import { useAgentController, type DisplayMessage } from "../hooks/useAgentController.js";
+import { useAgentController } from "../hooks/useAgentController.js";
 import { usePermissionBroker } from "../hooks/usePermissionBroker.js";
+import { useThemeManager } from "../hooks/useThemeManager.js";
+import { useSessionCommands } from "../hooks/useSessionCommands.js";
 import { ThemeContext, useTheme } from "../theme/theme.js";
 import { PROVIDER_LABELS } from "../util/labels.js";
-import { THEMES, isThemeName, type Theme } from "../theme/themes.js";
-import { loadCustomThemes } from "../theme/custom.js";
-import { COMMANDS, parseCommand } from "../commands/registry.js";
-import type { CommandContext } from "../commands/types.js";
-import { formatLedger } from "../util/ledger.js";
-import { formatMcpStatus } from "../util/mcp.js";
-import { formatRewindList, formatRewindResult } from "../util/rewind.js";
+import { formatPricingTag } from "../util/format.js";
 import { Header } from "./Header.js";
 import { InputBar } from "./InputBar.js";
 import { MessageList } from "./MessageList.js";
@@ -65,26 +54,6 @@ export interface AppProps {
   mcp?: McpAppState;
 }
 
-/** Build display messages from a stored history (text parts only). */
-function seedFromHistory(history: ConversationMessage[]): DisplayMessage[] {
-  return history
-    .map((msg): DisplayMessage | null => {
-      const text = msg.content
-        .filter((c) => c.type === "text")
-        .map((c) => (c as { text: string }).text)
-        .join("\n");
-      if (!text) return null; // tool_call / tool_result parts are not replayed into the view
-      return {
-        id: `${msg.role}-${Math.random().toString(36).slice(2)}`,
-        role: msg.role,
-        text,
-        streaming: false,
-        toolCalls: [],
-        subAgents: [],
-      };
-    })
-    .filter((m): m is DisplayMessage => m !== null);
-}
 
 export function App({
   session: initialSession,
@@ -120,221 +89,41 @@ export function App({
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isSessionPickerOpen, setIsSessionPickerOpen] = useState(false);
   const [isConnectOpen, setIsConnectOpen] = useState(false);
-  const [themeName, setThemeName] = useState<string>(initialTheme);
-  // U13: user themes from ~/.anvil/themes.json, loaded once. Built-ins win
-  // on name conflicts (the loader rejects shadows, this is belt-and-braces).
-  const [customThemes] = useState(() => loadCustomThemes());
-  const resolveTheme = (name: string): Theme =>
-    customThemes.themes[name] ?? (isThemeName(name) ? THEMES[name] : THEMES.dark);
-  const themeNames = [...Object.keys(THEMES), ...Object.keys(customThemes.themes)];
   // U6: full tool-output display, toggled by /expand. Session-scoped,
   // never persisted — a resumed session starts compact.
   const [expandTools, setExpandTools] = useState(false);
 
-  const applyTheme = (name: string) => {
-    if (!name) {
-      const problems = customThemes.problems.map((p) => `${p.name}: ${p.error}`).join("; ");
-      printSystemMessage(
-        `Usage: /theme <name>. Valid themes: ${themeNames.join(", ")}.` +
-        (problems ? ` Custom theme problems: ${problems}` : "")
-      );
-      return;
-    }
-    if (!isThemeName(name) && !(name in customThemes.themes)) {
-      printSystemMessage(
-        `Unknown theme "${name}". Valid themes: ${themeNames.join(", ")}.`
-      );
-      return;
-    }
-    setThemeName(name);
-    saveSettings({ ...loadSettings(), theme: name }); // persists across restarts
-    printSystemMessage(`Theme set to ${name}${isThemeName(name) ? "" : " (custom)"}.`);
-  };
+  const { themeName, resolveTheme, applyTheme } = useThemeManager({ initialTheme, printSystemMessage });
 
-  /** Auto-save after every completed or cancelled turn. */
-  const persist = useCallback(() => {
-    try {
-      saveSession(session.toStoredSession(activeProviderId, currentModel));
-    } catch {
-      // disk failures must not take the chat down; the next turn will retry
-    }
-  }, [session, activeProviderId, currentModel]);
+  const { handleSubmit, resumeFromStored } = useSessionCommands({
+    session,
+    providers,
+    activeProviderId,
+    currentModel,
+    sessionOptions,
+    broker,
+    mcp,
+    isBusy,
+    printSystemMessage,
+    clearMessages,
+    replaceMessages,
+    applyTheme,
+    setSession,
+    setActiveProviderId,
+    setCurrentModel,
+    setIsModelPickerOpen,
+    setIsSessionPickerOpen,
+    setIsConnectOpen,
+    setExpandTools,
+    send,
+  });
 
-  const resumeFromStored = (stored: StoredSession) => {
-    const provider = providers[stored.metadata.providerId as ProviderId];
-    if (!provider) {
-      printSystemMessage(`Unknown provider "${stored.metadata.providerId}" in stored session.`);
-      return;
-    }
-    const restored = new AgentSession(
-      provider,
-      { ...sessionOptions, model: stored.metadata.model, permissionBroker: broker },
-      stored
-    );
-    setSession(restored);
-    setActiveProviderId(stored.metadata.providerId as ProviderId);
-    setCurrentModel(stored.metadata.model);
-    clearMessages();
-    replaceMessages(seedFromHistory(stored.history));
-    printSystemMessage(`Resumed "${stored.metadata.title}" (${stored.metadata.model}).`);
-    // Phase 8 (A.1.4): re-emit the persisted plan once so the user sees it.
-    if (restored.plan) printSystemMessage(`Plan: ${restored.plan}`);
-  };
 
-  const handleSubmit = async (text: string) => {
-    const parsed = parseCommand(text);
-    if (parsed) {
-      const command = COMMANDS.find((c) => c.name === parsed.name);
-      const ctx: CommandContext = {
-        clearHistory: () => {
-          if (isBusy) {
-            printSystemMessage("Cannot clear the conversation while a turn is in flight.");
-            return;
-          }
-          // Keep the old session file intact so /clear is recoverable via
-          // /session resume, and give the cleared conversation a new session id.
-          const fresh = new AgentSession(providers[activeProviderId], {
-            ...sessionOptions,
-            model: currentModel,
-            permissionBroker: broker,
-          });
-          setSession(fresh);
-          clearMessages();
-          printSystemMessage("Conversation cleared. The previous session can be resumed with /session.");
-        },
-        openModelPicker: () => {
-          if (isBusy) {
-            printSystemMessage("Cannot switch models while a turn is in flight.");
-            return;
-          }
-          setIsModelPickerOpen(true);
-        },
-        printSystemMessage,
-        sessionList: () => {
-          const metas = listSessions();
-          if (metas.length === 0) {
-            printSystemMessage("No saved sessions.");
-            return;
-          }
-          printSystemMessage(
-            metas
-              .map((m) => `${m.id}  ${m.title}  (${m.model}, updated ${m.updatedAt})`)
-              .join("\n")
-          );
-        },
-        sessionNew: () => {
-          if (isBusy) {
-            printSystemMessage("Cannot start a new session while a turn is in flight.");
-            return;
-          }
-          const fresh = new AgentSession(providers[activeProviderId], {
-            ...sessionOptions,
-            model: currentModel,
-            permissionBroker: broker,
-          });
-          setSession(fresh);
-          clearMessages();
-          printSystemMessage("Started a new session.");
-        },
-        sessionResume: (id?: string) => {
-          if (isBusy) {
-            printSystemMessage("Cannot resume a session while a turn is in flight.");
-            return;
-          }
-          if (!id) {
-            setIsSessionPickerOpen(true);
-            return;
-          }
-          const stored = loadSession(id);
-          if (!stored) {
-            printSystemMessage(`No saved session found with id ${id}.`);
-            return;
-          }
-          resumeFromStored(stored);
-        },
-        sessionRename: (title: string) => {
-          renameSession(session.id, title);
-          printSystemMessage(`Session renamed to "${title}".`);
-        },
-        setTheme: applyTheme,
-        openConnect: () => {
-          if (isBusy) {
-            printSystemMessage("Cannot connect a provider while a turn is in flight.");
-            return;
-          }
-          setIsConnectOpen(true);
-        },
-        showLedger: () => {
-          printSystemMessage(formatLedger(session.getRunLedger()));
-        },
-        toggleExpand: () => {
-          setExpandTools((prev) => {
-            printSystemMessage(prev ? "Tool output expansion off." : "Tool output expansion on — full results shown.");
-            return !prev;
-          });
-        },
-        rewind: (idText?: string) => {
-          if (isBusy) {
-            printSystemMessage("Cannot rewind while a turn is in flight.");
-            return;
-          }
-          if (idText === undefined) {
-            printSystemMessage(formatRewindList(session.getCheckpoints()));
-            return;
-          }
-          const id = Number(idText);
-          if (!Number.isInteger(id) || id <= 0) {
-            printSystemMessage(`Usage: /rewind <n> — n is a checkpoint number from /rewind.`);
-            return;
-          }
-          void session.rewind(id).then((result) => {
-            printSystemMessage(formatRewindResult(result));
-            persist();
-          });
-        },
-        mcp: (sub?: string) => {
-          const conns = mcp?.list() ?? [];
-          const notices = mcp?.notices ?? [];
-          if (sub === undefined || sub === "status") {
-            printSystemMessage(formatMcpStatus(conns, notices));
-            return;
-          }
-          if (sub === "reconnect") {
-            if (isBusy) {
-              printSystemMessage("Cannot reconnect MCP servers while a turn is in flight.");
-              return;
-            }
-            if (!mcp) {
-              printSystemMessage(formatMcpStatus([], notices));
-              return;
-            }
-            printSystemMessage("Reconnecting MCP servers...");
-            void mcp.reconnect().then((report) => {
-              const fresh = [...notices, ...report.problems.map((p) => `MCP ${p}`)];
-              printSystemMessage(
-                `Reconnected: ${report.connected} server(s), ${report.tools} tool(s). ` +
-                `(New tools need a restart to enter this session.)\n` +
-                formatMcpStatus(mcp.list(), fresh)
-              );
-            });
-            return;
-          }
-          printSystemMessage(`Unknown /mcp subcommand: ${sub}. Try /mcp or /mcp reconnect.`);
-        },
-      };
-      if (command) command.run(parsed.args, ctx);
-      else printSystemMessage(`Unknown command: /${parsed.name}. Try /help.`);
-      return;
-    }
-    // Regular turn: run it, then auto-save regardless of how it ended
-    // (turn_complete, cancelled, or error).
-    await send(text);
-    persist();
-  };
+
 
   const handleModelSelect = (provider: ModelProvider, modelInfo: ModelInfo) => {
     const result = session.switchModel(provider, modelInfo.id);
-    const pricingTag = modelInfo.isFree ? " [FREE]" : modelInfo.isFree === false ? " [PAID]" : "";
+    const pricingTag = formatPricingTag(modelInfo.isFree);
     if (result.historyCleared) {
       printSystemMessage(
         `Switched to ${provider.id}/${modelInfo.id}${pricingTag} — conversation history was cleared (different provider).`

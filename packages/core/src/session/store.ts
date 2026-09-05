@@ -1,19 +1,13 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { atomicWriteJson } from "../atomicWrite.js";
+import { anvilHome, atomicWriteJson } from "../atomicWrite.js";
 import { StoredSession, SessionMetadata } from "./types.js";
 
 // Default sessions dir honors ANVIL_HOME (like the models cache) so tests and
 // relocated installs never touch the real ~/.anvil/sessions. Resolved lazily
 // because the env can be set after import. Callers may still pass an explicit
 // dir override, which always wins.
-const SESSIONS_DIR = (): string => {
-  const home = process.env.ANVIL_HOME
-    ? path.resolve(process.env.ANVIL_HOME)
-    : path.join(os.homedir(), ".anvil");
-  return path.join(home, "sessions");
-};
+const SESSIONS_DIR = (): string => path.join(anvilHome(), "sessions");
 
 function ensureDir(dir: string): void {
   fs.mkdirSync(dir, { recursive: true });

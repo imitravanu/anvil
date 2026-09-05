@@ -11,6 +11,9 @@ import {
 } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 import { groupByProvider } from "../util/grouping.js";
+import { formatPricingTag, pricingKind } from "../util/format.js";
+import { MAX_VISIBLE_ROWS } from "../util/displayLimits.js";
+import { useWindowedList } from "../hooks/useWindowedList.js";
 
 interface PickerRow {
   model: ModelInfo;
@@ -19,7 +22,7 @@ interface PickerRow {
   providerDisplayName: string;
 }
 
-const MAX_VISIBLE = 8;
+const MAX_VISIBLE = MAX_VISIBLE_ROWS;
 
 /**
  * Model/provider picker overlay. Takes over keyboard input while open.
@@ -121,14 +124,7 @@ export function ModelPicker({
     }
   });
 
-  const scrollOffset = useMemo(() => {
-    if (ordered.length <= MAX_VISIBLE) return 0;
-    const half = Math.floor(MAX_VISIBLE / 2);
-    let start = selected - half;
-    if (start < 0) start = 0;
-    if (start + MAX_VISIBLE > ordered.length) start = ordered.length - MAX_VISIBLE;
-    return start;
-  }, [selected, ordered.length]);
+  const { offset: scrollOffset, hasAbove, hasBelow } = useWindowedList(ordered.length, selected);
 
   const visible = useMemo(() => {
     return ordered
@@ -136,17 +132,13 @@ export function ModelPicker({
       .map((entry, i) => ({ ...entry, pos: scrollOffset + i }));
   }, [ordered, scrollOffset]);
 
-  const hasAbove = scrollOffset > 0;
-  const hasBelow = scrollOffset + MAX_VISIBLE < ordered.length;
-
   const renderRow = (entry: (typeof visible)[number]) => {
     const { row, pos } = entry;
     const isSelected = pos === selected;
     const isCurrent = row.model.id === currentModelId;
     const marker = isSelected ? "❯ " : "  ";
-    const isFree = row.model.isFree;
-    const isPaid = row.model.isFree === false;
-    const pricingTag = isFree ? " [FREE]" : isPaid ? " [PAID]" : "";
+    const kind = pricingKind(row.model.isFree);
+    const pricingTag = formatPricingTag(row.model.isFree);
     const limited = isRateLimited(row.model.providerId, row.model.id);
 
     if (!row.enabled) {
@@ -162,9 +154,9 @@ export function ModelPicker({
       <Text key={row.model.id} color={isSelected ? theme.colors.primary : undefined}>
         {marker}
         {row.model.displayName}
-        {isFree ? (
+        {kind === "free" ? (
           <Text color={theme.colors.toolDone} bold> [FREE]</Text>
-        ) : isPaid ? (
+        ) : kind === "paid" ? (
           <Text dimColor> [PAID]</Text>
         ) : null}
         {limited ? <Text dimColor> [rate-limited]</Text> : null}

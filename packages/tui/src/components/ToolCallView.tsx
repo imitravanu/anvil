@@ -1,10 +1,12 @@
 import { Box, Text } from "ink";
 import type { DisplayToolCall } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
+import { TOOL_SUMMARY_MAX } from "../util/displayLimits.js";
 import { formatToolOutput } from "../util/toolOutput.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
+import { ExpandedLines } from "./ExpandedLines.js";
 
-function oneLine(text: string, max = 60): string {
+function oneLine(text: string, max = TOOL_SUMMARY_MAX): string {
   const first = text.split("\n")[0] ?? "";
   return first.length > max ? first.slice(0, max - 1) + "…" : first;
 }
@@ -17,13 +19,16 @@ function describeCall(call: DisplayToolCall): string {
 export function ToolCallView({ call, expanded }: { call: DisplayToolCall; expanded?: boolean }) {
   const theme = useTheme();
   const spinner = useSpinnerFrame(call.status === "running");
-  const symbol = call.status === "running" ? spinner : call.status === "done" ? "✓" : "✗";
+  const symbol =
+    call.status === "running" ? spinner : call.status === "done" ? "✓" : call.status === "cancelled" ? "○" : "✗";
   const color =
     call.status === "running"
       ? theme.colors.toolRunning
       : call.status === "done"
         ? theme.colors.toolDone
-        : theme.colors.toolError;
+        : call.status === "cancelled"
+          ? theme.colors.dim
+          : theme.colors.toolError;
   return (
     <Box flexDirection="column">
       <Box paddingLeft={3}>
@@ -32,13 +37,7 @@ export function ToolCallView({ call, expanded }: { call: DisplayToolCall; expand
         <Text dimColor> {describeCall(call)}</Text>
       </Box>
       {expanded && call.status !== "running" && (
-        <Box paddingLeft={5} flexDirection="column">
-          {formatToolOutput(call.output).map((line, i) => (
-            <Text key={i} dimColor>
-              {line}
-            </Text>
-          ))}
-        </Box>
+        <ExpandedLines lines={formatToolOutput(call.output)} />
       )}
     </Box>
   );

@@ -9,13 +9,18 @@ export interface PendingPermissionRequest {
 type Listener = (req: PendingPermissionRequest | null) => void;
 
 /**
- * Implements core's PermissionBroker, bridging a pending permission request
+ * Implements core's PermissionBroker, bridging pending permission requests
  * into React via a tiny pub-sub. "Always allow" is per TOOL NAME, for the
  * rest of this process only — never persisted (Phase 6+ may revisit).
+ *
+ * Requests are served FIFO through a queue: concurrent callers no longer
+ * clobber each other (the second request used to overwrite `current`,
+ * orphaning the first promise forever). The overlay shows the head only.
  */
 export class TuiPermissionBroker implements PermissionBroker {
   private listeners = new Set<Listener>();
   private current: PendingPermissionRequest | null = null;
+  private queue: { toolName: string; summary: string; resolve: (approved: boolean) => void }[] = [];
   private alwaysApprove = new Set<string>(); // tool names approved for the rest of this session
 
   /** Register a listener; returns an unsubscribe function. Fires immediately with current state. */
@@ -30,17 +35,25 @@ export class TuiPermissionBroker implements PermissionBroker {
   async requestPermission(toolName: string, summary: string): Promise<boolean> {
     if (this.alwaysApprove.has(toolName)) return true;
     return new Promise<boolean>((resolve) => {
-      this.current = {
-        toolName,
-        summary,
-        resolve: (approved: boolean) => {
-          this.current = null;
-          this.notify();
-          resolve(approved);
-        },
-      };
-      this.notify();
+      this.queue.push({ toolName, summary, resolve });
+      this.pump();
     });
+  }
+
+  private pump(): void {
+    if (this.current || this.queue.length === 0) return;
+    const next = this.queue.shift()!;
+    this.current = {
+      toolName: next.toolName,
+      summary: next.summary,
+      resolve: (approved: boolean) => {
+        this.current = null;
+        this.notify();
+        next.resolve(approved);
+        this.pump();
+      },
+    };
+    this.notify();
   }
 
   approveAlwaysForSession(toolName: string): void {

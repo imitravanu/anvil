@@ -70,8 +70,8 @@ describe("translateChatCompletionsChunkStream", () => {
     );
     expect(events).toEqual([
       { type: "tool_call_start", id: "call_1", name: "read_file" },
-      { type: "tool_call_delta", id: "call_1", partialInputJson: '{"pa' },
-      { type: "tool_call_delta", id: "call_1", partialInputJson: '{"path":"a.ts"}' },
+      { type: "tool_call_delta", id: "call_1", cumulativeInputJson: '{"pa' },
+      { type: "tool_call_delta", id: "call_1", cumulativeInputJson: '{"path":"a.ts"}' },
       { type: "tool_call_end", id: "call_1", name: "read_file", input: { path: "a.ts" } },
       { type: "usage", inputTokens: 9, outputTokens: 14 },
       { type: "turn_end", stopReason: "tool_use" },
@@ -92,14 +92,48 @@ describe("translateChatCompletionsChunkStream", () => {
     );
     expect(events).toEqual([
       { type: "tool_call_start", id: "c1", name: "f" },
-      { type: "tool_call_delta", id: "c1", partialInputJson: "{}" },
+      { type: "tool_call_delta", id: "c1", cumulativeInputJson: "{}" },
       { type: "tool_call_end", id: "c1", name: "f", input: {} },
       { type: "turn_end", stopReason: "unknown" },
     ]);
   });
 
-  it("produces exactly one error event (no throw) when the stream fails", async () => {
-    async function* failing(): AsyncGenerator<RawOpenAIChunk> {
+  it("emits usage exactly once even when gateways repeat it", async () => {
+    const events = await collect(
+      translateChatCompletionsChunkStream(
+        of([
+          { choices: [{ delta: { content: "Hi" }, finish_reason: null }], usage: { prompt_tokens: 5, completion_tokens: 2 } },
+          { choices: [{ delta: {}, finish_reason: "stop" }], usage: { prompt_tokens: 5, completion_tokens: 9 } },
+        ])
+      )
+    );
+    expect(events).toEqual([
+      { type: "text_delta", text: "Hi" },
+      { type: "usage", inputTokens: 5, outputTokens: 9 },
+      { type: "turn_end", stopReason: "end_turn" },
+    ]);
+  });
+
+  it("defers start until the name arrives and freezes the first id", async () => {
+    const events = await collect(
+      translateChatCompletionsChunkStream(
+        of([
+          { choices: [{ delta: { tool_calls: [{ index: 0, id: "real-id" }] }, finish_reason: null }] },
+          { choices: [{ delta: { tool_calls: [{ index: 0, function: { name: "f", arguments: "{}" } }] }, finish_reason: null }] },
+          { choices: [{ delta: { tool_calls: [{ index: 0, id: "other-id" }] }, finish_reason: null }] },
+          { choices: [{ delta: {}, finish_reason: "tool_calls" }] },
+        ])
+      )
+    );
+    expect(events).toEqual([
+      { type: "tool_call_start", id: "real-id", name: "f" },
+      { type: "tool_call_delta", id: "real-id", cumulativeInputJson: "{}" },
+      { type: "tool_call_end", id: "real-id", name: "f", input: {} },
+      { type: "turn_end", stopReason: "tool_use" },
+    ]);
+  });
+
+  it("produces exactly one error event (no throw) when the stream fails", async () => {    async function* failing(): AsyncGenerator<RawOpenAIChunk> {
       yield { choices: [{ delta: { content: "partial" }, finish_reason: null }] };
       throw new Error("connection reset");
     }

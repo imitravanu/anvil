@@ -2,7 +2,7 @@ import { Box, Text, useStdout } from "ink";
 import { MODEL_REGISTRY } from "@anvil/core";
 import type { UsageTotals } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
-import { displayModelLabel, curtail } from "../util/format.js";
+import { displayModelLabel, curtail, formatPricingTag } from "../util/format.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
 
 interface StatusBarProps {
@@ -20,7 +20,7 @@ export function StatusBar({ model, isBusy, usage }: StatusBarProps) {
   const busyFrame = useSpinnerFrame(isBusy);
   const info = MODEL_REGISTRY.find((m) => m.id === model);
 
-  const modelLabel = `${displayModelLabel(model)}${info?.isFree ? " [FREE]" : ""}`;
+  const modelLabel = `${displayModelLabel(model)}${formatPricingTag(info?.isFree)}`;
   const state = isBusy ? (
     <>
       <Text color={theme.colors.accent}>{busyFrame}</Text> busy

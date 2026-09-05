@@ -8,10 +8,7 @@ import { SubAgentView } from "./SubAgentView.js";
 
 export function MessageView({ message, expandTools }: { message: DisplayMessage; expandTools?: boolean }) {
   const theme = useTheme();
-  // U2 streaming caret: the interrupted session already implemented this as a
-  // braille spinner after the streaming text (consistent with ToolCallView) —
-  // kept as the single implementation; my blink-caret variant was removed as
-  // redundant (recorded in PHASE-8-PROGRESS.md §5).
+  // Streaming caret: single braille-spinner implementation (see PHASE-8-PROGRESS.md §5).
   const spinner = useSpinnerFrame(message.streaming);
   if (message.role === "user") {
     return (
@@ -36,36 +33,27 @@ export function MessageView({ message, expandTools }: { message: DisplayMessage;
   // never markdown-parse mid-flight (flicker rule) — then ONE re-render
   // through the bounded markdown renderer once the turn settles. Code fences
   // are highlighted inside MarkdownView, so no direct highlighter call here.
-  if (message.streaming) {
-    return (
-      <Box flexDirection="column">
-        <Text bold color={theme.colors.primary}>
-          anvil
-        </Text>
-        <Text color={theme.colors.assistantText}>
-          {message.text ? `${message.text} ` : ""}
-          <Text color={theme.colors.accent}>{spinner}</Text>
-        </Text>
-        {message.toolCalls.map((call) => (
-          <ToolCallView key={call.id} call={call} expanded={expandTools} />
-        ))}
-        {message.subAgents.map((sub, i) => (
-          <SubAgentView key={`${sub.task}-${i}`} sub={sub} expanded={expandTools} />
-        ))}
-      </Box>
-    );
-  }
+  // Cards render once below, for both states (sub-agent ids are position
+  // counters — stable under appends, unlike task-text keys on duplicates).
+  const textBlock = message.streaming ? (
+    <Text color={theme.colors.assistantText}>
+      {message.text ? `${message.text} ` : ""}
+      <Text color={theme.colors.accent}>{spinner}</Text>
+    </Text>
+  ) : (
+    <MarkdownView blocks={parseMarkdownText(message.text)} />
+  );
   return (
     <Box flexDirection="column">
       <Text bold color={theme.colors.primary}>
         anvil
       </Text>
-      <MarkdownView blocks={parseMarkdownText(message.text)} />
+      {textBlock}
       {message.toolCalls.map((call) => (
         <ToolCallView key={call.id} call={call} expanded={expandTools} />
       ))}
       {message.subAgents.map((sub, i) => (
-        <SubAgentView key={`${sub.task}-${i}`} sub={sub} expanded={expandTools} />
+        <SubAgentView key={i} sub={sub} expanded={expandTools} />
       ))}
     </Box>
   );

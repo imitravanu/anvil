@@ -1,7 +1,15 @@
-import { describe, expect, it } from "vitest";
-import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded } from "../compaction.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded, mergeSummaryIntoHistory } from "../compaction.js";
 import { FakeProvider } from "./fakeProvider.js";
+import type { ScriptEntry } from "./fakeProvider.js";
+import { AgentSession } from "../index.js";
+import { AUTO_APPROVE_BROKER } from "../types.js";
+import { MODEL_REGISTRY } from "../../providers/registry.js";
 import type { ConversationMessage } from "../../providers/types.js";
+import type { StreamEvent } from "../../providers/types.js";
 
 const model = "fake-model";
 
@@ -13,14 +21,6 @@ function makeHistory(n: number): ConversationMessage[] {
   return Array.from({ length: n }, (_, i) => textMsg(i % 2 === 0 ? "user" : "assistant", `msg ${i}`));
 }
 
-const summarizer = new FakeProvider([
-  [
-    { type: "text_delta", text: "Summary of earlier turns." },
-    { type: "turn_end", stopReason: "end_turn" },
-  ],
-]);
-void summarizer;
-
 describe("compactIfNeeded", () => {
   it("below threshold: returns history unchanged with compacted: false", async () => {
     const history = makeHistory(10);
@@ -29,7 +29,7 @@ describe("compactIfNeeded", () => {
       history,
       contextWindow,
       contextWindow * COMPACTION_THRESHOLD - 1, // just below
-      summarizer,
+      new FakeProvider([]), // must never be called
       model
     );
     expect(result.compacted).toBe(false);
@@ -79,5 +79,153 @@ describe("compactIfNeeded", () => {
     expect(result.compacted).toBe(false);
     expect(out).toEqual(history);
     expect(provider.calls).toHaveLength(0);
+  });
+
+  it("empty summary is a no-op, never a placeholder in history", async () => {
+    const provider = new FakeProvider([
+      [{ type: "turn_end", stopReason: "end_turn" }], // no text_delta at all
+    ]);
+    const { history: out, result } = await compactIfNeeded(makeHistory(10), 1000, 990, provider, model);
+    expect(result.compacted).toBe(false);
+    expect(out).toHaveLength(10);
+  });
+});
+
+describe("mergeSummaryIntoHistory", () => {
+  const summary = textMsg("user", "[Earlier summary]");
+  it("merges when the kept tail starts with a user message", () => {
+    const out = mergeSummaryIntoHistory([summary, textMsg("user", "tail"), textMsg("assistant", "reply")]);
+    expect(out).toHaveLength(2);
+    expect(out[0]).toEqual({
+      role: "user",
+      content: [{ type: "text", text: "[Earlier summary]" }, { type: "text", text: "tail" }],
+    });
+    expect(out[1].role).toBe("assistant");
+  });
+
+  it("leaves alternating histories untouched", () => {
+    const history = [summary, textMsg("assistant", "a"), textMsg("user", "u")];
+    expect(mergeSummaryIntoHistory(history)).toBe(history); // same reference, no copy
+  });
+
+  it("handles degenerate inputs without throwing", () => {
+    expect(mergeSummaryIntoHistory([])).toEqual([]);
+    expect(mergeSummaryIntoHistory([summary])).toEqual([summary]);
+  });
+});
+
+describe("compaction in the agent loop", () => {
+  let tmp: string;
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-comp-"));
+  });
+  afterEach(() => {
+    try {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  const modelId = "gemini-3.6-flash";
+  const window = MODEL_REGISTRY.find((m) => m.id === modelId)!.contextWindow;
+
+  function bigReadTurn(file: string, id: string): StreamEvent[] {
+    return [
+      { type: "tool_call_end", id, name: "read_file", input: { path: file } },
+      { type: "usage", inputTokens: window, outputTokens: 10 },
+      { type: "turn_end", stopReason: "tool_use" },
+    ];
+  }
+
+  function textTurn(): StreamEvent[] {
+    return [
+      { type: "text_delta", text: "Done." },
+      { type: "usage", inputTokens: window, outputTokens: 10 },
+      { type: "turn_end", stopReason: "end_turn" },
+    ];
+  }
+
+  it("compacts at most once per turn and never leaves consecutive users", async () => {
+    const file = path.join(tmp, "a.txt");
+    fs.writeFileSync(file, "x");
+    const script: StreamEvent[][] = [
+      // send 1: build a long history with small usage (no compaction: model
+      // lookup uses lastInputTokens, which stays under threshold throughout).
+      ...[0, 1, 2].map((i) => [
+        { type: "tool_call_end", id: `s${i}`, name: "read_file", input: { path: file } },
+        { type: "usage", inputTokens: 100, outputTokens: 10 },
+        { type: "turn_end", stopReason: "tool_use" },
+      ] as StreamEvent[]),
+      [{ type: "text_delta", text: "ok" }, { type: "usage", inputTokens: 100, outputTokens: 10 }, { type: "turn_end", stopReason: "end_turn" }],
+      // send 2: huge usage every round. The loop-top check runs BEFORE each
+      // stream, so the summarizer entry sits between tool streams: after the
+      // first huge-usage round lands, the next loop-top compacts.
+      bigReadTurn(file, "b0"),
+      // the single summarizer call (tools: [] distinguishes it from turns)
+      [{ type: "text_delta", text: "Earlier: three reads." }, { type: "turn_end", stopReason: "end_turn" }],
+      bigReadTurn(file, "b1"),
+      bigReadTurn(file, "b2"),
+      textTurn(),
+    ];
+    const provider = new FakeProvider(script);
+    const session = new AgentSession(provider, {
+      systemPrompt: "",
+      model: modelId,
+      maxTokens: 512,
+      projectRoot: tmp,
+      permissionBroker: AUTO_APPROVE_BROKER,
+    });
+    const drain = async (text: string) => {
+      const events = [];
+      for await (const e of session.send(text)) events.push(e);
+      return events;
+    };
+    await drain("first");
+    const events = await drain("second");
+    expect(events.filter((e) => e.type === "compacted")).toHaveLength(1);
+    const summarizes = provider.calls.filter((c) => c.tools.length === 0);
+    expect(summarizes).toHaveLength(1);
+    // History role alternation holds after the merge.
+    const history = session.getHistory();
+    for (let i = 1; i < history.length; i++) {
+      expect(`${history[i - 1].role}/${history[i].role}`).not.toBe("user/user");
+    }
+  });
+
+  it("a throwing summarizer never kills the turn", async () => {
+    const file = path.join(tmp, "a.txt");
+    fs.writeFileSync(file, "x");
+    const script: ScriptEntry[] = [
+      ...[0, 1, 2].map((i) => [
+        { type: "tool_call_end", id: `s${i}`, name: "read_file", input: { path: file } },
+        { type: "usage", inputTokens: 100, outputTokens: 10 },
+        { type: "turn_end", stopReason: "tool_use" },
+      ] as StreamEvent[]),
+      [{ type: "text_delta", text: "ok" }, { type: "usage", inputTokens: 100, outputTokens: 10 }, { type: "turn_end", stopReason: "end_turn" }],
+      bigReadTurn(file, "b0"),
+      // summarizer entry: a stream that throws instead of summarizing
+      async function* () {
+        throw new Error("summarizer down");
+      },
+      textTurn(),
+    ];
+    const provider = new FakeProvider(script);
+    const session = new AgentSession(provider, {
+      systemPrompt: "",
+      model: modelId,
+      maxTokens: 512,
+      projectRoot: tmp,
+      permissionBroker: AUTO_APPROVE_BROKER,
+    });
+    const drain = async (text: string) => {
+      const events = [];
+      for await (const e of session.send(text)) events.push(e);
+      return events;
+    };
+    await drain("first");
+    const events = await drain("second");
+    expect(events.some((e) => e.type === "turn_complete")).toBe(true);
+    expect(events.some((e) => e.type === "compacted")).toBe(false);
   });
 });

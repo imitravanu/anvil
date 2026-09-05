@@ -46,8 +46,7 @@ describe("parseDiff", () => {
 });
 
 describe("diffWords", () => {
-  it("marks only the changed words in a paired line", () => {
-    const { del, add } = diffWords("const oldName = 1;", "const newName = 1;");
+  it("marks only the changed words in a paired line", () => {    const { del, add } = diffWords("const oldName = 1;", "const newName = 1;");
     expect(del.filter((s) => s.changed).map((s) => s.text)).toEqual(["oldName"]);
     expect(add.filter((s) => s.changed).map((s) => s.text)).toEqual(["newName"]);
     expect(del.filter((s) => !s.changed && s.text.trim()).length).toBeGreaterThan(0);
@@ -59,6 +58,14 @@ describe("diffWords", () => {
     const diff = diffWords("aaa", "bbb");
     expect(diff.del.every((s) => s.changed)).toBe(true);
     expect(diff.add.every((s) => s.changed)).toBe(true);
+  });
+
+  it("bails out to fully-changed on huge lines instead of O(n*m) LCS", () => {
+    const big = Array.from({ length: 300 }, (_, i) => `w${i}`).join(" ");
+    const start = Date.now();
+    const { del } = diffWords(big, `${big} tail`);
+    expect(Date.now() - start).toBeLessThan(1000);
+    expect(del.some((s) => s.changed)).toBe(true);
   });
 });
 

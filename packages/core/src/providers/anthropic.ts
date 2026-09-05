@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { CompletionRequest, ConversationMessage, ModelProvider, StreamEvent } from "./types.js";
+import { ensureTurnEnd } from "./streaming.js";
 
 export type StopReason = "end_turn" | "tool_use" | "max_tokens" | "error" | "unknown";
 
@@ -50,7 +51,10 @@ export async function* translateAnthropicStream(
       if (event.type === "message_start") {
         usageIn = event.message?.usage?.input_tokens ?? 0;
       } else if (event.type === "content_block_start" && event.content_block?.type === "tool_use") {
-        const id = event.content_block.id ?? "";
+        // A block without an id is unusable downstream (deltas/ends key by
+        // id): skip it entirely rather than emitting a nameless orphan start.
+        const id = event.content_block.id;
+        if (!id) continue;
         const index = event.index ?? -1;
         blockIndexToToolId.set(index, id);
         toolInputBuffers.set(id, "");
@@ -67,7 +71,7 @@ export async function* translateAnthropicStream(
           if (toolId) {
             const next = (toolInputBuffers.get(toolId) ?? "") + event.delta.partial_json;
             toolInputBuffers.set(toolId, next);
-            yield { type: "tool_call_delta", id: toolId, partialInputJson: next };
+            yield { type: "tool_call_delta", id: toolId, cumulativeInputJson: next };
           }
         }
       } else if (event.type === "content_block_stop") {
@@ -169,8 +173,10 @@ export function createAnthropicProvider(apiKey: string | undefined): ModelProvid
           { signal: request.signal }
         );
 
-        yield* translateAnthropicStream(
-          stream as unknown as AsyncIterable<RawAnthropicStreamEvent>
+        yield* ensureTurnEnd(
+          translateAnthropicStream(
+            stream as unknown as AsyncIterable<RawAnthropicStreamEvent>
+          )
         );
       } catch (err) {
         yield { type: "error", message: err instanceof Error ? err.message : String(err) };

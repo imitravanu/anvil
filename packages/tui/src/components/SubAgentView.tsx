@@ -2,6 +2,7 @@ import { Box, Text } from "ink";
 import type { DisplaySubAgent } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { capReportLines, formatSubAgentLine } from "../util/subagent.js";
+import { ExpandedLines } from "./ExpandedLines.js";
 
 /**
  * U10 sub-agent card: collapsed one-liner always, report body under /expand.
@@ -22,13 +23,7 @@ export function SubAgentView({ sub, expanded }: { sub: DisplaySubAgent; expanded
         <Text color={color}>{formatSubAgentLine(sub)}</Text>
       </Box>
       {expanded && sub.status === "done" && (
-        <Box paddingLeft={5} flexDirection="column">
-          {capReportLines(sub.report).map((line, i) => (
-            <Text key={i} dimColor>
-              {line}
-            </Text>
-          ))}
-        </Box>
+        <ExpandedLines lines={capReportLines(sub.report)} />
       )}
     </Box>
   );

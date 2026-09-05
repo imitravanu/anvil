@@ -17,6 +17,22 @@ export function providerOfModel(modelId: string): string | null {
   return MODEL_REGISTRY.find((m) => m.id === modelId)?.providerId ?? null;
 }
 
+/**
+ * Pricing tag suffix: " [FREE]", " [PAID]", or "" when unknown. Single source
+ * for the chrome in Header/StatusBar/pickers (was copy-pasted thrice).
+ * pricingKind splits the DECISION from the rendering for styled call sites.
+ */
+export type PricingKind = "free" | "paid" | "unknown";
+export function pricingKind(isFree: boolean | undefined): PricingKind {
+  if (isFree === true) return "free";
+  if (isFree === false) return "paid";
+  return "unknown";
+}
+export function formatPricingTag(isFree: boolean | undefined): string {
+  const kind = pricingKind(isFree);
+  return kind === "free" ? " [FREE]" : kind === "paid" ? " [PAID]" : "";
+}
+
 /** Code-point-aware truncation ("…"). Never use String#length for this — CJK/emoji. */
 export function curtail(text: string, max: number): string {
   if (max <= 0) return "";

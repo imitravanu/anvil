@@ -39,10 +39,16 @@ export function MessageList({ messages, model, expandTools }: { messages: Displa
   // number of rendered messages relative to the terminal height. With the
   // outer frame's chrome (borders, header, dividers, input, status bar) each
   // turn now costs ~3 rows: role label, text, and the blank line between turns.
+  // Hidden history is stated, never silent (the full truth lives in the
+  // session file + /ledger).
   const maxMessages = Math.max(1, Math.floor((rows - 9) / 3));
+  const hidden = Math.max(0, messages.length - maxMessages);
   const visible = messages.slice(-maxMessages);
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1} justifyContent="flex-end">
+      {hidden > 0 && (
+        <Text dimColor>… {hidden} earlier message{hidden === 1 ? "" : "s"} hidden (terminal height)</Text>
+      )}
       {visible.map((message, index) => (
         <Box key={message.id} marginTop={index > 0 ? 1 : 0}>
           <MessageView message={message} expandTools={expandTools} />

@@ -186,11 +186,11 @@ describe("rewind checkpoints", () => {
     }
   });
 
-  it("takeSnapshot: missing file snapshots null, directories skip", () => {
+  it("takeSnapshot: missing file snapshots null, directories skip", async () => {
     const missing = path.join(tmp, "nope.txt");
     const dir = path.join(tmp, "sub");
     fs.mkdirSync(dir);
-    const cp = takeSnapshot(tmp, 1, [missing, "./sub", ""]);
+    const cp = await takeSnapshot(tmp, 1, [missing, "./sub", ""]);
     expect(cp.files).toEqual([{ path: missing, content: null }]);
     expect(cp.skipped).toBe(2);
   });
@@ -199,5 +199,43 @@ describe("rewind checkpoints", () => {
     const mk = (id: number): Checkpoint => ({ id, ts: "t", files: [], skipped: 0 });
     const list = [1, 2, 3, 4, 5, 6, 7].map(mk);
     expect(capCheckpoints(list).map((c) => c.id)).toEqual([3, 4, 5, 6, 7]);
+  });
+
+  it("sub-agent file writes merge into the parent ring and rewind", async () => {
+    const file = path.join(tmp, "sub.txt");
+    fs.writeFileSync(file, "before-sub");
+    const script: StreamEvent[][] = [
+      [
+        { type: "tool_call_end", id: "d1", name: "delegate_task", input: { task: "edit the file" } },
+        { type: "turn_end", stopReason: "tool_use" },
+      ],
+      // sub-agent turn: overwrites the file, then reports
+      [
+        { type: "tool_call_end", id: "w0", name: "write_file", input: { path: file, content: "after-sub" } },
+        { type: "usage", inputTokens: 60, outputTokens: 8 },
+        { type: "turn_end", stopReason: "tool_use" },
+      ],
+      [
+        { type: "text_delta", text: "edited" },
+        { type: "usage", inputTokens: 70, outputTokens: 5 },
+        { type: "turn_end", stopReason: "end_turn" },
+      ],
+      textTurn("noted"),
+    ];
+    const provider = new FakeProvider(script);
+    const session = new AgentSession(provider, { ...BASE_OPTIONS, projectRoot: tmp });
+    const events = await runOneTurn(session);
+    expect(fs.readFileSync(file, "utf-8")).toBe("after-sub");
+    expect(events.filter((e) => e.type === "subagent_finished")).toHaveLength(1);
+
+    // The parent ring holds the sub's checkpoint (fresh parent id).
+    const cps = session.getCheckpoints();
+    expect(cps).toHaveLength(1);
+    expect(cps[0].files).toBe(1);
+    expect(session.getRunLedger().some((e) => e.eventType === "checkpoint_merged")).toBe(true);
+
+    const result = await session.rewind(cps[0].id);
+    expect(result.ok).toBe(true);
+    expect(fs.readFileSync(file, "utf-8")).toBe("before-sub");
   });
 });

@@ -42,12 +42,19 @@ describe("formatToolOutput", () => {
 });
 
 describe("retainOutput", () => {
-  it("keeps small outputs intact and truncates large ones with a marker", () => {
+  it("keeps small outputs equal and truncates large ones with markers", () => {
     const small = { a: 1 };
-    expect(retainOutput(small)).toBe(small);
+    expect(retainOutput(small)).toEqual(small);
+    // Single huge string: capped in place with an inner marker.
     const big = { blob: "x".repeat(OUTPUT_RETAIN_MAX + 100) };
-    const kept = retainOutput(big) as { truncated: string; note: string };
-    expect(kept.note).toContain("truncated");
-    expect(kept.truncated.length).toBeLessThanOrEqual(OUTPUT_RETAIN_MAX);
+    const kept = retainOutput(big) as { blob: string };
+    expect(kept.blob).toContain("…[truncated]");
+    expect(kept.blob.length).toBeLessThanOrEqual(2000 + 50);
+    // Many medium strings: top-level truncation with a note.
+    const wide: Record<string, string> = {};
+    for (let i = 0; i < 5; i++) wide[`k${i}`] = "y".repeat(1500);
+    const keptWide = retainOutput(wide) as { truncated: string; note: string };
+    expect(keptWide.note).toContain("truncated");
+    expect(keptWide.truncated.length).toBeLessThanOrEqual(OUTPUT_RETAIN_MAX);
   });
 });

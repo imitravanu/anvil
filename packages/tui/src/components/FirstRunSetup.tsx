@@ -1,21 +1,12 @@
 import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import TextInput from "ink-text-input";
-import type { ProviderCredentials, ProviderId } from "@anvil/core";
+import type { ProviderId } from "@anvil/core";
 import { saveCredential } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
+import { PROVIDER_META } from "../util/providers.js";
 
-const PROVIDERS: { id: ProviderId; label: string; field: keyof ProviderCredentials; placeholder?: string }[] = [
-  { id: "anthropic", label: "Anthropic", field: "anthropicApiKey" },
-  { id: "openai", label: "OpenAI", field: "openaiApiKey" },
-  { id: "gemini", label: "Google Gemini (Free Tier)", field: "geminiApiKey" },
-  { id: "openrouter", label: "OpenRouter (Free Models)", field: "openrouterApiKey" },
-  { id: "groq", label: "Groq (100% Free & Blazing Fast)", field: "groqApiKey", placeholder: "gsk_..." },
-  { id: "github", label: "GitHub Models (Free GPT-4o-mini with PAT)", field: "githubApiKey", placeholder: "ghp_..." },
-  { id: "cerebras", label: "Cerebras (1M Free Tokens/day)", field: "cerebrasApiKey", placeholder: "csk_..." },
-  { id: "mistral", label: "Mistral AI / Codestral (Free Tier)", field: "mistralApiKey" },
-  { id: "ollama", label: "Ollama (Local $0 Offline - localhost:11434)", field: "ollamaApiKey", placeholder: "Enter to connect" },
-];
+const PROVIDERS = PROVIDER_META;
 
 /**
  * Provider connect/onboarding flow: pick a provider, paste an API key
@@ -53,7 +44,7 @@ export function FirstRunSetup({
         {PROVIDERS.map((p, i) => (
           <Text key={p.id} color={i === selected ? theme.colors.primary : undefined}>
             {i === selected ? "❯ " : "  "}
-            {p.label}
+            {p.marketLabel}
           </Text>
         ))}
       </Box>
@@ -65,7 +56,7 @@ export function FirstRunSetup({
       <Box flexDirection="column" paddingX={1}>
         <Text dimColor>Step 2 of 2 — paste the key (↑/↓ won't work here)</Text>
         <Text color={theme.colors.primary}>
-          Paste your {provider.label} API key (input is hidden):
+          Paste your {provider.marketLabel} API key (input is hidden):
         </Text>
         <TextInput
           value={apiKey}
@@ -86,7 +77,7 @@ export function FirstRunSetup({
   // done — wait for Enter, then hand off to the caller
   return (
     <Box flexDirection="column" paddingX={1}>
-      <Text color={theme.colors.toolDone}>✓ {provider.label} API key saved.</Text>
+      <Text color={theme.colors.toolDone}>✓ {provider.marketLabel} API key saved.</Text>
       <Text dimColor>Add more providers or press Enter to continue.</Text>
     </Box>
   );

@@ -1,5 +1,15 @@
-import { createOpenRouterFreeSource, syncFreeModels } from "@anvil/core";
-import { Command } from "./types.js";
+import {
+  AgentSession,
+  createOpenRouterFreeSource,
+  listSessions,
+  loadSession,
+  renameSession,
+  syncFreeModels,
+} from "@anvil/core";
+import { Command, CommandContext, CommandHandlerDeps } from "./types.js";
+import { formatLedger } from "../util/ledger.js";
+import { formatMcpStatus } from "../util/mcp.js";
+import { formatRewindList, formatRewindResult } from "../util/rewind.js";
 
 export const COMMANDS: Command[] = [
   {
@@ -144,4 +154,181 @@ export function parseCommand(input: string): { name: string; args: string[] } | 
   if (!input.startsWith("/")) return null;
   const [name, ...args] = input.slice(1).trim().split(/\s+/);
   return { name, args };
+}
+
+/**
+ * P3 single-touch commands: the one constructor for CommandContext.
+ * New commands add a registry entry above (+ a context method here if they
+ * need session access) — App.tsx and hooks never change for new commands.
+ * Built fresh per call so guards (isBusy, session identity) never go stale.
+ */
+export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
+  const {
+    session,
+    providers,
+    activeProviderId,
+    currentModel,
+    sessionOptions,
+    broker,
+    mcp,
+    isBusy,
+    printSystemMessage,
+    clearMessages,
+    persist,
+    resumeFromStored,
+    applyTheme,
+    setSession,
+    setIsModelPickerOpen,
+    setIsSessionPickerOpen,
+    setIsConnectOpen,
+    setExpandTools,
+  } = deps;
+  return {
+    clearHistory: () => {
+      if (isBusy) {
+        printSystemMessage("Cannot clear the conversation while a turn is in flight.");
+        return;
+      }
+      // Keep the old session file intact so /clear is recoverable via
+      // /session resume, and give the cleared conversation a new session id.
+      const fresh = new AgentSession(providers[activeProviderId], {
+        ...sessionOptions,
+        model: currentModel,
+        permissionBroker: broker,
+      });
+      setSession(fresh);
+      clearMessages();
+      printSystemMessage("Conversation cleared. The previous session can be resumed with /session.");
+    },
+    openModelPicker: () => {
+      if (isBusy) {
+        printSystemMessage("Cannot switch models while a turn is in flight.");
+        return;
+      }
+      setIsModelPickerOpen(true);
+    },
+    printSystemMessage,
+    sessionList: () => {
+      const metas = listSessions();
+      if (metas.length === 0) {
+        printSystemMessage("No saved sessions.");
+        return;
+      }
+      printSystemMessage(
+        metas
+          .map((m) => `${m.id}  ${m.title}  (${m.model}, updated ${m.updatedAt})`)
+          .join("\n")
+      );
+    },
+    sessionNew: () => {
+      if (isBusy) {
+        printSystemMessage("Cannot start a new session while a turn is in flight.");
+        return;
+      }
+      const fresh = new AgentSession(providers[activeProviderId], {
+        ...sessionOptions,
+        model: currentModel,
+        permissionBroker: broker,
+      });
+      setSession(fresh);
+      clearMessages();
+      printSystemMessage("Started a new session.");
+    },
+    sessionResume: (id?: string) => {
+      if (isBusy) {
+        printSystemMessage("Cannot resume a session while a turn is in flight.");
+        return;
+      }
+      if (!id) {
+        setIsSessionPickerOpen(true);
+        return;
+      }
+      const stored = loadSession(id);
+      if (!stored) {
+        printSystemMessage(`No saved session found with id ${id}.`);
+        return;
+      }
+      resumeFromStored(stored);
+    },
+    sessionRename: (title: string) => {
+      renameSession(session.id, title);
+      printSystemMessage(`Session renamed to "${title}".`);
+    },
+    setTheme: applyTheme,
+    openConnect: () => {
+      if (isBusy) {
+        printSystemMessage("Cannot connect a provider while a turn is in flight.");
+        return;
+      }
+      setIsConnectOpen(true);
+    },
+    showLedger: () => {
+      printSystemMessage(formatLedger(session.getRunLedger()));
+    },
+    toggleExpand: () => {
+      setExpandTools((prev) => {
+        printSystemMessage(prev ? "Tool output expansion off." : "Tool output expansion on — full results shown.");
+        return !prev;
+      });
+    },
+    rewind: (idText?: string) => {
+      if (isBusy) {
+        printSystemMessage("Cannot rewind while a turn is in flight.");
+        return;
+      }
+      if (idText === undefined) {
+        printSystemMessage(formatRewindList(session.getCheckpoints()));
+        return;
+      }
+      const idTextTrimmed = idText.trim();
+      // Strict decimal: Number() accepts hex ("0x10"), exponents, and
+      // whitespace — none of which are checkpoint ids.
+      if (!/^\d+$/.test(idTextTrimmed)) {
+        printSystemMessage(`Usage: /rewind <n> — n is a checkpoint number from /rewind.`);
+        return;
+      }
+      const id = Number(idTextTrimmed);
+      if (!Number.isSafeInteger(id) || id <= 0) {
+        printSystemMessage(`Usage: /rewind <n> — n is a checkpoint number from /rewind.`);
+        return;
+      }
+      void session.rewind(id).then((result) => {
+        printSystemMessage(formatRewindResult(result));
+        persist();
+      }).catch((err: unknown) => {
+        printSystemMessage(`Rewind failed: ${err instanceof Error ? err.message : String(err)}`);
+      });
+    },
+    mcp: (sub?: string) => {
+      const conns = mcp?.list() ?? [];
+      const notices = mcp?.notices ?? [];
+      if (sub === undefined || sub === "status") {
+        printSystemMessage(formatMcpStatus(conns, notices));
+        return;
+      }
+      if (sub === "reconnect") {
+        if (isBusy) {
+          printSystemMessage("Cannot reconnect MCP servers while a turn is in flight.");
+          return;
+        }
+        if (!mcp) {
+          printSystemMessage(formatMcpStatus([], notices));
+          return;
+        }
+        printSystemMessage("Reconnecting MCP servers...");
+        void mcp.reconnect().then((report) => {
+          const fresh = [...notices, ...report.problems.map((p) => `MCP ${p}`)];
+          printSystemMessage(
+            `Reconnected: ${report.connected} server(s), ${report.tools} tool(s). ` +
+            `(New tools need a restart to enter this session.)\n` +
+            formatMcpStatus(mcp.list(), fresh)
+          );
+        }).catch((err: unknown) => {
+          printSystemMessage(`MCP reconnect failed: ${err instanceof Error ? err.message : String(err)}`);
+        });
+        return;
+      }
+      printSystemMessage(`Unknown /mcp subcommand: ${sub}. Try /mcp or /mcp reconnect.`);
+    },
+  };
 }

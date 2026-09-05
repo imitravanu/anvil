@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 // ---------------------------------------------------------------------------
@@ -7,6 +8,17 @@ import path from "node:path";
 // Crash mid-write must never leave a half-written credentials/settings/
 // session/cache file behind for the lenient readers to misread.
 // ---------------------------------------------------------------------------
+
+/**
+ * Single home-dir resolver (was copy-pasted across config/cache/store/mcp).
+ * ANVIL_HOME relocates the data dir; resolved lazily because the env can be
+ * set after modules import.
+ */
+export function anvilHome(): string {
+  return process.env.ANVIL_HOME
+    ? path.resolve(process.env.ANVIL_HOME)
+    : path.join(os.homedir(), ".anvil");
+}
 
 /**
  * Write JSON atomically: temp file in the same directory (+ optional mode,

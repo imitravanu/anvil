@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -11,6 +11,7 @@ import {
 } from "../registry.js";
 import {
   DEFAULT_SYNC_TTL_MS,
+  fetchOpenRouterFreeModels,
   getRateLimitedModels,
   isRateLimited,
   isRateLimitMessage,
@@ -150,5 +151,68 @@ describe("Phase 8 (B) — free-model coordinator", () => {
     expect(isRateLimited("phase8-test", "p8b-health-a")).toBe(true);
     expect(isRateLimited("phase8-test", "other")).toBe(false);
     expect(Object.keys(getRateLimitedModels())).toContain("phase8-test");
+  });
+
+  it("different credentials fly separately (no cross-cred sharing)", async () => {
+    const counter = { count: 0 };
+    const src = fakeSource("p8b-creds", [freeModel("p8b-creds-a", "phase8-test")], counter);
+    await syncFreeModels({ sources: [src], ttlMs: 0, apiKeyBySource: { "p8b-creds": "key-one" } });
+    await syncFreeModels({ sources: [src], ttlMs: 0, apiKeyBySource: { "p8b-creds": "key-two" } });
+    expect(counter.count).toBe(2);
+  });
+
+  it("partial failure preserves the failed source's cached models", async () => {
+    const keeper = freeModel("p8b-keep-a", "phase8-test");
+    const good = fakeSource("p8b-mix-good", [keeper]);
+    const bad = fakeSource("p8b-mix-bad", () => {
+      throw new Error("flaky");
+    });
+    const first = await syncFreeModels({ sources: [good, bad], ttlMs: 0 });
+    expect(first.results.find((r) => r.sourceId === "p8b-mix-good")?.ok).toBe(true);
+    // Prime the cache with BOTH sources healthy, then fail one.
+    const good2 = fakeSource("p8b-mix-good", [keeper]);
+    const bad2 = fakeSource("p8b-mix-bad", [freeModel("p8b-mix-b", "phase8-test")]);
+    await syncFreeModels({ sources: [good2, bad2], ttlMs: 0 });
+    const report = await syncFreeModels({ sources: [good, bad], ttlMs: 0 });
+    expect(report.results.find((r) => r.sourceId === "p8b-mix-bad")?.ok).toBe(false);
+    const { loadModelsCacheV2 } = await import("../cache.js");
+    const cached = loadModelsCacheV2();
+    // The failed source's last-good models survive; the healthy source refreshes.
+    expect(cached.sources["p8b-mix-bad"]?.map((m) => m.id)).toContain("p8b-mix-b");
+    expect(cached.sources["p8b-mix-good"]?.map((m) => m.id)).toContain("p8b-keep-a");
+    expect(report.refreshedAt).toBeTruthy(); // partial success still stamps
+  });
+
+  it("numeric zero pricing counts as free", async () => {
+    const numeric = {
+      ...freeModel("p8b-num-a", "phase8-test"),
+      // fetchOpenRouterFreeModels shape is tested via the unit below; here the
+      // coordinator path treats whatever the source returns as authoritative.
+    };
+    const src = fakeSource("p8b-num", [numeric]);
+    const report = await syncFreeModels({ sources: [src], ttlMs: 0 });
+    expect(report.results[0].newlyFree).toContain("p8b-num-a");
+  });
+
+  it("fetchOpenRouterFreeModels accepts numeric and string zero pricing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          data: [
+            { id: "n/zero-num", name: "Zero Num", pricing: { prompt: 0, completion: 0 }, supported_parameters: [], architecture: { modality: "text" }, context_length: 1000 },
+            { id: "n/zero-str", name: "Zero Str", pricing: { prompt: "0", completion: "0" }, supported_parameters: [], architecture: { modality: "text" }, context_length: 1000 },
+            { id: "n/paid", name: "Paid", pricing: { prompt: 1, completion: 2 }, supported_parameters: [], architecture: { modality: "text" }, context_length: 1000 },
+          ],
+        }),
+      }))
+    );
+    try {
+      const models = await fetchOpenRouterFreeModels();
+      expect(models.map((m) => m.id).sort()).toEqual(["n/zero-num", "n/zero-str"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -3,6 +3,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadCustomThemes } from "../custom.js";
+import { REQUIRED_COLOR_KEYS, THEMES } from "../themes.js";
+
+describe("theme registry consistency", () => {
+  it("REQUIRED_COLOR_KEYS covers every built-in color key exactly", () => {
+    for (const theme of Object.values(THEMES)) {
+      expect([...REQUIRED_COLOR_KEYS].sort()).toEqual(Object.keys(theme.colors).sort());
+    }
+  });
+});
 
 const COLORS = {
   primary: "cyan",

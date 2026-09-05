@@ -1,6 +1,5 @@
 import type { RunLedgerEntry } from "@anvil/core";
-
-const MAX_ROWS = 15;
+import { LEDGER_MAX_ROWS } from "./displayLimits.js";
 
 /**
  * U7 run-ledger UI: render the Phase 8 (A.1.5) append-only ledger as a
@@ -36,7 +35,7 @@ export function formatLedger(entries: readonly RunLedgerEntry[]): string {
   ];
   if (tools) lines.push(`Tools: ${tools}`);
 
-  const tail = entries.slice(-MAX_ROWS);
+  const tail = entries.slice(-LEDGER_MAX_ROWS);
   if (entries.length > tail.length) {
     lines.push(`… ${entries.length - tail.length} older event(s) omitted`);
   }

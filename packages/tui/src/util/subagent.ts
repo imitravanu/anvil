@@ -1,4 +1,6 @@
 /** U10 sub-agent cards: collapsed line + capped report lines. Pure. */
+import { SUBAGENT_TASK_MAX, capLines } from "./displayLimits.js";
+export { EXPANDED_MAX_LINES as MAX_REPORT_LINES } from "./displayLimits.js";
 
 export interface SubAgentRecord {
   task: string;
@@ -21,7 +23,8 @@ export function retainReport(report: string): string {
 /** One-line collapsed summary: `◈ sub-agent: <task> — N calls, X in/Y out`. */
 export function formatSubAgentLine(sub: Pick<SubAgentRecord, "task" | "status" | "toolCalls" | "inputTokens" | "outputTokens">): string {
   const first = (sub.task.split("\n")[0] ?? "").trim();
-  const task = first.length > 60 ? first.slice(0, 59) + "…" : first || "(no task)";
+  const task =
+    first.length > SUBAGENT_TASK_MAX ? first.slice(0, SUBAGENT_TASK_MAX - 1) + "…" : first || "(no task)";
   const counts =
     sub.status === "running"
       ? "running…"
@@ -33,11 +36,7 @@ export function formatSubAgentLine(sub: Pick<SubAgentRecord, "task" | "status" |
 }
 
 /** Report body for expanded display, capped with an omission notice. */
-export const MAX_REPORT_LINES = 30;
-
-export function capReportLines(report: string, max: number = MAX_REPORT_LINES): string[] {
+export function capReportLines(report: string, max?: number): string[] {
   if (!report) return ["(empty report)"];
-  const lines = report.split("\n");
-  if (lines.length <= max) return lines;
-  return [...lines.slice(0, max), `… ${lines.length - max} more line(s) omitted`];
+  return capLines(report.split("\n"), max);
 }

@@ -40,7 +40,9 @@ export interface ConversationMessage {
 export type StreamEvent =
   | { type: "text_delta"; text: string }
   | { type: "tool_call_start"; id: string; name: string }
-  | { type: "tool_call_delta"; id: string; partialInputJson: string }
+  // Deltas carry the CUMULATIVE argument buffer (adapters append fragments
+  // before emitting) — consumers overwrite, never concatenate.
+  | { type: "tool_call_delta"; id: string; cumulativeInputJson: string }
   | {
       type: "tool_call_end";
       id: string;

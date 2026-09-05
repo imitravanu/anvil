@@ -1,15 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { ConversationMessage, ModelProvider, StreamEvent } from "../providers/types.js";
 import { MODEL_REGISTRY } from "../providers/registry.js";
-import { TOOL_DEFINITIONS, executeTool, describeToolInput } from "../tools/index.js";
+import { TOOL_DEFINITIONS } from "../tools/index.js";
 import type { ToolExecutionResult, ToolDefinition } from "../tools/types.js";
-import { compactIfNeeded } from "./compaction.js";
+import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded } from "./compaction.js";
 import { SessionMetadata, StoredSession } from "../session/types.js";
 import { AgentEvent, AgentOptions, DEFAULT_MAX_INNER_ITERATIONS } from "./types.js";
-import { canonicalInputHash } from "./canonical.js";
 import { RunLedgerEntry, capLedger, maxSeq } from "./ledger.js";
 import { isRateLimitMessage, noteRateLimited } from "../providers/freeModels.js";
 import { MAX_DELEGATIONS_PER_TURN, runSubAgent } from "./subagent.js";
+import { TurnState } from "./turnState.js";
+import { LoopGuard, type AccumulatedToolCall, type PreparedCall } from "./loopGuard.js";
+import { ToolOrchestrator, type RunnableCall } from "./orchestrator.js";
+import { HistoryStore } from "./historyStore.js";
 import {
   Checkpoint,
   capCheckpoints,
@@ -19,20 +22,13 @@ import {
   type CheckpointMeta,
 } from "./checkpoints.js";
 
-interface AccumulatedToolCall {
-  id: string;
-  name: string;
-  input: unknown;
-  providerMetadata?: Record<string, unknown>;
-}
-
 export interface RestoreData {
   metadata: SessionMetadata;
   history: ConversationMessage[];
 }
 
 export class AgentSession {
-  private history: ConversationMessage[] = [];
+  private history = new HistoryStore();
   private currentController: AbortController | null = null;
   private isSending = false;
   private provider: ModelProvider;
@@ -44,13 +40,13 @@ export class AgentSession {
   readonly maxInnerIterations: number;
   /** Current plan, set by the update_plan tool; persists on save. */
   plan: string | null = null;
-  private iterationsUsed = 0;
   private ledger: RunLedgerEntry[] = [];
   private ledgerSeq = 0;
   private lastUsage: { inputTokens: number; outputTokens: number } | null = null;
-  // Phase 9: resolved tool list + per-turn delegation counter.
+  // Phase 9: resolved tool list (sub-agents exclude delegate_task; MCP seam).
+  // Per-turn counters (iterations, delegations, loop streaks) live in
+  // TurnState, fresh per send() — never as session fields.
   private toolDefs: ToolDefinition[];
-  private delegationsUsed = 0;
   // Rewind: in-memory ring of pre-mutation file snapshots (never persisted).
   private checkpoints: Checkpoint[] = [];
   private checkpointSeq = 0;
@@ -75,7 +71,7 @@ export class AgentSession {
     this.title = restore?.metadata.title ?? null;
     this.createdAt = restore?.metadata.createdAt ?? new Date().toISOString();
     if (restore) {
-      this.history = [...restore.history];
+      this.history = new HistoryStore(restore.history);
       this.plan = restore.metadata.plan ?? null;
       this.ledger = capLedger(restore.metadata.runLedger ?? []);
       this.ledgerSeq = maxSeq(this.ledger);
@@ -84,7 +80,7 @@ export class AgentSession {
 
   /** Read-only view of the conversation history (exposed for tests / future phases). */
   getHistory(): readonly ConversationMessage[] {
-    return this.history;
+    return this.history.get();
   }
 
   cancel(): void {
@@ -102,14 +98,20 @@ export class AgentSession {
     this.provider = provider;
     this.options = { ...this.options, model };
     if (providerChanged) {
-      this.history = [];
+      this.history.clear();
+      // Token/compaction bookkeeping belongs to the discarded history's
+      // provider: stale counts would misfire the next compaction check.
+      this.lastInputTokens = 0;
+      this.lastUsage = null;
     }
     return { historyCleared: providerChanged };
   }
 
   /** Wipe conversation history (the `/clear` command). */
   clearHistory(): void {
-    this.history = [];
+    this.history.clear();
+    this.lastInputTokens = 0;
+    this.lastUsage = null;
   }
 
   /** Snapshot for persistence — the CLI decides when to call saveSession(). */
@@ -127,18 +129,42 @@ export class AgentSession {
         ...(this.plan !== null ? { plan: this.plan } : {}),
         ...(this.ledger.length > 0 ? { runLedger: capLedger(this.ledger) } : {}),
       },
-      history: [...this.history],
+      history: this.history.snapshot(),
     };
   }
 
   /** Phase 8 (A.1.5): read-only view of this session's run ledger. */
   getRunLedger(): readonly RunLedgerEntry[] {
-    return this.ledger;
+    return [...this.ledger];
   }
 
   /** Rewind: metadata view of in-memory checkpoints (contents never exposed). */
   getCheckpoints(): CheckpointMeta[] {
     return this.checkpoints.map(checkpointMeta);
+  }
+
+  /**
+   * Hand over this session's checkpoints and empty the ring. Internal seam
+   * for sub-agent delegation (the parent merges them into its own ring) —
+   * not part of the UI surface.
+   */
+  drainCheckpoints(): Checkpoint[] {
+    const drained = [...this.checkpoints];
+    this.checkpoints = [];
+    return drained;
+  }
+
+  /** Merge sub-agent checkpoints into this session's ring with fresh ids. */
+  private mergeSubCheckpoints(sub: readonly Checkpoint[]): void {
+    if (sub.length === 0) return;
+    for (const cp of sub) {
+      this.checkpointSeq += 1;
+      this.checkpoints = capCheckpoints([
+        ...this.checkpoints,
+        { ...cp, id: this.checkpointSeq },
+      ]);
+    }
+    this.recordLedger({ eventType: "checkpoint_merged", outcome: "ok", elapsedMs: 0 });
   }
 
   /**
@@ -203,7 +229,7 @@ export class AgentSession {
       return;
     }
     this.isSending = true;
-    this.history.push({ role: "user", content: [{ type: "text", text: userText }] });
+    this.history.pushUserText(userText);
     if (this.title === null) {
       const firstLine = userText.trim().split("\n")[0] ?? "";
       const chars = Array.from(firstLine);
@@ -214,13 +240,9 @@ export class AgentSession {
     this.currentController = controller;
 
     // Phase 8 (A.1): per-turn loop state starts clean on every send().
-    this.iterationsUsed = 0;
-    this.delegationsUsed = 0;
-    let lastToolKey: string | null = null;
-    let toolStreak = 0;
-    let loopNotified = false;
-    // Total per-key counts this turn, for the non-consecutive repeat guard.
-    const totalCounts = new Map<string, number>();
+    // A fresh TurnState per call — budget and loop-guard state must never
+    // leak across turns (a reused instance would instantly budget_exhaust).
+    const turn = new TurnState(this.maxInnerIterations);
 
     try {
       while (true) {
@@ -233,43 +255,53 @@ export class AgentSession {
         // silently. The notice is an assistant-role message because the history
         // model has no "system" role and role alternation must stay valid for every
         // provider (recorded in docs/PHASE-8-PROGRESS.md).
-        if (this.iterationsUsed >= this.maxInnerIterations) {
+        if (turn.checkBudget()) {
           this.recordLedger({ eventType: "budget_exhausted", outcome: "aborted", elapsedMs: 0 });
           yield { type: "budget_exhausted" };
-          this.history.push({
-            role: "assistant",
-            content: [
-              {
-                type: "text",
-                text: `I reached this turn's step limit (${this.maxInnerIterations}). Here is where I am and what remains; tell me to continue.`,
-              },
-            ],
-          });
+          this.history.pushBudgetNotice(this.maxInnerIterations);
           return;
         }
 
         // Reactive compaction: if the previous turn's input tokens crossed the
         // model's context-window threshold, summarize older history first.
+        // Best-effort: a summarizer failure must never kill the turn, and a
+        // second attempt later in the same turn would thrash history — so the
+        // turn gets exactly one summarization ATTEMPT. The cheap guards are
+        // peeked first: a below-threshold loop-top must not burn the attempt
+        // (lastInputTokens is stale until the first round of THIS turn lands).
         const modelInfo = MODEL_REGISTRY.find((m) => m.id === this.options.model);
-        if (modelInfo && this.lastInputTokens > 0) {
-          const { history: compacted, result } = await compactIfNeeded(
-            this.history,
-            modelInfo.contextWindow,
-            this.lastInputTokens,
-            this.provider,
-            this.options.model,
-            controller.signal
-          );
-          if (result.compacted) {
-            this.history = compacted;
-            yield { type: "compacted", summary: result.summary! };
+        if (
+          modelInfo &&
+          !turn.compactedThisTurn &&
+          this.lastInputTokens >= modelInfo.contextWindow * COMPACTION_THRESHOLD &&
+          this.history.length > KEEP_RECENT_MESSAGES
+        ) {
+          turn.markCompactionAttempted();
+          try {
+            const { history: compacted, result } = await compactIfNeeded(
+              this.history.snapshot(),
+              modelInfo.contextWindow,
+              this.lastInputTokens,
+              this.provider,
+              this.options.model,
+              controller.signal
+            );
+            if (result.compacted) {
+              // Preserve role alternation on merge (several providers reject
+              // consecutive users); HistoryStore owns the merge.
+              this.history.applyCompacted(compacted);
+              yield { type: "compacted", summary: result.summary! };
+            }
+          } catch {
+            // Summarization failed (or was aborted) — proceed uncompacted.
+            // An abort surfaces as `cancelled` at the next loop-top check.
           }
         }
 
         const stream = this.provider.streamCompletion({
           model: this.options.model,
           systemPrompt: this.options.systemPrompt,
-          messages: [...this.history], // snapshot — never expose the live array to the provider
+          messages: this.history.snapshot(), // snapshot — never expose the live array to the provider
           tools: this.toolDefs,
           maxTokens: this.options.maxTokens,
           signal: controller.signal,
@@ -293,7 +325,8 @@ export class AgentSession {
               break;
             case "tool_call_delta": {
               const open = openCalls.get(event.id);
-              if (open) open.inputJson = event.partialInputJson;
+              // Cumulative buffer (see providers/streaming.ts): overwrite.
+              if (open) open.inputJson = event.cumulativeInputJson;
               break;
             }
             case "tool_call_end": {
@@ -350,15 +383,7 @@ export class AgentSession {
         // Record the assistant turn (text and/or tool_use blocks) in history
         // before anything else — including for plain text turns, which must
         // still be part of the conversation the provider sees next turn.
-        const assistantContent: ConversationMessage["content"] = [];
-        const text = textParts.join("");
-        if (text) assistantContent.push({ type: "text", text });
-        for (const call of toolCalls) {
-          assistantContent.push({ type: "tool_call", call });
-        }
-        if (assistantContent.length > 0) {
-          this.history.push({ role: "assistant", content: assistantContent });
-        }
+        this.history.pushAssistant(textParts, toolCalls);
 
         if (stopReason !== "tool_use") {
           yield { type: "turn_complete" };
@@ -366,60 +391,28 @@ export class AgentSession {
         }
 
         // Phase 8 (A.1): bounded, loop-safe, ordered tool orchestration.
-        this.iterationsUsed += 1;
+        turn.markIteration();
 
         const turnNotes: string[] = [];
-        type PreparedCall = {
-          call: AccumulatedToolCall;
-          def: ToolDefinition | undefined;
-          key: string;
-          refused: boolean;
-          loopWarn: boolean;
-          repeatWarn: boolean;
-        };
         // Classify in DECLARED order first: the consecutive same-key streak
         // (A.1.2) and the declared-order contract (F5) are order-sensitive.
-        const prepared: PreparedCall[] = toolCalls.map((call) => {
-          const def = this.toolDefs.find((d) => d.name === call.name);
-          const key = `${call.name}:${canonicalInputHash(call.input)}`;
-          if (key === lastToolKey) toolStreak += 1;
-          else {
-            toolStreak = 1;
-            lastToolKey = key;
-          }
-          const loopWarn = toolStreak === 3 && !loopNotified;
-          if (loopWarn) loopNotified = true;
-          // Non-consecutive repeat (A-B-A-B-A ping-pong the streak guard cannot
-          // see): 3rd TOTAL occurrence with other calls in between. Warn once
-          // per turn, never refuse — interleaved repeats are often legitimate
-          // re-reads, so this stays advisory while the consecutive guard stays
-          // the enforcing one.
-          const total = (totalCounts.get(key) ?? 0) + 1;
-          totalCounts.set(key, total);
-          const repeatWarn = total === 3 && !loopWarn && toolStreak < 3 && !loopNotified;
-          if (repeatWarn) loopNotified = true;
-          return { call, def, key, refused: toolStreak >= 4, loopWarn, repeatWarn };
-        });
+        const prepared: PreparedCall[] = LoopGuard.classify(toolCalls, this.toolDefs, turn);
 
         // update_plan is handled by the session (sets this.plan + emits
         // plan_updated) and never runs the generic executor; refused loop calls
         // never run at all.
         const handled = new Map<string, ToolExecutionResult>();
-        const toRun: { p: PreparedCall; startedAt: number }[] = [];
+        const toRun: RunnableCall[] = [];
         for (const p of prepared) {
           if (p.loopWarn) {
             this.recordLedger({ eventType: "loop_detected", tool: p.call.name, inputHash: p.key, outcome: "error", elapsedMs: 0 });
             yield { type: "loop_detected", tool: p.call.name };
-            turnNotes.push(
-              `[Loop guard] ${p.call.name} was repeated 3 times without progress. Stop repeating it and try a different approach.`
-            );
+            turnNotes.push(LoopGuard.warnText(p.call.name, "consecutive"));
           }
           if (p.repeatWarn) {
             this.recordLedger({ eventType: "loop_detected", tool: p.call.name, inputHash: p.key, outcome: "error", elapsedMs: 0 });
             yield { type: "loop_detected", tool: p.call.name };
-            turnNotes.push(
-              `[Loop guard] ${p.call.name} was repeated 3 times this turn (with other calls in between) without progress. Stop repeating it and try a different approach.`
-            );
+            turnNotes.push(LoopGuard.warnText(p.call.name, "non-consecutive"));
           }
           if (p.call.name === "update_plan") {
             const plan = (p.call.input as { plan?: unknown } | undefined)?.plan;
@@ -460,7 +453,7 @@ export class AgentSession {
               });
               continue;
             }
-            if (this.delegationsUsed >= MAX_DELEGATIONS_PER_TURN) {
+            if (!turn.tryConsumeDelegation(MAX_DELEGATIONS_PER_TURN)) {
               this.recordLedger({ eventType: "tool_finished", tool: "delegate_task", inputHash: p.key, outcome: "error", elapsedMs: 0 });
               handled.set(p.call.id, {
                 output: { error: `Delegation limit reached (${MAX_DELEGATIONS_PER_TURN} per turn).` },
@@ -469,7 +462,6 @@ export class AgentSession {
               });
               continue;
             }
-            this.delegationsUsed += 1;
             this.recordLedger({ eventType: "subagent_started", tool: "delegate_task", inputHash: p.key, outcome: "ok", elapsedMs: 0 });
             yield { type: "subagent_started", task };
             const subStartedAt = Date.now();
@@ -485,10 +477,15 @@ export class AgentSession {
               tools: this.toolDefs,
             });
             if (run.aborted) {
+              // Merge even on abort: files changed before the stop persist.
+              this.mergeSubCheckpoints(run.checkpoints);
               this.recordLedger({ eventType: "cancelled", tool: "delegate_task", inputHash: p.key, outcome: "aborted", elapsedMs: Date.now() - subStartedAt });
               yield { type: "cancelled" };
               return;
             }
+            // The sub-ring joins the parent ring (fresh ids, capped): rewind
+            // in the main session reaches sub-agent file writes too.
+            this.mergeSubCheckpoints(run.checkpoints);
             this.recordLedger({
               eventType: "subagent_finished",
               tool: "delegate_task",
@@ -513,11 +510,7 @@ export class AgentSession {
           }
           if (p.refused) {
             this.recordLedger({ eventType: "loop_refused", tool: p.call.name, inputHash: p.key, outcome: "error", elapsedMs: 0 });
-            handled.set(p.call.id, {
-              output: { error: "Repeated identical call blocked by loop guard." },
-              isError: true,
-              summary: "Repeated identical call blocked by loop guard.",
-            });
+            handled.set(p.call.id, LoopGuard.refusedResult());
             continue;
           }
           toRun.push({ p, startedAt: Date.now() });
@@ -526,14 +519,13 @@ export class AgentSession {
         // prompt or execution. Matched by NAME, pre-permission — a denied tool
         // changes nothing, so restoring over it stays correct. Batches with no
         // file writes (reads, run_command-only) snapshot nothing.
-        const rewindTargets: string[] = [];
-        for (const p of prepared) {
-          if (p.call.name !== "write_file" && p.call.name !== "edit_file") continue;
+        const rewindTargets = [...new Set(prepared.flatMap((p) => {
+          if (p.call.name !== "write_file" && p.call.name !== "edit_file") return [];
           const target = (p.call.input as { path?: unknown } | undefined)?.path;
-          if (typeof target === "string" && target.length > 0) rewindTargets.push(target);
-        }
+          return typeof target === "string" && target.length > 0 ? [target] : [];
+        }))];
         if (rewindTargets.length > 0) {
-          const cp = takeSnapshot(this.options.projectRoot, this.checkpointSeq + 1, rewindTargets);
+          const cp = await takeSnapshot(this.options.projectRoot, this.checkpointSeq + 1, rewindTargets);
           if (cp.files.length > 0) {
             this.checkpointSeq = cp.id;
             this.checkpoints = capCheckpoints([...this.checkpoints, cp]);
@@ -541,139 +533,21 @@ export class AgentSession {
             yield { type: "checkpoint", id: cp.id, files: cp.files.length };
           }
         }
-        // A.1.3 declared parallel policy: any mutating call forces the WHOLE batch
-        // serial (single-flight permission prompts; no file/command races). An
-        // all-read-only batch runs concurrently, then results are re-ordered.
-        // Unknown tools (no definition) default to the mutating policy:
-        // serial execution through the permission path. Today they error,
-        // but any future side-effecting executor inherits the safe policy.
-        const anyMutating = toRun.some((t) => t.p.def?.mutating ?? true);
-        const runResults = new Map<string, ToolExecutionResult>();
-        if (anyMutating || toRun.length <= 1) {
-          for (const t of toRun) {
-            const { call, def } = t.p;
-            if (controller.signal.aborted) {
-              this.recordLedger({ eventType: "cancelled", tool: call.name, inputHash: t.p.key, outcome: "aborted", elapsedMs: 0 });
-              yield { type: "cancelled" };
-              return;
-            }
-            if (!def) {
-              const msg = `Unknown tool: ${call.name}`;
-              const result: ToolExecutionResult = { output: { error: msg }, isError: true, summary: msg };
-              yield { type: "tool_finished", id: call.id, name: call.name, result };
-              this.recordLedger({ eventType: "tool_finished", tool: call.name, inputHash: t.p.key, outcome: "error", elapsedMs: Date.now() - t.startedAt });
-              runResults.set(call.id, result);
-              continue;
-            }
-            if (def.mutating) {
-              let summary = `${call.name}`;
-              try {
-                summary = await describeToolInput(call.name, call.input, {
-                  projectRoot: this.options.projectRoot,
-                  signal: controller.signal,
-                });
-              } catch {
-                // preview failure must not block the permission flow
-              }
-              let approved = false;
-              try {
-                // Race the broker against cancel: without this, cancel() during
-                // an open prompt hangs the turn until the user answers it.
-                approved = await new Promise<boolean>((resolve) => {
-                  if (controller.signal.aborted) {
-                    resolve(false);
-                    return;
-                  }
-                  const onAbort = () => resolve(false);
-                  controller.signal.addEventListener("abort", onAbort, { once: true });
-                  this.options.permissionBroker
-                    .requestPermission(def.name, summary)
-                    .then(
-                      (v) => {
-                        controller.signal.removeEventListener("abort", onAbort);
-                        resolve(v);
-                      },
-                      () => {
-                        controller.signal.removeEventListener("abort", onAbort);
-                        resolve(false); // a broken broker denies by default
-                      }
-                    );
-                });
-              } catch {
-                approved = false; // a broken broker denies by default
-              }
-              if (controller.signal.aborted) {
-                this.recordLedger({ eventType: "cancelled", tool: call.name, inputHash: t.p.key, outcome: "aborted", elapsedMs: 0 });
-                yield { type: "cancelled" };
-                return;
-              }
-              if (!approved) {
-                this.recordLedger({ eventType: "tool_permission_denied", tool: call.name, inputHash: t.p.key, outcome: "denied", elapsedMs: Date.now() - t.startedAt });
-                yield { type: "tool_permission_denied", id: call.id, name: call.name };
-                runResults.set(call.id, {
-                  output: { error: "Permission denied by user. The action was NOT performed." },
-                  isError: true,
-                  summary: "Permission denied by user.",
-                });
-                continue;
-              }
-            }
-            yield { type: "tool_started", id: call.id, name: call.name, input: call.input };
-            this.recordLedger({ eventType: "tool_started", tool: call.name, inputHash: t.p.key, outcome: "ok", elapsedMs: 0 });
-            const result = await executeTool(call.name, call.input, {
-              projectRoot: this.options.projectRoot,
-              signal: controller.signal,
-            });
-            yield { type: "tool_finished", id: call.id, name: call.name, result };
-            this.recordLedger({ eventType: "tool_finished", tool: call.name, inputHash: t.p.key, outcome: result.isError ? "error" : "ok", elapsedMs: Date.now() - t.startedAt });
-            runResults.set(call.id, result);
-          }
-        } else {
-          // Concurrent read-only batch — the shared AbortSignal reaches every call.
-          for (const t of toRun) {
-            yield { type: "tool_started", id: t.p.call.id, name: t.p.call.name, input: t.p.call.input };
-            this.recordLedger({ eventType: "tool_started", tool: t.p.call.name, inputHash: t.p.key, outcome: "ok", elapsedMs: 0 });
-          }
-          const outputs = await Promise.all(
-            toRun.map((t) =>
-              executeTool(t.p.call.name, t.p.call.input, {
-                projectRoot: this.options.projectRoot,
-                signal: controller.signal,
-              })
-            )
-          );
-          for (let i = 0; i < toRun.length; i++) {
-            const t = toRun[i];
-            const result = outputs[i];
-            yield { type: "tool_finished", id: t.p.call.id, name: t.p.call.name, result };
-            this.recordLedger({ eventType: "tool_finished", tool: t.p.call.name, inputHash: t.p.key, outcome: result.isError ? "error" : "ok", elapsedMs: Date.now() - t.startedAt });
-            runResults.set(t.p.call.id, result);
-          }
-          if (controller.signal.aborted) {
-            this.recordLedger({ eventType: "cancelled", outcome: "aborted", elapsedMs: 0 });
-            yield { type: "cancelled" };
-            return;
-          }
-        }
+        // Declared parallel policy + execution live in the orchestrator;
+        // results merge here with intercepted outcomes (handled wins) and
+        // rebuild into history in EXACTLY declared call order (F5).
+        const orchestrator = new ToolOrchestrator({
+          projectRoot: this.options.projectRoot,
+          permissionBroker: this.options.permissionBroker,
+          signal: controller.signal,
+          recordLedger: (entry) => this.recordLedger(entry),
+        });
+        const runResults = yield* orchestrator.run(toRun);
+        const outcomes = new Map<string, ToolExecutionResult>([...runResults, ...handled]);
 
-        // Rebuild the tool_result message in EXACTLY the declared call order —
-        // provider replay stability (F5) is non-negotiable whatever the path.
-        const ordered: ConversationMessage["content"] = [];
-        for (const p of prepared) {
-          const outcome = handled.get(p.call.id) ?? runResults.get(p.call.id);
-          if (outcome) {
-            ordered.push({
-              type: "tool_result",
-              result: { toolCallId: p.call.id, content: JSON.stringify(outcome.output), isError: outcome.isError },
-            });
-          }
-        }
         // Loop-guard demands lead the results message as a user-role text part
         // (the data model has no "system" role; recorded in PHASE-8-PROGRESS.md).
-        const parts: ConversationMessage["content"] = [];
-        if (turnNotes.length > 0) parts.push({ type: "text", text: turnNotes.join("\n") });
-        parts.push(...ordered);
-        this.history.push({ role: "user", content: parts });
+        this.history.pushToolResults(prepared, outcomes, turnNotes);
       }
     } catch (err: any) {
       if (controller.signal.aborted) {

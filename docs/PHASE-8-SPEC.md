@@ -158,7 +158,8 @@ runLedger?: RunLedgerEntry[];
 // providers/freeModels.ts (NEW)
 export interface FreeModelSource {
   id: string;
-  getFreeModels(apiKey?: string): Promise<ModelInfo[]>;
+  // AMENDMENT (P2, 2026-09-05): shipped as `fetchFreeModels` — same shape.
+  fetchFreeModels(apiKey?: string): Promise<ModelInfo[]>;
 }
 export interface SourceResult {
   sourceId: string; ok: boolean; count: number;

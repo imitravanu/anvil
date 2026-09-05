@@ -9,6 +9,10 @@ export {
   type LedgerOutcome,
 } from "./ledger.js";
 export { canonicalInputHash } from "./canonical.js";
+export { TurnState } from "./turnState.js";
+export { LoopGuard, type AccumulatedToolCall, type PreparedCall } from "./loopGuard.js";
+export { ToolOrchestrator, type RunnableCall, type OrchestratorDeps } from "./orchestrator.js";
+export { HistoryStore } from "./historyStore.js";
 export {
   CHECKPOINT_KEEP,
   CHECKPOINT_FILE_MAX,

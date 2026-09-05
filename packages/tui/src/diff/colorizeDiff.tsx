@@ -1,7 +1,9 @@
 import React from "react";
-import { Box, Text } from "ink";
+import { Box, Text, useStdout } from "ink";
 import { parseDiff, type DiffRow } from "./parseDiff.js";
 import { pairRows, type WordSeg } from "./wordDiff.js";
+import { useTheme } from "../theme/theme.js";
+import { curtail } from "../util/format.js";
 
 /** Max diff rows rendered in the permission overlay before an omission note. */
 export const MAX_DIFF_ROWS = 40;
@@ -33,14 +35,24 @@ function WordText({ segs, base }: { segs: WordSeg[]; base: string }) {
 }
 
 /**
- * U5 richer diffs: line numbers, paired del/add word highlighting, capped
- * rows. Same props as before — PermissionPrompt needs no changes.
+ * U5 richer diffs (+P1: theme-mapped colors, width-aware line curtail).
+ * Colors come from the active theme (custom themes work); long lines are
+ * curtailed to the terminal width so unbroken code lines can't overflow
+ * narrow terminals. Same props as before — PermissionPrompt needs no changes.
  */
 export function ColorizedDiff({ diff }: { diff: string }) {
+  const theme = useTheme();
+  const { stdout } = useStdout();
+  const width = stdout?.columns ?? 80;
+  // Overlay frame (border + padding) eats ~6 columns; gutter eats ~12.
+  const maxText = Math.max(20, width - 20);
   const rows = React.useMemo(() => parseDiff(diff), [diff]);
   const words = React.useMemo(() => pairRows(rows, (r) => r.text), [rows]);
   const visible = rows.slice(0, MAX_DIFF_ROWS);
   const omitted = rows.length - visible.length;
+  const addColor = theme.colors.toolDone;
+  const delColor = theme.colors.toolError;
+  const hunkColor = theme.colors.accent;
 
   return (
     <Box flexDirection="column">
@@ -49,13 +61,13 @@ export function ColorizedDiff({ diff }: { diff: string }) {
         if (row.kind === "file") {
           return (
             <Text key={key} dimColor bold>
-              {row.text}
+              {curtail(row.text, maxText)}
             </Text>
           );
         }
         if (row.kind === "hunk") {
           return (
-            <Text key={key} color="cyan">
+            <Text key={key} color={hunkColor}>
               {row.text}
             </Text>
           );
@@ -63,7 +75,7 @@ export function ColorizedDiff({ diff }: { diff: string }) {
         if (row.kind === "meta") {
           return (
             <Text key={key} dimColor>
-              {row.text}
+              {curtail(row.text, maxText)}
             </Text>
           );
         }
@@ -71,23 +83,27 @@ export function ColorizedDiff({ diff }: { diff: string }) {
           return (
             <Text key={key} dimColor>
               {gutter(row)}
-              {row.text}
+              {curtail(row.text, maxText)}
             </Text>
           );
         }
         const sign = row.kind === "add" ? "+" : "-";
-        const base = row.kind === "add" ? "green" : "red";
+        const base = row.kind === "add" ? addColor : delColor;
         const segs = words.get(i);
+        // Word highlights are dropped for overlong lines: a curtailed line
+        // can't keep segment alignment, and overflow is the worse failure.
+        const plain = segs ? segs.map((s) => s.text).join("") : row.text;
+        const useWords = segs !== undefined && Array.from(plain).length <= maxText;
         return (
           <Text key={key}>
             <Text color={base} bold>
               {sign}
             </Text>
             <Text dimColor>{gutter(row)}</Text>
-            {segs ? (
+            {useWords ? (
               <WordText segs={segs} base={base} />
             ) : (
-              <Text color={base}>{row.text}</Text>
+              <Text color={base}>{curtail(row.text, maxText)}</Text>
             )}
           </Text>
         );

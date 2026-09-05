@@ -3,6 +3,8 @@ import { Box, Text, useInput } from "ink";
 import { listSessions } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 import { curtail, displayModelLabel } from "../util/format.js";
+import { SESSION_TITLE_MAX, MAX_VISIBLE_ROWS } from "../util/displayLimits.js";
+import { useWindowedList } from "../hooks/useWindowedList.js";
 
 function relativeTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -14,7 +16,7 @@ function relativeTime(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-const MAX_VISIBLE = 8;
+const MAX_VISIBLE = MAX_VISIBLE_ROWS;
 
 /**
  * Session picker overlay. Same "takes over input" pattern as
@@ -45,13 +47,8 @@ export function SessionPicker({
     }
   });
 
-  const scrollOffset =
-    sessions.length <= MAX_VISIBLE
-      ? 0
-      : Math.max(0, Math.min(selected - Math.floor(MAX_VISIBLE / 2), sessions.length - MAX_VISIBLE));
+  const { offset: scrollOffset, hasAbove, hasBelow } = useWindowedList(sessions.length, selected);
   const visibleSessions = sessions.slice(scrollOffset, scrollOffset + MAX_VISIBLE);
-  const hasAbove = scrollOffset > 0;
-  const hasBelow = scrollOffset + MAX_VISIBLE < sessions.length;
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={theme.colors.primary} paddingX={1}>
@@ -69,7 +66,7 @@ export function SessionPicker({
             return (
               <Text key={meta.id} color={isSelected ? theme.colors.primary : undefined}>
                 {isSelected ? "❯ " : "  "}
-                {curtail(meta.title, 40)} · {displayModelLabel(meta.model)} · updated {relativeTime(meta.updatedAt)}
+                {curtail(meta.title, SESSION_TITLE_MAX)} · {displayModelLabel(meta.model)} · updated {relativeTime(meta.updatedAt)}
               </Text>
             );
           })}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { randomUUID } from "node:crypto";
 import { AgentSession, type AgentEvent } from "@anvil/core";
 import { retainReport, type SubAgentRecord } from "../util/subagent.js";
+import { HISTORY_RECALL_CAP, TRANSCRIPT_STATE_CAP } from "../util/displayLimits.js";
 
 export type DisplaySubAgent = SubAgentRecord;
 
@@ -9,7 +10,7 @@ export interface DisplayToolCall {
   id: string;
   name: string;
   input: unknown;
-  status: "running" | "done" | "error";
+  status: "running" | "done" | "error" | "cancelled";
   summary?: string;
   /** Full tool result output, retained capped (see OUTPUT_RETAIN_MAX) for /expand. */
   output?: unknown;
@@ -18,14 +19,32 @@ export interface DisplayToolCall {
 /** Cap retained output so long sessions can't bloat React state. */
 export const OUTPUT_RETAIN_MAX = 6000;
 
+/** Per-string cap inside retained output (the total cap alone still spikes). */
+const RETAIN_STRING_MAX = 2000;
+
 export function retainOutput(output: unknown): unknown {
   let text: string;
   try {
-    text = JSON.stringify(output) ?? String(output);
+    // Cap long strings DURING serialization: stringifying a multi-megabyte
+    // tool result in full just to slice it would spike memory first.
+    text =
+      JSON.stringify(output, (_key, value) =>
+        typeof value === "string" && value.length > RETAIN_STRING_MAX
+          ? value.slice(0, RETAIN_STRING_MAX) + "…[truncated]"
+          : value
+      ) ?? String(output);
   } catch {
     return { note: "[output not serializable for display]" };
   }
-  if (text.length <= OUTPUT_RETAIN_MAX) return output;
+  // Return the capped parse (never the original reference): retained display
+  // state stays bounded no matter how large the tool result was.
+  if (text.length <= OUTPUT_RETAIN_MAX) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { truncated: text, note: "[output truncated for display]" };
+    }
+  }
   return { truncated: text.slice(0, OUTPUT_RETAIN_MAX), note: "[output truncated for display]" };
 }
 
@@ -58,12 +77,17 @@ export function useAgentController(session: AgentSession) {
   const [plan, setPlan] = useState<string | null>(session.plan ?? null);
   useEffect(() => {
     setPlan(session.plan ?? null);
+    // Usage totals belong to the session too — a fresh/cleared transcript
+    // must not show the previous session's spend in the StatusBar.
+    setUsage({ inputTokens: 0, outputTokens: 0 });
   }, [session]);
 
   const send = useCallback(
     async (text: string) => {
       if (isBusy) return; // simplest policy for this phase: ignore input while busy
-      setSentHistory((prev) => [...prev, text]); // session-scoped recall history
+      // Bounded state: recall needs dozens, not thousands; the transcript window
+      // renders a handful while history truth lives in the session file.
+      setSentHistory((prev) => [...prev, text].slice(-HISTORY_RECALL_CAP));
       const userMsg: DisplayMessage = {
         id: randomUUID(),
         role: "user",
@@ -74,11 +98,14 @@ export function useAgentController(session: AgentSession) {
       };
       const assistantId = randomUUID();
       currentAssistantId.current = assistantId;
-      setMessages((prev) => [
-        ...prev,
-        userMsg,
-        { id: assistantId, role: "assistant", text: "", streaming: true, toolCalls: [], subAgents: [] },
-      ]);
+      setMessages((prev) => {
+        const next: DisplayMessage[] = [
+          ...prev,
+          userMsg,
+          { id: assistantId, role: "assistant", text: "", streaming: true, toolCalls: [], subAgents: [] },
+        ];
+        return next.length > TRANSCRIPT_STATE_CAP ? next.slice(-TRANSCRIPT_STATE_CAP) : next;
+      });
       setIsBusy(true);
 
       const updateAssistant = (fn: (m: DisplayMessage) => DisplayMessage) => {
@@ -188,7 +215,13 @@ function applyEvent(
       }));
       break;
     case "error":
-      update((m) => ({ ...m, text: m.text + `\n[error: ${event.message}]` }));
+      update((m) => ({
+        ...m,
+        text: m.text + `\n[error: ${event.message}]`,
+        toolCalls: m.toolCalls.map((t) =>
+          t.status === "running" ? { ...t, status: "error" as const, summary: "Turn failed" } : t
+        ),
+      }));
       break;
     case "compacted":
       setMessages((prev) => [
@@ -268,6 +301,9 @@ function applyEvent(
       // (The for-await loop ending still flips streaming/isBusy as before.)
       update((m) => ({
         ...m,
+        toolCalls: m.toolCalls.map((t) =>
+          t.status === "running" ? { ...t, status: "cancelled" as const, summary: "Cancelled" } : t
+        ),
         subAgents: m.subAgents.map((s) => (s.status === "running" ? { ...s, status: "cancelled" } : s)),
       }));
       break;

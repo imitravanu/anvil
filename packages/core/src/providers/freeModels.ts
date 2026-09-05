@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { ModelInfo } from "./types.js";
 import { MODEL_REGISTRY, registerModel } from "./registry.js";
 import { loadModelsCacheV2, saveModelsCacheV2, ModelsCacheV2 } from "./cache.js";
@@ -52,7 +53,9 @@ export async function fetchOpenRouterFreeModels(apiKey?: string): Promise<ModelI
 
     const freeModels: ModelInfo[] = [];
     for (const m of json.data) {
-      const isZeroPrice = m.pricing?.prompt === "0" && m.pricing?.completion === "0";
+      // Pricing may arrive as "0" or 0 depending on the API version — accept both.
+      const isZeroPrice =
+        String(m.pricing?.prompt ?? "") === "0" && String(m.pricing?.completion ?? "") === "0";
       const isFreeId =
         typeof m.id === "string" && (m.id.endsWith(":free") || m.id === "openrouter/free");
       if (!isZeroPrice && !isFreeId) continue;
@@ -119,20 +122,51 @@ export function isRateLimitMessage(message: string): boolean {
 }
 // --- The single owner of free-model sync (B.2). ---
 
-// Module-level state keeps one in-flight promise + one freshness clock per
-// process. Seeded from the persisted v2 cache so a boot inside the TTL does not
-// hammer the source again.
-let inFlight: Promise<SyncReport> | null = null;
-let lastRefreshedAt: number | null = null;
-let lastReport: SyncReport | null = null;
-try {
-  const cached = loadModelsCacheV2();
-  if (cached.syncedAt) {
-    const at = Date.parse(cached.syncedAt);
-    if (!Number.isNaN(at)) lastRefreshedAt = at;
+// Per-key flight + freshness state. The old code shared ONE global promise
+// and clock across all callers (wrong creds shared, import-time ANVIL_HOME
+// seeding) — keyed by sources + ttl + key-hash instead. Key hashes (never
+// raw keys) so secrets never sit in process-visible state.
+
+const flights = new Map<string, Promise<SyncReport>>();
+const freshness = new Map<string, { at: number; report: SyncReport | null }>();
+
+function flightKey(
+  sources: FreeModelSource[],
+  apiKeyBySource: Record<string, string | undefined> | undefined
+): string {
+  const keyHash = createHash("sha256")
+    .update(
+      sources
+        .map((s) => `${s.id}:${apiKeyBySource?.[s.id] ?? ""}`)
+        .sort()
+        .join("|"),
+      "utf8"
+    )
+    .digest("hex")
+    .slice(0, 16);
+  // NOTE: ttlMs is deliberately NOT part of the key — it is a read policy
+  // for the freshness window, not an identity. Same sources+keys share.
+  return `${sources.map((s) => s.id).sort().join(",")}|${keyHash}`;
+}
+
+/** Lazy freshness seed from the persisted cache (no import-time ANVIL_HOME read). */
+function seedFreshness(key: string): { at: number; report: SyncReport | null } | null {
+  const existing = freshness.get(key);
+  if (existing) return existing;
+  try {
+    const cached = loadModelsCacheV2();
+    if (cached.syncedAt) {
+      const at = Date.parse(cached.syncedAt);
+      if (!Number.isNaN(at)) {
+        const seeded = { at, report: null as SyncReport | null };
+        freshness.set(key, seeded);
+        return seeded;
+      }
+    }
+  } catch {
+    // ignore — unseeded behaves as never-synced
   }
-} catch {
-  // ignore
+  return null;
 }
 
 /**
@@ -218,17 +252,24 @@ export async function syncFreeModels(opts: {
   ttlMs?: number;
 }): Promise<SyncReport> {
   const ttlMs = opts.ttlMs ?? DEFAULT_SYNC_TTL_MS;
+  const key = flightKey(opts.sources, opts.apiKeyBySource);
 
-  // Single-flight: concurrent callers all share ONE actual sync.
-  if (inFlight) return inFlight;
+  // Single-flight PER KEY: concurrent callers with the same sources/ttl/keys
+  // share one sync; different options fly separately (the old global shared
+  // across different creds).
+  const flying = flights.get(key);
+  if (flying) return flying;
 
   // TTL: a refresh within the window is a no-op (report the data's true age).
-  if (ttlMs > 0 && lastRefreshedAt !== null && Date.now() - lastRefreshedAt < ttlMs) {
-    if (lastReport) return lastReport;
-    const fromCache = reportFromCache(opts.sources);
-    if (fromCache) {
-      lastReport = fromCache;
-      return fromCache;
+  if (ttlMs > 0) {
+    const fresh = freshness.get(key) ?? seedFreshness(key);
+    if (fresh && Date.now() - fresh.at < ttlMs) {
+      if (fresh.report) return fresh.report;
+      const fromCache = reportFromCache(opts.sources);
+      if (fromCache) {
+        fresh.report = fromCache;
+        return fromCache;
+      }
     }
   }
 
@@ -251,10 +292,20 @@ export async function syncFreeModels(opts: {
           if (!Array.isArray(models)) throw new Error("fetchFreeModels did not return an array");
           result.models = models;
           result.count = models.length;
-          const providerId = models[0]?.providerId ?? src.id;
-          const change = mergeFreeModels(providerId, models);
-          result.newlyFree = change.newlyFree;
-          result.noLongerFree = change.noLongerFree;
+          // A source may serve several providers: merge per provider group
+          // instead of attributing the whole list to the first model's owner.
+          const byProvider = new Map<string, ModelInfo[]>();
+          for (const m of models) {
+            const pid = m.providerId ?? src.id;
+            const list = byProvider.get(pid);
+            if (list) list.push(m);
+            else byProvider.set(pid, [m]);
+          }
+          for (const [pid, list] of byProvider) {
+            const change = mergeFreeModels(pid, list);
+            result.newlyFree.push(...change.newlyFree);
+            result.noLongerFree.push(...change.noLongerFree);
+          }
           result.ok = true;
         } catch (err) {
           result.error = err instanceof Error ? err.message : String(err);
@@ -264,27 +315,34 @@ export async function syncFreeModels(opts: {
     );
 
     const okOutcomes = outcomes.filter((o) => o.ok);
-    // Persist cache v2 only after a successful merge — never a partial state.
+    // Persist merge-preserving cache: overwrite ONLY succeeded sources, keep
+    // stale entries for failed ones. A transient single-source failure must
+    // not wipe that source's cached models while stamping "fresh".
     if (okOutcomes.length > 0) {
       const now = new Date().toISOString();
-      const sources: Record<string, ModelInfo[]> = {};
+      const previous = loadModelsCacheV2().sources;
+      const sources: Record<string, ModelInfo[]> = { ...previous };
       for (const o of okOutcomes) sources[o.sourceId] = o.models;
       const cache: ModelsCacheV2 = { version: 2, syncedAt: now, sources };
       saveModelsCacheV2(cache);
       report.refreshedAt = now;
-      lastRefreshedAt = Date.now();
     }
 
     report.results = outcomes.map(({ models: _models, ...rest }) => rest);
     report.errors = outcomes.filter((o) => !o.ok).map((o) => `[${o.sourceId}] ${o.error ?? "unknown error"}`);
-    lastReport = report;
+    // Record freshness only on partial-or-better success: an all-failed sync
+    // leaves the previous clock alone so the next call retries instead of
+    // serving the failure from TTL.
+    if (okOutcomes.length > 0) {
+      freshness.set(key, { at: Date.now(), report });
+    }
     return report;
   })();
 
-  inFlight = exec;
+  flights.set(key, exec);
   try {
-    return await inFlight;
+    return await exec;
   } finally {
-    inFlight = null;
+    flights.delete(key);
   }
 }

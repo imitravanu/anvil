@@ -1,7 +1,7 @@
 import { Box, Text, useStdout } from "ink";
 import { MODEL_REGISTRY } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
-import { curtail, displayModelLabel, providerOfModel, providerLabel } from "../util/format.js";
+import { curtail, displayModelLabel, providerOfModel, providerLabel, formatPricingTag } from "../util/format.js";
 
 interface HeaderProps {
   model: string;
@@ -16,7 +16,7 @@ export function Header({ model, isBusy }: HeaderProps) {
   const provider = info ? providerLabel(providerOfModel(model) ?? info.providerId) : "Anvil";
   const modelName = displayModelLabel(model);
   const state = isBusy ? "busy" : "idle";
-  const right = `${provider} · ${modelName}${info?.isFree ? " [FREE]" : ""}`;
+  const right = `${provider} · ${modelName}${formatPricingTag(info?.isFree)}`;
   const maxRight = Math.max(12, width - 20);
   return (
     <Box justifyContent="space-between" paddingX={theme.spacing.panelPaddingX}>

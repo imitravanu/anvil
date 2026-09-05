@@ -91,7 +91,9 @@ export function createStdioTransport(command, args, env): McpTransport;
 export interface McpTool { serverId: string; name: string; description: string; inputSchema: Record<string, unknown>; readOnly: boolean }
 export interface McpServerConnection {
   id: string;
-  status: "ready" | "error" | "misconfigured";
+  // (AMENDMENT, P2: `misconfigured` never shipped — config problems stay
+  // strings in the problems list; connections only ever report ready|error.)
+  status: "ready" | "error";
   error?: string;
   tools: McpTool[];
 }
@@ -123,8 +125,11 @@ export function toToolDefinitions(serverId, tools: McpTool[]): ToolDefinition[];
 // mutating: true UNLESS annotations.readOnlyHint === true. Unknown external
 //   tools prompt by DEFAULT — safe direction, matches U11.
 export function createMcpExecutor(conns: Map<id, conn>): ToolExecutor;
-// routes by parsing the serverId back out of the name; unknown/misconfigured/
-// error-status server → isError result (never throws into the loop).
+// (AMENDMENT, P2: ships as a getter closure `() => conns` + an optional
+// describe fn — `registerExternalExecutor(prefix, exec, describe?)` — so
+// reconnects refresh routing with no stale map.)
+// routes by scanning live connections for the full namespaced name;
+// unknown/error-status server → isError result (never throws into the loop).
 ```
 
 - `executeTool` gains an external-executor fallback: unknown name →

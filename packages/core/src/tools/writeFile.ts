@@ -34,8 +34,13 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   const abs = resolveWithinRoot(ctx.projectRoot, relPath);
   let existed = false;
   let prevBytes = 0;
+  let prevMode: number | undefined;
   try {
-    prevBytes = (await fs.stat(abs)).size;
+    const stat = await fs.stat(abs);
+    prevBytes = stat.size;
+    // Preserve the executable bit (and friends) across overwrites — a plain
+    // writeFile would reset scripts to 0644&~umask.
+    prevMode = stat.mode & 0o777;
     existed = true;
   } catch {
     // new file
@@ -43,6 +48,13 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   await fs.mkdir(path.dirname(abs), { recursive: true });
   if (ctx.signal.aborted) throw new Error("Aborted before writing");
   await fs.writeFile(abs, content, "utf8");
+  if (existed && prevMode !== undefined) {
+    try {
+      await fs.chmod(abs, prevMode);
+    } catch {
+      // best-effort: the write itself succeeded
+    }
+  }
   return {
     output: { path: relPath, bytes, overwrote: existed },
     isError: false,
@@ -50,12 +62,18 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   };
 };
 
-// Permission-prompt preview, computed WITHOUT writing.
+// Permission-prompt preview, computed WITHOUT writing. Capped: previewing a
+// huge file must not drag megabytes into the prompt.
 export const describe = async (input: unknown, ctx: ToolContext): Promise<string> => {
   const { path: relPath, content } = input as { path: string; content: string };
   const bytes = Buffer.byteLength(content ?? "", "utf8");
   try {
-    const prev = await fs.readFile(resolveWithinRoot(ctx.projectRoot, relPath), "utf8");
+    const abs = resolveWithinRoot(ctx.projectRoot, relPath);
+    const stat = await fs.stat(abs);
+    if (stat.size > MAX_WRITE_BYTES) {
+      return `Overwrite ${relPath} (${bytes} bytes; current file exceeds the ${MAX_WRITE_BYTES}-byte edit limit and cannot be previewed fully)`;
+    }
+    const prev = await fs.readFile(abs, "utf8");
     return `Overwrite ${relPath} (${bytes} bytes, currently ${Buffer.byteLength(prev, "utf8")} bytes)`;
   } catch {
     return `Create ${relPath} (${bytes} bytes)`;

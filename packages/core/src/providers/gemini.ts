@@ -28,11 +28,27 @@ export interface RawGeminiChunk {
 
 export function mapGeminiFinishReason(
   reason: string | null | undefined
-): "end_turn" | "tool_use" | "max_tokens" | "unknown" {
+): "end_turn" | "tool_use" | "max_tokens" | "error" | "unknown" {
   if (reason === "STOP") return "end_turn";
   if (reason === "MAX_TOKENS") return "max_tokens";
+  // Safety/system blocks are failures, not normal turns — they must never
+  // look like end_turn to the loop.
+  if (
+    reason === "SAFETY" ||
+    reason === "RECITATION" ||
+    reason === "BLOCKLIST" ||
+    reason === "PROHIBITED_CONTENT" ||
+    reason === "MALFORMED_FUNCTION_CALL"
+  ) {
+    return "error";
+  }
   return "unknown";
 }
+
+// Module-level: synthetic ids must be unique across turns, not just within
+// one. toGeminiContents rebuilds its id→name map over the FULL history, so a
+// per-turn counter colliding (gemini_call_1 every turn) misattributes replays.
+let geminiCallCounter = 0;
 
 /**
  * Gemini error messages sometimes arrive as one or two layers of nested JSON
@@ -61,7 +77,6 @@ export function geminiErrorMessage(err: unknown): string {
 export async function* translateGeminiChunkStream(
   raw: AsyncIterable<RawGeminiChunk>
 ): AsyncGenerator<StreamEvent> {
-  let callCounter = 0;
   let sawFunctionCall = false;
   let finishReason: string | null = null;
   // Gemini attaches usageMetadata to many chunks with growing/cumulative
@@ -78,7 +93,7 @@ export async function* translateGeminiChunkStream(
           if (part.text) yield { type: "text_delta", text: part.text };
         } else if (part.functionCall) {
           sawFunctionCall = true;
-          const id = part.functionCall.id ?? `gemini_call_${++callCounter}`;
+          const id = part.functionCall.id ?? `gemini_call_${++geminiCallCounter}`;
           const name = part.functionCall.name ?? "";
           yield { type: "tool_call_start", id, name };
           yield {
@@ -110,13 +125,19 @@ export async function* translateGeminiChunkStream(
     yield { type: "usage", ...usage };
   }
 
-  // Gemini has no dedicated stop reason for function-call turns (it reports
-  // STOP); if we saw a call this turn, report tool_use so the agent loop knows
-  // to execute tools and continue.
-  if (sawFunctionCall) {
+  // Stop-reason precedence is honesty-critical: a cutoff or block must never
+  // masquerade as a normal tool turn. MAX_TOKENS wins over calls (the turn was
+  // cut); mapped errors (safety etc.) win over everything except transport
+  // errors (already yielded above). Plain STOP + calls is the only tool_use.
+  const mapped = mapGeminiFinishReason(finishReason);
+  if (mapped === "error") {
+    yield { type: "turn_end", stopReason: "error" };
+  } else if (mapped === "max_tokens") {
+    yield { type: "turn_end", stopReason: "max_tokens" };
+  } else if (sawFunctionCall) {
     yield { type: "turn_end", stopReason: "tool_use" };
   } else if (finishReason) {
-    yield { type: "turn_end", stopReason: mapGeminiFinishReason(finishReason) };
+    yield { type: "turn_end", stopReason: mapped };
   } else {
     yield { type: "turn_end", stopReason: "unknown" };
   }

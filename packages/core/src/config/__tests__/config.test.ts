@@ -63,9 +63,12 @@ describe("resolveProviderSelection", () => {
     expect(() =>
       resolveProviderSelection({ flagProvider: "anthropic", creds: geminiOnly })
     ).toThrow(ProviderSelectionError);
+  });
+
+  it("distinguishes unknown provider ids (typos) from missing keys", () => {
     expect(() =>
       resolveProviderSelection({ envProvider: "not-a-provider", creds: geminiOnly })
-    ).toThrow(/not configured/);
+    ).toThrow(/Unknown provider "not-a-provider"/);
   });
 });
 

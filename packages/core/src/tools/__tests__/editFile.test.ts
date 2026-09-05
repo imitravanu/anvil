@@ -83,6 +83,17 @@ describe("edit_file", () => {
     );
   });
 
+  it("describe() refuses multi-match instead of previewing a first-match diff", async () => {
+    await fs.writeFile(path.join(root, "dup.txt"), "same\nsame\n");
+    const preview = await editFileTool.describe(
+      { path: "dup.txt", old_str: "same", new_str: "other" },
+      ctx
+    );
+    expect(preview).toContain("preview unavailable");
+    expect(preview).toContain("2 times");
+    expect(preview).not.toContain("+++ b/");
+  });
+
   it("refuses files over the size cap without reading them fully", async () => {
     const big = "z".repeat(MAX_WRITE_BYTES + 1024);
     await fs.writeFile(path.join(root, "big.txt"), big);

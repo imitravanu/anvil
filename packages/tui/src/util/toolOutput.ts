@@ -1,13 +1,6 @@
+import { capLines } from "./displayLimits.js";
 /** U6 expandable tool output: render a retained tool result as capped lines. */
-export const MAX_OUTPUT_LINES = 30;
-
-function capLines(lines: string[]): string[] {
-  if (lines.length <= MAX_OUTPUT_LINES) return lines;
-  return [
-    ...lines.slice(0, MAX_OUTPUT_LINES),
-    `… ${lines.length - MAX_OUTPUT_LINES} more line(s) omitted`,
-  ];
-}
+export { EXPANDED_MAX_LINES as MAX_OUTPUT_LINES } from "./displayLimits.js";
 
 /** Format a retained tool-call output for expanded display. Pure. */
 export function formatToolOutput(output: unknown): string[] {

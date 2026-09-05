@@ -20,7 +20,10 @@ describe("mapGeminiFinishReason", () => {
   it("maps known finish reasons", () => {
     expect(mapGeminiFinishReason("STOP")).toBe("end_turn");
     expect(mapGeminiFinishReason("MAX_TOKENS")).toBe("max_tokens");
-    expect(mapGeminiFinishReason("SAFETY")).toBe("unknown");
+    // Safety/system blocks are failures, never normal turns (P1).
+    expect(mapGeminiFinishReason("SAFETY")).toBe("error");
+    expect(mapGeminiFinishReason("RECITATION")).toBe("error");
+    expect(mapGeminiFinishReason("SOMETHING_ELSE")).toBe("unknown");
   });
 });
 
@@ -101,6 +104,55 @@ describe("translateGeminiChunkStream", () => {
       { type: "tool_call_end", id: "fc1", name: "read_file", input: { path: "a" } },
       { type: "turn_end", stopReason: "tool_use" },
     ]);
+  });
+
+  it("reports max_tokens over tool_use when the turn was cut off mid-call", async () => {
+    const events = await collect(
+      translateGeminiChunkStream(
+        of([
+          {
+            candidates: [
+              {
+                content: {
+                  parts: [{ functionCall: { id: "fc9", name: "read_file", args: {} } }],
+                },
+              },
+            ],
+          },
+          { candidates: [{ finishReason: "MAX_TOKENS" }] },
+        ])
+      )
+    );
+    expect(events[events.length - 1]).toEqual({ type: "turn_end", stopReason: "max_tokens" });
+  });
+
+  it("reports safety blocks as errors, never as normal turns", async () => {
+    for (const reason of ["SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT"]) {
+      const events = await collect(
+        translateGeminiChunkStream(of([{ candidates: [{ finishReason: reason }] }]))
+      );
+      expect(events[events.length - 1]).toEqual({ type: "turn_end", stopReason: "error" });
+    }
+    expect(mapGeminiFinishReason("SAFETY")).toBe("error");
+    expect(mapGeminiFinishReason("STOP")).toBe("end_turn");
+  });
+
+  it("synthesizes call ids unique across turns", async () => {
+    const one = await collect(
+      translateGeminiChunkStream(
+        of([{ candidates: [{ content: { parts: [{ functionCall: { name: "a", args: {} } }] } }] }])
+      )
+    );
+    const two = await collect(
+      translateGeminiChunkStream(
+        of([{ candidates: [{ content: { parts: [{ functionCall: { name: "a", args: {} } }] } }] }])
+      )
+    );
+    const id1 = (one[0] as { id: string }).id;
+    const id2 = (two[0] as { id: string }).id;
+    expect(id1).toMatch(/^gemini_call_\d+$/);
+    expect(id2).toMatch(/^gemini_call_\d+$/);
+    expect(id1).not.toBe(id2);
   });
 
   it("produces exactly one error event (no throw) when the stream fails", async () => {

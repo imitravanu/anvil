@@ -48,7 +48,9 @@ export const CHECKPOINT_KEEP = 5;          // ring size per session
 export const CHECKPOINT_FILE_MAX = 512 * 1024; // per-file cap (== tool read/write caps)
 export const CHECKPOINT_TOTAL_MAX = 2 * 1024 * 1024; // per-checkpoint byte cap
 
-export function takeSnapshot(projectRoot: string, paths: string[]): Checkpoint-ish
+export function takeSnapshot(projectRoot: string, id: number, paths: string[]): Checkpoint
+// (AMENDMENT, P2: id assigned by the caller — the session only bumps its
+// sequence when files were actually snapshotted.)
 // takeSnapshot resolves each path with resolveWithinRoot; unresolvable paths
 // are SKIPPED (counted in `skipped`), never thrown — a hostile path must not
 // break the turn it rides in. Files larger than FILE_MAX are skipped too.
@@ -74,7 +76,8 @@ export async function restoreCheckpoint(projectRoot, cp): Promise<{ restored: st
 - New event: `{ type: "checkpoint"; id: number; files: number }`.
 - Public API:
   ```ts
-  getCheckpoints(): readonly Checkpoint[];   // metadata view (no contents)
+  getCheckpoints(): CheckpointMeta[];   // metadata view (no contents)
+  // (AMENDMENT, P2: ships metadata-only — contents never leave the session.)
   rewind(id: number): Promise<{ ok: boolean; restored: string[]; deleted: string[]; errors: string[]; message: string }>;
   ```
   `rewind` restores via `restoreCheckpoint`, records ledger `rewind`

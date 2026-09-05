@@ -20,8 +20,7 @@ function isSpace(tok: string): boolean {
 }
 
 /** LCS table over two token lists (content tokens only). */
-function lcsTable(a: string[], b: string[]): number[][] {
-  const dp: number[][] = Array.from({ length: a.length + 1 }, () =>
+function lcsTable(a: string[], b: string[]): number[][] {  const dp: number[][] = Array.from({ length: a.length + 1 }, () =>
     new Array<number>(b.length + 1).fill(0)
   );
   for (let i = a.length - 1; i >= 0; i--) {
@@ -39,6 +38,14 @@ export function diffWords(delLine: string, addLine: string): { del: WordSeg[]; a
   const b = tokenize(addLine);
   const aContent = a.filter((t) => !isSpace(t));
   const bContent = b.filter((t) => !isSpace(t));
+  // Bail-out: LCS is O(n*m) — a minified 10k-token line in the permission
+  // overlay would hang the UI. Fully-changed is the honest fallback.
+  if (aContent.length * bContent.length > 50_000) {
+    return {
+      del: a.map((text) => ({ text, changed: !isSpace(text) })),
+      add: b.map((text) => ({ text, changed: !isSpace(text) })),
+    };
+  }
   const dp = lcsTable(aContent, bContent);
 
   // Walk back through content tokens to find the LCS membership.

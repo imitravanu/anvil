@@ -1,6 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { anvilHome } from "../atomicWrite.js";
 
 // ---------------------------------------------------------------------------
 // MCP server configuration (~/.anvil/mcp.json, ANVIL_HOME-honoring).
@@ -36,10 +36,7 @@ export const DEFAULT_MCP_TIMEOUT_MS = 60_000;
 const SERVER_ID_RE = /^[a-z0-9-_]{1,40}$/;
 
 export function mcpConfigPath(): string {
-  const home = process.env.ANVIL_HOME
-    ? path.resolve(process.env.ANVIL_HOME)
-    : path.join(os.homedir(), ".anvil");
-  return path.join(home, "mcp.json");
+  return path.join(anvilHome(), "mcp.json");
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {

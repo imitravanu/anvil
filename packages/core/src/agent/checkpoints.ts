@@ -1,4 +1,4 @@
-import fs from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { resolveWithinRoot } from "../tools/paths.js";
 
@@ -44,9 +44,10 @@ export function checkpointMeta(cp: Checkpoint): CheckpointMeta {
 /**
  * Snapshot `paths` against `projectRoot` with an assigned id. Hostile or
  * malformed targets are SKIPPED (counted), never thrown — checkpoint code
- * rides inside the turn and must not break it.
+ * rides inside the turn and must not break it. Async throughout: snapshots
+ * run inside `send()` and must not block the event loop on big files.
  */
-export function takeSnapshot(projectRoot: string, id: number, paths: string[]): Checkpoint {
+export async function takeSnapshot(projectRoot: string, id: number, paths: string[]): Promise<Checkpoint> {
   const files: FileSnapshot[] = [];
   let skipped = 0;
   let total = 0;
@@ -62,29 +63,33 @@ export function takeSnapshot(projectRoot: string, id: number, paths: string[]): 
       skipped += 1;
       continue;
     }
-    let content: Buffer | null = null;
+    // Open-then-fstat-then-bounded-read: the size check and the read observe
+    // the same open file description, so growth between check and read cannot
+    // bust the caps (the old statSync+readFileSync pair had that TOCTOU).
+    let fh: fs.FileHandle | null = null;
     try {
-      const stat = fs.statSync(resolved);
-      if (!stat.isFile()) {
+      fh = await fs.open(resolved, "r");
+      const stat = await fh.stat();
+      if (!stat.isFile() || stat.size > CHECKPOINT_FILE_MAX || total + stat.size > CHECKPOINT_TOTAL_MAX) {
         skipped += 1;
         continue;
       }
-      if (stat.size > CHECKPOINT_FILE_MAX || total + stat.size > CHECKPOINT_TOTAL_MAX) {
-        skipped += 1;
-        continue;
-      }
-      content = fs.readFileSync(resolved);
+      const content = Buffer.alloc(stat.size);
+      await fh.read(content, 0, stat.size, 0);
       total += content.length;
+      files.push({ path: p, content });
     } catch {
       // Missing file is a legitimate snapshot (rewind deletes the creation);
-      // only real read failures skip. Distinguish via existsSync.
-      if (fs.existsSync(resolved)) {
+      // only real read failures skip. Distinguish via existence.
+      try {
+        await fs.access(resolved);
         skipped += 1;
-        continue;
+      } catch {
+        files.push({ path: p, content: null });
       }
-      content = null;
+    } finally {
+      await fh?.close().catch(() => undefined);
     }
-    files.push({ path: p, content });
   }
   return { id, ts: new Date().toISOString(), files, skipped };
 }
@@ -123,11 +128,11 @@ export async function restoreCheckpoint(
     }
     try {
       if (f.content === null) {
-        fs.rmSync(resolved, { force: true });
+        await fs.rm(resolved, { force: true });
         deleted.push(f.path);
       } else {
-        fs.mkdirSync(path.dirname(resolved), { recursive: true });
-        fs.writeFileSync(resolved, f.content);
+        await fs.mkdir(path.dirname(resolved), { recursive: true });
+        await fs.writeFile(resolved, f.content);
         restored.push(f.path);
       }
     } catch (err: any) {

@@ -49,6 +49,16 @@ describe("ToolCallView", () => {
     expect(out).toContain("Denied");
     unmount();
   });
+
+  it("renders cancelled calls distinctly from errors", () => {
+    const { lastFrame, unmount } = renderThemed(
+      <ToolCallView call={{ ...doneCall, status: "cancelled", summary: "Cancelled" }} />
+    );
+    const out = frameText(lastFrame);
+    expect(out).toContain("○");
+    expect(out).toContain("Cancelled");
+    unmount();
+  });
 });
 
 const doneSub: DisplaySubAgent = {

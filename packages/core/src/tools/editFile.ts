@@ -44,6 +44,18 @@ async function computeEdit(
     throw new Error(`File exceeds the ${MAX_WRITE_BYTES}-byte edit limit (${stat.size} bytes).`);
   }
   const current = await fs.readFile(abs, "utf8");
+  // Validate uniqueness BEFORE diffing: the preview used to render a
+  // first-match diff for calls that execute() would then refuse as multi-match.
+  const matches = countOccurrences(current, input.old_str);
+  if (input.old_str === "" || matches === 0) {
+    throw new EditValidationError("old_str not found in file", `edit_file failed: old_str not found in ${input.path}`);
+  }
+  if (matches > 1) {
+    throw new EditValidationError(
+      `old_str matches ${matches} times; it must match exactly once`,
+      `edit_file failed: old_str matches ${matches} times in ${input.path}`
+    );
+  }
   const updated = current.replace(input.old_str, () => input.new_str);
   const diff = createTwoFilesPatch(
     `a/${input.path}`,
@@ -57,31 +69,29 @@ async function computeEdit(
   return { abs, current, updated, diff };
 }
 
+/** Validation failures carry their exact user-facing output + summary. */
+class EditValidationError extends Error {
+  readonly summary: string;
+  constructor(output: string, summary: string) {
+    super(output);
+    this.name = "EditValidationError";
+    this.summary = summary;
+  }
+}
+
 export const execute: ToolExecutor = async (rawInput, ctx: ToolContext) => {
   const input = rawInput as EditInput;
   let result: Awaited<ReturnType<typeof computeEdit>>;
   try {
     result = await computeEdit(input, ctx);
   } catch (err) {
+    if (err instanceof EditValidationError) {
+      return { output: { error: err.message }, isError: true, summary: err.summary };
+    }
     return {
       output: { error: (err as Error).message },
       isError: true,
       summary: `edit_file failed on ${input.path}: ${(err as Error).message}`,
-    };
-  }
-  const matches = countOccurrences(result.current, input.old_str);
-  if (input.old_str === "" || matches === 0) {
-    return {
-      output: { error: "old_str not found in file" },
-      isError: true,
-      summary: `edit_file failed: old_str not found in ${input.path}`,
-    };
-  }
-  if (matches > 1) {
-    return {
-      output: { error: `old_str matches ${matches} times; it must match exactly once` },
-      isError: true,
-      summary: `edit_file failed: old_str matches ${matches} times in ${input.path}`,
     };
   }
   if (ctx.signal.aborted) throw new Error("Aborted before writing");

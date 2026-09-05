@@ -1,16 +1,7 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { atomicWriteJson } from "../atomicWrite.js";
+import { anvilHome, atomicWriteJson } from "../atomicWrite.js";
 import type { ModelInfo } from "./types.js";
-
-// ANVIL_HOME lets tests (and future users) relocate the data dir; it must be
-// resolved lazily because the env can be set after this module is imported.
-function anvilHome(): string {
-  return process.env.ANVIL_HOME
-    ? path.resolve(process.env.ANVIL_HOME)
-    : path.join(os.homedir(), ".anvil");
-}
 
 const MODELS_CACHE_PATH = (): string => path.join(anvilHome(), "models-cache.json");
 

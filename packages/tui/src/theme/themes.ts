@@ -43,7 +43,7 @@ export const THEMES = {
       toolRunning: "yellowBright",
       toolDone: "greenBright",
       toolError: "redBright",
-      dim: "white",
+      dim: "gray",
       border: "yellowBright",
       accent: "yellowBright",
       surface: "white",

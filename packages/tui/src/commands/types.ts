@@ -1,3 +1,15 @@
+import type { Dispatch, SetStateAction } from "react";
+import type {
+  AgentOptions,
+  AgentSession,
+  ModelProvider,
+  ProviderId,
+  StoredSession,
+} from "@anvil/core";
+import type { TuiPermissionBroker } from "../permission/TuiPermissionBroker.js";
+import type { DisplayMessage } from "../hooks/useAgentController.js";
+import type { McpAppState } from "../components/App.js";
+
 export interface CommandContext {
   clearHistory: () => void;
   openModelPicker: () => void;
@@ -26,3 +38,33 @@ export interface Command {
   description: string;
   run: (args: string[], ctx: CommandContext) => void;
 }
+
+/**
+ * P3 single-touch commands: everything a command handler needs, in one
+ * object. Adding a command = one registry entry + (if it needs session
+ * access) one method here, implemented once in makeHandlers. App.tsx and
+ * hooks never change for new commands.
+ */
+export interface CommandHandlerDeps {
+  session: AgentSession;
+  providers: Record<ProviderId, ModelProvider>;
+  activeProviderId: ProviderId;
+  currentModel: string;
+  sessionOptions: Omit<AgentOptions, "permissionBroker" | "model">;
+  broker: TuiPermissionBroker;
+  mcp?: McpAppState;
+  isBusy: boolean;
+  printSystemMessage: (text: string) => void;
+  clearMessages: () => void;
+  replaceMessages: (seed: DisplayMessage[]) => void;
+  persist: () => void;
+  resumeFromStored: (stored: StoredSession) => void;
+  applyTheme: (name: string) => void;
+  setSession: Dispatch<SetStateAction<AgentSession>>;
+  setIsModelPickerOpen: Dispatch<SetStateAction<boolean>>;
+  setIsSessionPickerOpen: Dispatch<SetStateAction<boolean>>;
+  setIsConnectOpen: Dispatch<SetStateAction<boolean>>;
+  setExpandTools: Dispatch<SetStateAction<boolean>>;
+}
+
+export type CommandHandlerFactory = (deps: CommandHandlerDeps) => CommandContext;

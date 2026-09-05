@@ -5,7 +5,7 @@ import { REQUIRED_COLOR_KEYS, type Theme } from "./themes.js";
 
 // ---------------------------------------------------------------------------
 // U13 custom user themes (~/.anvil/themes.json, ANVIL_HOME-honoring).
-// { "<name>": { "colors": {<all 12 keys>}, "spacing"?: {panelPaddingX?, panelPaddingY?} } }
+// { "<name>": { "colors": {<every REQUIRED_COLOR_KEYS entry>}, "spacing"? } }
 // ---------------------------------------------------------------------------
 
 export const CUSTOM_THEME_NAME_RE = /^[a-z0-9-_]{1,24}$/;

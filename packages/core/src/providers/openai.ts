@@ -7,6 +7,7 @@ import {
   StreamEvent,
   ToolDefinition,
 } from "./types.js";
+import { ToolCallAssembler } from "./streaming.js";
 
 export function mapOpenAIFinishReason(
   reason: string | null | undefined
@@ -46,22 +47,13 @@ export interface RawOpenAIChunk {
 export async function* translateChatCompletionsChunkStream(
   raw: AsyncIterable<RawOpenAIChunk>
 ): AsyncGenerator<StreamEvent> {
-  // index -> partially-assembled tool call
-  const calls = new Map<number, { id: string; name: string; args: string }>();
+  // Call assembly (id-freeze, name-deferred start, cumulative deltas) lives
+  // in the shared ToolCallAssembler — see providers/streaming.ts.
+  const assembler = new ToolCallAssembler();
   let finishReason: string | null = null;
-
-  function* finalizeBufferedCalls(): Generator<StreamEvent> {
-    for (const [, entry] of [...calls.entries()].sort((a, b) => a[0] - b[0])) {
-      let parsed: unknown = {};
-      try {
-        parsed = entry.args.trim() ? JSON.parse(entry.args) : {};
-      } catch {
-        parsed = {}; // tool executor reports validation errors back to the model
-      }
-      yield { type: "tool_call_end", id: entry.id, name: entry.name, input: parsed };
-    }
-    calls.clear();
-  }
+  // Usage can arrive on any chunk (gateways repeat it); the contract is
+  // exactly one usage event per turn, so only the latest counts are kept.
+  let usage: { inputTokens: number; outputTokens: number } | null = null;
 
   try {
     for await (const chunk of raw) {
@@ -74,25 +66,16 @@ export async function* translateChatCompletionsChunkStream(
 
       if (delta?.tool_calls) {
         for (const tc of delta.tool_calls) {
-          let entry = calls.get(tc.index);
-          if (!entry) {
-            entry = { id: tc.id ?? `call_${tc.index}`, name: tc.function?.name ?? "", args: "" };
-            calls.set(tc.index, entry);
-            yield { type: "tool_call_start", id: entry.id, name: entry.name };
-          } else {
-            if (tc.id) entry.id = tc.id;
-            if (tc.function?.name) entry.name = tc.function.name;
-          }
-          if (tc.function?.arguments) {
-            entry.args += tc.function.arguments;
-            yield { type: "tool_call_delta", id: entry.id, partialInputJson: entry.args };
-          }
+          yield* assembler.push(tc.index, {
+            id: tc.id,
+            name: tc.function?.name,
+            argsFragment: tc.function?.arguments,
+          });
         }
       }
 
       if (chunk.usage) {
-        yield {
-          type: "usage",
+        usage = {
           inputTokens: chunk.usage.prompt_tokens ?? 0,
           outputTokens: chunk.usage.completion_tokens ?? 0,
         };
@@ -100,7 +83,7 @@ export async function* translateChatCompletionsChunkStream(
 
       if (choice?.finish_reason) {
         finishReason = choice.finish_reason;
-        yield* finalizeBufferedCalls();
+        yield* assembler.drain();
       }
     }
   } catch (err) {
@@ -108,10 +91,13 @@ export async function* translateChatCompletionsChunkStream(
     return;
   }
 
+  if (usage) {
+    yield { type: "usage", ...usage };
+  }
   if (finishReason) {
     yield { type: "turn_end", stopReason: mapOpenAIFinishReason(finishReason) };
   } else {
-    yield* finalizeBufferedCalls();
+    yield* assembler.drain();
     yield { type: "turn_end", stopReason: "unknown" };
   }
 }
