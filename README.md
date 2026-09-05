@@ -69,7 +69,7 @@ permission prompt with a real unified diff.
 ```bash
 # from a checkout of this repo
 cd packages/cli && npm pack
-npm install -g ./anvil-cli-0.1.0.tgz
+npm install -g ./anvil-cli-<version>.tgz   # see the filename npm pack prints
 
 # then run it from any directory
 cd ~/my-project && anvil
