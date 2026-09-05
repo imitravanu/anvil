@@ -19,8 +19,10 @@ export interface CommandContext {
   sessionNew: () => void;
   sessionResume: (id?: string) => void; // no id → open the SessionPicker overlay
   sessionRename: (title: string) => void;
-  // /theme: switch + persist; handler validates the name
+  // /theme: switch + persist; handler validates the name. No name → open
+  // the interactive picker.
   setTheme: (name: string) => void;
+  openThemePicker: () => void;
   // /connect: open the provider-key setup overlay (add/update a key in-app)
   openConnect: () => void;
   // /ledger print this session's run-ledger audit report
@@ -64,6 +66,7 @@ export interface CommandHandlerDeps {
   setIsModelPickerOpen: Dispatch<SetStateAction<boolean>>;
   setIsSessionPickerOpen: Dispatch<SetStateAction<boolean>>;
   setIsConnectOpen: Dispatch<SetStateAction<boolean>>;
+  setIsThemePickerOpen: Dispatch<SetStateAction<boolean>>;
   setExpandTools: Dispatch<SetStateAction<boolean>>;
 }
 

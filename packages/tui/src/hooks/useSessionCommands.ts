@@ -32,6 +32,7 @@ export interface UseSessionCommandsDeps {
   setIsModelPickerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setIsSessionPickerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setIsConnectOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsThemePickerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setExpandTools: React.Dispatch<React.SetStateAction<boolean>>;
   send: (text: string) => Promise<void>;
 }
@@ -89,6 +90,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     setIsModelPickerOpen,
     setIsSessionPickerOpen,
     setIsConnectOpen,
+    setIsThemePickerOpen,
     setExpandTools,
     send,
   } = deps;
@@ -142,6 +144,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     setIsModelPickerOpen,
     setIsSessionPickerOpen,
     setIsConnectOpen,
+    setIsThemePickerOpen,
     setExpandTools,
   });
 

@@ -12,6 +12,8 @@ export interface UseThemeManagerResult {
   themeName: string;
   resolveTheme: (name: string) => Theme;
   applyTheme: (name: string) => void;
+  /** Switch the UI immediately WITHOUT persisting — live preview in the picker. */
+  previewTheme: (name: string) => void;
 }
 
 /**
@@ -52,5 +54,11 @@ export function useThemeManager(opts: UseThemeManagerOptions): UseThemeManagerRe
     opts.printSystemMessage(`Theme set to ${name}${isThemeName(name) ? "" : " (custom)"}.`);
   };
 
-  return { themeName, resolveTheme, applyTheme };
+  /** Live preview: switches the whole UI but touches neither settings.json
+   *  nor the transcript — the picker restores or applies on exit. */
+  const previewTheme = (name: string) => {
+    if (isThemeName(name) || name in customThemes.themes) setThemeName(name);
+  };
+
+  return { themeName, resolveTheme, applyTheme, previewTheme };
 }

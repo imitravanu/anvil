@@ -29,7 +29,7 @@ export const COMMANDS: Command[] = [
         rewind: "e.g. /rewind 2 — restore checkpoint #2 (plain /rewind lists them)",
         session: "e.g. /session resume — with no id it opens the picker",
         sync: "e.g. /sync — force a free-model refresh now",
-        theme: "e.g. /theme — lists built-in + your custom names",
+        theme: "e.g. /theme — arrow through with live preview, Enter applies",
       };
       const lines = COMMANDS.map(
         (c) => `/${c.name} — ${c.description}${EXAMPLES[c.name] ? `\n    ${EXAMPLES[c.name]}` : ""}`
@@ -140,14 +140,13 @@ export const COMMANDS: Command[] = [
   },
   {
     name: "theme",
-    description: "Switch theme (built-in or ~/.anvil/themes.json custom)",
+    description: "Switch theme (live preview; built-in or ~/.anvil/themes.json custom)",
     run: (args, ctx) => {
       const name = args[0];
-      if (!name) {
-        ctx.setTheme("");
-        return;
-      }
-      ctx.setTheme(name);
+      // Bare /theme opens the interactive picker with live preview — the old
+      // dead-end usage message made the command look broken.
+      if (name) ctx.setTheme(name);
+      else ctx.openThemePicker();
     },
   },
 ];
@@ -183,6 +182,7 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
     setIsModelPickerOpen,
     setIsSessionPickerOpen,
     setIsConnectOpen,
+    setIsThemePickerOpen,
     setExpandTools,
   } = deps;
   return {
@@ -266,6 +266,13 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
       printSystemMessage(`Session renamed to "${title}".`);
     },
     setTheme: applyTheme,
+    openThemePicker: () => {
+      if (isBusy) {
+        printSystemMessage("Cannot switch themes while a turn is in flight.");
+        return;
+      }
+      setIsThemePickerOpen(true);
+    },
     openConnect: () => {
       if (isBusy) {
         printSystemMessage("Cannot connect a provider while a turn is in flight.");

@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { Box, Text, useStdout } from "ink";
 import {
   AgentSession,
@@ -27,6 +27,7 @@ import { PermissionPrompt } from "./PermissionPrompt.js";
 import { FirstRunSetup } from "./FirstRunSetup.js";
 import { PlanLine } from "./PlanLine.js";
 import { SessionPicker } from "./SessionPicker.js";
+import { ThemePicker } from "./ThemePicker.js";
 import { StatusBar } from "./StatusBar.js";
 
 // Provider labels live in util/labels.ts — single source of truth.
@@ -107,11 +108,18 @@ export function App({
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isSessionPickerOpen, setIsSessionPickerOpen] = useState(false);
   const [isConnectOpen, setIsConnectOpen] = useState(false);
+  const [isThemePickerOpen, setIsThemePickerOpen] = useState(false);
   // full tool-output display, toggled by /expand. Session-scoped,
   // never persisted — a resumed session starts compact.
   const [expandTools, setExpandTools] = useState(false);
 
-  const { themeName, resolveTheme, applyTheme } = useThemeManager({ initialTheme, printSystemMessage });
+  const { themeName, resolveTheme, applyTheme, previewTheme } = useThemeManager({ initialTheme, printSystemMessage });
+  // Theme active before the picker started previewing — previews mutate
+  // themeName, so Esc-restore needs a value captured at open time.
+  const themeBeforePicker = useRef(initialTheme);
+  useEffect(() => {
+    if (!isThemePickerOpen) themeBeforePicker.current = themeName;
+  }, [isThemePickerOpen, themeName]);
 
   const { handleSubmit, resumeFromStored } = useSessionCommands({
     session,
@@ -132,6 +140,7 @@ export function App({
     setIsModelPickerOpen,
     setIsSessionPickerOpen,
     setIsConnectOpen,
+    setIsThemePickerOpen,
     setExpandTools,
     send,
   });
@@ -228,6 +237,18 @@ export function App({
           <SessionPicker
             onSelect={handleSessionPick}
             onClose={() => setIsSessionPickerOpen(false)}
+          />
+        ) : isThemePickerOpen ? (
+          <ThemePicker
+            onPreview={previewTheme}
+            onApply={(name) => {
+              applyTheme(name);
+              setIsThemePickerOpen(false);
+            }}
+            onCancel={() => {
+              previewTheme(themeBeforePicker.current);
+              setIsThemePickerOpen(false);
+            }}
           />
         ) : isConnectOpen ? (
           <FirstRunSetup
