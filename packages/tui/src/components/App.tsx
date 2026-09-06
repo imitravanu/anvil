@@ -231,11 +231,19 @@ export function App({
           the app reads as a single window. The border color comes straight from
           the theme object because App is the theme *provider*; everything below
           this Box consumes the same colors via useTheme(). */}
+      {/* The frame is one row SHORTER than the terminal, deliberately. Ink
+          (build/ink.js) wipes the entire terminal — screen, scrollback, home —
+          whenever rendered height >= terminal rows; a frame exactly `rows`
+          tall trips that on EVERY re-render (each spinner tick), and in a
+          native terminal (no tmux) the wipes desync the pane: chat text
+          vanishes, redraws land on wrong rows (reproduced at 236x46 with 326
+          wipes in one session). One spare row keeps rendered height < rows
+          forever, so Ink always uses its stable in-place diff path. */}
       <Box
         flexDirection="column"
         borderStyle="round"
         borderColor={resolveTheme(themeName).colors.border}
-        height={rows}
+        height={Math.max(9, rows - 1)}
         width={stdout?.columns ?? 80}
         overflow="hidden"
       >

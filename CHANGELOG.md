@@ -4,6 +4,21 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 (major.minor.patch — breaking features bump minor while pre-1.0).
 
+## [0.6.2] — 2026-09-07
+
+### Fixed
+
+- **Chat content vanishing in native terminals** (the second, final root of
+  the line-stacking family): the app frame was exactly `rows` tall, and Ink
+  wipes the whole terminal (screen + scrollback + home) whenever rendered
+  height >= terminal rows — true on every re-render, i.e. every spinner tick
+  (326 full-screen wipes observed in one short session at 236x46). tmux
+  absorbs those wipes; a native terminal desyncs — user messages vanished,
+  redraws landed on wrong rows. The frame is now one row shorter than the
+  terminal, so Ink always uses its stable in-place diff path. Verified in a
+  raw pty (no tmux) across 20-46 rows x 80-236 columns: zero wipes, all
+  content persists; tmux behavior unchanged.
+
 ## [0.6.1] — 2026-09-07
 
 A full chief-engineer audit of the post-0.6.0 tree plus a concurrent TUI
@@ -301,7 +316,8 @@ onboarding, sub-agent delegation, and MCP (stdio) support.
 
 - Verification/eval harness, provider certification, project memory & git-native workflow, distribution (see `docs/ROADMAP.md`).
 
-[Unreleased]: https://github.com/mitravanu/anvil/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/mitravanu/anvil/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/mitravanu/anvil/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/mitravanu/anvil/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/mitravanu/anvil/compare/v0.5.1...v0.6.0
 [0.5.0]: https://github.com/mitravanu/anvil/compare/v0.4.0...v0.5.0

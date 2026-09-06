@@ -1,6 +1,6 @@
 {
   "name": "@anvil/tui",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Ink terminal UI for the Anvil coding agent.",
   "author": "mitravanu",
   "license": "MIT",

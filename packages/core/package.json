@@ -1,6 +1,6 @@
 {
   "name": "@anvil/core",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Core agent loop, provider adapters, sessions, and tools for Anvil.",
   "author": "mitravanu",
   "license": "MIT",
