@@ -1,9 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
-import { resolveWithinRoot } from "./paths.js";
+import { EXCLUDED_DIRS, resolveWithinRoot } from "./paths.js";
 
-const EXCLUDED_DIRS = new Set(["node_modules", ".git", "dist", ".anvil"]);
 const MAX_FILE_BYTES = 1024 * 1024;
 
 async function* textFiles(dir: string): AsyncGenerator<string> {
@@ -61,11 +60,12 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
 
   const matches: Array<{ path: string; line: number; text: string }> = [];
   let truncated = false;
-  for await (const abs of textFiles(absDir)) {
-    if (matches.length >= maxResults) {
-      truncated = true;
-      break;
-    }
+  // The cap is enforced per MATCH, not per file: checking only at file
+  // boundaries reported truncated=false when the cap was hit inside the LAST
+  // scanned file. The cost of honesty — when exactly maxResults matches exist
+  // in total, the scan runs to the end to prove nothing was omitted — is
+  // bounded by the size gates above.
+  scan: for await (const abs of textFiles(absDir)) {
     // Size-gate BEFORE reading: readFile would pull the whole file (any size)
     // into memory just to skip it — a multi-gigabyte log or artifact would
     // spike the heap on every scan.
@@ -79,10 +79,13 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
     if (buf.includes(0)) continue; // skip binary files
     const rel = path.relative(ctx.projectRoot, abs).split(path.sep).join("/");
     const lines = buf.toString("utf8").split("\n");
-    for (let i = 0; i < lines.length && matches.length < maxResults; i++) {
-      if (regex.test(lines[i])) {
-        matches.push({ path: rel, line: i + 1, text: lines[i].slice(0, 300) });
+    for (let i = 0; i < lines.length; i++) {
+      if (!regex.test(lines[i])) continue;
+      if (matches.length >= maxResults) {
+        truncated = true;
+        break scan; // one proven-omitted match is enough to know
       }
+      matches.push({ path: rel, line: i + 1, text: lines[i].slice(0, 300) });
     }
   }
   return {

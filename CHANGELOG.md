@@ -214,6 +214,33 @@ onboarding, sub-agent delegation, and MCP (stdio) support.
 
 ## [Unreleased]
 
+### Fixed
+
+- `grep` reported `truncated: false` when the result cap was hit inside the
+  last scanned file; the cap is now enforced per match.
+- `estimateTokens` (proactive compaction on resume) ignored image parts — an
+  image-heavy resumed session under-seeded and died on the provider's context
+  limit. Each image now counts a fixed 2k-token floor.
+- Concurrent writers to the same file shared one temp name (pid suffix only)
+  and could race each other's rename in `atomicWriteJson`; a failed write also
+  left the orphan temp behind.
+- The model registry was keyed by id only, so the same id under two providers
+  silently overwrote (last-wins) — including live-synced rows overwriting
+  curated ones. Lookups are provider-qualified first, and cross-provider
+  registration replaces only that provider's row.
+- A crashed sub-agent reported an empty success — the failure reason is now
+  captured (`failureReason`) and surfaced in the delegation result and card.
+- `anvil -p` could hang forever on an open-but-silent non-TTY stdin; after a
+  5s idle window it proceeds without piped input (stderr note).
+
+### Changed
+
+- CLI boot (chat / headless / goal) no longer repeats three near-identical
+  ~60-line blocks; MCP connection problems are surfaced on stderr in headless
+  and goal mode instead of being swallowed silently. `EXCLUDED_DIRS` is a
+  single source (union set) shared by grep / list_files / get_outline /
+  workspace awareness.
+
 ### Planned
 
 - Verification/eval harness, provider certification, project memory & git-native workflow, distribution (see `docs/ROADMAP.md`).

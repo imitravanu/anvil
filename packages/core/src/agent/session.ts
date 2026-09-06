@@ -381,7 +381,7 @@ export class AgentSession {
         // turn gets exactly one summarization ATTEMPT. The cheap guards are
         // peeked first: a below-threshold loop-top must not burn the attempt
         // (lastInputTokens is stale until the first round of THIS turn lands).
-        const modelInfo = getModel(this.options.model);
+        const modelInfo = getModel(this.options.model, this.provider.id);
         // Free-form model ids are supported on purpose, so an unknown id must
         // still compact — a conservative default window beats dying on the
         // provider's real limit.
@@ -707,10 +707,16 @@ export class AgentSession {
               outputTokens: run.usage.out,
               report: run.report,
             };
+            // A crashed sub-run must not look like an empty success.
+            const subFailed = Boolean(run.failureReason);
             handled.set(p.call.id, {
-              output: { report: run.report },
-              isError: false,
-              summary: `Sub-agent report (${run.toolCalls} tool call${run.toolCalls === 1 ? "" : "s"}).`,
+              output: subFailed
+                ? { report: run.report, error: run.failureReason }
+                : { report: run.report },
+              isError: subFailed,
+              summary: subFailed
+                ? `Sub-agent crashed after ${run.toolCalls} tool call${run.toolCalls === 1 ? "" : "s"}: ${run.failureReason}`
+                : `Sub-agent report (${run.toolCalls} tool call${run.toolCalls === 1 ? "" : "s"}).`,
             });
             continue;
           }

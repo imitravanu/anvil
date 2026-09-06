@@ -26,6 +26,8 @@ import {
   ProviderSelectionError,
   resolveProviderSelection,
   buildSystemPrompt,
+  type ModelProvider,
+  type ProviderId,
   type ToolDefinition,
 } from "@anvil/core";
 import { App, FirstRunSetup, TuiPermissionBroker, isThemeName, loadCustomThemes } from "@anvil/tui";
@@ -48,11 +50,6 @@ for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]] a
 }
 
 const VERSION = CORE_VERSION;
-
-const KNOWN_FLAGS = new Set([
-  "--provider", "--model", "--prompt", "-p", "--goal", "-g",
-  "--yes", "-y", "--raw", "--no-mcp",
-]);
 
 function parseFlags(argv: string[]): Record<string, string> {
   const flags: Record<string, string> = {};
@@ -160,19 +157,39 @@ process.on("unhandledRejection", (reason) => {
   process.exitCode = 1;
 });
 
-async function bootChat(): Promise<void> {
-  // restore the persisted free-model snapshot (any source) before
-  // the model picker needs it. Staleness is surfaced, not hidden.
+// ---------------------------------------------------------------------------
+// Shared boot context. chat / headless / goal used to repeat this block
+// (~60 lines each, drifting: headless/goal swallowed MCP failures silently).
+// ---------------------------------------------------------------------------
+
+interface BootContext {
+  creds: ReturnType<typeof loadCredentials>;
+  settings: ReturnType<typeof loadSettings>;
+  providers: Record<ProviderId, ModelProvider>;
+  provider: ModelProvider;
+  providerId: ProviderId;
+  model: string;
+  mcpConns: Map<string, McpServerConnection>;
+  mcpNotices: string[];
+  mcpDefs: ToolDefinition[];
+  mcpTools?: ToolDefinition[];
+}
+
+function restoreCachedModels(): void {
+  // Restore the persisted free-model snapshot (any source) before the model
+  // picker needs it. Staleness is surfaced by the picker, not hidden.
   const cached = loadModelsCacheV2();
   const cachedModels = collectModelsFromCache(cached);
   if (cachedModels.length > 0) {
     registerModels(cachedModels);
   }
+}
 
-  const creds = loadCredentials();
-  const settings = loadSettings();
-  const flags = parseFlags(process.argv.slice(2));
-
+function resolveSelectionOrExit(
+  flags: Record<string, string>,
+  creds: ReturnType<typeof loadCredentials>,
+  settings: ReturnType<typeof loadSettings>
+): { providerId: ProviderId; model: string } {
   let selection;
   try {
     selection = resolveProviderSelection({
@@ -194,17 +211,50 @@ async function bootChat(): Promise<void> {
     console.error("No provider is configured. Run `anvil config` to add an API key.");
     process.exit(1);
   }
+  return selection;
+}
+
+async function connectMcpTools(
+  conns: Map<string, McpServerConnection>,
+  notices: string[]
+): Promise<{ defs: ToolDefinition[]; connected: number; toolCount: number }> {
+  // All MCP outcomes land in `notices` — nothing is swallowed (headless/goal
+  // used to silently catch here, so a dead MCP server just vanished).
+  const empty = { defs: [], connected: 0, toolCount: 0 };
+  try {
+    const mcp = await connectAllMcpServers(conns, { timeoutMs: 10_000 });
+    for (const problem of mcp.problems) notices.push(`MCP ${problem}`);
+    if (mcp.connected === 0 && notices.length === 0) return empty;
+    const allMcpDefs = [...conns.values()].flatMap((c) =>
+      c.status === "ready" ? toToolDefinitions(c.id, c.tools) : []
+    );
+    const collision = dropCollidingMcpTools(
+      TOOL_DEFINITIONS.map((d) => d.name),
+      allMcpDefs
+    );
+    for (const d of collision.dropped) notices.push(`MCP dropped tool ${d.name} (name collision)`);
+    registerExternalExecutor(
+      MCP_TOOL_PREFIX,
+      createMcpExecutor(() => conns),
+      describeMcpInput
+    );
+    return { defs: collision.kept, connected: mcp.connected, toolCount: mcp.tools };
+  } catch (err) {
+    notices.push(`MCP connect failed: ${err instanceof Error ? err.message : String(err)}`);
+    return empty;
+  }
+}
+
+async function resolveBootContext(
+  flags: Record<string, string>,
+  opts: { mode: "chat" | "headless" | "goal" }
+): Promise<BootContext> {
+  restoreCachedModels();
+  const creds = loadCredentials();
+  const settings = loadSettings();
+  const selection = resolveSelectionOrExit(flags, creds, settings);
 
   const providers = createProviders(creds);
-  // one owner for free-model syncing — the coordinator. Single-flight
-  // + TTL mean boot, picker, and /sync can never double-fetch or silently diverge.
-  if (providers.openrouter?.isConfigured()) {
-    void syncFreeModels({
-      sources: [createOpenRouterFreeSource()],
-      apiKeyBySource: { openrouter: creds.openrouterApiKey },
-    });
-  }
-
   const provider = providers[selection.providerId];
   if (!provider.isConfigured()) {
     console.error(
@@ -213,52 +263,60 @@ async function bootChat(): Promise<void> {
     process.exit(1);
   }
 
-  // connect MCP servers (10s cap each). Dead servers warn once
-  // and never block chat; the executor reads this map live, so /mcp
-  // reconnect refreshes routing with no stale state.
+  const raw = flags.raw === "1";
+  const diagnostic = (text: string): void => {
+    if (opts.mode === "chat" || !raw) process.stderr.write(`${text}\n`);
+  };
+
   const mcpConns = new Map<string, McpServerConnection>();
   const mcpNotices: string[] = [];
-  const mcpDefs: ToolDefinition[] = [];
+  let mcpDefs: ToolDefinition[] = [];
   if (flags["no-mcp"]) {
     mcpNotices.push("MCP disabled by --no-mcp.");
   } else {
-  try {
-    const mcp = await connectAllMcpServers(mcpConns, { timeoutMs: 10_000 });
-    for (const problem of mcp.problems) mcpNotices.push(`MCP ${problem}`);
-    if (mcp.connected > 0 || mcpNotices.length > 0) {
-      const allMcpDefs = [...mcpConns.values()].flatMap((c) =>
-        c.status === "ready" ? toToolDefinitions(c.id, c.tools) : []
-      );
-      const collision = dropCollidingMcpTools(
-        TOOL_DEFINITIONS.map((d) => d.name),
-        allMcpDefs
-      );
-      mcpDefs.push(...collision.kept);
-      for (const d of collision.dropped) mcpNotices.push(`MCP dropped tool ${d.name} (name collision)`);
-      registerExternalExecutor(
-        MCP_TOOL_PREFIX,
-        createMcpExecutor(() => mcpConns),
-        describeMcpInput
-      );
-      if (mcp.connected > 0) {
-        console.error(`MCP: ${mcp.tools} tool(s) from ${mcp.connected} server(s).`);
-      }
+    const mcp = await connectMcpTools(mcpConns, mcpNotices);
+    mcpDefs = mcp.defs;
+    if (mcp.connected > 0) {
+      diagnostic(`MCP: ${mcp.toolCount} tool(s) from ${mcp.connected} server(s).`);
     }
-  } catch (err: any) {
-    mcpNotices.push(`MCP connect failed: ${err?.message ?? String(err)}`);
+    for (const notice of mcpNotices) diagnostic(`⚠ ${notice}`);
   }
-  } // end --no-mcp else
-  for (const notice of mcpNotices) console.error(`⚠ ${notice}`);
+
+  return {
+    creds,
+    settings,
+    providers,
+    provider,
+    providerId: selection.providerId,
+    model: selection.model,
+    mcpConns,
+    mcpNotices,
+    mcpDefs,
+    mcpTools: mcpDefs.length > 0 ? [...TOOL_DEFINITIONS, ...mcpDefs] : undefined,
+  };
+}
+
+async function bootChat(flags: Record<string, string>): Promise<void> {
+  const ctx = await resolveBootContext(flags, { mode: "chat" });
+  const { providers, provider, providerId, model, mcpConns, mcpNotices, mcpDefs, mcpTools } = ctx;
+
+  // one owner for free-model syncing — the coordinator. Single-flight
+  // + TTL mean boot, picker, and /sync can never double-fetch or silently diverge.
+  if (providers.openrouter?.isConfigured()) {
+    void syncFreeModels({
+      sources: [createOpenRouterFreeSource()],
+      apiKeyBySource: { openrouter: ctx.creds.openrouterApiKey },
+    });
+  }
 
   const broker = new TuiPermissionBroker();
-  const mcpTools = mcpDefs.length > 0 ? [...TOOL_DEFINITIONS, ...mcpDefs] : undefined;
   const projectRoot = process.cwd();
   const baseSystemPrompt = "You are Anvil, a terminal coding agent. Be concise.";
   const systemPrompt = buildSystemPrompt(baseSystemPrompt, projectRoot);
 
   const session = new AgentSession(provider, {
     systemPrompt,
-    model: selection.model,
+    model,
     maxTokens: 8192,
     projectRoot,
     permissionBroker: broker,
@@ -268,7 +326,7 @@ async function bootChat(): Promise<void> {
     ...(mcpTools !== undefined ? { tools: mcpTools } : {}),
   });
 
-  const rawTheme = settings.theme;
+  const rawTheme = ctx.settings.theme;
   const customThemeNames = loadCustomThemes().themes;
   const initialTheme =
     (rawTheme !== undefined && (isThemeName(rawTheme) || rawTheme in customThemeNames))
@@ -280,8 +338,8 @@ async function bootChat(): Promise<void> {
       session={session}
       broker={broker}
       providers={providers}
-      providerId={selection.providerId}
-      model={selection.model}
+      providerId={providerId}
+      model={model}
       initialTheme={initialTheme}
       sessionOptions={{
         systemPrompt,
@@ -301,160 +359,30 @@ async function bootChat(): Promise<void> {
 }
 
 async function bootHeadless(prompt: string, flags: Record<string, string>): Promise<void> {
-  const cached = loadModelsCacheV2();
-  const cachedModels = collectModelsFromCache(cached);
-  if (cachedModels.length > 0) {
-    registerModels(cachedModels);
-  }
-
-  const creds = loadCredentials();
-  const settings = loadSettings();
-
-  let selection;
-  try {
-    selection = resolveProviderSelection({
-      flagProvider: flags.provider,
-      flagModel: flags.model,
-      envProvider: process.env.ANVIL_PROVIDER,
-      envModel: process.env.ANVIL_MODEL,
-      settings,
-      creds,
-    });
-  } catch (err) {
-    if (err instanceof ProviderSelectionError) {
-      console.error(err.message);
-      process.exit(1);
-    }
-    throw err;
-  }
-  if (!selection) {
-    console.error("No provider is configured. Run `anvil config` to add an API key.");
-    process.exit(1);
-  }
-
-  const providers = createProviders(creds);
-  const provider = providers[selection.providerId];
-  if (!provider.isConfigured()) {
-    console.error(
-      `Provider "${selection.providerId}" is not configured. Check ~/.anvil/credentials.json.`
-    );
-    process.exit(1);
-  }
-
-  const mcpConns = new Map<string, McpServerConnection>();
-  const mcpDefs: ToolDefinition[] = [];
-  if (!flags["no-mcp"]) {
-    try {
-      const mcp = await connectAllMcpServers(mcpConns, { timeoutMs: 10_000 });
-      if (mcp.connected > 0) {
-        const allMcpDefs = [...mcpConns.values()].flatMap((c) =>
-          c.status === "ready" ? toToolDefinitions(c.id, c.tools) : []
-        );
-        const collision = dropCollidingMcpTools(
-          TOOL_DEFINITIONS.map((d) => d.name),
-          allMcpDefs
-        );
-        mcpDefs.push(...collision.kept);
-        registerExternalExecutor(
-          MCP_TOOL_PREFIX,
-          createMcpExecutor(() => mcpConns),
-          describeMcpInput
-        );
-      }
-    } catch {
-      // MCP connection issues do not block headless execution
-    }
-  }
-
+  const ctx = await resolveBootContext(flags, { mode: "headless" });
   const exitCode = await runHeadless({
     prompt,
-    provider,
-    model: selection.model,
+    provider: ctx.provider,
+    model: ctx.model,
     projectRoot: process.cwd(),
     autoApprove: flags.yes === "1",
     raw: flags.raw === "1",
-    mcpTools: mcpDefs.length > 0 ? [...TOOL_DEFINITIONS, ...mcpDefs] : undefined,
+    mcpTools: ctx.mcpTools,
   });
-
   process.exit(exitCode);
 }
 
 async function bootGoal(goal: string, flags: Record<string, string>): Promise<void> {
-  const cached = loadModelsCacheV2();
-  const cachedModels = collectModelsFromCache(cached);
-  if (cachedModels.length > 0) {
-    registerModels(cachedModels);
-  }
-
-  const creds = loadCredentials();
-  const settings = loadSettings();
-
-  let selection;
-  try {
-    selection = resolveProviderSelection({
-      flagProvider: flags.provider,
-      flagModel: flags.model,
-      envProvider: process.env.ANVIL_PROVIDER,
-      envModel: process.env.ANVIL_MODEL,
-      settings,
-      creds,
-    });
-  } catch (err) {
-    if (err instanceof ProviderSelectionError) {
-      console.error(err.message);
-      process.exit(1);
-    }
-    throw err;
-  }
-  if (!selection) {
-    console.error("No provider is configured. Run `anvil config` to add an API key.");
-    process.exit(1);
-  }
-
-  const providers = createProviders(creds);
-  const provider = providers[selection.providerId];
-  if (!provider.isConfigured()) {
-    console.error(
-      `Provider "${selection.providerId}" is not configured. Check ~/.anvil/credentials.json.`
-    );
-    process.exit(1);
-  }
-
-  const mcpConns = new Map<string, McpServerConnection>();
-  const mcpDefs: ToolDefinition[] = [];
-  if (!flags["no-mcp"]) {
-    try {
-      const mcp = await connectAllMcpServers(mcpConns, { timeoutMs: 10_000 });
-      if (mcp.connected > 0) {
-        const allMcpDefs = [...mcpConns.values()].flatMap((c) =>
-          c.status === "ready" ? toToolDefinitions(c.id, c.tools) : []
-        );
-        const collision = dropCollidingMcpTools(
-          TOOL_DEFINITIONS.map((d) => d.name),
-          allMcpDefs
-        );
-        mcpDefs.push(...collision.kept);
-        registerExternalExecutor(
-          MCP_TOOL_PREFIX,
-          createMcpExecutor(() => mcpConns),
-          describeMcpInput
-        );
-      }
-    } catch {
-      // MCP connection issues do not block goal execution
-    }
-  }
-
+  const ctx = await resolveBootContext(flags, { mode: "goal" });
   const exitCode = await runGoalHeadless({
     goal,
-    provider,
-    model: selection.model,
+    provider: ctx.provider,
+    model: ctx.model,
     projectRoot: process.cwd(),
     autoApprove: flags.yes === "1",
     raw: flags.raw === "1",
-    mcpTools: mcpDefs.length > 0 ? [...TOOL_DEFINITIONS, ...mcpDefs] : undefined,
+    mcpTools: ctx.mcpTools,
   });
-
   process.exit(exitCode);
 }
 
@@ -470,7 +398,7 @@ function runSetup(thenChat: boolean): void {
       onDone={() => {
         instance?.unmount();
         appInstance = null;
-        if (thenChat) void bootChat();
+        if (thenChat) void bootChat(parseFlags(process.argv.slice(2)));
       }}
     />,
     { exitOnCtrlC: false }
@@ -528,6 +456,6 @@ if (first === "config") {
       );
       process.exit(1);
     }
-    void bootChat();
+    void bootChat(flags);
   })();
 }

@@ -40,14 +40,43 @@ export class HeadlessPermissionBroker implements PermissionBroker {
 
 /**
  * Reads all buffered data from stdin until EOF (for piped usage).
+ * A parent process that spawns Anvil with an open-but-silent inherited pipe
+ * would otherwise block boot forever — after `idleMs` with no data (default
+ * 5s) we assume there is nothing more and proceed, noting it on stderr.
  */
-export async function readStdin(): Promise<string> {
+export async function readStdin(idleMs = 5_000): Promise<string> {
   if (process.stdin.isTTY) return "";
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];
-    process.stdin.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
-    process.stdin.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    process.stdin.on("error", () => resolve(""));
+    let settled = false;
+    const finish = (text: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(idle);
+      process.stdin.removeListener("data", onData);
+      process.stdin.removeListener("end", onEnd);
+      process.stdin.removeListener("error", onError);
+      resolve(text);
+    };
+    const onData = (chunk: Buffer) => {
+      chunks.push(Buffer.from(chunk));
+      // Data arriving resets the idle window — a slow but live pipe is fine.
+      clearTimeout(idle);
+      idle = setTimeout(onIdle, idleMs);
+    };
+    const onEnd = () => finish(Buffer.concat(chunks).toString("utf8"));
+    const onError = () => finish("");
+    const onIdle = () => {
+      process.stderr.write(
+        `[anvil] no EOF on stdin after ${Math.round(idleMs / 1000)}s — continuing without piped input\n`
+      );
+      process.stdin.destroy();
+      finish(Buffer.concat(chunks).toString("utf8"));
+    };
+    let idle = setTimeout(onIdle, idleMs);
+    process.stdin.on("data", onData);
+    process.stdin.on("end", onEnd);
+    process.stdin.on("error", onError);
   });
 }
 

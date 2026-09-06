@@ -40,6 +40,8 @@ export interface SubAgentRun {
   usage: { in: number; out: number };
   toolCalls: number;
   aborted: boolean;
+  /** Set when the sub-run crashed — surfaced to the parent turn, never swallowed. */
+  failureReason?: string;
   /** The sub-agent's own checkpoints, for the parent to merge . */
   checkpoints: Checkpoint[];
 }
@@ -92,6 +94,7 @@ export async function* runSubAgentLive(opts: {
   let outTokens = 0;
   let toolCalls = 0;
   let aborted = false;
+  let failureReason: string | undefined;
   try {
     for await (const event of sub.send(opts.task)) {
       switch (event.type) {
@@ -112,12 +115,18 @@ export async function* runSubAgentLive(opts: {
         case "cancelled":
           aborted = true;
           break;
+        case "error":
+          failureReason = event.message;
+          break;
         default:
           break;
       }
     }
-  } catch {
-    aborted = true; // a crashed sub-run must not crash the main turn
+  } catch (err) {
+    // A crashed sub-run must not crash the main turn — but the reason must
+    // reach the user (it used to vanish, leaving a silent empty report).
+    aborted = true;
+    failureReason = err instanceof Error ? err.message : String(err);
   } finally {
     opts.signal.removeEventListener("abort", onAbort);
   }
@@ -127,14 +136,9 @@ export async function* runSubAgentLive(opts: {
     usage: { in: inTokens, out: outTokens },
     toolCalls,
     aborted,
+    ...(failureReason ? { failureReason } : {}),
     // Hand the sub-ring to the parent even on abort/crash: files the sub
     // changed before stopping still exist, so rewind must still reach them.
     checkpoints: sub.drainCheckpoints(),
   };
-}
-export async function runSubAgent(opts: Parameters<typeof runSubAgentLive>[0]): Promise<SubAgentRun> {
-  const gen = runSubAgentLive(opts);
-  let next = await gen.next();
-  while (!next.done) next = await gen.next();
-  return next.value;
 }

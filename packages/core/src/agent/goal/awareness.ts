@@ -3,8 +3,8 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import { SituationalContext, GitContext, EcosystemContext } from "./types.js";
 import { loadProjectRules } from "../../config/rules.js";
+import { EXCLUDED_DIRS } from "../../tools/paths.js";
 
-const EXCLUDED_TOP_LEVEL = new Set([".git", "node_modules", "dist", ".anvil", ".next"]);
 
 /**
  * Gather git repository status if inside a git working tree.
@@ -126,7 +126,7 @@ export async function analyzeWorkspace(projectRoot: string): Promise<Situational
   try {
     topLevelEntries = fs
       .readdirSync(projectRoot)
-      .filter((name) => !EXCLUDED_TOP_LEVEL.has(name));
+      .filter((name) => !EXCLUDED_DIRS.has(name));
   } catch {
     topLevelEntries = [];
   }

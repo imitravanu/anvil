@@ -1,10 +1,22 @@
 import { ModelInfo } from "./types.js";
 
-const _modelIndex = new Map<string, ModelInfo>();
+// Two indexes: provider-qualified (exact) and id -> first entry. Keying by id
+// alone used to let the same id registered under a second provider silently
+// overwrite the first one's row (last-wins) — curated built-ins must keep
+// priority over live-synced duplicates, and a session asking about its own
+// provider's model must get THAT provider's row.
+const _qualifiedIndex = new Map<string, ModelInfo>();
+const _idFirstIndex = new Map<string, ModelInfo>();
+
+const _key = (providerId: string, id: string): string => `${providerId}:${id}`;
 
 function _reindex(): void {
-  _modelIndex.clear();
-  for (const m of MODEL_REGISTRY) _modelIndex.set(m.id, m);
+  _qualifiedIndex.clear();
+  _idFirstIndex.clear();
+  for (const m of MODEL_REGISTRY) {
+    _qualifiedIndex.set(_key(m.providerId, m.id), m);
+    if (!_idFirstIndex.has(m.id)) _idFirstIndex.set(m.id, m);
+  }
 }
 
 export const MODEL_REGISTRY: ModelInfo[] = [
@@ -349,7 +361,11 @@ export function getModelsForProvider(providerId: string): ModelInfo[] {
 }
 
 export function registerModel(model: ModelInfo): void {
-  const idx = MODEL_REGISTRY.findIndex((m) => m.id === model.id);
+  // Replace only the SAME provider's entry for that id — a cross-provider id
+  // collision must not overwrite the other provider's row.
+  const idx = MODEL_REGISTRY.findIndex(
+    (m) => m.providerId === model.providerId && m.id === model.id
+  );
   if (idx >= 0) {
     MODEL_REGISTRY[idx] = model;
   } else {
@@ -368,11 +384,15 @@ export function registerModel(model: ModelInfo): void {
       MODEL_REGISTRY.push(model);
     }
   }
-  _modelIndex.set(model.id, model);
+  _reindex();
 }
 
-export function getModel(id: string): ModelInfo | undefined {
-  return _modelIndex.get(id);
+export function getModel(id: string, providerId?: string): ModelInfo | undefined {
+  if (providerId) {
+    const exact = _qualifiedIndex.get(_key(providerId, id));
+    if (exact) return exact;
+  }
+  return _idFirstIndex.get(id);
 }
 
 export function registerModels(models: ModelInfo[]): void {
@@ -389,10 +409,10 @@ export function unregisterModels(ids: string[]): void {
   const set = new Set(ids);
   for (let i = MODEL_REGISTRY.length - 1; i >= 0; i--) {
     if (set.has(MODEL_REGISTRY[i].id)) {
-      _modelIndex.delete(MODEL_REGISTRY[i].id);
       MODEL_REGISTRY.splice(i, 1);
     }
   }
+  _reindex();
 }
 
 _reindex();

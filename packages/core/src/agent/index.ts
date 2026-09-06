@@ -30,7 +30,7 @@ export {
   type SessionFileChange,
 } from "./checkpoints.js";
 export {
-  runSubAgent,
+  runSubAgentLive,
   subAgentTools,
   capReport,
   SUB_AGENT_MAX_ITERATIONS,

@@ -8,6 +8,16 @@ export class PathEscapeError extends Error {
   }
 }
 
+/**
+ * Directory names every filesystem-walking tool skips (single source — was
+ * duplicated across grep/listFiles/outline/awareness with drifting members).
+ * The union is canonical: skipping `build`/`.next` everywhere is the intent
+ * (generated output, no source value, multi-MB scans).
+ */
+export const EXCLUDED_DIRS: ReadonlySet<string> = new Set([
+  "node_modules", ".git", "dist", ".anvil", "build", ".next",
+]);
+
 // Resolves `requested` against `root`, and throws if the result is not inside `root`.
 // Every tool below must call this instead of `path.resolve` directly. The deepest
 // existing ancestor is resolved through symlinks, blocking a link inside the

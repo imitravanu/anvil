@@ -1,9 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
-import { resolveWithinRoot } from "./paths.js";
+import { EXCLUDED_DIRS, resolveWithinRoot } from "./paths.js";
 
-const EXCLUDED_DIRS = new Set(["node_modules", ".git", "dist", ".anvil"]);
 
 // Supports ** (any depth, including zero directory levels), * (within a
 // segment), ? (single char). e.g. "src/**/*.ts" matches both "src/a.ts" and

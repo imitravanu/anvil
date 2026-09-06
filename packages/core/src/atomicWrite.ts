@@ -25,12 +25,25 @@ export function anvilHome(): string {
  * applied BEFORE the rename so there is no world-readable window) then
  * rename over the target. Throws on failure — callers decide policy.
  */
+let tmpSeq = 0;
 export function atomicWriteJson(file: string, data: unknown, opts?: { mode?: number }): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.tmp.${process.pid}`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), "utf-8");
-  if (opts?.mode !== undefined) {
-    fs.chmodSync(tmp, opts.mode);
+  // Sequence suffix: two same-process writers to one target would otherwise
+  // share a tmp name and race each other's rename (pid alone is not enough).
+  const tmp = `${file}.tmp.${process.pid}.${tmpSeq++}`;
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2), "utf-8");
+    if (opts?.mode !== undefined) {
+      fs.chmodSync(tmp, opts.mode);
+    }
+    fs.renameSync(tmp, file);
+  } catch (err) {
+    // Never leave the orphan tmp behind on a failed write.
+    try {
+      fs.unlinkSync(tmp);
+    } catch {
+      // already gone — nothing to clean
+    }
+    throw err;
   }
-  fs.renameSync(tmp, file);
 }
