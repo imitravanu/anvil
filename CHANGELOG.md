@@ -4,6 +4,96 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 (major.minor.patch — breaking features bump minor while pre-1.0).
 
+## [0.6.1] — 2026-09-07
+
+A full chief-engineer audit of the post-0.6.0 tree plus a concurrent TUI
+hardening pass. The headline: the "lines stack and interfere" corruption is
+fixed at its root, and two real security holes in the command safe-list are
+closed.
+
+### Fixed
+
+- **Line stacking (root cause 1 — input)**: when keystrokes arrive batched in
+  one read (fast typing, paste, tmux/SSH), the text-input component embedded
+  the carriage return into the input value instead of submitting — a raw
+  control character in a rendered frame line desyncs terminal row accounting,
+  and every later redraw lands on the wrong rows. Input is sanitized and an
+  embedded return now submits.
+- **Line stacking (root cause 2 — display)**: the transcript could render
+  assistant text, tool summaries, and verification output containing raw
+  control characters (`\r` progress lines, ANSI escape codes, tabs), which
+  Ink's row accounting cannot survive — borders broke and lines overwrote
+  each other for the rest of the session. All display sinks now sanitize
+  (`sanitizeTerminalText`): last `\r` segment kept (progress-bar semantics),
+  escapes stripped, tabs expanded. Verified live with a command printing real
+  color/progress/bell bytes.
+- **Security**: the read-only command safe-list no longer auto-allows file
+  readers pointed outside the project (`cat ~/.ssh/id_rsa` used to run
+  unprompted); `~`/`$HOME` arguments fail closed. The destructive-command
+  guard de-shells quotes and command substitution, so `rm -rf "$HOME"` and
+  `echo $(rm -rf ~)` are refused.
+- **Provider replay**: loop-guard notes were written before tool results in
+  history — a 400 on OpenAI-family providers and an Anthropic contract
+  violation exactly when a model started looping. Results now lead.
+- **Headless honesty**: `anvil -p` exited 0 when the turn was cut off by the
+  step budget (now exit 2); Ctrl+C reaches the graceful-cancel handler;
+  unknown flags fail loudly; `--help` works anywhere; `-p "-42 is the answer"`
+  is accepted.
+- **Goal engine**: cancelling or erroring on the planning turn aborts the
+  mission instead of burning the turn budget; the milestone review accepts
+  only the prompted `YES —` verdict shape (hedges fail); failed milestones
+  are visible in headless output.
+- **Race conditions**: a message queued in the gap between turns could start
+  a second concurrent send; typing between mission turns collided with mission
+  turns and failed innocent milestones. The busy claim now spans the whole
+  drain/mission, queues drain afterwards, and the Mission Deck's detail line
+  updates live.
+- A reply taller than the transcript pushed the user's message off the top
+  and the "… N earlier messages" indicator (rendered inside the clipped
+  region) was itself the first row eaten — the turn vanished without a trace.
+  The indicator now sits outside the clip and is always visible.
+- The status bar could be squeezed to zero rows by an overflowing transcript,
+  and measured width in code points instead of terminal cells (wrapping
+  `tokens … out` onto a second row); the bar is shrink-proof and the token
+  segment truncates to fit.
+- Markdown rendering: ordered lists lost their numbers; table rows laid out
+  side by side on one physical line; code blocks could fill the whole
+  transcript (long blocks now window head+tail with an omission line);
+  structural blocks render with blank-line separation; lists render with a
+  hanging indent and literal `•` bullets parse as markers.
+- Every fixed-height UI zone is width/height-capped: permission diffs, the
+  diff and rewind modals (windowed), the mission deck, tool/sub-agent/
+  verification card one-liners, and the outer frame clips as a backstop.
+- `grep` reported `truncated: false` when the cap was hit inside the last
+  scanned file; the cap is enforced per match.
+- `estimateTokens` (proactive compaction on resume) ignored images — each now
+  counts a 2k-token floor.
+- Concurrent writers to the same file raced one temp name in
+  `atomicWriteJson` (sequenced suffix; orphan temps cleaned up).
+- The model registry was keyed by id only — the same id under two providers
+  silently overwrote, curated rows included. Provider-qualified lookup, and
+  registration replaces only that provider's row.
+- A crashed sub-agent reported an empty success — the reason is captured and
+  surfaced.
+- `anvil -p` could hang forever on an open-but-silent non-TTY stdin (5s idle
+  window, stderr note).
+- Files named like `..config` were rejected as path escapes; unknown model
+  ids never compacted (32k fallback window); a delegation that changed files
+  now triggers auto-verify; an emptied checkpoint ring clears its persisted
+  file; `/connect` is escapable; the `/expand` notice no longer duplicates;
+  the transcript scrollback estimator counts settled assistant messages
+  through the real markdown parser.
+
+### Changed
+
+- CLI boot (chat / headless / goal) shares one selection/MCP/credentials
+  path; MCP connection problems are surfaced on stderr in headless and goal
+  mode instead of being swallowed silently. `EXCLUDED_DIRS` is a single
+  source (union set) shared by grep / list_files / get_outline / workspace
+  awareness.
+- Workspace dependency pins fixed (v0.6.0 shipped with stale pins that broke
+  fresh installs).
+
 ## [0.6.0] — 2026-09-06
 
 ### Added
@@ -205,69 +295,18 @@ loop with six tools and path containment, interactive permission prompts with
 unified diffs, session persistence, context compaction, theming, first-run
 onboarding, sub-agent delegation, and MCP (stdio) support.
 
-[Unreleased]: https://github.com/mitravanu/anvil/compare/v0.5.0...HEAD
+## [Unreleased]
+
+### Planned
+
+- Verification/eval harness, provider certification, project memory & git-native workflow, distribution (see `docs/ROADMAP.md`).
+
+[Unreleased]: https://github.com/mitravanu/anvil/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/mitravanu/anvil/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/mitravanu/anvil/compare/v0.5.1...v0.6.0
 [0.5.0]: https://github.com/mitravanu/anvil/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/mitravanu/anvil/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mitravanu/anvil/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mitravanu/anvil/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mitravanu/anvil/releases/tag/v0.1.0
 
-## [Unreleased]
-
-### Fixed
-
-- `grep` reported `truncated: false` when the result cap was hit inside the
-  last scanned file; the cap is now enforced per match.
-- `estimateTokens` (proactive compaction on resume) ignored image parts — an
-  image-heavy resumed session under-seeded and died on the provider's context
-  limit. Each image now counts a fixed 2k-token floor.
-- Concurrent writers to the same file shared one temp name (pid suffix only)
-  and could race each other's rename in `atomicWriteJson`; a failed write also
-  left the orphan temp behind.
-- The model registry was keyed by id only, so the same id under two providers
-  silently overwrote (last-wins) — including live-synced rows overwriting
-  curated ones. Lookups are provider-qualified first, and cross-provider
-  registration replaces only that provider's row.
-- A crashed sub-agent reported an empty success — the failure reason is now
-  captured (`failureReason`) and surfaced in the delegation result and card.
-- `anvil -p` could hang forever on an open-but-silent non-TTY stdin; after a
-  5s idle window it proceeds without piped input (stderr note).
-- The transcript could render assistant text, tool summaries, and verification
-  output containing raw control characters (`\r` progress lines, ANSI escape
-  codes, tabs). Ink's row accounting cannot survive those — borders broke and
-  lines overwrote each other for the rest of the session. All display sinks
-  now sanitize (`sanitizeTerminalText`): last `\r` segment kept (progress-bar
-  semantics), escapes stripped, tabs expanded.
-- A reply taller than the transcript pushed the user's message off the top and
-  the "… N earlier messages" indicator (rendered inside the clipped region)
-  was itself the first row eaten — the turn vanished without a trace. The
-  indicator now sits outside the clip and is always visible.
-- The status bar had no `flexShrink: 0`, so an overflowing transcript could
-  squeeze its single row to zero and the bar disappeared entirely.
-- The status bar measured its width in code points instead of terminal cells
-  and ignored the frame border, wrapping `tokens … out` onto a second row with
-  long model names; it now truncates the token segment to fit.
-- Markdown rendering: ordered lists lost their numbers (`1.` → `•`); table
-  rows laid out side by side on one physical line (row Box default
-  direction); code blocks had no containment and could fill the whole
-  transcript (long blocks now window head+tail with an omission line);
-  structural blocks render with blank-line separation and a box-drawing table
-  rule.
-- The transcript scrollback estimator now counts settled assistant messages
-  through the real markdown parser (windowed code, tables, spacing) so the
-  hidden-messages indicator stays honest.
-- Markdown lists render with a hanging indent: wrapped continuation lines
-  align under the item text instead of column 0, and literal `•` bullets
-  (which models emit instead of markdown dashes) parse as list markers.
-
-### Changed
-
-- CLI boot (chat / headless / goal) no longer repeats three near-identical
-  ~60-line blocks; MCP connection problems are surfaced on stderr in headless
-  and goal mode instead of being swallowed silently. `EXCLUDED_DIRS` is a
-  single source (union set) shared by grep / list_files / get_outline /
-  workspace awareness.
-
-### Planned
-
-- Verification/eval harness, provider certification, project memory & git-native workflow, distribution (see `docs/ROADMAP.md`).
