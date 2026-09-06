@@ -3,6 +3,7 @@ import type { DisplayVerification } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
 import { curtail } from "../util/format.js";
+import { sanitizeTerminalText } from "../util/sanitize.js";
 
 export function VerificationCard({ verification }: { verification: DisplayVerification }) {
   const theme = useTheme();
@@ -43,13 +44,16 @@ export function VerificationCard({ verification }: { verification: DisplayVerifi
           </Text>
         </Box>
         {/* The command shares the title row (space-between) — an uncurtailed
-            long command wraps and grows the fixed-feel card. */}
-        <Text dimColor>cmd: {curtail(verification.command, Math.max(10, width - 46))}</Text>
+            long command wraps and grows the fixed-feel card. Verification
+            summaries quote test-runner output (\r progress lines, ANSI). */}
+        <Text dimColor>
+          cmd: {curtail(sanitizeTerminalText(verification.command), Math.max(10, width - 46))}
+        </Text>
       </Box>
 
       {verification.summary && (
         <Box paddingLeft={3}>
-          <Text dimColor>{curtail(verification.summary, 120)}</Text>
+          <Text dimColor>{curtail(sanitizeTerminalText(verification.summary), 120)}</Text>
         </Box>
       )}
 

@@ -3,6 +3,11 @@ import { MarkdownBlock, MarkdownSpan, parseMarkdownText } from "./renderMarkdown
 import { highlightCodeBlocks } from "./highlightCodeBlocks.js";
 import { useTheme } from "../theme/theme.js";
 import { curtail } from "../util/format.js";
+import {
+  CODE_HEAD_LINES,
+  CODE_TAIL_LINES,
+  markdownBlockSpaced,
+} from "../util/displayLimits.js";
 
 function Spans({ spans }: { spans: MarkdownSpan[] }) {
   const theme = useTheme();
@@ -57,24 +62,30 @@ function TableView({ headers, rows }: { headers: MarkdownSpan[][]; rows: Markdow
     curtail(
       cells
         .map((_, c) => pad(cells[c] ?? [{ text: "" }], widths[c]))
-        .join(" | "),
+        .join(" │ "),
       maxLen
     );
+  const rule = curtail(
+    widths.map((w) => "─".repeat(w)).join("─┼─"),
+    maxLen
+  );
   return (
     <>
-      <Text bold wrap="wrap">{line(headers)}</Text>
-      <Text dimColor>{curtail(widths.map((w) => "-".repeat(w)).join("-+-"), maxLen)}</Text>
+      <Text bold>{line(headers)}</Text>
+      <Text dimColor>{rule}</Text>
       {rows.map((row, i) => (
-        <Text key={i} wrap="wrap">{line(row)}</Text>
+        <Text key={i}>{line(row)}</Text>
       ))}
     </>
   );
 }
 
 /**
- * Renders parsed markdown blocks. Code blocks reuse the existing second-pass
+ * Render parsed markdown blocks. Code blocks reuse the existing second-pass
  * highlighter (fences only) — markdown parsing runs FIRST, so highlighted ANSI
- * is never re-parsed as inline markdown.
+ * is never re-parsed as inline markdown. Long code blocks window head+tail so
+ * one block can never eat the whole transcript; the full text stays in the
+ * session file.
  */
 export function MarkdownView({ blocks }: { blocks: MarkdownBlock[] }) {
   const theme = useTheme();
@@ -83,74 +94,101 @@ export function MarkdownView({ blocks }: { blocks: MarkdownBlock[] }) {
   return (
     <Box flexDirection="column">
       {blocks.map((block, i) => {
-        switch (block.kind) {
-          case "heading":
-            return (
-              <Text key={i} bold color={theme.colors.primary}>
-                {"  ".repeat(Math.min(block.level, 4))}
-                <Spans spans={block.spans} />
-              </Text>
-            );
-          case "text":
-            return (
-              <Text key={i}>
-                <Spans spans={block.spans} />
-              </Text>
-            );
-          case "list":
-            return (
-              <Text key={i}>
-                {"  ".repeat(Math.min(block.depth, 4))}{"  • "}
-                <Spans spans={block.spans} />
-              </Text>
-            );
-          case "quote":
-            return (
-              <Text key={i} dimColor>
-                {"▍".repeat(Math.min(block.depth, 3))} <Spans spans={block.spans} />
-              </Text>
-            );
-          case "hr":
-            return (
-              <Text key={i} dimColor>
-                {"─".repeat(40)}
-              </Text>
-            );
-          case "table":
-            return (
-              <Box key={i} flexDirection="column">
-                <TableView headers={block.headers} rows={block.rows} />
-              </Box>
-            );
-          case "links":
-            return (
-              <Box key={i} flexDirection="column">
-                {block.links.map((l) => (
-                  <Text key={l.n} dimColor>
-                    [{l.n}] {l.text !== l.url ? `${l.text} → ` : ""}{l.url}
-                  </Text>
-                ))}
-              </Box>
-            );
-          case "code": {
-            // Curtail plain code lines BEFORE highlighting: a single minified
-            // line would otherwise render as 100+ visual rows and stack the
-            // frame. Curtailing post-highlight would slice ANSI sequences.
-            const safeCode = block.code
-              .split("\n")
-              .map((l) => curtail(l, maxCodeLen))
-              .join("\n");
-            const fenced = `\`\`\`${block.language}\n${safeCode}\`\`\``;
-            return (
-              <Text key={i} color={theme.colors.userText} wrap="wrap">
-                {highlightCodeBlocks(fenced)}
-              </Text>
-            );
-          }
-        }
+        const spaced = markdownBlockSpaced(block.kind, blocks[i - 1]?.kind);
+        return (
+          // flexDirection column: Box defaults to row, which laid the
+          // table's rule/rows out side by side on one physical line.
+          <Box key={i} flexDirection="column" marginTop={spaced ? 1 : 0}>
+            {renderBlock(block, theme, maxCodeLen)}
+          </Box>
+        );
       })}
     </Box>
   );
+}
+
+function renderBlock(
+  block: MarkdownBlock,
+  theme: ReturnType<typeof useTheme>,
+  maxCodeLen: number
+) {
+  switch (block.kind) {
+    case "heading":
+      return (
+        <Text bold color={theme.colors.primary}>
+          {"  ".repeat(Math.min(block.level, 4))}
+          <Spans spans={block.spans} />
+        </Text>
+      );
+    case "text":
+      return (
+        <Text>
+          <Spans spans={block.spans} />
+        </Text>
+      );
+    case "list":
+      return (
+        <Text>
+          {"  ".repeat(Math.min(block.depth, 4))}  {block.marker}{" "}
+          <Spans spans={block.spans} />
+        </Text>
+      );
+    case "quote":
+      return (
+        <Text dimColor>
+          {"▍".repeat(Math.min(block.depth, 3))} <Spans spans={block.spans} />
+        </Text>
+      );
+    case "hr":
+      return (
+        <Text dimColor>
+          {"─".repeat(40)}
+        </Text>
+      );
+    case "table":
+      return <TableView headers={block.headers} rows={block.rows} />;
+    case "links":
+      return (
+        <Box flexDirection="column">
+          {block.links.map((l) => (
+            <Text key={l.n} dimColor>
+              [{l.n}] {l.text !== l.url ? `${l.text} → ` : ""}{l.url}
+            </Text>
+          ))}
+        </Box>
+      );
+    case "code": {
+      // Curtail plain code lines BEFORE highlighting: a single minified
+      // line would otherwise render as 100+ visual rows and stack the
+      // frame. Curtailing post-highlight would slice ANSI sequences.
+      const all = block.code.split("\n").map((l) => curtail(l, maxCodeLen));
+      const highlight = (lines: string[]) =>
+        highlightCodeBlocks(`\`\`\`${block.language}\n${lines.join("\n")}\n\`\`\``).split("\n");
+      // Window long blocks head+tail; ANSI output splits safely on \n
+      // (escape sequences never contain a newline byte).
+      const segs: { text: string; dim?: boolean }[] =
+        all.length > CODE_HEAD_LINES + CODE_TAIL_LINES + 2
+          ? [
+              ...highlight(all.slice(0, CODE_HEAD_LINES)).map((text) => ({ text })),
+              {
+                text: `… ${all.length - CODE_HEAD_LINES - CODE_TAIL_LINES} lines omitted (${all.length} total — full block in the session file)`,
+                dim: true,
+              },
+              ...highlight(all.slice(-CODE_TAIL_LINES)).map((text) => ({ text })),
+            ]
+          : highlight(all).map((text) => ({ text }));
+      return (
+        <Box flexDirection="column">
+          {segs.map((s, j) => (
+            <Text key={j}>
+              <Text dimColor>▎ </Text>
+              <Text dimColor={s.dim || undefined}>{s.text}</Text>
+            </Text>
+          ))}
+        </Box>
+      );
+    }
+  }
 }
 
 export { parseMarkdownText }; // convenience for callers/tests

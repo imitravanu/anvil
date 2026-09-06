@@ -71,24 +71,33 @@ export function MessageList({ messages, model, expandTools }: { messages: Displa
       </Box>
     );
   }
+  // Two stacked zones: the "… N earlier messages" indicator sits OUTSIDE the
+  // bottom-anchored clip. Inside it, the indicator was the first row the flex
+  // clip ate whenever the newest message itself overflowed — the user's turn
+  // vanished with no trace, as if the message had never been sent.
   return (
-    <Box
-      flexDirection="column"
-      flexGrow={1}
-      flexShrink={1}
-      minHeight={0}
-      overflow="hidden"
-      paddingX={1}
-      justifyContent="flex-end"
-    >
+    <Box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden" paddingX={1}>
       {hidden > 0 && (
-        <Text dimColor>… {hidden} earlier message{hidden === 1 ? "" : "s"} above — full history in the session file</Text>
-      )}
-      {messages.map((message, index) => (
-        <Box key={message.id} marginTop={index > 0 ? 1 : 0} flexShrink={0}>
-          <MessageView message={message} expandTools={expandTools} />
+        <Box flexShrink={0}>
+          <Text dimColor>
+            … {hidden} earlier message{hidden === 1 ? "" : "s"} above — full history in the session file
+          </Text>
         </Box>
-      ))}
+      )}
+      <Box
+        flexDirection="column"
+        flexGrow={1}
+        flexShrink={1}
+        minHeight={0}
+        overflow="hidden"
+        justifyContent="flex-end"
+      >
+        {messages.map((message, index) => (
+          <Box key={message.id} marginTop={index > 0 ? 1 : 0} flexShrink={0}>
+            <MessageView message={message} expandTools={expandTools} />
+          </Box>
+        ))}
+      </Box>
     </Box>
   );
 }

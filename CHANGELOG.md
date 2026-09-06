@@ -232,6 +232,30 @@ onboarding, sub-agent delegation, and MCP (stdio) support.
   captured (`failureReason`) and surfaced in the delegation result and card.
 - `anvil -p` could hang forever on an open-but-silent non-TTY stdin; after a
   5s idle window it proceeds without piped input (stderr note).
+- The transcript could render assistant text, tool summaries, and verification
+  output containing raw control characters (`\r` progress lines, ANSI escape
+  codes, tabs). Ink's row accounting cannot survive those — borders broke and
+  lines overwrote each other for the rest of the session. All display sinks
+  now sanitize (`sanitizeTerminalText`): last `\r` segment kept (progress-bar
+  semantics), escapes stripped, tabs expanded.
+- A reply taller than the transcript pushed the user's message off the top and
+  the "… N earlier messages" indicator (rendered inside the clipped region)
+  was itself the first row eaten — the turn vanished without a trace. The
+  indicator now sits outside the clip and is always visible.
+- The status bar had no `flexShrink: 0`, so an overflowing transcript could
+  squeeze its single row to zero and the bar disappeared entirely.
+- The status bar measured its width in code points instead of terminal cells
+  and ignored the frame border, wrapping `tokens … out` onto a second row with
+  long model names; it now truncates the token segment to fit.
+- Markdown rendering: ordered lists lost their numbers (`1.` → `•`); table
+  rows laid out side by side on one physical line (row Box default
+  direction); code blocks had no containment and could fill the whole
+  transcript (long blocks now window head+tail with an omission line);
+  structural blocks render with blank-line separation and a box-drawing table
+  rule.
+- The transcript scrollback estimator now counts settled assistant messages
+  through the real markdown parser (windowed code, tables, spacing) so the
+  hidden-messages indicator stays honest.
 
 ### Changed
 

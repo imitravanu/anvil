@@ -2,7 +2,7 @@ import { Box, Text, useStdout } from "ink";
 import { MODEL_REGISTRY } from "@anvil/core";
 import type { UsageTotals } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
-import { contextGauge, curtail, displayModelLabel, formatPricingTag } from "../util/format.js";
+import { contextGauge, curtail, displayModelLabel, displayWidth, formatPricingTag } from "../util/format.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
 
 export interface StatusBarProps {
@@ -48,11 +48,24 @@ export function StatusBar({
   const checkpointPlain = checkpointCount && checkpointCount > 0 ? ` │ ⎌ ${checkpointCount}` : "";
   const testPlain = testStatus ? ` │ 🧪 ${testStatus}` : "";
 
-  const leftPlain = `${curtail(modelLabel, 40)} │ ${statePlain}${checkpointPlain}${testPlain}${gaugePlain} │ ${tokens}`;
-  const budget = width - Array.from(leftPlain).length - 6;
+  // Width accounting in terminal CELLS (emoji are 2), and the reserve covers
+  // the outer frame's two border columns — a left segment measured in code
+  // points alone wrapped the tokens onto a second row and grew this zone.
+  const avail = Math.max(20, width - 2 * theme.spacing.panelPaddingX - 2);
+  const fixedPlain = `${curtail(modelLabel, 40)} │ ${statePlain}${checkpointPlain}${testPlain}${gaugePlain} │ `;
+  const tokensShown = (() => {
+    const room = avail - displayWidth(fixedPlain);
+    if (displayWidth(tokens) <= room) return tokens;
+    return curtail(tokens, Math.max(0, room - 1));
+  })();
+  const budget = avail - displayWidth(fixedPlain + tokensShown);
 
   return (
-    <Box paddingX={theme.spacing.panelPaddingX} justifyContent="space-between">
+    // flexShrink 0 is load-bearing: when an unsrinkable transcript message
+    // overflows the frame, Yoga distributes shrink across every shrinkable
+    // child and this single-row bar loses its row entirely (the status bar
+    // "disappears" on long replies).
+    <Box flexShrink={0} paddingX={theme.spacing.panelPaddingX} justifyContent="space-between">
       <Text dimColor>
         {curtail(modelLabel, 40)} │ {state}
         {checkpointCount !== undefined && checkpointCount > 0 && (
@@ -82,7 +95,7 @@ export function StatusBar({
             {gauge.text}
           </Text>
         )}{" "}
-        │ {tokens}
+        │ {tokensShown}
       </Text>
       {budget >= hints.length ? <Text dimColor>{hints}</Text> : null}
     </Box>

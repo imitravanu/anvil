@@ -10,6 +10,26 @@ export const HISTORY_RECALL_CAP = 100; // sentHistory bound
 export const MESSAGE_QUEUE_CAP = 10; // messages typed while a turn runs
 export const IMAGE_MAX_BYTES = 5 * 1024 * 1024; // /image attachment cap
 
+// Code-block windowing: a 40-line block otherwise fills the whole transcript
+// and (via the flex clip) shows only its tail, silently. Render head+tail
+// with an omission marker instead; the full block lives in the session file.
+export const CODE_HEAD_LINES = 10;
+export const CODE_TAIL_LINES = 3;
+
+/**
+ * Whether a markdown block gets a blank line above it. Paragraph-like blocks
+ * (text, hr) stay tight under their neighbors; structural blocks breathe.
+ * Shared by MarkdownView (renders it) and the transcript estimator (counts
+ * it) so the "… N earlier messages" indicator stays honest.
+ */
+export function markdownBlockSpaced(kind: string, prevKind: string | undefined): boolean {
+  if (!prevKind) return false;
+  if (kind === "heading" || kind === "code" || kind === "table" || kind === "links" || kind === "quote") return true;
+  if (kind === "list") return prevKind !== "list";
+  // text/hr: only breathe after a boxed block, not after lists or other text.
+  return prevKind === "code" || prevKind === "table" || prevKind === "links" || prevKind === "quote";
+}
+
 /** "… N more line(s) omitted" suffix shared by expanded viewers. */
 export function omittedLine(total: number, shown: number): string {
   return `… ${total - shown} more line(s) omitted`;

@@ -24,7 +24,8 @@ export type MarkdownSpan = {
 export type MarkdownBlock =
   | { kind: "heading"; level: number; spans: MarkdownSpan[] }
   | { kind: "text"; spans: MarkdownSpan[] }
-  | { kind: "list"; depth: number; spans: MarkdownSpan[] }
+  /** `marker` preserves the source marker: "•" for bullets, "1."/"2)" ordered. */
+  | { kind: "list"; depth: number; marker: string; spans: MarkdownSpan[] }
   | { kind: "quote"; spans: MarkdownSpan[]; depth: number }
   | { kind: "code"; language: string; code: string }
   | { kind: "hr" }
@@ -38,7 +39,7 @@ const FENCE_RE = /^```([^\s`]*)\s*$/;
 const HEADING_RE = /^(#{1,6})\s+(.*)$/;
 const HR_RE = /^\s*(-{3,}|\*{3,}|_{3,})\s*$/;
 const QUOTE_RE = /^((?:>\s?)+)(.*)$/;
-const LIST_RE = /^(\s*)(?:[-*+]|\d+[.)])\s+(.*)$/;
+const LIST_RE = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
 
 export function parseInline(text: string, allowLinks = true): MarkdownSpan[] {
   const spans: MarkdownSpan[] = [];
@@ -223,7 +224,8 @@ export function parseMarkdownText(text: string): MarkdownBlock[] {
     if (list) {
       flushPara();
       const depth = listDepth(list[1]);
-      blocks.push({ kind: "list", depth, spans: parseInline(list[2]) });
+      const marker = /^[-*+]$/.test(list[2]) ? "•" : list[2];
+      blocks.push({ kind: "list", depth, marker, spans: parseInline(list[3]) });
       i += 1;
       continue;
     }

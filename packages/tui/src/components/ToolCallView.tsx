@@ -3,14 +3,18 @@ import type { DisplayToolCall } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { TOOL_SUMMARY_MAX } from "../util/displayLimits.js";
 import { curtail } from "../util/format.js";
+import { sanitizeTerminalText } from "../util/sanitize.js";
 import { formatToolOutput } from "../util/toolOutput.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
 import { ExpandedLines } from "./ExpandedLines.js";
 
 function describeCall(call: DisplayToolCall): string {
   // Summaries and JSON inputs are single-lined via curtail (code-point aware —
-  // a naive slice could split a surrogate pair).
-  if (call.summary) return curtail(call.summary.split("\n")[0] ?? "", TOOL_SUMMARY_MAX);
+  // a naive slice could split a surrogate pair). Sanitize FIRST: tool output
+  // carries \r progress lines and ANSI codes that corrupt the frame.
+  if (call.summary) {
+    return curtail(sanitizeTerminalText(call.summary).split("\n")[0] ?? "", TOOL_SUMMARY_MAX);
+  }
   return curtail(JSON.stringify(call.input), TOOL_SUMMARY_MAX);
 }
 
