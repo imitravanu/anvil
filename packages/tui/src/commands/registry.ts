@@ -329,10 +329,14 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
       printSystemMessage(formatLedger(session.getRunLedger()));
     },
     toggleExpand: () => {
-      setExpandTools((prev) => {
-        printSystemMessage(prev ? "Tool output expansion off." : "Tool output expansion on — full results shown.");
-        return !prev;
-      });
+      // Side effect outside the updater: React may invoke updaters twice
+      // (StrictMode), which duplicated the transcript notice. The message is
+      // derived from the deps' current value, not read inside the updater.
+      const turningOn = !deps.expandTools;
+      setExpandTools(turningOn);
+      printSystemMessage(
+        turningOn ? "Tool output expansion on — full results shown." : "Tool output expansion off."
+      );
     },
     rewind: (idText?: string) => {
       if (isBusy) {

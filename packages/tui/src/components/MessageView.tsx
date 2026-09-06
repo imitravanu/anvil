@@ -66,7 +66,7 @@ export function MessageView({ message, expandTools }: { message: DisplayMessage;
         <ToolCallView key={call.id} call={call} expanded={expandTools} />
       ))}
       {message.verifications?.map((v) => (
-        <VerificationCard key={v.id} verification={v} expanded={expandTools} />
+        <VerificationCard key={v.id} verification={v} />
       ))}
       {message.subAgents.map((sub, i) => (
         <SubAgentView key={i} sub={sub} expanded={expandTools} />

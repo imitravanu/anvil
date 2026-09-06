@@ -1,17 +1,13 @@
-import { Box, Text } from "ink";
+import { Box, Text, useStdout } from "ink";
 import type { DisplayVerification } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
 import { curtail } from "../util/format.js";
 
-export function VerificationCard({
-  verification,
-  expanded: _expanded,
-}: {
-  verification: DisplayVerification;
-  expanded?: boolean;
-}) {
+export function VerificationCard({ verification }: { verification: DisplayVerification }) {
   const theme = useTheme();
+  const { stdout } = useStdout();
+  const width = stdout?.columns ?? 80;
   const spinner = useSpinnerFrame(verification.status === "running");
 
   const borderColor =
@@ -46,7 +42,9 @@ export function VerificationCard({
                 : "Test Suite Regression Detected"}
           </Text>
         </Box>
-        <Text dimColor>cmd: {verification.command}</Text>
+        {/* The command shares the title row (space-between) — an uncurtailed
+            long command wraps and grows the fixed-feel card. */}
+        <Text dimColor>cmd: {curtail(verification.command, Math.max(10, width - 46))}</Text>
       </Box>
 
       {verification.summary && (

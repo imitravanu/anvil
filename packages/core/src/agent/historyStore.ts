@@ -135,9 +135,12 @@ export class HistoryStore {
   /**
    * Close the turn: tool results rebuilt in EXACTLY declared call order
    * (provider replay stability is non-negotiable whatever the execution
-   * path), with loop-guard notes leading as user-role text in the SAME
-   * message (a separate user message between tool_call and tool_result
-   * would break Gemini's functionResponse adjacency).
+   * path), with any loop-guard notes trailing as user-role text in the SAME
+   * message (a separate user message between tool_call and tool_result would
+   * break Gemini's functionResponse adjacency). Results must come FIRST
+   * within the message: Anthropic requires tool_result blocks at the start of
+   * the user turn, and OpenAI-family providers reject a user text message
+   * interleaved between assistant tool_calls and their role:"tool" replies.
    */
   pushToolResults(
     prepared: readonly PreparedCall[],
@@ -154,9 +157,8 @@ export class HistoryStore {
         });
       }
     }
-    const parts: ConversationMessage["content"] = [];
+    const parts: ConversationMessage["content"] = [...ordered];
     if (turnNotes.length > 0) parts.push({ type: "text", text: turnNotes.join("\n") });
-    parts.push(...ordered);
     this.messages.push({ role: "user", content: parts });
   }
 }

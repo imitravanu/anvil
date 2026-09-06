@@ -4,6 +4,11 @@ import { getModel } from "../providers/registry.js";
 import { TOOL_DEFINITIONS, detectTestCommand, runTestVerification } from "../tools/index.js";
 import type { ToolExecutionResult, ToolDefinition } from "../tools/types.js";
 import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded, estimateTokens } from "./compaction.js";
+
+// Context window assumed for model ids not in the registry (free-form ids are
+// supported on purpose). Conservative: compaction may fire a bit early, which
+// beats an unhandled provider overflow error.
+const FALLBACK_CONTEXT_WINDOW = 32_000;
 import { SessionMetadata, StoredSession } from "../session/types.js";
 import { AgentEvent, AgentOptions, DEFAULT_MAX_INNER_ITERATIONS } from "./types.js";
 import { RunLedgerEntry, capLedger, maxSeq } from "./ledger.js";
@@ -61,8 +66,7 @@ export class AgentSession {
   private isSending = false;
   private provider: ModelProvider;
   private options: AgentOptions;
-  // The previous turn's input token count — compaction uses it reactively
-  //.
+  // The previous turn's input token count — compaction uses it reactively.
   private lastInputTokens = 0;
   // durable-loop state.
   readonly maxInnerIterations: number;
@@ -378,17 +382,20 @@ export class AgentSession {
         // peeked first: a below-threshold loop-top must not burn the attempt
         // (lastInputTokens is stale until the first round of THIS turn lands).
         const modelInfo = getModel(this.options.model);
+        // Free-form model ids are supported on purpose, so an unknown id must
+        // still compact — a conservative default window beats dying on the
+        // provider's real limit.
+        const contextWindow = modelInfo?.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
         if (
-          modelInfo &&
           !turn.compactedThisTurn &&
-          this.lastInputTokens >= modelInfo.contextWindow * COMPACTION_THRESHOLD &&
+          this.lastInputTokens >= contextWindow * COMPACTION_THRESHOLD &&
           this.history.length > KEEP_RECENT_MESSAGES
         ) {
           turn.markCompactionAttempted();
           try {
             const { history: compacted, result } = await compactIfNeeded(
               this.history.snapshot(),
-              modelInfo.contextWindow,
+              contextWindow,
               this.lastInputTokens,
               this.provider,
               this.options.model,
@@ -682,6 +689,9 @@ export class AgentSession {
             // The sub-ring joins the parent ring (fresh ids, capped): rewind
             // in the main session reaches sub-agent file writes too.
             await this.mergeSubCheckpoints(run.checkpoints);
+            // A delegation that snapshotted files mutated the project — the
+            // auto-verify loop must gate it like any direct write.
+            if (run.checkpoints.length > 0) turn.mutationsOccurred = true;
             this.recordLedger({
               eventType: "subagent_finished",
               tool: "delegate_task",
@@ -744,7 +754,7 @@ export class AgentSession {
         // history first so the NEXT turn replays valid tool_call/tool_result
         // pairs, then surface the cancellation. Whatever the orchestrator did
         // complete is preserved as the real result.
-        if (!runResults || controller.signal.aborted) {
+        if (controller.signal.aborted) {
           this.pushCancelledToolResults(prepared, handled, runResults, turnNotes);
           yield { type: "cancelled" };
           return;

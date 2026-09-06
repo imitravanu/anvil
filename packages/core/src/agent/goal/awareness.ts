@@ -54,7 +54,7 @@ function inspectGit(projectRoot: string): GitContext | undefined {
 function inspectEcosystem(projectRoot: string): EcosystemContext {
   const pkgJsonPath = path.join(projectRoot, "package.json");
   if (fs.existsSync(pkgJsonPath)) {
-    let pkg: any = {};
+    let pkg: { scripts?: Record<string, string> } = {};
     try {
       pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
     } catch {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ColorizedDiff } from "../../diff/colorizeDiff.js";
 import { Header } from "../Header.js";
-import { PlanLine } from "../PlanLine.js";
 import { MissionDeck } from "../MissionDeck.js";
 import { VerificationCard } from "../VerificationCard.js";
 import { StatusBar } from "../StatusBar.js";
@@ -73,10 +72,10 @@ describe("Header", () => {
   });
 });
 
-describe("PlanLine & MissionDeck", () => {
+describe("MissionDeck plan fallback", () => {
   it("renders the plan label and hides overflow with a count", () => {
     const plan = ["one", "two", "three", "four"].join("\n");
-    const { lastFrame, unmount } = renderThemed(<PlanLine plan={plan} />);
+    const { lastFrame, unmount } = renderThemed(<MissionDeck plan={plan} />);
     const out = frameText(lastFrame);
     expect(out).toContain("plan ▸");
     expect(out).toContain("one");
@@ -85,7 +84,7 @@ describe("PlanLine & MissionDeck", () => {
   });
 
   it("renders nothing for a blank plan", () => {
-    const { lastFrame, unmount } = renderThemed(<PlanLine plan={"  \n "} />);
+    const { lastFrame, unmount } = renderThemed(<MissionDeck plan={"  \n "} />);
     expect(frameText(lastFrame).trim()).toBe("");
     unmount();
   });

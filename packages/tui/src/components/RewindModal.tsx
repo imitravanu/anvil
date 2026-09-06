@@ -64,6 +64,8 @@ export function RewindModal({ session, onSelect, onClose }: RewindModalProps) {
       borderColor={theme.colors.accent}
       paddingX={2}
       paddingY={1}
+      flexShrink={0}
+      overflow="hidden"
     >
       <Box justifyContent="space-between" marginBottom={1}>
         <Text bold color={theme.colors.accent}>
@@ -72,30 +74,48 @@ export function RewindModal({ session, onSelect, onClose }: RewindModalProps) {
         <Text dimColor>↑/↓: navigate · Enter: restore · Esc: cancel</Text>
       </Box>
 
+      {/* Sliding window around the selection — a long session must not make
+          the modal taller than the frame (row stacking). */}
       <Box flexDirection="column" gap={0}>
-        {checkpoints.map((cp: CheckpointMeta, idx: number) => {
-          const isSelected = idx === selectedIdx;
-          const timeStr = new Date(cp.ts).toLocaleTimeString();
-          const fileText = `${cp.files} file${cp.files === 1 ? "" : "s"} snapshotted`;
-
+        {(() => {
+          const windowSize = 8;
+          const start = Math.max(0, Math.min(selectedIdx - windowSize + 1, checkpoints.length - windowSize));
+          const rows = checkpoints.slice(start, start + windowSize);
           return (
-            <Box key={cp.id} gap={1}>
-              <Text color={isSelected ? theme.colors.accent : undefined} bold={isSelected}>
-                {isSelected ? "❯ " : "  "}
-                #{cp.id}
-              </Text>
-              <Text dimColor>({timeStr})</Text>
-              <Text color={isSelected ? theme.colors.assistantText : undefined}>
-                {fileText}
-              </Text>
-              {isSelected && (
-                <Text color={theme.colors.toolDone} bold>
-                  [Press Enter to restore]
+            <>
+              {start > 0 && <Text dimColor>  … {start} older checkpoint{start === 1 ? "" : "s"}</Text>}
+              {rows.map((cp: CheckpointMeta) => {
+                const idx = checkpoints.indexOf(cp);
+                const isSelected = idx === selectedIdx;
+                const timeStr = new Date(cp.ts).toLocaleTimeString();
+                const fileText = `${cp.files} file${cp.files === 1 ? "" : "s"} snapshotted`;
+
+                return (
+                  <Box key={cp.id} gap={1}>
+                    <Text color={isSelected ? theme.colors.accent : undefined} bold={isSelected}>
+                      {isSelected ? "❯ " : "  "}
+                      #{cp.id}
+                    </Text>
+                    <Text dimColor>({timeStr})</Text>
+                    <Text color={isSelected ? theme.colors.assistantText : undefined}>
+                      {fileText}
+                    </Text>
+                    {isSelected && (
+                      <Text color={theme.colors.toolDone} bold>
+                        [Press Enter to restore]
+                      </Text>
+                    )}
+                  </Box>
+                );
+              })}
+              {start + rows.length < checkpoints.length && (
+                <Text dimColor>
+                  … {checkpoints.length - start - rows.length} newer checkpoint{checkpoints.length - start - rows.length === 1 ? "" : "s"}
                 </Text>
               )}
-            </Box>
+            </>
           );
-        })}
+        })()}
       </Box>
     </Box>
   );

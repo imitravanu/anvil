@@ -75,7 +75,11 @@ export async function runHeadless(opts: HeadlessOptions): Promise<number> {
   const abortHandler = () => {
     session.cancel();
   };
-  process.on("SIGINT", abortHandler);
+  // Prepend: index.tsx registers a last-resort exit handler at import time.
+  // Listener order is registration order, so without prepending, that handler
+  // process.exit()s before this one can cancel the session — piped stdout is
+  // truncated and the graceful-cancel path never runs.
+  process.prependListener("SIGINT", abortHandler);
 
   try {
     for await (const event of session.send(opts.prompt)) {
@@ -112,6 +116,15 @@ export async function runHeadless(opts: HeadlessOptions): Promise<number> {
         case "error":
           process.stderr.write(`\nError: ${event.message}\n`);
           return 1;
+        case "budget_exhausted":
+          // A turn cut off mid-task is NOT a success — pipelines (and the
+          // planned eval harness) key off the exit code.
+          if (!opts.raw) {
+            process.stderr.write("\nTurn stopped: step budget exhausted. Task may be incomplete.\n");
+          } else {
+            process.stderr.write("budget_exhausted\n");
+          }
+          return 2;
         case "turn_complete":
           process.stdout.write("\n");
           return 0;

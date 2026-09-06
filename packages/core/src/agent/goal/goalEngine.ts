@@ -59,9 +59,13 @@ function emptyOutcome(): GoalTurnOutcome {
  */
 export function parseMilestones(rawText: string, goal: string): GoalMilestone[] {
   try {
-    const jsonMatch = rawText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+    // Fenced JSON first — models wrap arrays in ```json fences more often
+    // than not, and the greedy fallback below can span prose if two arrays
+    // or an example appear in the reply.
+    const fenced = rawText.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
+    const jsonMatch = fenced?.[1] ?? rawText.match(/\[\s*\{[\s\S]*\}\s*\]/)?.[0];
     if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
+      const parsed = JSON.parse(jsonMatch);
       if (Array.isArray(parsed) && parsed.length > 0) {
         return parsed.map((m: any, idx: number) => ({
           id: String(m.id ?? idx + 1),
@@ -144,6 +148,31 @@ export async function* runGoalMission(
     `Respond with ONLY a JSON array — no prose, no markdown fences — of objects with keys: id (string), title (string), criteria (string).`;
 
   const planning = yield* deps.sendTurn(planningPrompt, null);
+  // Cancel/error on the planning turn must fail the mission — falling
+  // through would run parseMilestones on an empty text (deterministic
+  // fallback plan) and burn the whole turn budget against a dead provider.
+  if (planning.cancelled) {
+    yield { type: "goal_failed", error: "Mission cancelled." };
+    return {
+      goal,
+      success: false,
+      milestones: [],
+      totalTurns: 1,
+      filesChanged: [],
+      summary: "Mission cancelled during planning.",
+    };
+  }
+  if (planning.errored) {
+    yield { type: "goal_failed", error: "Planning turn failed; mission aborted." };
+    return {
+      goal,
+      success: false,
+      milestones: [],
+      totalTurns: 1,
+      filesChanged: [],
+      summary: "Mission aborted: the planning turn errored.",
+    };
+  }
   const milestones = parseMilestones(planning.text, goal);
   yield { type: "plan_decomposed", milestones };
 
@@ -230,7 +259,12 @@ export async function* runGoalMission(
       milestone
     );
     const reviewVerdict = review.text.trim();
-    const satisfied = /^YES\b/i.test(reviewVerdict);
+    // The prompt asks for "YES — reason" (or "NO — reason"). A bare /^YES\b/
+    // matched hedges like "Yes, but the criteria were not met..." as a PASS;
+    // accept only the prompted shape (or an exact "YES") and treat a leading
+    // NO as an explicit reject.
+    const satisfied =
+      /^YES\s*(?:—|--|:)/i.test(reviewVerdict) || reviewVerdict.toUpperCase() === "YES";
     totalTurns += 1;
 
     if (review.cancelled) {

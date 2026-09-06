@@ -5,6 +5,7 @@ import {
   type AgentEvent,
   runGoalMission,
   MAX_GOAL_TURNS,
+  type GoalMilestone,
   type GoalTurnOutcome,
 } from "@anvil/core";
 import { retainReport, type SubAgentRecord } from "../util/subagent.js";
@@ -120,7 +121,6 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
   const pendingImagesRef = useRef<{ mediaType: string; data: string; path: string }[]>([]);
   const onTurnSettledRef = useRef(opts.onTurnSettled);
   onTurnSettledRef.current = opts.onTurnSettled;
-  const currentAssistantId = useRef<string | null>(null);
   const [sentHistory, setSentHistory] = useState<string[]>([]);
   // the persistent plan — seeded from the session, updated live
   // by plan_updated events, reset whenever the active session changes.
@@ -142,7 +142,8 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
 
   const runTurn = useCallback(
     async (text: string) => {
-      busyRef.current = true;
+      // busyRef belongs to the caller (send's claim covers the whole drain —
+      // toggling it here opened a window where two sends ran concurrently).
       const attached = pendingImagesRef.current;
       pendingImagesRef.current = [];
       // Bounded state: recall needs dozens, not thousands; the transcript window
@@ -159,7 +160,6 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         ...(attached.length > 0 ? { images: attached.map((a) => ({ path: a.path })) } : {}),
       };
       const assistantId = randomUUID();
-      currentAssistantId.current = assistantId;
       setMessages((prev) => {
         const next: DisplayMessage[] = [
           ...prev,
@@ -195,39 +195,11 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         // Mark streaming done either way — completion, cancellation, or error.
         updateAssistant((m) => ({ ...m, streaming: false }));
         setIsBusy(false);
-        busyRef.current = false;
-        currentAssistantId.current = null;
-          onTurnSettledRef.current?.();
+        onTurnSettledRef.current?.();
       }
     },
     [session]
   );
-
-  /** Drain queued messages after the current turn settles. */
-  const send = useCallback(
-    async (text: string) => {
-      if (busyRef.current) {
-        queueRef.current = [...queueRef.current, text].slice(-MESSAGE_QUEUE_CAP);
-        setQueued([...queueRef.current]);
-        return;
-      }
-      await runTurn(text);
-      while (queueRef.current.length > 0) {
-        const [next, ...rest] = queueRef.current;
-        queueRef.current = rest;
-        setQueued(rest);
-        await runTurn(next);
-      }
-    },
-    [runTurn]
-  );
-
-  /** Stage an image for the next message (/image). Capped at 4 pending. */
-  const addPendingImage = useCallback((img: { mediaType: string; data: string; path: string }) => {
-    pendingImagesRef.current = [...pendingImagesRef.current, img].slice(-4);
-  }, []);
-
-  const cancel = useCallback(() => session.cancel(), [session]);
 
   /** Append a system notice to the transcript — never sent to the model. */
   const printSystemMessage = useCallback((text: string) => {
@@ -236,6 +208,51 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
       { id: randomUUID(), role: "system" as const, text, streaming: false, toolCalls: [], subAgents: [] },
     ]);
   }, []);
+
+  /** Drain queued messages after the current turn settles. The caller owns
+   *  the busyRef claim: runTurn's finally clears it, but the drain re-checks
+   *  and re-enters runTurn in the same synchronous continuation, so a user
+   *  send() can never observe the window between turns (that window used to
+   *  let a second send start a concurrent turn on one session). */
+  const drainQueue = useCallback(async () => {
+    while (queueRef.current.length > 0) {
+      const [next, ...rest] = queueRef.current;
+      queueRef.current = rest;
+      setQueued(rest);
+      await runTurn(next);
+    }
+  }, [runTurn]);
+
+  /** Drain queued messages after the current turn settles. */
+  const send = useCallback(
+    async (text: string) => {
+      if (busyRef.current) {
+        const next = [...queueRef.current, text];
+        // A silently dropped head looked like the message never existed.
+        if (next.length > MESSAGE_QUEUE_CAP) {
+          printSystemMessage("Queue full — dropped the oldest queued message.");
+        }
+        queueRef.current = next.slice(-MESSAGE_QUEUE_CAP);
+        setQueued([...queueRef.current]);
+        return;
+      }
+      busyRef.current = true;
+      try {
+        await runTurn(text);
+        await drainQueue();
+      } finally {
+        busyRef.current = false;
+      }
+    },
+    [runTurn, drainQueue, printSystemMessage]
+  );
+
+  /** Stage an image for the next message (/image). Capped at 4 pending. */
+  const addPendingImage = useCallback((img: { mediaType: string; data: string; path: string }) => {
+    pendingImagesRef.current = [...pendingImagesRef.current, img].slice(-4);
+  }, []);
+
+  const cancel = useCallback(() => session.cancel(), [session]);
 
   /** Clear the visible transcript (pairs with session.clearHistory() for /clear). */
   const clearMessages = useCallback(() => {
@@ -251,12 +268,18 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
    * Run one mission turn without a user bubble — the mission deck and system
    * notices carry the context; the assistant card renders text and tool calls.
    * Collects the outcome signals the goal mission judges milestones on.
+   * `onEvent` lets launchGoal update the deck's live detail line while the
+   * turn streams (the mission protocol's own progress events never reach the
+   * TUI — its injected sendTurn consumes the session's events directly).
    */
   const runGoalTurn = useCallback(
-    async (prompt: string): Promise<GoalTurnOutcome> => {
-      busyRef.current = true;
+    async (
+      prompt: string,
+      onEvent?: (event: AgentEvent) => void
+    ): Promise<GoalTurnOutcome> => {
+      // busy/isBusy are owned by launchGoal for the whole mission — toggling
+      // per turn let user input slip into the gaps between mission turns.
       const assistantId = randomUUID();
-      currentAssistantId.current = assistantId;
       setMessages((prev) => {
         const next: DisplayMessage[] = [
           ...prev,
@@ -264,7 +287,6 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         ];
         return next.length > TRANSCRIPT_STATE_CAP ? next.slice(-TRANSCRIPT_STATE_CAP) : next;
       });
-      setIsBusy(true);
 
       const updateAssistant = (fn: (m: DisplayMessage) => DisplayMessage) => {
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? fn(m) : m)));
@@ -295,12 +317,10 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
           if (event.type === "error") outcome.errored = true;
           if (event.type === "cancelled") outcome.cancelled = true;
           applyEvent(event, updateAssistant, setUsage, setMessages, setPlan, setTestStatus);
+          onEvent?.(event);
         }
       } finally {
         updateAssistant((m) => ({ ...m, streaming: false }));
-        setIsBusy(false);
-        busyRef.current = false;
-        currentAssistantId.current = null;
         onTurnSettledRef.current?.();
       }
       return outcome;
@@ -310,20 +330,57 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
 
   /**
    * Launch an autonomous goal over the LIVE session: the real GoalEngine
-   * mission protocol drives turns through this session, so tool calls render
+   * mission protocol drives turns through this session, so tool cards render
    * in the transcript while the Mission Deck reflects genuine milestone
    * evidence (no more hardcoded fake deck).
+   *
+   * busyRef stays claimed for the WHOLE mission: a message typed in the gap
+   * between two mission turns must queue, not interleave — a colliding turn
+   * used to come back errored and mark an innocent milestone failed.
    */
   const launchGoal = useCallback(
     async (objective: string) => {
-      if (busyRef.current) return;
+      if (busyRef.current) {
+        printSystemMessage("Finish or cancel the current turn before starting a mission.");
+        return;
+      }
+      busyRef.current = true;
+      setIsBusy(true);
       setGoal(null);
+      // Live deck detail: mirror the goal engine's milestone_progress onto the
+      // milestone that owns the running turn.
+      const missionMilestone: { current: string | null } = { current: null };
+      const onMissionEvent = (event: AgentEvent) => {
+        const milestoneId = missionMilestone.current;
+        if (!milestoneId) return;
+        let detail: string | undefined;
+        if (event.type === "tool_started") detail = `Running ${event.name}...`;
+        else if (event.type === "verification_started") detail = "Running automated test verification...";
+        else if (event.type === "verification_result")
+          detail = event.passed ? "Automated verification passed." : "Automated verification FAILED.";
+        if (!detail) return;
+        setGoal((prev) =>
+          prev
+            ? {
+                ...prev,
+                milestones: prev.milestones.map((m) =>
+                  m.id === milestoneId ? { ...m, detail } : m
+                ),
+              }
+            : prev
+        );
+      };
       const mission = runGoalMission(objective, {
         projectRoot: session.projectRoot,
         summarizeChanges: () => session.summarizeChanges(),
-        sendTurn: async function* (prompt: string) {
-          const outcome = await runGoalTurn(prompt);
-          return outcome;
+        sendTurn: async function* (prompt: string, milestone: GoalMilestone | null) {
+          missionMilestone.current = milestone?.id ?? null;
+          try {
+            const outcome = await runGoalTurn(prompt, onMissionEvent);
+            return outcome;
+          } finally {
+            missionMilestone.current = null;
+          }
         },
       });
       try {
@@ -411,9 +468,15 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         }
       } catch (err: unknown) {
         printSystemMessage(`Mission error: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setIsBusy(false);
+        // Messages typed between mission turns queued — deliver them now,
+        // while we still hold the busy claim.
+        await drainQueue();
+        busyRef.current = false;
       }
     },
-    [session, runGoalTurn, printSystemMessage]
+    [session, runGoalTurn, printSystemMessage, drainQueue]
   );
 
   return {

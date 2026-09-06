@@ -34,12 +34,20 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: Input
   }, [matchingCommands.length, slashText]);
 
   useInput((_input, key) => {
-    // Slash-menu keys take priority: Esc dismisses, arrows navigate, Tab fills.
-    if (showCommandMenu) {
-      if (key.escape) {
+    // Esc: cancel a busy turn FIRST (the one thing a user must always be able
+    // to reach), then dismiss the slash menu.
+    if (key.escape) {
+      if (isBusy) {
+        onCancel();
+        return;
+      }
+      if (showCommandMenu) {
         setValue(""); // dismiss the menu and go back to typing
         return;
       }
+    }
+    // Slash-menu keys: arrows navigate, Tab fills.
+    if (showCommandMenu) {
       if (key.upArrow) {
         setCommandIndex((i) => Math.max(0, i - 1));
         return;
@@ -56,11 +64,6 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: Input
         }
         return;
       }
-    }
-
-    if (key.escape && isBusy) {
-      onCancel();
-      return;
     }
     // Ctrl+C: cancel while a turn is streaming (never kills the app mid-turn);
     // exit cleanly while idle. Ink delivers Ctrl+C as "c" with key.ctrl set
@@ -100,6 +103,32 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: Input
     }
   });
 
+  // THE line-stacking bug: when keystrokes arrive batched in one read (fast
+  // typing, paste, tmux/SSH), Ink delivers e.g. "hi\r" as a single chunk — and
+  // ink-text-input only sets key.return for a LONE "\r", so the return falls
+  // into its insert branch and is embedded into the value. A raw control
+  // character in a rendered frame line desyncs the terminal's column/row
+  // accounting, and every later redraw lands on the wrong rows — the "lines
+  // stack and interfere" corruption. Sanitize the value here and treat an
+  // embedded return as submit (text after it becomes the new draft).
+  const handleTextInputChange = (raw: string) => {
+    if (/[\r\n]/.test(raw)) {
+      const idx = raw.search(/[\r\n]/);
+      const before = raw.slice(0, idx);
+      const after = raw.slice(idx + 1).replace(/[\r\n]+/g, "");
+      if (before.trim()) {
+        onSubmit(before.trim());
+      }
+      setValue(after);
+      historyIndex.current = -1;
+      return;
+    }
+    // Typing after recall starts a new draft; Up/Down then starts again
+    // from the newest sent message instead of overwriting the draft.
+    if (raw !== value) historyIndex.current = -1;
+    setValue(raw);
+  };
+
   return (
     <Box flexDirection="column" flexShrink={0}>
       {/* Slash-command autocomplete menu — appears on "/" */}
@@ -128,12 +157,7 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: Input
         <Text color={theme.colors.primary}>{"> "}</Text>
         <TextInput
           value={value}
-          onChange={(nextValue) => {
-            // Typing after recall starts a new draft; Up/Down then starts again
-            // from the newest sent message instead of overwriting the draft.
-            if (nextValue !== value) historyIndex.current = -1;
-            setValue(nextValue);
-          }}
+          onChange={handleTextInputChange}
           placeholder={isBusy ? "working… (Esc to cancel)" : "Type a message, / for commands"}
           onSubmit={(text) => {
             // Enter with the slash menu open runs the highlighted command.

@@ -79,6 +79,11 @@ describe("run_command destructive-command guard", () => {
       "rm -rf /*",
       "rm -rf ~",
       "rm -rf $HOME",
+      "rm -rf \"$HOME\"",
+      "rm -rf '~'",
+      "echo hi && rm -rf \"$HOME\"",
+      "echo $(rm -rf ~)",
+      "echo `rm -rf ~`",
       "rm -fr /",
       "rm -r -f /",
       "rm --recursive --force /",
@@ -142,7 +147,7 @@ describe("run_command read-only safe-list", () => {
       "git status", "git log --oneline", "git diff", "node --version", "npm ls",
       "python3 --version", "echo hello world", "date", "uname -a",
     ]) {
-      expect(isReadOnlyCommand(cmd), cmd).toBe(true);
+      expect(isReadOnlyCommand(cmd, root), cmd).toBe(true);
     }
   });
 
@@ -154,7 +159,22 @@ describe("run_command read-only safe-list", () => {
       "cat a > b", "ls; rm -rf /", "echo hi && evil", "cat `cat f`", "echo $HOME",
       "find . -delete", "ls *.txt", "", "  ",
     ]) {
-      expect(isReadOnlyCommand(cmd), cmd).toBe(false);
+      expect(isReadOnlyCommand(cmd, root), cmd).toBe(false);
     }
+  });
+
+  it("contains file-reader arguments to the project root", async () => {
+    const { isReadOnlyCommand } = await import("../bash.js");
+    // Reading host files with no prompt must be impossible: the equivalent
+    // read_file is path-contained, and the safe-list must not bypass it.
+    for (const cmd of [
+      "cat /etc/passwd", "cat ~/.ssh/id_rsa", "head -20 /etc/hosts",
+      "tail -5 /var/log/syslog", "stat /etc/shadow", "du /usr", "file /bin/bash",
+      "cat ../outside.txt", "wc -l ../../etc/passwd",
+    ]) {
+      expect(isReadOnlyCommand(cmd, root), cmd).toBe(false);
+    }
+    expect(isReadOnlyCommand("cat ./file.txt", root)).toBe(true);
+    expect(isReadOnlyCommand("cat /etc/passwd")).toBe(false); // no root: fail closed
   });
 });

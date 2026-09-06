@@ -38,24 +38,31 @@ function WordText({ segs, base }: { segs: WordSeg[]; base: string }) {
  * U5 richer diffs (+P1: theme-mapped colors, width-aware line curtail).
  * Colors come from the active theme (custom themes work); long lines are
  * curtailed to the terminal width so unbroken code lines can't overflow
- * narrow terminals. Same props as before — PermissionPrompt needs no changes.
+ * narrow terminals. Callers that already know their row budget (DiffModal)
+ * pass maxRows explicitly; the default reserves the permission overlay's
+ * chrome (frame 6 + modal 8) plus slack so the prompt can never overflow.
  */
-export function ColorizedDiff({ diff }: { diff: string }) {
+export function ColorizedDiff({
+  diff,
+  maxRows,
+  maxText: maxTextProp,
+}: {
+  diff: string;
+  maxRows?: number;
+  maxText?: number;
+}) {
   const theme = useTheme();
   const { stdout } = useStdout();
   const width = stdout?.columns ?? 80;
   const termRows = stdout?.rows ?? 24;
   // Overlay frame (border + padding) eats ~6 columns; gutter eats ~12.
-  const maxText = Math.max(20, width - 20);
-  // The permission overlay must fit the frame: title, options, and hint cost
-  // ~10 rows besides the border, so the diff gets whatever is left — never
-  // the full MAX_DIFF_ROWS on a short terminal (that overflow squashed the
-  // whole app before the flex fix).
-  const maxRows = Math.max(3, Math.min(MAX_DIFF_ROWS, termRows - 12));
+  const maxText = Math.max(20, maxTextProp ?? width - 20);
+  const effectiveMaxRows = Math.max(3, Math.min(MAX_DIFF_ROWS, maxRows ?? termRows - 15));
   const parsed = React.useMemo(() => parseDiff(diff), [diff]);
-  const words = React.useMemo(() => pairRows(parsed, (r) => r.text), [parsed]);
-  const visible = parsed.slice(0, maxRows);
+  const visible = parsed.slice(0, effectiveMaxRows);
   const omitted = parsed.length - visible.length;
+  // Pair only the rows that render — full-diff pairing wasted CPU on large diffs.
+  const words = React.useMemo(() => pairRows(visible, (r) => r.text), [visible]);
   const addColor = theme.colors.toolDone;
   const delColor = theme.colors.toolError;
   const hunkColor = theme.colors.accent;
@@ -74,7 +81,7 @@ export function ColorizedDiff({ diff }: { diff: string }) {
         if (row.kind === "hunk") {
           return (
             <Text key={key} color={hunkColor}>
-              {row.text}
+              {curtail(row.text, maxText)}
             </Text>
           );
         }

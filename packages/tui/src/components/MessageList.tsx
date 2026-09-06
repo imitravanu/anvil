@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Box, Text, useStdout } from "ink";
 import { CORE_VERSION } from "@anvil/core";
 import type { DisplayMessage } from "../hooks/useAgentController.js";
@@ -33,16 +34,29 @@ function EmptyState({ model }: { model: string }) {
   );
 }
 
-export function MessageList({ messages, model, expandTools, height }: { messages: DisplayMessage[]; model: string; expandTools?: boolean; height: number }) {
+export function MessageList({ messages, model, expandTools }: { messages: DisplayMessage[]; model: string; expandTools?: boolean }) {
   const { stdout } = useStdout();
+  const termRows = stdout?.rows ?? 24;
+  // Row budget for the "N earlier messages" honesty indicator, estimated from
+  // the terminal size minus chrome reserve. The container itself is flex-sized
+  // (no explicit height) so Yoga — not stale rows arithmetic — owns layout.
+  // The reserve covers header+dividers+status bar (6), input bar (~3), and the
+  // plan/queued HUD (up to 3): the estimator may then err on the visible side.
+  const rowBudget = Math.max(3, termRows - 12);
+  const width = stdout?.columns ?? 80;
+  // Memoized: this walks every message on every render, and spinners tick at
+  // 80 ms during a busy turn.
+  const hidden = useMemo(
+    () => hiddenMessageCount(messages, width, rowBudget, expandTools ?? false),
+    [messages, width, rowBudget, expandTools]
+  );
   // Shared bounded container for both states: bottom-anchored, clipped at the
-  // top exactly like terminal scrollback. Before the flex fix, unbounded
-  // content overflowed the fixed-height frame and Ink's default flex-shrink:1
-  // squashed EVERY zone at once — chrome vanished, turns merged onto shared
-  // rows, status bar overran the border (seen in real captures at 30 rows).
-  // The chrome around this list is flexShrink={0}; overlays taller than the
-  // basis (slash menu, permission prompt) borrow rows from here via
-  // flexShrink instead of breaking the frame.
+  // top exactly like terminal scrollback. No explicit height here: the parent
+  // frame is height={rows} and every chrome zone is flexShrink={0}, so this
+  // flexGrow={1} + minHeight={0} + overflow="hidden" region is the ONLY element
+  // allowed to shrink. The previous explicit height={rows-9} fought Yoga when
+  // overlays (slash menu, permission prompt, DiffModal, MissionDeck) grew —
+  // total rows exceeded the frame and turns/chrome overwrote shared rows.
   if (messages.length === 0) {
     return (
       <Box
@@ -50,7 +64,6 @@ export function MessageList({ messages, model, expandTools, height }: { messages
         flexGrow={1}
         flexShrink={1}
         minHeight={0}
-        height={height}
         overflow="hidden"
         justifyContent="center"
       >
@@ -64,18 +77,13 @@ export function MessageList({ messages, model, expandTools, height }: { messages
       flexGrow={1}
       flexShrink={1}
       minHeight={0}
-      height={height}
       overflow="hidden"
       paddingX={1}
       justifyContent="flex-end"
     >
-      {(() => {
-        const width = stdout?.columns ?? 80;
-        const hidden = hiddenMessageCount(messages, width, height);
-        return hidden > 0 ? (
-          <Text dimColor>… {hidden} earlier message{hidden === 1 ? "" : "s"} above — full history in the session file</Text>
-        ) : null;
-      })()}
+      {hidden > 0 && (
+        <Text dimColor>… {hidden} earlier message{hidden === 1 ? "" : "s"} above — full history in the session file</Text>
+      )}
       {messages.map((message, index) => (
         <Box key={message.id} marginTop={index > 0 ? 1 : 0} flexShrink={0}>
           <MessageView message={message} expandTools={expandTools} />

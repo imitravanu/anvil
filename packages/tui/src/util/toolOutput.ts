@@ -1,6 +1,4 @@
 import { capLines } from "./displayLimits.js";
-/** expandable tool output: render a retained tool result as capped lines. */
-export { EXPANDED_MAX_LINES as MAX_OUTPUT_LINES } from "./displayLimits.js";
 
 /** Format a retained tool-call output for expanded display. Pure. */
 export function formatToolOutput(output: unknown): string[] {

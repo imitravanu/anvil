@@ -68,17 +68,14 @@ describe("message queueing while busy", () => {
 
     const first = api.current!.send("one");
     await new Promise((r) => setTimeout(r, 30)); // let turn 1 park on the gate
-    console.error("DBG busy:", api.current!.isBusy, "msgs:", JSON.stringify(api.current!.messages));
     expect(api.current!.isBusy).toBe(true);
 
     // Typed while busy: queued, not dropped, not sent yet.
     void api.current!.send("two");
     await new Promise((r) => setTimeout(r, 30));
-    console.error("DEBUG1 calls:", provider.calls.length, "queued:", JSON.stringify(api.current!.queued), "busy:", api.current!.isBusy, "msgs:", JSON.stringify(api.current!.messages.map((m) => `${m.role}:${m.text.slice(0, 25)}${m.errorText ? ` ERR=${m.errorText}` : ""}`)));
     expect(api.current!.queued).toEqual(["two"]);
     expect(provider.calls()).toBe(1);
 
-    console.error("DEBUG calls:", provider.calls.length, "queued:", api.current!.queued, "busy:", api.current!.isBusy, "msgs:", api.current!.messages.map((m) => `${m.role}:${m.text.slice(0, 20)}`));
     release();
     await first; // drain runs turn 2 before send resolves
     await new Promise((r) => setTimeout(r, 50));

@@ -1,7 +1,8 @@
-import { Box, Text } from "ink";
+import { Box, Text, useStdout } from "ink";
 import { MarkdownBlock, MarkdownSpan, parseMarkdownText } from "./renderMarkdown.js";
 import { highlightCodeBlocks } from "./highlightCodeBlocks.js";
 import { useTheme } from "../theme/theme.js";
+import { curtail } from "../util/format.js";
 
 function Spans({ spans }: { spans: MarkdownSpan[] }) {
   const theme = useTheme();
@@ -33,6 +34,8 @@ function plainText(spans: MarkdownSpan[]): string {
 }
 
 function TableView({ headers, rows }: { headers: MarkdownSpan[][]; rows: MarkdownSpan[][][] }) {
+  const { stdout } = useStdout();
+  const maxLen = Math.max(20, (stdout?.columns ?? 80) - 6);
   const colCount = Math.max(headers.length, ...rows.map((r) => r.length));
   const widths: number[] = [];
   for (let c = 0; c < colCount; c++) {
@@ -48,16 +51,21 @@ function TableView({ headers, rows }: { headers: MarkdownSpan[][]; rows: Markdow
   };
   // NOTE: padded table cells intentionally drop inline styling — alignment
   // needs plain strings, and footnotes still resolve via the links block.
+  // Wide model-emitted tables overflowed narrow terminals and stacked rows;
+  // curtail the finished line so a table can never exceed terminal width.
   const line = (cells: MarkdownSpan[][]) =>
-    cells
-      .map((_, c) => pad(cells[c] ?? [{ text: "" }], widths[c]))
-      .join(" | ");
+    curtail(
+      cells
+        .map((_, c) => pad(cells[c] ?? [{ text: "" }], widths[c]))
+        .join(" | "),
+      maxLen
+    );
   return (
     <>
-      <Text bold>{line(headers)}</Text>
-      <Text dimColor>{widths.map((w) => "-".repeat(w)).join("-+-")}</Text>
+      <Text bold wrap="wrap">{line(headers)}</Text>
+      <Text dimColor>{curtail(widths.map((w) => "-".repeat(w)).join("-+-"), maxLen)}</Text>
       {rows.map((row, i) => (
-        <Text key={i}>{line(row)}</Text>
+        <Text key={i} wrap="wrap">{line(row)}</Text>
       ))}
     </>
   );
@@ -70,6 +78,8 @@ function TableView({ headers, rows }: { headers: MarkdownSpan[][]; rows: Markdow
  */
 export function MarkdownView({ blocks }: { blocks: MarkdownBlock[] }) {
   const theme = useTheme();
+  const { stdout } = useStdout();
+  const maxCodeLen = Math.max(20, (stdout?.columns ?? 80) - 6);
   return (
     <Box flexDirection="column">
       {blocks.map((block, i) => {
@@ -123,9 +133,16 @@ export function MarkdownView({ blocks }: { blocks: MarkdownBlock[] }) {
               </Box>
             );
           case "code": {
-            const fenced = `\`\`\`${block.language}\n${block.code}\`\`\``;
+            // Curtail plain code lines BEFORE highlighting: a single minified
+            // line would otherwise render as 100+ visual rows and stack the
+            // frame. Curtailing post-highlight would slice ANSI sequences.
+            const safeCode = block.code
+              .split("\n")
+              .map((l) => curtail(l, maxCodeLen))
+              .join("\n");
+            const fenced = `\`\`\`${block.language}\n${safeCode}\`\`\``;
             return (
-              <Text key={i} color={theme.colors.userText}>
+              <Text key={i} color={theme.colors.userText} wrap="wrap">
                 {highlightCodeBlocks(fenced)}
               </Text>
             );

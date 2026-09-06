@@ -5,7 +5,6 @@ import { callTool } from "../mcp/client.js";
 
 // ---------------------------------------------------------------------------
 // MCP tool adapter: namespaced definitions + dispatch.
-// 3.
 // ---------------------------------------------------------------------------
 
 export const MCP_TOOL_PREFIX = "mcp_";
@@ -23,7 +22,7 @@ export function mcpToolName(serverId: string, toolName: string): string {
 /**
  * Convert server tools to session ToolDefinitions. Unknown external tools
  * are mutating BY DEFAULT (permission prompts gate them) unless the server
- * marks readOnlyHint — the safe direction ( decision log).
+ * marks readOnlyHint — the safe direction.
  */
 export function toToolDefinitions(serverId: string, tools: McpToolDef[]): ToolDefinition[] {
   return tools.map((t) => ({
@@ -35,10 +34,6 @@ export function toToolDefinitions(serverId: string, tools: McpToolDef[]): ToolDe
   }));
 }
 
-/**
- * Drop MCP definitions that collide with built-in tool names (built-in wins,
- * first-in-list wins among MCP). Returns kept + dropped for startup warnings.
- */
 /**
  * Live tool list from every ready MCP connection, with name collisions
  * against the built-in tools dropped. Shared by CLI boot and `/mcp

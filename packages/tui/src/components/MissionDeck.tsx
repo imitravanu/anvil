@@ -20,6 +20,18 @@ export function MissionDeck({ goal, plan, isBusy = false }: MissionDeckProps) {
   if (goal && goal.milestones.length > 0) {
     const completedCount = goal.milestones.filter((m) => m.status === "completed").length;
     const totalCount = goal.milestones.length;
+    // The deck is flexShrink={0} chrome — with 10+ milestones (plus overlays
+    // borrowing nothing from it) it can overflow the frame. Show a window
+    // around the active milestone; the header already carries the counts.
+    const MAX_DECK_ROWS = 5;
+    const activeIdx = goal.milestones.findIndex((m) => m.status === "in_progress");
+    const deckStart =
+      goal.milestones.length > MAX_DECK_ROWS
+        ? Math.max(0, Math.min(activeIdx - 1, goal.milestones.length - MAX_DECK_ROWS))
+        : 0;
+    const deckRows = goal.milestones.slice(deckStart, deckStart + MAX_DECK_ROWS);
+    const hiddenBefore = deckStart;
+    const hiddenAfter = goal.milestones.length - deckStart - deckRows.length;
 
     return (
       <Box
@@ -29,6 +41,7 @@ export function MissionDeck({ goal, plan, isBusy = false }: MissionDeckProps) {
         borderColor={theme.colors.accent}
         paddingX={1}
         marginX={1}
+        overflow="hidden"
       >
         <Box justifyContent="space-between">
           <Box gap={1}>
@@ -42,7 +55,10 @@ export function MissionDeck({ goal, plan, isBusy = false }: MissionDeckProps) {
           </Text>
         </Box>
 
-        {goal.milestones.map((m) => {
+        {hiddenBefore > 0 && (
+          <Text dimColor>  … {hiddenBefore} earlier milestone{hiddenBefore === 1 ? "" : "s"}</Text>
+        )}
+        {deckRows.map((m) => {
           const isDone = m.status === "completed";
           const isRunning = m.status === "in_progress";
           const isFailed = m.status === "failed";
@@ -70,6 +86,9 @@ export function MissionDeck({ goal, plan, isBusy = false }: MissionDeckProps) {
             </Box>
           );
         })}
+        {hiddenAfter > 0 && (
+          <Text dimColor>  … {hiddenAfter} more milestone{hiddenAfter === 1 ? "" : "s"}</Text>
+        )}
       </Box>
     );
   }

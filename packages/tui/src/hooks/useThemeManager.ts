@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { loadSettings, saveSettings } from "@anvil/core";
 import { THEMES, isThemeName, type Theme } from "../theme/themes.js";
 import { loadCustomThemes } from "../theme/custom.js";
@@ -55,10 +55,15 @@ export function useThemeManager(opts: UseThemeManagerOptions): UseThemeManagerRe
   };
 
   /** Live preview: switches the whole UI but touches neither settings.json
-   *  nor the transcript — the picker restores or applies on exit. */
-  const previewTheme = (name: string) => {
-    if (isThemeName(name) || name in customThemes.themes) setThemeName(name);
-  };
+   *  nor the transcript — the picker restores or applies on exit.
+   *  Memoized: ThemePicker previews on selection change, and an unmemoized
+   *  callback re-fired the effect (and re-rendered the whole UI) every render. */
+  const previewTheme = useCallback(
+    (name: string) => {
+      if (isThemeName(name) || name in customThemes.themes) setThemeName(name);
+    },
+    [customThemes]
+  );
 
   return { themeName, resolveTheme, applyTheme, previewTheme };
 }

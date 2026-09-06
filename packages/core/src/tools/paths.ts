@@ -16,8 +16,7 @@ export class PathEscapeError extends Error {
 export function resolveWithinRoot(root: string, requested: string): string {
   const resolvedRoot = path.resolve(root);
   const resolved = path.resolve(resolvedRoot, requested);
-  const relative = path.relative(resolvedRoot, resolved);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+  if (!isInsideRoot(resolvedRoot, resolved)) {
     throw new PathEscapeError(requested);
   }
   // A non-existent root has no symlinks to resolve. This also keeps the helper
@@ -31,9 +30,15 @@ export function resolveWithinRoot(root: string, requested: string): string {
   }
   const physicalRoot = fs.realpathSync(resolvedRoot);
   const physicalExisting = fs.existsSync(existing) ? fs.realpathSync(existing) : existing;
-  const physicalRelative = path.relative(physicalRoot, physicalExisting);
-  if (physicalRelative.startsWith("..") || path.isAbsolute(physicalRelative)) {
+  if (!isInsideRoot(physicalRoot, physicalExisting)) {
     throw new PathEscapeError(requested);
   }
   return resolved;
+}
+
+/** Relative-path containment: `..` itself or any `../` prefix escapes.
+ *  A name that merely STARTS with dots (`..config`) is a legitimate file. */
+function isInsideRoot(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return !(relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative));
 }

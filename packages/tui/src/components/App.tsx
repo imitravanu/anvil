@@ -125,12 +125,10 @@ export function App({
       stdout.off("resize", resizeTick);
     };
   }, [stdout]);
-  // Basis height for the message list: everything that is ALWAYS on screen —
-  // outer frame border (2), header (1), two dividers (2), status bar (1),
-  // bordered input (3) — leaves the rest for the transcript. PlanLine and the
-  // taller overlays take their rows from the list via its flexShrink, so the
-  // basis only has to be right for the plain input state.
-  const listBasis = Math.max(3, rows - 9);
+  // No explicit listBasis: the transcript region is flex-sized (flexGrow=1,
+  // minHeight=0, overflow hidden) and Yoga owns the row budget. The previous
+  // rows-9 arithmetic fought every overlay (slash menu, permission prompt,
+  // DiffModal, MissionDeck) and stacked their rows onto the transcript.
 
   const pendingPermission = usePermissionBroker(broker);
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
@@ -173,6 +171,7 @@ export function App({
     setIsConnectOpen,
     setIsThemePickerOpen,
     setExpandTools,
+    expandTools,
     setIsDiffOpen,
     setIsRewindOpen,
     setGoal,
@@ -238,6 +237,7 @@ export function App({
         borderColor={resolveTheme(themeName).colors.border}
         height={rows}
         width={stdout?.columns ?? 80}
+        overflow="hidden"
       >
         {/* Every fixed-height zone keeps its rows: each component's root Box
             is flexShrink={0} (see components) and the bare Divider text is
@@ -251,7 +251,7 @@ export function App({
           <Divider />
         </Box>
         <Box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0}>
-          <MessageList messages={messages} model={currentModel} expandTools={expandTools} height={listBasis} />
+          <MessageList messages={messages} model={currentModel} expandTools={expandTools} />
         </Box>
         <Box flexShrink={0}>
           <Divider />
@@ -318,6 +318,7 @@ export function App({
           <FirstRunSetup
             title="Connect a provider — pick one, paste its API key, done."
             onDone={handleConnectDone}
+            onCancel={() => setIsConnectOpen(false)}
           />
         ) : (
           <InputBar

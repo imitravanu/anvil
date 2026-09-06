@@ -14,15 +14,17 @@ permission prompt with a real unified diff.
 - **Free & local models**: keep API spend at $0 with Groq's free tier, GitHub Models, Cerebras,
   Mistral's experimentation tier, or Ollama (fully offline). Every model is tagged `[FREE]` or
   `[PAID]` in the picker and header, so pricing is always visible.
-- **Agent loop with 6 tools**: `read_file`, `write_file`, `edit_file` (unified diffs),
-  `list_files` (glob or plain-name search), `grep`, `run_command` — with cancellation and path
-  containment to the project root
+- **Agent loop with 10 tools**: `read_file`, `write_file`, `edit_file` (unified diffs),
+  `list_files` (glob or plain-name search), `grep`, `run_command`, `get_outline`
+  (token-efficient structure outline), `verify_tests` (run the project's detected test runner),
+  `update_plan`, and `delegate_task` (sub-agent) — with cancellation and path containment
+  to the project root
 - **Interactive permissions**: every mutating tool call shows the diff or command before it runs
   (Allow once / Always allow this session / Deny — or just press **Esc** to deny). Known
   read-only commands (`ls`, `cat`, `git status`, `node --version`, …) run without prompting;
   anything with shell metacharacters, globs, or mutating subcommands always prompts.
-- **Model picker with type-to-filter**: 40+ models — including live-synced OpenRouter free
-  models — are searchable by name; free models sort first.
+- **Model picker with type-to-filter**: 36 built-in models plus live-synced OpenRouter free
+  models — searchable by name; free models sort first.
 - **Honest UI everywhere**: real unified diffs in permission prompts, bounded transcript with a
   "… N earlier messages above" scrollback indicator, compact actionable error messages (rate
   limits include the retry time), a per-session run ledger (`/ledger`), and file checkpoints you
@@ -130,8 +132,12 @@ fill. Or type the command directly:
 | `/session new` | start a fresh session |
 | `/session resume [id]` | resume a session (no id → interactive picker) |
 | `/session rename <title>` | rename the current session |
+| `/goal <objective>` | launch an autonomous multi-step mission (decompose → execute → verify → critique) |
+| `/image <path>` | attach a png/jpeg/webp/gif (max 5 MB) to your next message (vision models) |
+| `/retry <text>` | drop the last exchange and resend with corrected wording |
+| `/diff` | review every file the session touched as unified diffs |
 | `/mcp` | MCP server status (tools, health) |
-| `/mcp reconnect` | reconnect + refresh all MCP servers (new tools need a restart to enter the session) |
+| `/mcp reconnect` | reconnect + refresh all MCP servers (new tools are hot-loaded into the running session) |
 
 Keys: **Esc** or **Ctrl+C** cancels a streaming turn; **Ctrl+C** while idle exits; **Up/Down** in
 an empty input recalls messages you sent this session; typing **/** opens the command menu.
@@ -181,6 +187,9 @@ file lists, interfaces, and acceptance criteria:
   progress `docs/PHASE-9-PROGRESS.md`)
 - `Phase 10` — MCP external tools, stdio only (spec `docs/PHASE-10-SPEC.md`,
   progress `docs/PHASE-10-PROGRESS.md`)
+- `Phases 11–16` — codebase intelligence (`get_outline`, project rules), headless mode
+  (`-p`), closed-loop auto-verification, the goal engine, the cockpit UI, and hardening
+  (specs and records in `docs/`; the multi-phase roadmap lives in `docs/ROADMAP.md`)
 
 ## MCP servers (Phase 10)
 

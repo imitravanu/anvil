@@ -8,7 +8,7 @@ import {
   type StoredSession,
 } from "@anvil/core";
 import type { TuiPermissionBroker } from "../permission/TuiPermissionBroker.js";
-import type { DisplayMessage } from "./useAgentController.js";
+import type { DisplayMessage, DisplayGoal } from "./useAgentController.js";
 import { COMMANDS, makeHandlers, parseCommand } from "../commands/registry.js";
 import type { CommandContext } from "../commands/types.js";
 import type { McpAppState } from "../components/App.js";
@@ -35,9 +35,10 @@ export interface UseSessionCommandsDeps {
   setIsConnectOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setIsThemePickerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setExpandTools: React.Dispatch<React.SetStateAction<boolean>>;
+  expandTools: boolean;
   setIsDiffOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   setIsRewindOpen?: React.Dispatch<React.SetStateAction<boolean>>;
-  setGoal?: (goal: any) => void;
+  setGoal?: React.Dispatch<React.SetStateAction<DisplayGoal | null>>;
   send: (text: string) => Promise<void>;
   launchGoal?: (objective: string) => Promise<void>;
   addPendingImage: (img: { mediaType: string; data: string; path: string }) => void;
@@ -99,6 +100,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     setIsConnectOpen,
     setIsThemePickerOpen,
     setExpandTools,
+    expandTools,
     setIsDiffOpen,
     setIsRewindOpen,
     setGoal,
@@ -159,6 +161,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     setIsConnectOpen,
     setIsThemePickerOpen,
     setExpandTools,
+    expandTools,
     setIsDiffOpen,
     setIsRewindOpen,
     setGoal,

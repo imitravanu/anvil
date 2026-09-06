@@ -3,7 +3,6 @@ import { StringDecoder } from "node:string_decoder";
 
 // ---------------------------------------------------------------------------
 // MCP transport seam. Newline-delimited JSON-RPC 2.0 over stdio.
-// 2.
 // ---------------------------------------------------------------------------
 
 export interface McpTransport {

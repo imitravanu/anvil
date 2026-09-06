@@ -49,7 +49,7 @@ export function StatusBar({
   const testPlain = testStatus ? ` │ 🧪 ${testStatus}` : "";
 
   const leftPlain = `${curtail(modelLabel, 40)} │ ${statePlain}${checkpointPlain}${testPlain}${gaugePlain} │ ${tokens}`;
-  const budget = width - leftPlain.length - 6;
+  const budget = width - Array.from(leftPlain).length - 6;
 
   return (
     <Box paddingX={theme.spacing.panelPaddingX} justifyContent="space-between">

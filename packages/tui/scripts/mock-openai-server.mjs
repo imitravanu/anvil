@@ -72,4 +72,5 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(8117, "127.0.0.1", () => console.error("mock server on 127.0.0.1:8117"));
+const PORT = Number(process.env.MOCK_PORT) || 8117;
+server.listen(PORT, "127.0.0.1", () => console.error(`mock server on 127.0.0.1:${PORT}`));

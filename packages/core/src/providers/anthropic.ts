@@ -9,7 +9,7 @@ export function mapStopReason(reason: string): StopReason {
   if (reason === "max_tokens") return "max_tokens";
   if (reason === "end_turn" || reason === "stop_sequence") return "end_turn";
   // A stop reason the provider legitimately returned that we don't recognize.
-  // Deliberately NOT "error" — see the contract notes in the phase spec.
+  // Deliberately NOT "error": unknown stop reasons are not turn failures.
   return "unknown";
 }
 

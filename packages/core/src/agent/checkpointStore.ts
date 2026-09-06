@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
-import { anvilHome, atomicWriteJson } from "../atomicWrite.js";
+import { anvilHome } from "../atomicWrite.js";
 import { CHECKPOINT_KEEP, type Checkpoint } from "./checkpoints.js";
 
 // ---------------------------------------------------------------------------
@@ -40,29 +40,25 @@ export async function saveCheckpointsAsync(
   checkpoints: readonly Checkpoint[],
   dir: string = checkpointsDir()
 ): Promise<void> {
-  if (!SAFE_ID_RE.test(sessionId) || checkpoints.length === 0) return;
-  const serialized = serializeCheckpoints(checkpoints);
+  if (!SAFE_ID_RE.test(sessionId)) return;
   const targetPath = path.join(dir, `${sessionId}.json`);
+  // An emptied ring (all rewound / drained) must clear the persisted file too,
+  // or the next resume resurrects checkpoints the user already used up.
+  if (checkpoints.length === 0) {
+    try {
+      await fsPromises.unlink(targetPath);
+    } catch {
+      // missing file is the desired end state anyway
+    }
+    return;
+  }
+  const serialized = serializeCheckpoints(checkpoints);
   const tmp = `${targetPath}.tmp.${process.pid}`;
   try {
     await fsPromises.mkdir(path.dirname(targetPath), { recursive: true });
     await fsPromises.writeFile(tmp, JSON.stringify({ version: 1, checkpoints: serialized }, null, 2), "utf-8");
     await fsPromises.chmod(tmp, 0o600);
     await fsPromises.rename(tmp, targetPath);
-  } catch {
-    // persistence is best-effort: an in-memory ring still covers this session
-  }
-}
-
-export function saveCheckpoints(
-  sessionId: string,
-  checkpoints: readonly Checkpoint[],
-  dir: string = checkpointsDir()
-): void {
-  if (!SAFE_ID_RE.test(sessionId) || checkpoints.length === 0) return;
-  const serialized = serializeCheckpoints(checkpoints);
-  try {
-    atomicWriteJson(path.join(dir, `${sessionId}.json`), { version: 1, checkpoints: serialized }, { mode: 0o600 });
   } catch {
     // persistence is best-effort: an in-memory ring still covers this session
   }
@@ -84,9 +80,17 @@ export function loadCheckpoints(sessionId: string, dir: string = checkpointsDir(
         id: c.id,
         ts: c.ts,
         skipped: typeof c.skipped === "number" ? c.skipped : 0,
+        // Validate content per entry: one malformed entry must not throw out
+        // of Buffer.from and discard the whole session's checkpoint history.
         files: c.files
-          .filter((f): f is { path: string; content: string | null } =>
-            typeof f === "object" && f !== null && typeof (f as { path?: unknown }).path === "string")
+          .filter(
+            (f): f is { path: string; content: string | null } =>
+              typeof f === "object" &&
+              f !== null &&
+              typeof (f as { path?: unknown }).path === "string" &&
+              ((f as { content?: unknown }).content === null ||
+                typeof (f as { content?: unknown }).content === "string")
+          )
           .map((f) => ({
             path: f.path,
             content: f.content === null ? null : Buffer.from(f.content, "base64"),

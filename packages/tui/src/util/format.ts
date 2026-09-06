@@ -42,6 +42,39 @@ export function curtail(text: string, max: number): string {
   return chars.slice(0, max - 1).join("") + "…";
 }
 
+// Terminal cells, not code points: 🧪/🔧/🎯 are 2 cells wide, │ ⎌ ◈ are 1.
+// Covers the wide ranges Anvil actually renders (emoji, CJK, fullwidth forms);
+// anything unlisted counts 1, which only risks a wrap — never a crash.
+const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
+  [0x1100, 0x115f], // Hangul Jamo
+  [0x2e80, 0x303e], // CJK radicals · punctuation
+  [0x3041, 0x33ff], // Hiragana · Katakana · CJK compat
+  [0x4e00, 0x9fff], // CJK unified
+  [0xac00, 0xd7a3], // Hangul syllables
+  [0xf900, 0xfaff], // CJK compatibility ideographs
+  [0xfe10, 0xfe19], // vertical forms
+  [0xfe30, 0xfe6f], // CJK compat forms
+  [0xff00, 0xff60], // fullwidth forms
+  [0xffe0, 0xffe6], // fullwidth signs
+  [0x1f300, 0x1f64f], // emoji (🔧 🎯 …)
+  [0x1f900, 0x1f9ff], // supplemental emoji (🧪 …)
+];
+
+function isWide(cp: number): boolean {
+  return WIDE_RANGES.some(([lo, hi]) => cp >= lo && cp <= hi);
+}
+
+/** Rendered terminal-cell width of a string (wide chars count 2). */
+export function displayWidth(text: string): number {
+  let width = 0;
+  for (const ch of text) {
+    const cp = ch.codePointAt(0) ?? 0;
+    if (cp === 0xfe0f) continue; // variation selector adds no cell
+    width += isWide(cp) ? 2 : 1;
+  }
+  return width;
+}
+
 /** Human-readable age of an ISO timestamp ("2m ago", "3h ago", "5d ago"). */
 export function relativeTime(iso: string): string {
   const ts = Date.parse(iso);
@@ -56,9 +89,10 @@ export function relativeTime(iso: string): string {
 }
 
 /**
- * : collapse a (possibly multi-line) plan into at most `maxLines`
- * display lines that fit the terminal width. Pure — PlanLine just renders it.
- */export function collapsePlan(
+ * Collapse a (possibly multi-line) plan into at most `maxLines`
+ * display lines that fit the terminal width. Pure — MissionDeck renders it.
+ */
+export function collapsePlan(
   plan: string,
   width: number,
   maxLines = 2

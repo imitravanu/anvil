@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import * as path from "node:path";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 
 const MAX_STREAM_BYTES = 20 * 1024; // per stream
@@ -69,7 +70,12 @@ function segments(command: string): string[] {
 // rm with recursive+force flags whose target is the filesystem root, a
 // top-level glob, or the user's home dir. Plain `rm -rf ./build` inside the
 // project stays allowed — the permission prompt remains the gate for those.
-function isRootWipe(segment: string): boolean {
+function isRootWipe(rawSegment: string): boolean {
+  // De-shell the segment first: quotes group targets (`rm -rf "$HOME"`),
+  // and $(…) / `…` hide commands that run when the segment executes
+  // (`echo $(rm -rf ~)`). After stripping, the patterns below see exactly
+  // what bash would act on.
+  const segment = rawSegment.replace(/["'`]/g, " ").replace(/\$\(|\)/g, " ");
   const m = segment.match(/\brm\b(.*)$/);
   if (!m) return false;
   const rest = m[1];
@@ -81,7 +87,10 @@ function isRootWipe(segment: string): boolean {
     longFlags.some((f) => f.startsWith("recursive"));
   const force = shortFlags.includes("f") || longFlags.some((f) => f.startsWith("force"));
   if (!(recursive && force)) return false;
-  return /(^|\s)(\/(\s|$|\*)|~(\s|$|\/)|\$HOME(\s|$|\/))/.test(rest);
+  // Bare root, /*, or ANY home-relative target (~ / $HOME in whatever
+  // grouping). Over-broad on purpose: a false refusal costs the model one
+  // reworded call; a missed wipe costs the user their home directory.
+  return /(^|\s)(\/(\s|$|\*)|~|\$HOME|\$\{HOME\})/.test(rest);
 }
 
 const WHOLE_COMMAND_CHECKS: { test: (cmd: string) => boolean; reason: string }[] = [
@@ -118,6 +127,27 @@ const READ_ONLY_BINARIES = new Set([
   "tree", "which", "whoami", "date", "uname", "echo",
 ]);
 
+// Binaries that PRINT the files named in their arguments. Without containment
+// they would read arbitrary host files with no prompt (`cat ~/.ssh/id_rsa`)
+// — the exact hole the read_file tool's path containment exists to close —
+// so their path arguments must resolve inside the project root.
+const FILE_READER_BINARIES = new Set(["cat", "head", "tail", "wc", "file", "stat", "du", "tree"]);
+
+/** True iff every positional argument resolves inside projectRoot. */
+function pathsInsideRoot(args: readonly string[], projectRoot: string): boolean {
+  const root = path.resolve(projectRoot);
+  for (const arg of args) {
+    if (arg.startsWith("-")) continue; // flags and their attached values
+    // bash expands these before the binary sees them — `~/.ssh/id_rsa` and
+    // `$HOME/...` resolve OUTSIDE the project no matter what path.resolve says.
+    if (arg.startsWith("~") || arg.startsWith("$")) return false;
+    const resolved = path.isAbsolute(arg) ? path.resolve(arg) : path.resolve(root, arg);
+    const rel = path.relative(root, resolved);
+    if (rel !== "" && (rel === ".." || rel.startsWith(`..${path.sep}`))) return false;
+  }
+  return true;
+}
+
 // For multi-mode binaries, only these subcommands are considered read-only —
 // `git status` is safe, `git push`/`git branch foo` are not.
 const READ_ONLY_SUBCOMMANDS: Record<string, Set<string>> = {
@@ -138,10 +168,11 @@ const SHELL_METACHARS = /[|;&<>()`$\\\n]/;
 /**
  * True iff the command is a plain single invocation of a known read-only
  * binary (with an allowed subcommand where relevant) and contains no shell
- * metacharacters or globs. Conservative by construction: anything not
- * positively recognized stays permission-gated.
+ * metacharacters or globs. File-reader binaries additionally require every
+ * positional argument to stay inside projectRoot — without a projectRoot they
+ * are never auto-allowed (fail closed). Conservative by construction.
  */
-export function isReadOnlyCommand(command: string): boolean {
+export function isReadOnlyCommand(command: string, projectRoot?: string): boolean {
   const trimmed = command.trim();
   if (!trimmed || SHELL_METACHARS.test(trimmed)) return false;
   if (/[*?[]/.test(trimmed)) return false;
@@ -150,6 +181,10 @@ export function isReadOnlyCommand(command: string): boolean {
   const sub = READ_ONLY_SUBCOMMANDS[bin];
   if (sub) return parts.length > 1 && sub.has(parts[1]);
   if (!READ_ONLY_BINARIES.has(bin)) return false;
+  if (FILE_READER_BINARIES.has(bin)) {
+    if (!projectRoot) return false;
+    return pathsInsideRoot(parts.slice(1), projectRoot);
+  }
   return true; // pure printers — arguments are inert (metachars/globs already rejected)
 }
 

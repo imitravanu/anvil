@@ -68,5 +68,5 @@ export interface AgentOptions {
   autoVerify?: boolean | string;
 }
 
-/** when maxInnerIterations is not set. */
+/** Default inner iteration budget applied when maxInnerIterations is not set. */
 export const DEFAULT_MAX_INNER_ITERATIONS = 20;

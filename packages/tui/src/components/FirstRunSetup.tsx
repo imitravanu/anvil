@@ -15,9 +15,13 @@ const PROVIDERS = PROVIDER_META;
  */
 export function FirstRunSetup({
   onDone,
+  onCancel,
   title = "Welcome to Anvil. Configure at least one provider's API key to start.",
 }: {
   onDone: (providerId: ProviderId) => void;
+  /** Esc-to-cancel for the /connect overlay. First-run boot omits it: Anvil
+   *  needs one provider before it can start, so Esc would be a dead end. */
+  onCancel?: () => void;
   title?: string;
 }) {
   const theme = useTheme();
@@ -27,6 +31,12 @@ export function FirstRunSetup({
   const provider = PROVIDERS[selected];
 
   useInput((_input, key) => {
+    if (key.escape) {
+      // Every overlay honors Esc; /connect passes onCancel, first-run does not
+      // (a provider is required before the app can start).
+      if (onCancel && step === "provider") onCancel();
+      return;
+    }
     if (step === "provider") {
       if (key.upArrow) setSelected((s) => Math.max(0, s - 1));
       else if (key.downArrow) setSelected((s) => Math.min(PROVIDERS.length - 1, s + 1));
@@ -40,7 +50,7 @@ export function FirstRunSetup({
     return (
       <Box flexDirection="column" flexShrink={0} paddingX={1}>
         <Text color={theme.colors.primary}>{title}</Text>
-        <Text dimColor>Step 1 of 2 — choose a provider, Enter to continue:</Text>
+        <Text dimColor>Step 1 of 2 — choose a provider, Enter to continue{onCancel ? ", Esc to cancel" : ""}:</Text>
         {PROVIDERS.map((p, i) => (
           <Text key={p.id} color={i === selected ? theme.colors.primary : undefined}>
             {i === selected ? "❯ " : "  "}
@@ -60,7 +70,23 @@ export function FirstRunSetup({
         </Text>
         <TextInput
           value={apiKey}
-          onChange={setApiKey}
+          onChange={(next) => {
+            // Same batched-keystroke hazard as InputBar: a return embedded in
+            // the chunk must never reach the saved credential or the frame.
+            const idx = next.search(/[\r\n]/);
+            if (idx !== -1) {
+              const before = next.slice(0, idx);
+              if (before.trim()) {
+                const trimmed = before.trim() || (provider.id === "ollama" ? "ollama" : "");
+                if (trimmed) {
+                  saveCredential(provider.field, trimmed);
+                  setStep("done");
+                }
+              }
+              return;
+            }
+            setApiKey(next);
+          }}
           mask={provider.id === "ollama" ? undefined : "*"}
           placeholder={provider.placeholder ?? "sk-..."}
           onSubmit={(value) => {

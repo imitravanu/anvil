@@ -7,7 +7,7 @@ import type {
   StoredSession,
 } from "@anvil/core";
 import type { TuiPermissionBroker } from "../permission/TuiPermissionBroker.js";
-import type { DisplayMessage } from "../hooks/useAgentController.js";
+import type { DisplayMessage, DisplayGoal } from "../hooks/useAgentController.js";
 import type { McpAppState } from "../components/App.js";
 
 export interface CommandContext {
@@ -77,12 +77,11 @@ export interface CommandHandlerDeps {
   setIsConnectOpen: Dispatch<SetStateAction<boolean>>;
   setIsThemePickerOpen: Dispatch<SetStateAction<boolean>>;
   setExpandTools: Dispatch<SetStateAction<boolean>>;
+  expandTools: boolean;
   setIsDiffOpen?: Dispatch<SetStateAction<boolean>>;
   setIsRewindOpen?: Dispatch<SetStateAction<boolean>>;
-  setGoal?: (goal: any) => void;
+  setGoal?: Dispatch<SetStateAction<DisplayGoal | null>>;
   send: (text: string) => Promise<void>;
   launchGoal?: (objective: string) => Promise<void>;
   addPendingImage: (img: { mediaType: string; data: string; path: string }) => void;
 }
-
-export type CommandHandlerFactory = (deps: CommandHandlerDeps) => CommandContext;

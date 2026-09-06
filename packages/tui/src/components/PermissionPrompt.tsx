@@ -3,6 +3,7 @@ import { Box, Text, useInput, useStdout } from "ink";
 import type { PendingPermissionRequest } from "../permission/TuiPermissionBroker.js";
 import { ColorizedDiff } from "../diff/colorizeDiff.js";
 import { useTheme } from "../theme/theme.js";
+import { curtail } from "../util/format.js";
 
 const DIFF_TOOLS = new Set(["edit_file", "write_file"]);
 
@@ -52,6 +53,11 @@ export function PermissionPrompt({
   });
 
   const label = TOOL_LABELS[request.toolName] ?? `wants to ${request.toolName.replace(/_/g, " ")}`;
+  const { stdout } = useStdout();
+  // Command summaries are model-authored — a 500-char one-liner would wrap to
+  // a dozen rows inside this flexShrink={0} overlay and overflow the frame.
+  // The diff path bounds itself in ColorizedDiff; bound the text path here.
+  const maxText = Math.max(20, (stdout?.columns ?? 80) - 8);
 
   return (
     <Box
@@ -69,7 +75,7 @@ export function PermissionPrompt({
         {isDiff ? (
           <ColorizedDiff diff={request.summary} />
         ) : (
-          <Text color={theme.colors.assistantText}>{request.summary}</Text>
+          <Text color={theme.colors.assistantText}>{curtail(request.summary, maxText * 3)}</Text>
         )}
       </Box>
       {options.map((option, i) => (

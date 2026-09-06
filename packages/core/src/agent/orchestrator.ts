@@ -35,14 +35,14 @@ export class ToolOrchestrator {
 
   async *run(
     toRun: readonly RunnableCall[]
-  ): AsyncGenerator<AgentEvent, Map<string, ToolExecutionResult> | undefined> {
+  ): AsyncGenerator<AgentEvent, Map<string, ToolExecutionResult>> {
     const runResults = new Map<string, ToolExecutionResult>();
     if (this.isSerialBatch(toRun)) {
       yield* this.runSerial(toRun, runResults);
     } else {
       yield* this.runConcurrent(toRun, runResults);
     }
-    // Undefined iff the batch was abandoned mid-flight on abort. The session
+    // The map may be missing entries for calls cut off by abort; the session
     // owns the `cancelled` event and repairs history afterwards — this class
     // owns nothing but tool execution.
     return runResults;
@@ -75,7 +75,7 @@ export class ToolOrchestrator {
         // records the auto-allow so the bypass is never silent.
         if (call.name === "run_command") {
           const command = (call.input as { command?: unknown } | undefined)?.command;
-          if (typeof command === "string" && isReadOnlyCommand(command)) {
+          if (typeof command === "string" && isReadOnlyCommand(command, projectRoot)) {
             this.deps.recordLedger({ eventType: "tool_auto_allowed", tool: call.name, inputHash: t.p.key, outcome: "ok", elapsedMs: 0 });
             yield { type: "tool_started", id: call.id, name: call.name, input: call.input };
             this.deps.recordLedger({ eventType: "tool_started", tool: call.name, inputHash: t.p.key, outcome: "ok", elapsedMs: 0 });
@@ -96,7 +96,7 @@ export class ToolOrchestrator {
           // preview failure must not block the permission flow
         }
         let approved = false;
-        try {
+        {
           // Race the broker against cancel: without this, cancel() during
           // an open prompt hangs the turn until the user answers it.
           approved = await new Promise<boolean>((resolve) => {
@@ -117,8 +117,6 @@ export class ToolOrchestrator {
               }
             );
           });
-        } catch {
-          approved = false; // a broken broker denies by default
         }
         if (signal.aborted) {
           this.deps.recordLedger({ eventType: "cancelled", tool: call.name, inputHash: t.p.key, outcome: "aborted", elapsedMs: 0 });

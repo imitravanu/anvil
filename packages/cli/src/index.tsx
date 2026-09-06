@@ -49,16 +49,37 @@ for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]] a
 
 const VERSION = CORE_VERSION;
 
+const KNOWN_FLAGS = new Set([
+  "--provider", "--model", "--prompt", "-p", "--goal", "-g",
+  "--yes", "-y", "--raw", "--no-mcp",
+]);
+
 function parseFlags(argv: string[]): Record<string, string> {
   const flags: Record<string, string> = {};
+  const nextValue = (i: number, flag: string): string => {
+    const v = argv[i + 1];
+    // A missing value or another flag means the user typo'd
+    // (`anvil -p` with no text). Fail loudly instead of silently ignoring it
+    // and falling through to chat/headless with an empty prompt. A single
+    // leading dash is a legitimate value ("anvil -p -42 is the answer") —
+    // only a doubled dash is treated as the next flag.
+    if (v === undefined || v.startsWith("--")) {
+      console.error(`Missing value for ${flag}. See \`anvil --help\`.`);
+      process.exit(1);
+    }
+    return v;
+  };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--provider" || arg === "--model") {
-      flags[arg.slice(2)] = argv[++i] ?? "";
+      flags[arg.slice(2)] = nextValue(i, arg);
+      i++;
     } else if (arg === "--prompt" || arg === "-p") {
-      flags.prompt = argv[++i] ?? "";
+      flags.prompt = nextValue(i, arg);
+      i++;
     } else if (arg === "--goal" || arg === "-g") {
-      flags.goal = argv[++i] ?? "";
+      flags.goal = nextValue(i, arg);
+      i++;
     } else if (arg === "--yes" || arg === "-y") {
       flags.yes = "1";
     } else if (arg === "--raw") {
@@ -66,6 +87,13 @@ function parseFlags(argv: string[]): Record<string, string> {
     } else if (arg === "--no-mcp") {
       // Skip MCP server startup entirely (fast boot, no child processes).
       flags["no-mcp"] = "1";
+    } else if (!arg.startsWith("-")) {
+      continue; // bare words are handled by the caller (subcommands)
+    } else {
+      // A typo'd flag used to be ignored silently — `anvil --promt x` opened
+      // plain chat. Fail with the closest-sounding known flag instead.
+      console.error(`Unknown flag: ${arg}. See \`anvil --help\`.`);
+      process.exit(1);
     }
   }
   return flags;
@@ -95,7 +123,7 @@ Environment:
 
 Config lives in ~/.anvil (credentials.json, settings.json, sessions/).
 Set ANVIL_HOME to relocate the data dir (credentials, settings, sessions, cache).
-Slash commands inside the app: /help /clear /connect /expand /ledger /mcp /model /rewind /theme /session /sync.
+Slash commands inside the app: /help /clear /connect /diff /expand /goal /image /ledger /mcp /model /retry /rewind /theme /session /sync.
 `;
 
 // --- Startup crash guard: never leave the terminal in a broken raw-mode state. ---
@@ -454,11 +482,12 @@ function runSetup(thenChat: boolean): void {
 const argv = process.argv.slice(2);
 const first = argv[0];
 
-if (first === "--version" || first === "-v") {
+// Honored anywhere — `anvil -y --help` used to open an interactive chat.
+if (argv.includes("--version") || argv.includes("-v")) {
   console.log(`anvil ${VERSION}`);
   process.exit(0);
 }
-if (first === "--help" || first === "-h") {
+if (argv.includes("--help") || argv.includes("-h")) {
   console.log(HELP);
   process.exit(0);
 }

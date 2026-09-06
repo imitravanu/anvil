@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { formatToolOutput, MAX_OUTPUT_LINES } from "../toolOutput.js";
+import { formatToolOutput } from "../toolOutput.js";
+import { EXPANDED_MAX_LINES } from "../displayLimits.js";
 import { retainOutput, OUTPUT_RETAIN_MAX } from "../../hooks/useAgentController.js";
 
 describe("formatToolOutput", () => {
@@ -34,9 +35,9 @@ describe("formatToolOutput", () => {
   });
 
   it("caps long output with an omission notice", () => {
-    const big = Array.from({ length: MAX_OUTPUT_LINES + 5 }, (_, i) => `line ${i}`).join("\n");
+    const big = Array.from({ length: EXPANDED_MAX_LINES + 5 }, (_, i) => `line ${i}`).join("\n");
     const lines = formatToolOutput({ stdout: big, stderr: "" });
-    expect(lines.length).toBe(MAX_OUTPUT_LINES + 1);
+    expect(lines.length).toBe(EXPANDED_MAX_LINES + 1);
     expect(lines[lines.length - 1]).toContain("5 more line(s) omitted");
   });
 });

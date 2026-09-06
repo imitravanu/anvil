@@ -55,6 +55,13 @@ export async function runGoalHeadless(opts: GoalHeadlessOptions): Promise<number
             process.stderr.write(`✔ [Milestone ${event.milestone.id} Completed]\n\n`);
           }
           break;
+        case "milestone_failed":
+          // Failed milestones continue the mission; hiding them made the
+          // stderr stream claim progress the debrief then contradicted.
+          if (!opts.raw) {
+            process.stderr.write(`✗ [Milestone ${event.milestone.id} Failed] ${event.error}\n\n`);
+          }
+          break;
         case "critique_started":
           if (!opts.raw) {
             process.stderr.write(`🔍 [Adversarial Self-Critique] Reviewing mission integrity...\n`);
@@ -80,8 +87,8 @@ export async function runGoalHeadless(opts: GoalHeadlessOptions): Promise<number
       }
     }
     return 0;
-  } catch (err: any) {
-    process.stderr.write(`\nError in GoalEngine: ${err?.message ?? String(err)}\n`);
+  } catch (err: unknown) {
+    process.stderr.write(`\nError in GoalEngine: ${err instanceof Error ? err.message : String(err)}\n`);
     return 1;
   }
 }

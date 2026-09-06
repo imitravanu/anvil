@@ -7,7 +7,6 @@ import { CORE_VERSION } from "../version.js";
 // ---------------------------------------------------------------------------
 // MCP client: minimal JSON-RPC 2.0 over an McpTransport.
 // Handshake: initialize → notifications/initialized → tools/list (paginated).
-// 2.
 // ---------------------------------------------------------------------------
 
 /** Protocol version we declare. Recorded; see version-negotiation note below. */
@@ -96,7 +95,7 @@ export class McpClient {
       return; // malformed line — ignore (framing is newline-delimited JSON)
     }
     if (!isRecord(msg)) return;
-    // Server notifications have no id — v1 reads and ignores them ().
+    // Server notifications have no id — read and ignore them.
     // JSON-RPC ids may be numbers OR strings — both must route.
     if (typeof msg.id !== "number" && typeof msg.id !== "string") return;
     const resolve = this.pending.get(msg.id);
