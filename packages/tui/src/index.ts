@@ -1,4 +1,10 @@
 export { App, type AppProps } from "./components/App.js";
+export { Header, type HeaderProps } from "./components/Header.js";
+export { StatusBar, type StatusBarProps } from "./components/StatusBar.js";
+export { MissionDeck, type MissionDeckProps } from "./components/MissionDeck.js";
+export { VerificationCard } from "./components/VerificationCard.js";
+export { DiffModal, type DiffModalProps } from "./components/DiffModal.js";
+export { RewindModal, type RewindModalProps } from "./components/RewindModal.js";
 export { TuiPermissionBroker, type PendingPermissionRequest } from "./permission/TuiPermissionBroker.js";
 export { FirstRunSetup } from "./components/FirstRunSetup.js";
 export { THEMES, isThemeName, type Theme, type ThemeName } from "./theme/themes.js";

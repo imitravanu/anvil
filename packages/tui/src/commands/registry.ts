@@ -33,6 +33,7 @@ export const COMMANDS: Command[] = [
         ledger: "e.g. /ledger — what ran, what failed, tokens spent",
         retry: "e.g. /retry actually use python 3.12 — retry with corrected wording",
         diff: "e.g. /diff — see every file the session touched",
+        goal: "e.g. /goal add user auth — autonomous plan, execution & critique",
         mcp: "e.g. /mcp reconnect — refresh all servers",
         model: "e.g. /model — Enter switches, Esc cancels",
         rewind: "e.g. /rewind 2 — restore checkpoint #2 (plain /rewind lists them)",
@@ -173,6 +174,18 @@ export const COMMANDS: Command[] = [
       else ctx.openThemePicker();
     },
   },
+  {
+    name: "goal",
+    description: "Launch an autonomous mission: /goal <objective>",
+    run: (args, ctx) => {
+      const objective = args.join(" ").trim();
+      if (!objective) {
+        ctx.printSystemMessage("Usage: /goal <objective> — launch an autonomous multi-step engineering mission");
+        return;
+      }
+      ctx.launchGoal(objective);
+    },
+  },
 ];
 
 export function parseCommand(input: string): { name: string; args: string[] } | null {
@@ -211,6 +224,10 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
     setIsConnectOpen,
     setIsThemePickerOpen,
     setExpandTools,
+    setIsDiffOpen,
+    setIsRewindOpen,
+    setGoal,
+    launchGoal,
     addPendingImage,
   } = deps;
   return {
@@ -323,6 +340,10 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
         return;
       }
       if (idText === undefined) {
+        if (setIsRewindOpen) {
+          setIsRewindOpen(true);
+          return;
+        }
         printSystemMessage(formatRewindList(session.getCheckpoints()));
         return;
       }
@@ -408,6 +429,10 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
         printSystemMessage("Cannot diff while a turn is in flight.");
         return;
       }
+      if (setIsDiffOpen) {
+        setIsDiffOpen(true);
+        return;
+      }
       void session.summarizeChanges()
         .then((changes) => {
           if (changes.length === 0) {
@@ -472,6 +497,17 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
         return;
       }
       printSystemMessage(`Unknown /mcp subcommand: ${sub}. Try /mcp or /mcp reconnect.`);
+    },
+    launchGoal: (objective: string) => {
+      if (isBusy) {
+        printSystemMessage("Cannot launch a goal while a turn is in flight.");
+        return;
+      }
+      printSystemMessage(`🎯 Autonomous Mission Initiated: "${objective}"`);
+      // The real GoalEngine mission runs over the live session (tool cards
+      // render in the transcript) and drives the Mission Deck from genuine
+      // milestone evidence.
+      void launchGoal?.(objective);
     },
   };
 }

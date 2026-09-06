@@ -39,6 +39,8 @@ export interface CommandContext {
   showDiff: () => void;
   // /mcp: no arg → server status; "reconnect" → refresh all
   mcp: (sub?: string) => void;
+  // /goal: launch an autonomous multi-step engineering mission
+  launchGoal: (objective: string) => void;
 }
 
 export interface Command {
@@ -75,7 +77,11 @@ export interface CommandHandlerDeps {
   setIsConnectOpen: Dispatch<SetStateAction<boolean>>;
   setIsThemePickerOpen: Dispatch<SetStateAction<boolean>>;
   setExpandTools: Dispatch<SetStateAction<boolean>>;
+  setIsDiffOpen?: Dispatch<SetStateAction<boolean>>;
+  setIsRewindOpen?: Dispatch<SetStateAction<boolean>>;
+  setGoal?: (goal: any) => void;
   send: (text: string) => Promise<void>;
+  launchGoal?: (objective: string) => Promise<void>;
   addPendingImage: (img: { mediaType: string; data: string; path: string }) => void;
 }
 

@@ -1,5 +1,12 @@
 import { ModelInfo } from "./types.js";
 
+const _modelIndex = new Map<string, ModelInfo>();
+
+function _reindex(): void {
+  _modelIndex.clear();
+  for (const m of MODEL_REGISTRY) _modelIndex.set(m.id, m);
+}
+
 export const MODEL_REGISTRY: ModelInfo[] = [
   {
     id: "claude-opus-5",
@@ -361,6 +368,11 @@ export function registerModel(model: ModelInfo): void {
       MODEL_REGISTRY.push(model);
     }
   }
+  _modelIndex.set(model.id, model);
+}
+
+export function getModel(id: string): ModelInfo | undefined {
+  return _modelIndex.get(id);
 }
 
 export function registerModels(models: ModelInfo[]): void {
@@ -376,6 +388,11 @@ export function registerModels(models: ModelInfo[]): void {
 export function unregisterModels(ids: string[]): void {
   const set = new Set(ids);
   for (let i = MODEL_REGISTRY.length - 1; i >= 0; i--) {
-    if (set.has(MODEL_REGISTRY[i].id)) MODEL_REGISTRY.splice(i, 1);
+    if (set.has(MODEL_REGISTRY[i].id)) {
+      _modelIndex.delete(MODEL_REGISTRY[i].id);
+      MODEL_REGISTRY.splice(i, 1);
+    }
   }
 }
+
+_reindex();

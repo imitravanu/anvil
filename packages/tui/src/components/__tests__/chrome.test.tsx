@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { ColorizedDiff } from "../../diff/colorizeDiff.js";
 import { Header } from "../Header.js";
 import { PlanLine } from "../PlanLine.js";
+import { MissionDeck } from "../MissionDeck.js";
+import { VerificationCard } from "../VerificationCard.js";
 import { StatusBar } from "../StatusBar.js";
 import { MessageView } from "../MessageView.js";
 import type { DisplayMessage } from "../../hooks/useAgentController.js";
@@ -49,9 +51,29 @@ describe("Header", () => {
     expect(frameText(busy.lastFrame)).toContain("busy");
     busy.unmount();
   });
+
+  it("renders multi-segment situational cockpit header when context is present", () => {
+    const context = {
+      projectRoot: "/tmp/anvil",
+      projectName: "anvil-core",
+      git: { branch: "feature-branch", clean: false, modifiedFiles: ["file.ts"] },
+      ecosystem: { type: "node" as const, packageManager: "pnpm", testScript: "vitest run" },
+      topLevelEntries: ["src", "package.json"],
+      summary: "test summary",
+    };
+    const { lastFrame, unmount } = renderThemed(
+      <Header model="gemini-3.6-flash" isBusy={false} context={context} />
+    );
+    const out = frameText(lastFrame);
+    expect(out).toContain("▲ ANVIL");
+    expect(out).toContain("repo: anvil-core");
+    expect(out).toContain("node");
+    expect(out).toContain("(pnpm)");
+    unmount();
+  });
 });
 
-describe("PlanLine", () => {
+describe("PlanLine & MissionDeck", () => {
   it("renders the plan label and hides overflow with a count", () => {
     const plan = ["one", "two", "three", "four"].join("\n");
     const { lastFrame, unmount } = renderThemed(<PlanLine plan={plan} />);
@@ -78,6 +100,22 @@ describe("StatusBar", () => {
     expect(out).toContain("○ idle");
     expect(out).toContain("1,500 in");
     expect(out).toContain("40 out");
+    unmount();
+  });
+
+  it("displays checkpoint count and test health status when available", () => {
+    const { lastFrame, unmount } = renderThemed(
+      <StatusBar
+        model="gemini-3.6-flash"
+        isBusy={false}
+        usage={{ inputTokens: 100, outputTokens: 50 }}
+        checkpointCount={3}
+        testStatus="green"
+      />
+    );
+    const out = frameText(lastFrame);
+    expect(out).toContain("⎌ 3");
+    expect(out).toContain("🧪 green");
     unmount();
   });
 });
@@ -125,5 +163,52 @@ describe("MessageView", () => {
     );
     expect(frameText(sys.lastFrame)).toContain("note");
     sys.unmount();
+  });
+
+  it("renders closed-loop TDD verification card and self-repair attempts", () => {
+    const { lastFrame, unmount } = renderThemed(
+      <MessageView
+        message={assistant({
+          verifications: [
+            {
+              id: "v1",
+              command: "npm test",
+              status: "passed",
+              summary: "374 passed",
+              repairsUsed: 1,
+            },
+          ],
+        })}
+      />
+    );
+    const out = frameText(lastFrame);
+    expect(out).toContain("Test Suite Verified Green");
+    expect(out).toContain("cmd: npm test");
+    expect(out).toContain("Auto-Repair Attempt 1/2");
+    unmount();
+  });
+});
+
+describe("MissionDeck Component", () => {
+  it("renders active mission with milestone progression and turn counter", () => {
+    const goal = {
+      title: "Build Auth Engine",
+      milestones: [
+        { id: "1", title: "Explore Auth Files", criteria: "Done", status: "completed" as const },
+        { id: "2", title: "Write Middleware", criteria: "In progress", status: "in_progress" as const, detail: "editing jwt.ts" },
+        { id: "3", title: "Test Verification", criteria: "Pending", status: "pending" as const },
+      ],
+      currentTurn: 2,
+      maxTurns: 10,
+    };
+    const { lastFrame, unmount } = renderThemed(<MissionDeck goal={goal} isBusy={true} />);
+    const out = frameText(lastFrame);
+    expect(out).toContain("MISSION: Build Auth Engine");
+    expect(out).toContain("[1/3] · Turn 2/10");
+    expect(out).toContain("1. Explore Auth Files");
+    expect(out).toContain("2. Write Middleware");
+    expect(out).toContain("3. Test Verification");
+    expect(out).toContain("(editing jwt.ts)");
+    unmount();
   });
 });

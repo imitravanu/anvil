@@ -1,0 +1,94 @@
+import { describe, expect, it, vi } from "vitest";
+import { DiffModal } from "../DiffModal.js";
+import { RewindModal } from "../RewindModal.js";
+import { frameText, renderThemed } from "../../test-utils/testRender.js";
+import type { AgentSession, CheckpointMeta, SessionFileChange } from "@anvil/core";
+
+function mockSession(over: {
+  changes?: SessionFileChange[];
+  checkpoints?: CheckpointMeta[];
+}): AgentSession {
+  return {
+    summarizeChanges: vi.fn().mockResolvedValue(over.changes ?? []),
+    getCheckpoints: vi.fn().mockReturnValue(over.checkpoints ?? []),
+  } as unknown as AgentSession;
+}
+
+describe("DiffModal", () => {
+  it("renders empty notice when session has no file changes", async () => {
+    const session = mockSession({ changes: [] });
+    const onClose = vi.fn();
+    const { lastFrame, unmount } = renderThemed(
+      <DiffModal session={session} onClose={onClose} />
+    );
+
+    // Wait for async summarizeChanges promise
+    await new Promise((r) => setTimeout(r, 20));
+
+    const out = frameText(lastFrame);
+    expect(out).toContain("Diff Inspector");
+    expect(out).toContain("No files modified");
+    unmount();
+  });
+
+  it("renders file tabs and diff content when changes exist", async () => {
+    const changes: SessionFileChange[] = [
+      {
+        path: "src/auth.ts",
+        kind: "modified",
+        diff: "@@ -1,2 +1,2 @@\n-const old = 1;\n+const next = 2;",
+      },
+    ];
+    const session = mockSession({ changes });
+    const onClose = vi.fn();
+    const { lastFrame, unmount } = renderThemed(
+      <DiffModal session={session} onClose={onClose} />
+    );
+
+    await new Promise((r) => setTimeout(r, 20));
+
+    const out = frameText(lastFrame);
+    expect(out).toContain("Diff Inspector");
+    expect(out).toContain("src/auth.ts");
+    expect(out).toContain("~ modified");
+    expect(out).toContain("old");
+    expect(out).toContain("next");
+    unmount();
+  });
+});
+
+describe("RewindModal", () => {
+  it("renders empty notice when no checkpoints exist", () => {
+    const session = mockSession({ checkpoints: [] });
+    const onSelect = vi.fn();
+    const onClose = vi.fn();
+    const { lastFrame, unmount } = renderThemed(
+      <RewindModal session={session} onSelect={onSelect} onClose={onClose} />
+    );
+    const out = frameText(lastFrame);
+    expect(out).toContain("Time-Travel Checkpoint Rewind");
+    expect(out).toContain("No checkpoints recorded");
+    unmount();
+  });
+
+  it("renders checkpoint timeline and selection cursor", () => {
+    const checkpoints: CheckpointMeta[] = [
+      { id: 1, files: 2, skipped: 0, ts: new Date(Date.now() - 60000).toISOString() },
+      { id: 2, files: 1, skipped: 0, ts: new Date().toISOString() },
+    ];
+    const session = mockSession({ checkpoints });
+    const onSelect = vi.fn();
+    const onClose = vi.fn();
+    const { lastFrame, unmount } = renderThemed(
+      <RewindModal session={session} onSelect={onSelect} onClose={onClose} />
+    );
+    const out = frameText(lastFrame);
+    expect(out).toContain("Time-Travel Checkpoint Rewind");
+    expect(out).toContain("#1");
+    expect(out).toContain("2 files snapshotted");
+    expect(out).toContain("#2");
+    expect(out).toContain("1 file snapshotted");
+    expect(out).toContain("❯");
+    unmount();
+  });
+});

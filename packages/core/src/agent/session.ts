@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { ConversationMessage, ModelProvider, StreamEvent } from "../providers/types.js";
-import { MODEL_REGISTRY } from "../providers/registry.js";
-import { TOOL_DEFINITIONS } from "../tools/index.js";
+import { getModel } from "../providers/registry.js";
+import { TOOL_DEFINITIONS, detectTestCommand, runTestVerification } from "../tools/index.js";
 import type { ToolExecutionResult, ToolDefinition } from "../tools/types.js";
 import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded, estimateTokens } from "./compaction.js";
 import { SessionMetadata, StoredSession } from "../session/types.js";
 import { AgentEvent, AgentOptions, DEFAULT_MAX_INNER_ITERATIONS } from "./types.js";
 import { RunLedgerEntry, capLedger, maxSeq } from "./ledger.js";
-import { isRateLimitMessage, noteRateLimited, rateLimitRetrySeconds } from "../providers/freeModels.js";
+import { clearRateLimitRecord, getConsecutiveRateLimitCount, isCircuitOpen, isRateLimitMessage, noteRateLimited, rateLimitRetrySeconds, recordFailure, recordSuccess } from "../providers/freeModels.js";
 import { MAX_DELEGATIONS_PER_TURN, runSubAgentLive } from "./subagent.js";
 import { TurnState } from "./turnState.js";
 import { LoopGuard, type AccumulatedToolCall, type PreparedCall } from "./loopGuard.js";
@@ -23,7 +23,7 @@ import {
   restoreCheckpoint,
   type CheckpointMeta,
 } from "./checkpoints.js";
-import { loadCheckpoints, saveCheckpoints } from "./checkpointStore.js";
+import { loadCheckpoints, saveCheckpointsAsync } from "./checkpointStore.js";
 
 /**
  * Abortable wait for the automatic rate-limit retry. Rejects on abort so the
@@ -47,6 +47,8 @@ function sleepAbortable(ms: number, signal: AbortSignal): Promise<void> {
     signal.addEventListener("abort", onAbort, { once: true });
   });
 }
+
+export const MAX_VERIFY_REPAIRS = 2;
 
 export interface RestoreData {
   metadata: SessionMetadata;
@@ -225,7 +227,7 @@ export class AgentSession {
   }
 
   /** Merge sub-agent checkpoints into this session's ring with fresh ids. */
-  private mergeSubCheckpoints(sub: readonly Checkpoint[]): void {
+  private async mergeSubCheckpoints(sub: readonly Checkpoint[]): Promise<void> {
     if (sub.length === 0) return;
     for (const cp of sub) {
       this.checkpointSeq += 1;
@@ -234,7 +236,7 @@ export class AgentSession {
         { ...cp, id: this.checkpointSeq },
       ]);
     }
-    this.persistCheckpoints();
+    await this.persistCheckpoints();
     this.recordLedger({ eventType: "checkpoint_merged", outcome: "ok", elapsedMs: 0 });
   }
 
@@ -294,9 +296,9 @@ export class AgentSession {
     ]);
   }
 
-  /** Best-effort persist of the rewind ring (never breaks the turn). */
-  private persistCheckpoints(): void {
-    saveCheckpoints(this.id, this.checkpoints);
+  /** Best-effort persist of the rewind ring. Awaited to avoid data loss on crash. */
+  private async persistCheckpoints(): Promise<void> {
+    await saveCheckpointsAsync(this.id, this.checkpoints);
   }
 
   /**
@@ -375,7 +377,7 @@ export class AgentSession {
         // turn gets exactly one summarization ATTEMPT. The cheap guards are
         // peeked first: a below-threshold loop-top must not burn the attempt
         // (lastInputTokens is stale until the first round of THIS turn lands).
-        const modelInfo = MODEL_REGISTRY.find((m) => m.id === this.options.model);
+        const modelInfo = getModel(this.options.model);
         if (
           modelInfo &&
           !turn.compactedThisTurn &&
@@ -402,6 +404,11 @@ export class AgentSession {
             // Summarization failed (or was aborted) — proceed uncompacted.
             // An abort surfaces as `cancelled` at the next loop-top check.
           }
+        }
+
+        if (isCircuitOpen(this.provider.id, this.options.model)) {
+          yield { type: "error", message: `Provider circuit breaker is open. Wait before retrying.` };
+          return;
         }
 
         const stream = this.provider.streamCompletion({
@@ -476,9 +483,14 @@ export class AgentSession {
               // second 429 in the same turn surfaces as a normal error.
               if (isRateLimitMessage(event.message)) {
                 noteRateLimited(this.provider.id, this.options.model);
+                // Exactly one circuit failure per failed request — noteRateLimited
+                // never touches the breaker, this is its single accounting point.
+                // Other errors (bad-model 404s, network) must NOT open the circuit.
+                recordFailure(this.provider.id, this.options.model);
                 if (!turn.rateLimitRetried) {
                   turn.rateLimitRetried = true;
-                  rateLimitRetry = rateLimitRetrySeconds(event.message);
+                  const consecutive = getConsecutiveRateLimitCount(this.provider.id, this.options.model);
+                  rateLimitRetry = rateLimitRetrySeconds(event.message, consecutive);
                   break; // leave the switch; the loop breaks out below
                 }
               }
@@ -513,6 +525,51 @@ export class AgentSession {
         this.history.pushAssistant(textParts, toolCalls);
 
         if (stopReason !== "tool_use") {
+          // Closed-loop TDD auto-verification: if mutations occurred and autoVerify is active,
+          // probe tests before concluding turn.
+          const testCmd =
+            typeof this.options.autoVerify === "string"
+              ? this.options.autoVerify
+              : this.options.autoVerify
+                ? detectTestCommand(this.options.projectRoot)
+                : null;
+
+          if (testCmd && turn.mutationsOccurred && turn.verifyRepairsUsed < MAX_VERIFY_REPAIRS) {
+            yield { type: "verification_started", command: testCmd };
+            this.recordLedger({ eventType: "verification_started", tool: testCmd, outcome: "ok", elapsedMs: 0 });
+            const verifyStart = Date.now();
+            const verifyResult = await runTestVerification(
+              this.options.projectRoot,
+              testCmd,
+              undefined,
+              controller.signal
+            );
+            const elapsed = Date.now() - verifyStart;
+
+            if (controller.signal.aborted) {
+              yield { type: "cancelled" };
+              return;
+            }
+
+            if (verifyResult.passed) {
+              yield { type: "verification_result", passed: true, summary: verifyResult.summary };
+              this.recordLedger({ eventType: "verification_finished", tool: testCmd, outcome: "ok", elapsedMs: elapsed });
+            } else {
+              turn.verifyRepairsUsed += 1;
+              yield { type: "verification_result", passed: false, summary: verifyResult.summary };
+              this.recordLedger({ eventType: "verification_finished", tool: testCmd, outcome: "error", elapsedMs: elapsed });
+
+              const repairMsg =
+                `[Automated Test Verification Failed]\n` +
+                `The test command \`${testCmd}\` failed (exit ${verifyResult.exitCode}):\n` +
+                `${verifyResult.failureTrace ?? verifyResult.output}\n\n` +
+                `Analyze the test failure, use edit_file or write_file to repair the issue, and ensure the tests pass.`;
+              this.history.pushUserText(repairMsg);
+              continue;
+            }
+          }
+
+          recordSuccess(this.provider.id, this.options.model);
           yield { type: "turn_complete" };
           return;
         }
@@ -614,7 +671,7 @@ export class AgentSession {
             const run = subStep.value;
             if (run.aborted) {
               // Merge even on abort: files changed before the stop persist.
-              this.mergeSubCheckpoints(run.checkpoints);
+              await this.mergeSubCheckpoints(run.checkpoints);
               this.recordLedger({ eventType: "cancelled", tool: "delegate_task", inputHash: p.key, outcome: "aborted", elapsedMs: Date.now() - subStartedAt });
               // Close the tool batch honestly before stopping — sibling calls
               // and the delegation itself need tool_results in history.
@@ -624,7 +681,7 @@ export class AgentSession {
             }
             // The sub-ring joins the parent ring (fresh ids, capped): rewind
             // in the main session reaches sub-agent file writes too.
-            this.mergeSubCheckpoints(run.checkpoints);
+            await this.mergeSubCheckpoints(run.checkpoints);
             this.recordLedger({
               eventType: "subagent_finished",
               tool: "delegate_task",
@@ -668,7 +725,7 @@ export class AgentSession {
           if (cp.files.length > 0) {
             this.checkpointSeq = cp.id;
             this.checkpoints = capCheckpoints([...this.checkpoints, cp]);
-            this.persistCheckpoints();
+            await this.persistCheckpoints();
             this.recordLedger({ eventType: "checkpoint_created", outcome: "ok", elapsedMs: 0 });
             yield { type: "checkpoint", id: cp.id, files: cp.files.length };
           }
@@ -693,6 +750,14 @@ export class AgentSession {
           return;
         }
         const outcomes = new Map<string, ToolExecutionResult>([...runResults, ...handled]);
+        for (const p of prepared) {
+          // A mutation happened only if the tool actually ran and succeeded —
+          // a missing outcome (cancelled batch) or an error is not a mutation.
+          const outcome = outcomes.get(p.call.id);
+          if (p.def?.mutating && outcome && !outcome.isError) {
+            turn.mutationsOccurred = true;
+          }
+        }
 
         // Loop-guard demands lead the results message as a user-role text part
         // (the data model has no "system" role).
@@ -705,6 +770,9 @@ export class AgentSession {
       }
       if (isRateLimitMessage(err?.message ?? String(err))) {
         noteRateLimited(this.provider.id, this.options.model);
+        recordFailure(this.provider.id, this.options.model);
+      } else {
+        clearRateLimitRecord(this.provider.id, this.options.model);
       }
       yield { type: "error", message: err?.message ?? String(err) };
     } finally {

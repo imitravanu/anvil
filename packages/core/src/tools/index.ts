@@ -5,6 +5,8 @@ import * as editFile from "./editFile.js";
 import * as listFiles from "./listFiles.js";
 import * as grep from "./grep.js";
 import * as bash from "./bash.js";
+import * as outline from "./outline.js";
+import * as verifyTests from "./verifyTests.js";
 import * as updatePlan from "./updatePlan.js"; // plan scratchpad
 import * as delegateTask from "./delegateTask.js"; // sub-agent delegation tool
 
@@ -26,6 +28,8 @@ const REGISTRY: RegisteredTool[] = [
   { definition: listFiles.definition, execute: listFiles.execute },
   { definition: grep.definition, execute: grep.execute },
   { definition: bash.definition, execute: bash.execute, describe: bash.describe },
+  { definition: outline.definition, execute: outline.execute },
+  { definition: verifyTests.definition, execute: verifyTests.execute },
   // Session intercepts this tool before the generic executor (sets session.plan
   // and emits plan_updated); the executor here is just a safe no-op.
   { definition: updatePlan.definition, execute: updatePlan.execute },
@@ -117,3 +121,5 @@ export async function describeToolInput(
   }
   return `${name}(${JSON.stringify(input).slice(0, 200)})`;
 }
+
+export { detectTestCommand, runTestVerification, type TestRunResult } from "./verifyTests.js";

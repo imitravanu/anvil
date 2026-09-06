@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { randomUUID } from "node:crypto";
-import { AgentSession, type AgentEvent } from "@anvil/core";
+import {
+  AgentSession,
+  type AgentEvent,
+  runGoalMission,
+  MAX_GOAL_TURNS,
+  type GoalTurnOutcome,
+} from "@anvil/core";
 import { retainReport, type SubAgentRecord } from "../util/subagent.js";
 import { friendlyError } from "../util/errors.js";
 import { HISTORY_RECALL_CAP, TRANSCRIPT_STATE_CAP, MESSAGE_QUEUE_CAP } from "../util/displayLimits.js";
@@ -49,6 +55,30 @@ export function retainOutput(output: unknown): unknown {
   return { truncated: text.slice(0, OUTPUT_RETAIN_MAX), note: "[output truncated for display]" };
 }
 
+export interface DisplayVerification {
+  id: string;
+  command: string;
+  status: "running" | "passed" | "failed";
+  summary?: string;
+  repairsUsed: number;
+}
+
+export interface DisplayGoalMilestone {
+  id: string;
+  title: string;
+  criteria: string;
+  status: "pending" | "in_progress" | "completed" | "failed";
+  summary?: string;
+  detail?: string;
+}
+
+export interface DisplayGoal {
+  title: string;
+  milestones: DisplayGoalMilestone[];
+  currentTurn: number;
+  maxTurns: number;
+}
+
 export interface DisplayMessage {
   id: string;
   role: "user" | "assistant" | "system";
@@ -56,6 +86,7 @@ export interface DisplayMessage {
   streaming: boolean;
   toolCalls: DisplayToolCall[];
   subAgents: DisplaySubAgent[]; // delegation cards live on the assistant turn
+  verifications?: DisplayVerification[]; // closed-loop TDD verification & repair cards
   /** Attached image paths (/image) shown under the user turn. */
   images?: { path: string }[];
   /** Friendly, compact turn-failure line (raw provider walls are remapped). */
@@ -94,8 +125,12 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
   // the persistent plan — seeded from the session, updated live
   // by plan_updated events, reset whenever the active session changes.
   const [plan, setPlan] = useState<string | null>(session.plan ?? null);
+  const [goal, setGoal] = useState<DisplayGoal | null>(null);
+  const [testStatus, setTestStatus] = useState<"green" | "failed" | "running" | null>(null);
   useEffect(() => {
     setPlan(session.plan ?? null);
+    setGoal(null);
+    setTestStatus(null);
     // Usage totals belong to the session too — a fresh/cleared transcript
     // must not show the previous session's spend in the StatusBar.
     setUsage({ inputTokens: 0, outputTokens: 0 });
@@ -120,6 +155,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         streaming: false,
         toolCalls: [],
         subAgents: [],
+        verifications: [],
         ...(attached.length > 0 ? { images: attached.map((a) => ({ path: a.path })) } : {}),
       };
       const assistantId = randomUUID();
@@ -128,7 +164,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         const next: DisplayMessage[] = [
           ...prev,
           userMsg,
-          { id: assistantId, role: "assistant", text: "", streaming: true, toolCalls: [], subAgents: [] },
+          { id: assistantId, role: "assistant", text: "", streaming: true, toolCalls: [], subAgents: [], verifications: [] },
         ];
         return next.length > TRANSCRIPT_STATE_CAP ? next.slice(-TRANSCRIPT_STATE_CAP) : next;
       });
@@ -153,7 +189,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
           if (event.type === "tool_finished" || event.type === "tool_permission_denied") {
             textNeedsBreak = true;
           }
-          applyEvent(event, updateAssistant, setUsage, setMessages, setPlan);
+          applyEvent(event, updateAssistant, setUsage, setMessages, setPlan, setTestStatus);
         }
       } finally {
         // Mark streaming done either way — completion, cancellation, or error.
@@ -211,13 +247,187 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     setMessages(seed);
   }, []);
 
+  /**
+   * Run one mission turn without a user bubble — the mission deck and system
+   * notices carry the context; the assistant card renders text and tool calls.
+   * Collects the outcome signals the goal mission judges milestones on.
+   */
+  const runGoalTurn = useCallback(
+    async (prompt: string): Promise<GoalTurnOutcome> => {
+      busyRef.current = true;
+      const assistantId = randomUUID();
+      currentAssistantId.current = assistantId;
+      setMessages((prev) => {
+        const next: DisplayMessage[] = [
+          ...prev,
+          { id: assistantId, role: "assistant", text: "", streaming: true, toolCalls: [], subAgents: [], verifications: [] },
+        ];
+        return next.length > TRANSCRIPT_STATE_CAP ? next.slice(-TRANSCRIPT_STATE_CAP) : next;
+      });
+      setIsBusy(true);
+
+      const updateAssistant = (fn: (m: DisplayMessage) => DisplayMessage) => {
+        setMessages((prev) => prev.map((m) => (m.id === assistantId ? fn(m) : m)));
+      };
+
+      const outcome: GoalTurnOutcome = {
+        text: "",
+        errored: false,
+        verificationFailed: false,
+        permissionDenied: false,
+        cancelled: false,
+      };
+      let textNeedsBreak = false;
+      try {
+        for await (const event of session.send(prompt)) {
+          if (event.type === "text_delta") {
+            if (textNeedsBreak) {
+              updateAssistant((m) => ({ ...m, text: m.text + "\n\n" }));
+              textNeedsBreak = false;
+            }
+            outcome.text += event.text;
+          }
+          if (event.type === "tool_finished" || event.type === "tool_permission_denied") {
+            textNeedsBreak = true;
+          }
+          if (event.type === "verification_result" && !event.passed) outcome.verificationFailed = true;
+          if (event.type === "tool_permission_denied") outcome.permissionDenied = true;
+          if (event.type === "error") outcome.errored = true;
+          if (event.type === "cancelled") outcome.cancelled = true;
+          applyEvent(event, updateAssistant, setUsage, setMessages, setPlan, setTestStatus);
+        }
+      } finally {
+        updateAssistant((m) => ({ ...m, streaming: false }));
+        setIsBusy(false);
+        busyRef.current = false;
+        currentAssistantId.current = null;
+        onTurnSettledRef.current?.();
+      }
+      return outcome;
+    },
+    [session]
+  );
+
+  /**
+   * Launch an autonomous goal over the LIVE session: the real GoalEngine
+   * mission protocol drives turns through this session, so tool calls render
+   * in the transcript while the Mission Deck reflects genuine milestone
+   * evidence (no more hardcoded fake deck).
+   */
+  const launchGoal = useCallback(
+    async (objective: string) => {
+      if (busyRef.current) return;
+      setGoal(null);
+      const mission = runGoalMission(objective, {
+        projectRoot: session.projectRoot,
+        summarizeChanges: () => session.summarizeChanges(),
+        sendTurn: async function* (prompt: string) {
+          const outcome = await runGoalTurn(prompt);
+          return outcome;
+        },
+      });
+      try {
+        for await (const ge of mission) {
+          switch (ge.type) {
+            case "plan_decomposed":
+              setGoal({
+                title: objective,
+                milestones: ge.milestones.map((m) => ({
+                  id: m.id,
+                  title: m.title,
+                  criteria: m.criteria,
+                  status: m.status as DisplayGoalMilestone["status"],
+                })),
+                currentTurn: 1,
+                maxTurns: MAX_GOAL_TURNS,
+              });
+              break;
+            case "milestone_started":
+              setGoal((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      currentTurn: prev.currentTurn + 1,
+                      milestones: prev.milestones.map((m) =>
+                        m.id === ge.milestone.id ? { ...m, status: "in_progress" as const } : m
+                      ),
+                    }
+                  : prev
+              );
+              break;
+            case "milestone_completed":
+              setGoal((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      milestones: prev.milestones.map((m) =>
+                        m.id === ge.milestone.id ? { ...m, status: "completed" as const, detail: undefined } : m
+                      ),
+                    }
+                  : prev
+              );
+              break;
+            case "milestone_failed":
+              setGoal((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      milestones: prev.milestones.map((m) =>
+                        m.id === ge.milestone.id ? { ...m, status: "failed" as const } : m
+                      ),
+                    }
+                  : prev
+              );
+              printSystemMessage(`✗ Milestone ${ge.milestone.id} failed: ${ge.error}`);
+              break;
+            case "critique_result":
+              printSystemMessage(`🔍 Self-critique: ${ge.verdict}`);
+              break;
+            case "goal_failed":
+              printSystemMessage(`✗ Mission failed: ${ge.error}`);
+              break;
+            case "goal_completed":
+              setGoal((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      milestones: ge.result.milestones.map((m) => ({
+                        id: m.id,
+                        title: m.title,
+                        criteria: m.criteria,
+                        status: m.status as DisplayGoalMilestone["status"],
+                      })),
+                    }
+                  : prev
+              );
+              printSystemMessage(
+                `${ge.result.success ? "✔" : "✗"} Mission ${ge.result.success ? "accomplished" : "ended"}: ` +
+                  `${ge.result.summary} Files changed: ${ge.result.filesChanged.length}.`
+              );
+              break;
+            default:
+              break;
+          }
+        }
+      } catch (err: unknown) {
+        printSystemMessage(`Mission error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    },
+    [session, runGoalTurn, printSystemMessage]
+  );
+
   return {
     messages,
     isBusy,
     usage,
     plan,
+    goal,
+    setGoal,
+    testStatus,
+    setTestStatus,
     queued,
     send,
+    launchGoal,
     addPendingImage,
     cancel,
     printSystemMessage,
@@ -236,7 +446,8 @@ function applyEvent(
   update: (fn: (m: DisplayMessage) => DisplayMessage) => void,
   setUsage: React.Dispatch<React.SetStateAction<UsageTotals>>,
   setMessages: React.Dispatch<React.SetStateAction<DisplayMessage[]>>,
-  setPlan: React.Dispatch<React.SetStateAction<string | null>>
+  setPlan: React.Dispatch<React.SetStateAction<string | null>>,
+  setTestStatus?: React.Dispatch<React.SetStateAction<"green" | "failed" | "running" | null>>
 ): void {
   switch (event.type) {
     case "text_delta":
@@ -337,6 +548,50 @@ function applyEvent(
       // drive the persistent plan line, not just the transcript.
       setPlan(event.plan || null);
       setMessages((prev) => [...prev, systemMessage(`Plan updated: ${event.plan}`)]);
+      break;
+    case "verification_started":
+      setTestStatus?.("running");
+      update((m) => {
+        const list = m.verifications ?? [];
+        if (list.length > 0 && list[list.length - 1].status === "failed") {
+          const last = list[list.length - 1];
+          const updated = [
+            ...list.slice(0, -1),
+            { ...last, status: "running" as const, repairsUsed: last.repairsUsed + 1 },
+          ];
+          return { ...m, verifications: updated };
+        }
+        return {
+          ...m,
+          verifications: [
+            ...list,
+            {
+              id: randomUUID(),
+              command: event.command,
+              status: "running",
+              repairsUsed: 0,
+            },
+          ],
+        };
+      });
+      break;
+    case "verification_result":
+      setTestStatus?.(event.passed ? "green" : "failed");
+      update((m) => {
+        const list = m.verifications ?? [];
+        if (list.length === 0) return m;
+        const lastIdx = list.length - 1;
+        const updated = list.map((v, i) =>
+          i === lastIdx
+            ? {
+                ...v,
+                status: (event.passed ? "passed" : "failed") as DisplayVerification["status"],
+                summary: event.summary,
+              }
+            : v
+        );
+        return { ...m, verifications: updated };
+      });
       break;
     case "checkpoint":
       setMessages((prev) => [

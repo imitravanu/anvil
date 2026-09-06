@@ -25,9 +25,12 @@ import {
   MCP_TOOL_PREFIX,
   ProviderSelectionError,
   resolveProviderSelection,
+  buildSystemPrompt,
   type ToolDefinition,
 } from "@anvil/core";
 import { App, FirstRunSetup, TuiPermissionBroker, isThemeName, loadCustomThemes } from "@anvil/tui";
+import { runHeadless, readStdin } from "./headless.js";
+import { runGoalHeadless } from "./goalRunner.js";
 
 // Detached MCP server children would outlive Anvil — SIGKILL them on exit.
 // `exit` alone misses real signals (kill, terminal close), so hook those too.
@@ -52,6 +55,14 @@ function parseFlags(argv: string[]): Record<string, string> {
     const arg = argv[i];
     if (arg === "--provider" || arg === "--model") {
       flags[arg.slice(2)] = argv[++i] ?? "";
+    } else if (arg === "--prompt" || arg === "-p") {
+      flags.prompt = argv[++i] ?? "";
+    } else if (arg === "--goal" || arg === "-g") {
+      flags.goal = argv[++i] ?? "";
+    } else if (arg === "--yes" || arg === "-y") {
+      flags.yes = "1";
+    } else if (arg === "--raw") {
+      flags.raw = "1";
     } else if (arg === "--no-mcp") {
       // Skip MCP server startup entirely (fast boot, no child processes).
       flags["no-mcp"] = "1";
@@ -64,11 +75,17 @@ const HELP = `Anvil — a terminal coding agent (v${VERSION})
 
 Usage:
   anvil                     Start an interactive chat session
+  anvil -p, --prompt <text> Run headless non-interactive turn (streams to stdout)
+  anvil -g, --goal <text>   Run autonomous multi-step engineering mission
   anvil config              (Re)configure a provider API key
   anvil --version           Print the version and exit
   anvil --help              Show this help
 
 Options:
+  -p, --prompt <text>       Run headless turn and stream response to stdout
+  -g, --goal <text>         Autonomous mission mode (decomposes, executes, critiques)
+  -y, --yes                 Auto-approve mutating tools in headless mode
+  --raw                     Suppress tool diagnostic messages on stderr
   --provider <id>           Override the provider for this run
   --model <id>              Override the model for this run
   --no-mcp                  Skip MCP server startup (fast boot)
@@ -207,12 +224,19 @@ async function bootChat(): Promise<void> {
 
   const broker = new TuiPermissionBroker();
   const mcpTools = mcpDefs.length > 0 ? [...TOOL_DEFINITIONS, ...mcpDefs] : undefined;
+  const projectRoot = process.cwd();
+  const baseSystemPrompt = "You are Anvil, a terminal coding agent. Be concise.";
+  const systemPrompt = buildSystemPrompt(baseSystemPrompt, projectRoot);
+
   const session = new AgentSession(provider, {
-    systemPrompt: "You are Anvil, a terminal coding agent. Be concise.",
+    systemPrompt,
     model: selection.model,
     maxTokens: 8192,
-    projectRoot: process.cwd(),
+    projectRoot,
     permissionBroker: broker,
+    // Closed-loop verification is a core product behavior, not a goal-mode
+    // extra: after mutations, the detected test runner gates the turn.
+    autoVerify: true,
     ...(mcpTools !== undefined ? { tools: mcpTools } : {}),
   });
 
@@ -232,9 +256,10 @@ async function bootChat(): Promise<void> {
       model={selection.model}
       initialTheme={initialTheme}
       sessionOptions={{
-        systemPrompt: "You are Anvil, a terminal coding agent. Be concise.",
+        systemPrompt,
         maxTokens: 8192,
-        projectRoot: process.cwd(),
+        projectRoot,
+        autoVerify: true,
         ...(mcpDefs.length > 0 ? { tools: [...TOOL_DEFINITIONS, ...mcpDefs] } : {}),
       }}
       mcp={{
@@ -245,6 +270,164 @@ async function bootChat(): Promise<void> {
     />,
     { exitOnCtrlC: false }
   );
+}
+
+async function bootHeadless(prompt: string, flags: Record<string, string>): Promise<void> {
+  const cached = loadModelsCacheV2();
+  const cachedModels = collectModelsFromCache(cached);
+  if (cachedModels.length > 0) {
+    registerModels(cachedModels);
+  }
+
+  const creds = loadCredentials();
+  const settings = loadSettings();
+
+  let selection;
+  try {
+    selection = resolveProviderSelection({
+      flagProvider: flags.provider,
+      flagModel: flags.model,
+      envProvider: process.env.ANVIL_PROVIDER,
+      envModel: process.env.ANVIL_MODEL,
+      settings,
+      creds,
+    });
+  } catch (err) {
+    if (err instanceof ProviderSelectionError) {
+      console.error(err.message);
+      process.exit(1);
+    }
+    throw err;
+  }
+  if (!selection) {
+    console.error("No provider is configured. Run `anvil config` to add an API key.");
+    process.exit(1);
+  }
+
+  const providers = createProviders(creds);
+  const provider = providers[selection.providerId];
+  if (!provider.isConfigured()) {
+    console.error(
+      `Provider "${selection.providerId}" is not configured. Check ~/.anvil/credentials.json.`
+    );
+    process.exit(1);
+  }
+
+  const mcpConns = new Map<string, McpServerConnection>();
+  const mcpDefs: ToolDefinition[] = [];
+  if (!flags["no-mcp"]) {
+    try {
+      const mcp = await connectAllMcpServers(mcpConns, { timeoutMs: 10_000 });
+      if (mcp.connected > 0) {
+        const allMcpDefs = [...mcpConns.values()].flatMap((c) =>
+          c.status === "ready" ? toToolDefinitions(c.id, c.tools) : []
+        );
+        const collision = dropCollidingMcpTools(
+          TOOL_DEFINITIONS.map((d) => d.name),
+          allMcpDefs
+        );
+        mcpDefs.push(...collision.kept);
+        registerExternalExecutor(
+          MCP_TOOL_PREFIX,
+          createMcpExecutor(() => mcpConns),
+          describeMcpInput
+        );
+      }
+    } catch {
+      // MCP connection issues do not block headless execution
+    }
+  }
+
+  const exitCode = await runHeadless({
+    prompt,
+    provider,
+    model: selection.model,
+    projectRoot: process.cwd(),
+    autoApprove: flags.yes === "1",
+    raw: flags.raw === "1",
+    mcpTools: mcpDefs.length > 0 ? [...TOOL_DEFINITIONS, ...mcpDefs] : undefined,
+  });
+
+  process.exit(exitCode);
+}
+
+async function bootGoal(goal: string, flags: Record<string, string>): Promise<void> {
+  const cached = loadModelsCacheV2();
+  const cachedModels = collectModelsFromCache(cached);
+  if (cachedModels.length > 0) {
+    registerModels(cachedModels);
+  }
+
+  const creds = loadCredentials();
+  const settings = loadSettings();
+
+  let selection;
+  try {
+    selection = resolveProviderSelection({
+      flagProvider: flags.provider,
+      flagModel: flags.model,
+      envProvider: process.env.ANVIL_PROVIDER,
+      envModel: process.env.ANVIL_MODEL,
+      settings,
+      creds,
+    });
+  } catch (err) {
+    if (err instanceof ProviderSelectionError) {
+      console.error(err.message);
+      process.exit(1);
+    }
+    throw err;
+  }
+  if (!selection) {
+    console.error("No provider is configured. Run `anvil config` to add an API key.");
+    process.exit(1);
+  }
+
+  const providers = createProviders(creds);
+  const provider = providers[selection.providerId];
+  if (!provider.isConfigured()) {
+    console.error(
+      `Provider "${selection.providerId}" is not configured. Check ~/.anvil/credentials.json.`
+    );
+    process.exit(1);
+  }
+
+  const mcpConns = new Map<string, McpServerConnection>();
+  const mcpDefs: ToolDefinition[] = [];
+  if (!flags["no-mcp"]) {
+    try {
+      const mcp = await connectAllMcpServers(mcpConns, { timeoutMs: 10_000 });
+      if (mcp.connected > 0) {
+        const allMcpDefs = [...mcpConns.values()].flatMap((c) =>
+          c.status === "ready" ? toToolDefinitions(c.id, c.tools) : []
+        );
+        const collision = dropCollidingMcpTools(
+          TOOL_DEFINITIONS.map((d) => d.name),
+          allMcpDefs
+        );
+        mcpDefs.push(...collision.kept);
+        registerExternalExecutor(
+          MCP_TOOL_PREFIX,
+          createMcpExecutor(() => mcpConns),
+          describeMcpInput
+        );
+      }
+    } catch {
+      // MCP connection issues do not block goal execution
+    }
+  }
+
+  const exitCode = await runGoalHeadless({
+    goal,
+    provider,
+    model: selection.model,
+    projectRoot: process.cwd(),
+    autoApprove: flags.yes === "1",
+    raw: flags.raw === "1",
+    mcpTools: mcpDefs.length > 0 ? [...TOOL_DEFINITIONS, ...mcpDefs] : undefined,
+  });
+
+  process.exit(exitCode);
 }
 
 function runSetup(thenChat: boolean): void {
@@ -287,9 +470,35 @@ if (first === "config") {
   // First run: no API keys at all — onboard instead of hard-failing.
   runSetup(true);
 } else {
-  if (!process.stdin.isTTY) {
-    console.error("Anvil needs an interactive terminal (stdin is not a TTY).");
-    process.exit(1);
-  }
-  void bootChat();
+  const flags = parseFlags(argv);
+  void (async () => {
+    if (flags.goal && flags.goal.trim()) {
+      await bootGoal(flags.goal.trim(), flags);
+      return;
+    }
+
+    const stdinText = await readStdin();
+    const hasPromptFlag = Boolean(flags.prompt && flags.prompt.trim());
+    const hasStdin = Boolean(stdinText && stdinText.trim());
+
+    if (hasPromptFlag || hasStdin) {
+      let finalPrompt = flags.prompt ?? "";
+      if (hasStdin) {
+        finalPrompt = finalPrompt
+          ? `[Context from stdin]\n${stdinText.trim()}\n\n${finalPrompt}`
+          : stdinText.trim();
+      }
+      await bootHeadless(finalPrompt, flags);
+      return;
+    }
+
+    if (!process.stdin.isTTY) {
+      console.error(
+        "Anvil is running non-interactively (stdin is not a TTY).\n" +
+          "Provide a prompt with --prompt <text> or pipe input via stdin."
+      );
+      process.exit(1);
+    }
+    void bootChat();
+  })();
 }

@@ -4,10 +4,78 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 (major.minor.patch — breaking features bump minor while pre-1.0).
 
-## [Unreleased]
+## [0.6.0] — 2026-09-06
+
+### Added
+
+- **Cockpit TUI**: the header now shows the repository name, git branch (with
+  dirty `*`), ecosystem, package manager, detected test script, and rules
+  source; the status bar shows test-suite health (`🧪 green`/`fail`/`running`)
+  and the checkpoint counter (`⎌ <n>`).
+- **Verification & self-repair cards**: when the closed-loop verification runs
+  in the transcript, a `VerificationCard` shows the test command, pass/fail
+  state, failure trace, and repair attempts (`Repair attempt 1/2`).
+- **Mission Deck HUD**: while a goal is active, a docked panel above the input
+  bar shows the goal, its milestones (`✓`/`▶`/`○`/`✗`), live detail notes, and
+  the turn budget (`Turn N/10`).
+- **Interactive modals**: `/diff` opens a syntax-highlighted diff modal with
+  file tabs (`Tab`/`h`/`l`) and scrolling; `/rewind` opens a checkpoint
+  timeline with instant rollback on `Enter`.
+- **Goal mode (`anvil -g, --goal "<objective>"` / `/goal`)**: Anvil introspects
+  the workspace (git state, ecosystem, package manager, test scripts, project
+  rules), decomposes the objective into verifiable milestones, executes them
+  autonomously with closed-loop test verification, reviews its own work per
+  milestone, and reports a debrief. Milestones are marked completed only with
+  evidence (clean turn + passing verification + self-review); failed
+  milestones are reported as such and do not abort the run.
+- **Closed-loop TDD auto-verification & self-repair**: after file mutations,
+  Anvil runs the project's test suite; on failure the trace is fed back into
+  context for up to 2 self-repair attempts before the turn completes.
+- **`verify_tests` tool**: run the detected test runner (npm, cargo, pytest,
+  go) with an optional pattern filter. Patterns are passed to the runner as
+  literal arguments — never through a shell.
+- **Headless mode (`anvil -p "..."` / stdin pipe)**: non-interactive turns
+  stream assistant text to `stdout` and diagnostics to `stderr` (pipeable).
+  `-y/--yes` auto-approves mutating tools; without it they are refused, so
+  unattended runs are safe by default.
+- **Project rules discovery**: `.anvil/rules`, `AGENTS.md`, or `.cursorrules`
+  (precedence-ordered, 16 KB cap) are injected into the system prompt at
+  session start.
+- **`get_outline` tool**: token-efficient structural outline (functions,
+  classes, interfaces, types, enums, headings) for TypeScript, JavaScript,
+  Python, Go, Rust, and Markdown files.
 
 ### Fixed
 
+- **Security**: `verify_tests` no longer interpolates its `pattern` argument
+  into a shell command. A pattern is now a separate argv element for the
+  detected runner, so model-supplied filter text cannot execute arbitrary
+  shell commands (confirmed exploitable before the fix).
+- **`/goal` in the TUI now runs the real goal engine.** It previously only
+  sent a chat prompt with a hardcoded, never-updating mission deck; the deck
+  now reflects genuinely evidence-gated milestones (clean turn + passing
+  verification + self-review), live turn counts, and an honest debrief —
+  including `✗` for milestones that fail review.
+- **Closed-loop auto-verification is now enabled in normal chat sessions**
+  (TUI and headless). It was implemented but never switched on outside goal
+  mode. After file mutations, the detected test runner gates the turn; in
+  headless mode verification runs are visible on stderr (`🧪 [verify] …`).
+- Goal engine honesty: milestones are no longer marked completed
+  unconditionally — completion requires a clean turn, passing verification,
+  and a YES from the per-milestone adversarial review. The final critique is
+  retried when it comes back empty instead of printing a blank verdict.
+  Short single-action goals now plan one milestone instead of the generic
+  three-phase plan. Goal mode aborts with a clear message when a mutating
+  tool is permission-refused instead of burning the remaining turns.
+- Verification events are surfaced in headless output (`🧪 [verify] …` on
+  stderr) instead of running silently.
+- The cockpit header reports the correct branch for a git repo with no
+  commits (previously shown as "no-git").
+- Auto-verification only triggers when a mutating tool actually succeeded;
+  cancelled batches and errored calls no longer count as mutations.
+- Circuit-breaker accounting: one rate-limited request counts as exactly one
+  failure; other errors (e.g. unknown-model 404s) no longer open the circuit;
+  the backoff counter is no longer reset while the circuit is open.
 - The "Rate limited — waiting Ns, retrying automatically…" notice is rewritten
   when the automatic retry also fails, so the transcript no longer implies a
   retry is still pending next to the final error.
@@ -143,3 +211,9 @@ onboarding, sub-agent delegation, and MCP (stdio) support.
 [0.3.0]: https://github.com/mitravanu/anvil/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mitravanu/anvil/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mitravanu/anvil/releases/tag/v0.1.0
+
+## [Unreleased]
+
+### Planned
+
+- Verification/eval harness, provider certification, project memory & git-native workflow, distribution (see `docs/ROADMAP.md`).

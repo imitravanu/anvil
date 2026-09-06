@@ -40,3 +40,4 @@ export {
   MAX_DELEGATIONS_PER_TURN,
   type SubAgentRun,
 } from "./subagent.js";
+export * from "./goal/index.js";

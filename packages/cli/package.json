@@ -1,6 +1,6 @@
 {
   "name": "@anvil/cli",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "A terminal-based AI coding agent with interactive permission prompts.",
   "author": "mitravanu",
   "license": "MIT",
@@ -17,6 +17,7 @@
     "build": "tsc -p . --noEmit && esbuild src/index.tsx --bundle --platform=node --format=esm --outfile=dist/index.js --alias:react-devtools-core=./src/devtools-shim.js --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
     "dev": "tsx src/index.tsx",
     "prepublishOnly": "npm run build",
+    "test": "vitest run",
     "typecheck": "tsc -p . --noEmit"
   },
   "devDependencies": {

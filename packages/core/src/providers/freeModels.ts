@@ -93,9 +93,35 @@ export function createOpenRouterFreeSource(): FreeModelSource {
   return { id: "openrouter", fetchFreeModels: (key) => fetchOpenRouterFreeModels(key) };
 }
 
-// --- Recorded 429/rate-limit health (record only — NO backoff in this phase). ---
+// --- Recorded 429/rate-limit health with exponential backoff and circuit breaker. ---
 
 const rateLimited = new Map<string, Set<string>>(); // sourceId -> model ids
+const consecutiveRateLimits = new Map<string, number>(); // sourceId:modelId -> consecutive count
+
+const CIRCUIT_BREAKER_THRESHOLD = 5;
+const CIRCUIT_BREAKER_TIMEOUT_MS = 60_000;
+type CircuitState = "closed" | "open" | "half-open";
+interface CircuitBreakerEntry {
+  state: CircuitState;
+  failureCount: number;
+  lastFailureAt: number;
+  halfOpenAt: number;
+}
+const circuitBreakers = new Map<string, CircuitBreakerEntry>();
+
+function circuitKey(sourceId: string, modelId: string): string {
+  return `${sourceId}:${modelId}`;
+}
+
+function getCircuitBreaker(sourceId: string, modelId: string): CircuitBreakerEntry {
+  const key = circuitKey(sourceId, modelId);
+  let cb = circuitBreakers.get(key);
+  if (!cb) {
+    cb = { state: "closed", failureCount: 0, lastFailureAt: 0, halfOpenAt: 0 };
+    circuitBreakers.set(key, cb);
+  }
+  return cb;
+}
 
 export function noteRateLimited(sourceId: string, modelId: string): void {
   let set = rateLimited.get(sourceId);
@@ -104,16 +130,71 @@ export function noteRateLimited(sourceId: string, modelId: string): void {
     rateLimited.set(sourceId, set);
   }
   set.add(modelId);
+  // Health record + backoff counter only — the circuit breaker is driven
+  // exclusively by recordFailure()/recordSuccess() so one 429 can never
+  // be counted twice.
+  const key = `${sourceId}:${modelId}`;
+  const consecutive = (consecutiveRateLimits.get(key) ?? 0) + 1;
+  consecutiveRateLimits.set(key, consecutive);
 }
 
 export function isRateLimited(sourceId: string, modelId: string): boolean {
   return rateLimited.get(sourceId)?.has(modelId) ?? false;
 }
 
+export function isCircuitOpen(sourceId: string, modelId: string): boolean {
+  const cb = getCircuitBreaker(sourceId, modelId);
+  if (cb.state === "closed") return false;
+  if (cb.state === "open") {
+    if (Date.now() >= cb.halfOpenAt) {
+      cb.state = "half-open";
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+export function getCircuitState(sourceId: string, modelId: string): CircuitState {
+  return getCircuitBreaker(sourceId, modelId).state;
+}
+
 export function getRateLimitedModels(): Readonly<Record<string, readonly string[]>> {
   const out: Record<string, readonly string[]> = {};
   for (const [source, set] of rateLimited) out[source] = [...set];
   return out;
+}
+
+export function clearRateLimitRecord(sourceId: string, modelId: string): void {
+  const key = `${sourceId}:${modelId}`;
+  consecutiveRateLimits.delete(key);
+  rateLimited.get(sourceId)?.delete(modelId);
+  const cb = circuitBreakers.get(key);
+  if (cb) {
+    cb.failureCount = 0;
+    cb.state = "closed";
+  }
+}
+
+export function recordSuccess(sourceId: string, modelId: string): void {
+  clearRateLimitRecord(sourceId, modelId);
+  const cb = getCircuitBreaker(sourceId, modelId);
+  cb.state = "closed";
+  cb.failureCount = 0;
+}
+
+export function recordFailure(sourceId: string, modelId: string): void {
+  const cb = getCircuitBreaker(sourceId, modelId);
+  cb.failureCount++;
+  cb.lastFailureAt = Date.now();
+  if (cb.failureCount >= CIRCUIT_BREAKER_THRESHOLD) {
+    cb.state = "open";
+    cb.halfOpenAt = Date.now() + CIRCUIT_BREAKER_TIMEOUT_MS;
+  }
+}
+
+export function getConsecutiveRateLimitCount(sourceId: string, modelId: string): number {
+  return consecutiveRateLimits.get(`${sourceId}:${modelId}`) ?? 0;
 }
 
 /** Loose detector for rate-limit/quota errors so the agent loop can RECORD them. */
@@ -124,18 +205,25 @@ export function isRateLimitMessage(message: string): boolean {
 const MIN_RETRY_WAIT_S = 1;
 const MAX_RETRY_WAIT_S = 120;
 const DEFAULT_RETRY_WAIT_S = 20;
+const BACKOFF_MULTIPLIER = 2;
 
 /**
  * Wait seconds before an automatic retry, parsed from the provider message
- * ("Please retry in 53.2s"). Providers that don't advertise a window get a
- * conservative default; everything clamps to [1, 120] so a hostile value can
- * neither busy-loop the turn nor park it for an hour.
+ * ("Please retry in 53.2s") and adjusted for consecutive failures via exponential
+ * backoff. Providers that don't advertise a window get a conservative default;
+ * everything clamps to [1, 120] so a hostile value can neither busy-loop the
+ * turn nor park it for an hour.
  */
-export function rateLimitRetrySeconds(message: string): number {
+export function rateLimitRetrySeconds(message: string, consecutiveFailures: number = 1): number {
   const m = message.match(/retry in ([\d.]+)\s*s/i);
-  const parsed = m ? Math.ceil(parseFloat(m[1])) : DEFAULT_RETRY_WAIT_S;
-  if (!Number.isFinite(parsed) || parsed < MIN_RETRY_WAIT_S) return MIN_RETRY_WAIT_S;
-  return Math.min(parsed, MAX_RETRY_WAIT_S);
+  let parsed = m ? Math.ceil(parseFloat(m[1])) : DEFAULT_RETRY_WAIT_S;
+  if (!Number.isFinite(parsed) || parsed < MIN_RETRY_WAIT_S) parsed = MIN_RETRY_WAIT_S;
+  parsed = Math.min(parsed, MAX_RETRY_WAIT_S);
+  if (consecutiveFailures > 1) {
+    const backoff = Math.min(parsed * Math.pow(BACKOFF_MULTIPLIER, consecutiveFailures - 1), MAX_RETRY_WAIT_S);
+    parsed = Math.max(parsed, backoff);
+  }
+  return parsed;
 }
 // --- The single owner of free-model sync . ---
 

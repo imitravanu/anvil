@@ -35,7 +35,11 @@ export interface UseSessionCommandsDeps {
   setIsConnectOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setIsThemePickerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setExpandTools: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsDiffOpen?: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsRewindOpen?: React.Dispatch<React.SetStateAction<boolean>>;
+  setGoal?: (goal: any) => void;
   send: (text: string) => Promise<void>;
+  launchGoal?: (objective: string) => Promise<void>;
   addPendingImage: (img: { mediaType: string; data: string; path: string }) => void;
 }
 
@@ -95,7 +99,11 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     setIsConnectOpen,
     setIsThemePickerOpen,
     setExpandTools,
+    setIsDiffOpen,
+    setIsRewindOpen,
+    setGoal,
     send,
+    launchGoal,
     addPendingImage,
   } = deps;
 
@@ -151,7 +159,11 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     setIsConnectOpen,
     setIsThemePickerOpen,
     setExpandTools,
+    setIsDiffOpen,
+    setIsRewindOpen,
+    setGoal,
     send,
+    launchGoal,
     addPendingImage,
   });
 

@@ -5,11 +5,13 @@ import {
   createProviders,
   loadCredentials,
   loadSession,
+  analyzeWorkspace,
   type AgentOptions,
   type McpServerConnection,
   type ModelInfo,
   type ModelProvider,
   type ProviderId,
+  type SituationalContext,
 } from "@anvil/core";
 import type { TuiPermissionBroker } from "../permission/TuiPermissionBroker.js";
 import { useAgentController } from "../hooks/useAgentController.js";
@@ -19,13 +21,16 @@ import { useSessionCommands } from "../hooks/useSessionCommands.js";
 import { ThemeContext, useTheme } from "../theme/theme.js";
 import { PROVIDER_LABELS } from "../util/labels.js";
 import { formatPricingTag } from "../util/format.js";
+import { formatRewindResult } from "../util/rewind.js";
 import { Header } from "./Header.js";
 import { InputBar } from "./InputBar.js";
 import { MessageList } from "./MessageList.js";
 import { ModelPicker } from "./ModelPicker.js";
 import { PermissionPrompt } from "./PermissionPrompt.js";
 import { FirstRunSetup } from "./FirstRunSetup.js";
-import { PlanLine } from "./PlanLine.js";
+import { MissionDeck } from "./MissionDeck.js";
+import { DiffModal } from "./DiffModal.js";
+import { RewindModal } from "./RewindModal.js";
 import { SessionPicker } from "./SessionPicker.js";
 import { ThemePicker } from "./ThemePicker.js";
 import { StatusBar } from "./StatusBar.js";
@@ -76,7 +81,11 @@ export function App({
     isBusy,
     usage,
     plan,
+    goal,
+    setGoal,
+    testStatus,
     send,
+    launchGoal,
     cancel,
     printSystemMessage,
     clearMessages,
@@ -90,6 +99,18 @@ export function App({
     onTurnSettled: () => persistRef.current(),
   });
   const persistRef = useRef<() => void>(() => undefined);
+
+  const [situationalContext, setSituationalContext] = useState<SituationalContext | undefined>();
+  useEffect(() => {
+    let active = true;
+    void analyzeWorkspace(session.projectRoot).then((ctx) => {
+      if (active) setSituationalContext(ctx);
+    });
+    return () => {
+      active = false;
+    };
+  }, [session.projectRoot]);
+
   const { stdout } = useStdout();
   const rows = stdout?.rows ?? 24;
   // Ink does not re-render on terminal resize by itself, and every zone here
@@ -116,6 +137,8 @@ export function App({
   const [isSessionPickerOpen, setIsSessionPickerOpen] = useState(false);
   const [isConnectOpen, setIsConnectOpen] = useState(false);
   const [isThemePickerOpen, setIsThemePickerOpen] = useState(false);
+  const [isDiffOpen, setIsDiffOpen] = useState(false);
+  const [isRewindOpen, setIsRewindOpen] = useState(false);
   // full tool-output display, toggled by /expand. Session-scoped,
   // never persisted — a resumed session starts compact.
   const [expandTools, setExpandTools] = useState(false);
@@ -150,7 +173,11 @@ export function App({
     setIsConnectOpen,
     setIsThemePickerOpen,
     setExpandTools,
+    setIsDiffOpen,
+    setIsRewindOpen,
+    setGoal,
     send,
+    launchGoal,
     addPendingImage,
   });
   persistRef.current = persist;
@@ -219,7 +246,7 @@ export function App({
             shrink — Ink's CSS-style default flex-shrink:1 otherwise compresses
             everything at once, which is what made turns and chrome overwrite
             each other's rows. */}
-        <Header model={currentModel} isBusy={isBusy} />
+        <Header model={currentModel} isBusy={isBusy} context={situationalContext} />
         <Box flexShrink={0}>
           <Divider />
         </Box>
@@ -229,9 +256,8 @@ export function App({
         <Box flexShrink={0}>
           <Divider />
         </Box>
-        {/* : the agent's current plan stays visible above the
-            input until it changes or the session changes. */}
-        {plan && <PlanLine plan={plan} />}
+        {/* Mission Deck: autonomous goal progression and persistent plan HUD */}
+        <MissionDeck goal={goal} plan={plan} isBusy={isBusy} />
         {queued.length > 0 && (
           <Box flexShrink={0} paddingX={2}>
             <Text dimColor>
@@ -243,6 +269,27 @@ export function App({
             so keystrokes can never leak into it. */}
         {pendingPermission ? (
           <PermissionPrompt request={pendingPermission} broker={broker} />
+        ) : isDiffOpen ? (
+          <DiffModal session={session} onClose={() => setIsDiffOpen(false)} />
+        ) : isRewindOpen ? (
+          <RewindModal
+            session={session}
+            onSelect={(id) => {
+              setIsRewindOpen(false);
+              void session
+                .rewind(id)
+                .then((result) => {
+                  printSystemMessage(formatRewindResult(result));
+                  persistRef.current();
+                })
+                .catch((err: unknown) => {
+                  printSystemMessage(
+                    `Rewind failed: ${err instanceof Error ? err.message : String(err)}`
+                  );
+                });
+            }}
+            onClose={() => setIsRewindOpen(false)}
+          />
         ) : isModelPickerOpen ? (
           <ModelPicker
             providers={providers}
@@ -280,7 +327,13 @@ export function App({
             sentHistory={sentHistory}
           />
         )}
-        <StatusBar model={currentModel} isBusy={isBusy} usage={usage} />
+        <StatusBar
+          model={currentModel}
+          isBusy={isBusy}
+          usage={usage}
+          checkpointCount={session.getCheckpoints().length}
+          testStatus={testStatus}
+        />
       </Box>
     </ThemeContext.Provider>
   );

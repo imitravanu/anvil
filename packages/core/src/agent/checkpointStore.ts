@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import fsPromises from "node:fs/promises";
 import path from "node:path";
 import { anvilHome, atomicWriteJson } from "../atomicWrite.js";
 import { CHECKPOINT_KEEP, type Checkpoint } from "./checkpoints.js";
@@ -22,13 +23,8 @@ interface SerializedCheckpoint {
   files: { path: string; content: string | null }[]; // content = base64, null = created by the agent
 }
 
-export function saveCheckpoints(
-  sessionId: string,
-  checkpoints: readonly Checkpoint[],
-  dir: string = checkpointsDir()
-): void {
-  if (!SAFE_ID_RE.test(sessionId) || checkpoints.length === 0) return;
-  const serialized: SerializedCheckpoint[] = checkpoints.map((cp) => ({
+function serializeCheckpoints(checkpoints: readonly Checkpoint[]): SerializedCheckpoint[] {
+  return checkpoints.map((cp) => ({
     id: cp.id,
     ts: cp.ts,
     skipped: cp.skipped,
@@ -37,6 +33,34 @@ export function saveCheckpoints(
       content: f.content === null ? null : f.content.toString("base64"),
     })),
   }));
+}
+
+export async function saveCheckpointsAsync(
+  sessionId: string,
+  checkpoints: readonly Checkpoint[],
+  dir: string = checkpointsDir()
+): Promise<void> {
+  if (!SAFE_ID_RE.test(sessionId) || checkpoints.length === 0) return;
+  const serialized = serializeCheckpoints(checkpoints);
+  const targetPath = path.join(dir, `${sessionId}.json`);
+  const tmp = `${targetPath}.tmp.${process.pid}`;
+  try {
+    await fsPromises.mkdir(path.dirname(targetPath), { recursive: true });
+    await fsPromises.writeFile(tmp, JSON.stringify({ version: 1, checkpoints: serialized }, null, 2), "utf-8");
+    await fsPromises.chmod(tmp, 0o600);
+    await fsPromises.rename(tmp, targetPath);
+  } catch {
+    // persistence is best-effort: an in-memory ring still covers this session
+  }
+}
+
+export function saveCheckpoints(
+  sessionId: string,
+  checkpoints: readonly Checkpoint[],
+  dir: string = checkpointsDir()
+): void {
+  if (!SAFE_ID_RE.test(sessionId) || checkpoints.length === 0) return;
+  const serialized = serializeCheckpoints(checkpoints);
   try {
     atomicWriteJson(path.join(dir, `${sessionId}.json`), { version: 1, checkpoints: serialized }, { mode: 0o600 });
   } catch {

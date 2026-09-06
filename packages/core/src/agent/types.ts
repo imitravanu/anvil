@@ -37,7 +37,10 @@ export type AgentEvent =
   // live delegation progress: the tool the sub-agent is using right now
   | { type: "subagent_progress"; tool: string; detail: string }
   // Rewind: pre-mutation file snapshot taken this turn.
-  | { type: "checkpoint"; id: number; files: number };
+  | { type: "checkpoint"; id: number; files: number }
+  // Closed-loop TDD auto-verification
+  | { type: "verification_started"; command: string }
+  | { type: "verification_result"; passed: boolean; summary: string };
 
 export interface AgentOptions {
   systemPrompt: string;
@@ -58,6 +61,11 @@ export interface AgentOptions {
    * model's delegate_task call is refused instead of nesting. Default true.
    */
   allowDelegation?: boolean;
+  /**
+   * Closed-loop verification command (e.g. "npm test") or true to auto-detect.
+   * When enabled, mutations trigger automated test verification with self-repair before turn completion.
+   */
+  autoVerify?: boolean | string;
 }
 
 /** when maxInnerIterations is not set. */

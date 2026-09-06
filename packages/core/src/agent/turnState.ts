@@ -15,6 +15,10 @@ export class TurnState {
   compactedThisTurn = false;
   /** One automatic rate-limit retry per turn — a second 429 surfaces. */
   rateLimitRetried = false;
+  /** Tracks whether file mutations occurred during this turn. */
+  mutationsOccurred = false;
+  /** Closed-loop verification self-repair attempts consumed this turn. */
+  verifyRepairsUsed = 0;
 
   constructor(readonly maxInnerIterations: number) {}
 

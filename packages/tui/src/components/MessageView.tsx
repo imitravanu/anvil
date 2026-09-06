@@ -5,6 +5,7 @@ import { useTheme } from "../theme/theme.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
 import { ToolCallView } from "./ToolCallView.js";
 import { SubAgentView } from "./SubAgentView.js";
+import { VerificationCard } from "./VerificationCard.js";
 
 export function MessageView({ message, expandTools }: { message: DisplayMessage; expandTools?: boolean }) {
   const theme = useTheme();
@@ -63,6 +64,9 @@ export function MessageView({ message, expandTools }: { message: DisplayMessage;
       )}
       {message.toolCalls.map((call) => (
         <ToolCallView key={call.id} call={call} expanded={expandTools} />
+      ))}
+      {message.verifications?.map((v) => (
+        <VerificationCard key={v.id} verification={v} expanded={expandTools} />
       ))}
       {message.subAgents.map((sub, i) => (
         <SubAgentView key={i} sub={sub} expanded={expandTools} />
