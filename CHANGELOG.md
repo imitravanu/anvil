@@ -256,6 +256,9 @@ onboarding, sub-agent delegation, and MCP (stdio) support.
 - The transcript scrollback estimator now counts settled assistant messages
   through the real markdown parser (windowed code, tables, spacing) so the
   hidden-messages indicator stays honest.
+- Markdown lists render with a hanging indent: wrapped continuation lines
+  align under the item text instead of column 0, and literal `•` bullets
+  (which models emit instead of markdown dashes) parse as list markers.
 
 ### Changed
 

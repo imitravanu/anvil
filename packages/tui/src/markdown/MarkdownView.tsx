@@ -3,6 +3,7 @@ import { MarkdownBlock, MarkdownSpan, parseMarkdownText } from "./renderMarkdown
 import { highlightCodeBlocks } from "./highlightCodeBlocks.js";
 import { useTheme } from "../theme/theme.js";
 import { curtail } from "../util/format.js";
+import { wrapSpans } from "../util/wrapSpans.js";
 import {
   CODE_HEAD_LINES,
   CODE_TAIL_LINES,
@@ -91,6 +92,9 @@ export function MarkdownView({ blocks }: { blocks: MarkdownBlock[] }) {
   const theme = useTheme();
   const { stdout } = useStdout();
   const maxCodeLen = Math.max(20, (stdout?.columns ?? 80) - 6);
+  // Wrap width mirrors the transcript estimator's usable width (padding +
+  // frame reserve); list continuation lines hang-indent to the marker column.
+  const wrapWidth = Math.max(20, (stdout?.columns ?? 80) - 6);
   return (
     <Box flexDirection="column">
       {blocks.map((block, i) => {
@@ -99,7 +103,7 @@ export function MarkdownView({ blocks }: { blocks: MarkdownBlock[] }) {
           // flexDirection column: Box defaults to row, which laid the
           // table's rule/rows out side by side on one physical line.
           <Box key={i} flexDirection="column" marginTop={spaced ? 1 : 0}>
-            {renderBlock(block, theme, maxCodeLen)}
+            {renderBlock(block, theme, maxCodeLen, wrapWidth)}
           </Box>
         );
       })}
@@ -110,7 +114,8 @@ export function MarkdownView({ blocks }: { blocks: MarkdownBlock[] }) {
 function renderBlock(
   block: MarkdownBlock,
   theme: ReturnType<typeof useTheme>,
-  maxCodeLen: number
+  maxCodeLen: number,
+  wrapWidth: number
 ) {
   switch (block.kind) {
     case "heading":
@@ -126,13 +131,30 @@ function renderBlock(
           <Spans spans={block.spans} />
         </Text>
       );
-    case "list":
+    case "list": {
+      // Hanging indent: the marker sits in the left column and wrapped
+      // continuation lines align under the text, not at column 0. The
+      // prefix mirrors the exact marker width ("• " is 2 cells, "1. " 3).
+      const indent = Math.min(block.depth, 4) * 2;
+      const markerStr = `${block.marker} `;
+      const prefix = " ".repeat(indent + markerStr.length);
+      const rows = wrapSpans(block.spans, Math.max(10, wrapWidth - prefix.length));
       return (
-        <Text>
-          {"  ".repeat(Math.min(block.depth, 4))}  {block.marker}{" "}
-          <Spans spans={block.spans} />
-        </Text>
+        <Box flexDirection="column">
+          <Text>
+            {"  ".repeat(Math.min(block.depth, 4))}
+            {markerStr}
+            <Spans spans={rows[0]?.spans ?? []} />
+          </Text>
+          {rows.slice(1).map((r, j) => (
+            <Text key={j}>
+              {prefix}
+              <Spans spans={r.spans} />
+            </Text>
+          ))}
+        </Box>
       );
+    }
     case "quote":
       return (
         <Text dimColor>

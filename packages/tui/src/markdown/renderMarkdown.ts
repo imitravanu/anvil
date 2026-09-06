@@ -39,7 +39,8 @@ const FENCE_RE = /^```([^\s`]*)\s*$/;
 const HEADING_RE = /^(#{1,6})\s+(.*)$/;
 const HR_RE = /^\s*(-{3,}|\*{3,}|_{3,})\s*$/;
 const QUOTE_RE = /^((?:>\s?)+)(.*)$/;
-const LIST_RE = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
+// Models emit literal "•" bullets despite being asked for markdown dashes.
+const LIST_RE = /^(\s*)([-*+•]|\d+[.)])\s+(.*)$/;
 
 export function parseInline(text: string, allowLinks = true): MarkdownSpan[] {
   const spans: MarkdownSpan[] = [];
@@ -224,7 +225,7 @@ export function parseMarkdownText(text: string): MarkdownBlock[] {
     if (list) {
       flushPara();
       const depth = listDepth(list[1]);
-      const marker = /^[-*+]$/.test(list[2]) ? "•" : list[2];
+      const marker = /^[-*+•]$/.test(list[2]) ? "•" : list[2];
       blocks.push({ kind: "list", depth, marker, spans: parseInline(list[3]) });
       i += 1;
       continue;

@@ -66,6 +66,13 @@ function estimateMarkdownLines(text: string, usable: number): number {
       case "hr":
         lines += 1;
         break;
+      case "list": {
+        // Hanging indent: continuations wrap at (usable - marker column).
+        const prefix = Math.min(block.depth, 4) * 2 + (block.marker === "•" ? 2 : 3);
+        const plain = block.spans.map((s) => s.text).join("");
+        lines += Math.max(1, Math.ceil(Array.from(plain).length / Math.max(1, usable - prefix)));
+        break;
+      }
       default: {
         const plain = block.spans.map((s) => s.text).join("");
         lines += Math.max(1, Math.ceil(Array.from(plain).length / usable));
