@@ -83,7 +83,17 @@ function estimateMarkdownLines(text: string, usable: number): number {
   return lines === 0 ? 1 : lines;
 }
 
-/** Count of oldest messages that do not fit the given row budget. Pure. */
+/**
+ * Count of oldest messages that do not fit the given row budget. Pure.
+ *
+ * Fold math: the clip is bottom-anchored, so the NEWEST message is always at
+ * least partially visible and must never count as hidden. Walking from the
+ * newest upward, the first message whose height crosses above the fold is
+ * PARTIALLY visible (its tail is on screen) — only the messages above it are
+ * the ones the indicator should report. The only exception is an exact
+ * boundary: when the budget is consumed completely, every remaining message
+ * starts AT or above the fold and is fully hidden.
+ */
 export function hiddenMessageCount(
   messages: readonly DisplayMessage[],
   width: number,
@@ -97,11 +107,19 @@ export function hiddenMessageCount(
   let used = 0;
   let hidden = 0;
   for (let i = messages.length - 1; i >= 0; i--) {
-    used += estimatedLines(messages[i], width, expandTools);
-    if (used > effectiveBudget) {
+    // Budget exactly consumed: this message starts at the fold top — hidden.
+    if (used >= effectiveBudget) {
       hidden = i + 1;
       break;
     }
+    const h = estimatedLines(messages[i], width, expandTools);
+    if (used + h > effectiveBudget) {
+      // Fold cuts inside this message: it is partially visible; only the
+      // messages above it (0..i-1) are counted as hidden.
+      hidden = i;
+      break;
+    }
+    used += h;
   }
   return hidden;
 }

@@ -33,9 +33,30 @@ describe("transcript window estimator", () => {
     const messages = [
       msg("a".repeat(2000), "user"), // huge — will not fit a 20-row budget
       msg("short", "assistant"),
-      msg("b".repeat(2000), "assistant"),
+      msg("b".repeat(2000), "assistant"), // newest huge reply
     ];
-    expect(hiddenMessageCount(messages, 80, 20)).toBe(3);
+    // The newest message is bottom-anchored, so its tail stays visible and it
+    // is never counted as hidden — only the two messages above it are.
+    expect(hiddenMessageCount(messages, 80, 20)).toBe(2);
     expect(hiddenMessageCount(messages, 80, 5000)).toBe(0);
+  });
+
+  it("never counts a short exchange as hidden just because the newest answer is tall", () => {
+    // One exchange: user prompt + a reply taller than the whole 20-row
+    // transcript (est ~23 rows). The reply is on screen (bottom-anchored, tail
+    // visible), so the only hidden message is the user's own prompt.
+    const messages = [
+      msg("what does the module export?", "user"),
+      msg("y".repeat(1500)), // est ~23 rows at width 80
+    ];
+    expect(hiddenMessageCount(messages, 80, 20)).toBe(1);
+  });
+
+  it("counts messages fully above the fold when the budget is exactly consumed", () => {
+    // Three 10-row messages, budget exactly 20: the two bottom messages end
+    // precisely at the fold top, so the oldest is fully hidden.
+    const ten = "x".repeat(600); // est ~10 rows at width 80
+    const messages = [msg(ten, "user"), msg(ten), msg(ten)];
+    expect(hiddenMessageCount(messages, 80, 21)).toBe(1);
   });
 });

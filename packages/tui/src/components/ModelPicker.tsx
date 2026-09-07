@@ -174,7 +174,7 @@ export function ModelPicker({
 
     if (!row.enabled) {
       return (
-        <Text key={row.model.id} dimColor>
+        <Text key={row.model.id} color={theme.colors.dim}>
           {marker}
           {row.model.displayName}
           {pricingTag} {limited ? "[rate-limited] " : ""}(no API key)
@@ -182,15 +182,15 @@ export function ModelPicker({
       );
     }
     return (
-      <Text key={row.model.id} color={isSelected ? theme.colors.primary : undefined}>
+      <Text key={row.model.id} color={isSelected ? theme.colors.primary : theme.colors.userText}>
         {marker}
         {row.model.displayName}
         {kind === "free" ? (
           <Text color={theme.colors.toolDone} bold> [FREE]</Text>
         ) : kind === "paid" ? (
-          <Text dimColor> [PAID]</Text>
+          <Text color={theme.colors.dim}> [PAID]</Text>
         ) : null}
-        {limited ? <Text dimColor> [rate-limited]</Text> : null}
+        {limited ? <Text color={theme.colors.toolRunning}> [rate-limited]</Text> : null}
         {isCurrent ? " (current)" : ""}
       </Text>
     );

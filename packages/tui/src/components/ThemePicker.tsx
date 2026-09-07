@@ -51,9 +51,10 @@ export function ThemePicker({
         Select a theme — move to preview live, Enter to apply, Esc to keep the current one
       </Text>
       {names.map((name, i) => (
-        <Text key={name} color={i === selected ? theme.colors.primary : undefined}>
+        <Text key={name} color={i === selected ? theme.colors.primary : theme.colors.userText}>
           {i === selected ? "❯ " : "  "}
           {name}
+          {name === "light" ? " (for white/light background terminals)" : ""}
           {isThemeName(name) ? "" : " (custom)"}
         </Text>
       ))}

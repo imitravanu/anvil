@@ -54,7 +54,7 @@ export function SessionPicker({
             const globalIndex = scrollOffset + i;
             const isSelected = globalIndex === selected;
             return (
-              <Text key={meta.id} color={isSelected ? theme.colors.primary : undefined}>
+              <Text key={meta.id} color={isSelected ? theme.colors.primary : theme.colors.userText}>
                 {isSelected ? "❯ " : "  "}
                 {curtail(meta.title, SESSION_TITLE_MAX)} · {displayModelLabel(meta.model)} · updated {relativeTime(meta.updatedAt)}
               </Text>

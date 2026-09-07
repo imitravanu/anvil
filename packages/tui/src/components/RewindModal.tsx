@@ -92,12 +92,12 @@ export function RewindModal({ session, onSelect, onClose }: RewindModalProps) {
 
                 return (
                   <Box key={cp.id} gap={1}>
-                    <Text color={isSelected ? theme.colors.accent : undefined} bold={isSelected}>
+                    <Text color={isSelected ? theme.colors.accent : theme.colors.primary} bold={isSelected}>
                       {isSelected ? "❯ " : "  "}
                       #{cp.id}
                     </Text>
-                    <Text dimColor>({timeStr})</Text>
-                    <Text color={isSelected ? theme.colors.assistantText : undefined}>
+                    <Text color={theme.colors.dim}>({timeStr})</Text>
+                    <Text color={isSelected ? theme.colors.assistantText : theme.colors.userText}>
                       {fileText}
                     </Text>
                     {isSelected && (

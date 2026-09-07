@@ -13,36 +13,41 @@ function EmptyState({ model }: { model: string }) {
   return (
     <Box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1}>
       <Text color={theme.colors.primary} bold>▲ ANVIL</Text>
-      <Text dimColor>Terminal coding agent</Text>
-      <Text dimColor>
+      <Text color={theme.colors.dim}>Terminal coding agent</Text>
+      <Text color={theme.colors.dim}>
         {provider ? providerLabel(provider) : "Anvil"} · {displayModelLabel(model)}
       </Text>
       <Box marginTop={1} flexDirection="column">
-        <Text>Just type a task — I can read, edit, and run code in this project.</Text>
+        <Text color={theme.colors.userText}>Just type a task — I can read, edit, and run code in this project.</Text>
       </Box>
       <Box marginTop={1} flexDirection="column">
-        <Text dimColor>Try:</Text>
-        <Text><Text color={theme.colors.primary}>/help</Text><Text dimColor> — list commands</Text></Text>
-        <Text><Text color={theme.colors.primary}>/model</Text><Text dimColor> — switch model or provider</Text></Text>
-        <Text><Text color={theme.colors.primary}>/session</Text><Text dimColor> — resume a past conversation</Text></Text>
-        <Text><Text color={theme.colors.primary}>/connect</Text><Text dimColor> — add or update a provider API key</Text></Text>
+        <Text color={theme.colors.dim}>Try:</Text>
+        <Text><Text color={theme.colors.primary}>/help</Text><Text color={theme.colors.dim}> — list commands</Text></Text>
+        <Text><Text color={theme.colors.primary}>/model</Text><Text color={theme.colors.dim}> — switch model or provider</Text></Text>
+        <Text><Text color={theme.colors.primary}>/session</Text><Text color={theme.colors.dim}> — resume a past conversation</Text></Text>
+        <Text><Text color={theme.colors.primary}>/connect</Text><Text color={theme.colors.dim}> — add or update a provider API key</Text></Text>
       </Box>
       <Box marginTop={1}>
-        <Text dimColor>v{CORE_VERSION}</Text>
+        <Text color={theme.colors.dim}>v{CORE_VERSION}</Text>
       </Box>
     </Box>
   );
 }
 
 export function MessageList({ messages, model, expandTools }: { messages: DisplayMessage[]; model: string; expandTools?: boolean }) {
+  const theme = useTheme();
   const { stdout } = useStdout();
   const termRows = stdout?.rows ?? 24;
   // Row budget for the "N earlier messages" honesty indicator, estimated from
   // the terminal size minus chrome reserve. The container itself is flex-sized
   // (no explicit height) so Yoga — not stale rows arithmetic — owns layout.
-  // The reserve covers header+dividers+status bar (6), input bar (~3), and the
-  // plan/queued HUD (up to 3): the estimator may then err on the visible side.
-  const rowBudget = Math.max(3, termRows - 12);
+  // Measured chrome at 30 rows: frame borders (2) + header (1) + the two
+  // dividers flanking the transcript (2) + input box incl. borders (3) +
+  // status bar (1) = 9, plus 1 line of slack — 10 total. The plan/queued HUD
+  // renders BELOW the transcript divider (outside this region); Yoga then
+  // gives the list exactly what the chrome leaves. This reserve matches the
+  // measured 30-row layout (transcript = rows - 10 = 20).
+  const rowBudget = Math.max(3, termRows - 10);
   const width = stdout?.columns ?? 80;
   // Memoized: this walks every message on every render, and spinners tick at
   // 80 ms during a busy turn.
@@ -79,7 +84,7 @@ export function MessageList({ messages, model, expandTools }: { messages: Displa
     <Box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden" paddingX={1}>
       {hidden > 0 && (
         <Box flexShrink={0}>
-          <Text dimColor>
+          <Text color={theme.colors.dim}>
             … {hidden} earlier message{hidden === 1 ? "" : "s"} above — full history in the session file
           </Text>
         </Box>

@@ -42,6 +42,7 @@ export interface UseSessionCommandsDeps {
   send: (text: string) => Promise<void>;
   launchGoal?: (objective: string) => Promise<void>;
   addPendingImage: (img: { mediaType: string; data: string; path: string }) => void;
+  recordSentMessage?: (text: string) => void;
 }
 
 export interface UseSessionCommandsResult {
@@ -171,6 +172,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
   });
 
   const handleSubmit = async (text: string) => {
+    deps.recordSentMessage?.(text);
     const parsed = parseCommand(text);
     if (parsed) {
       const command = COMMANDS.find((c) => c.name === parsed.name);

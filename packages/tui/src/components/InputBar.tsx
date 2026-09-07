@@ -135,13 +135,20 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: Input
       {showCommandMenu && (
         <Box flexDirection="column" paddingX={1}>
           {matchingCommands.length === 0 ? (
-            <Text dimColor>No matching commands.</Text>
+            <Text color={theme.colors.dim}>No matching commands.</Text>
           ) : (
             matchingCommands.map((command, i) => (
-              <Text key={command.name} color={i === commandIndex ? theme.colors.primary : undefined}>
-                {i === commandIndex ? "❯ " : "  "}
-                <Text color={theme.colors.toolName}>/{command.name}</Text> — {command.description}
-                {i === commandIndex ? "   (Tab fill · Enter run)" : ""}
+              <Text key={command.name}>
+                <Text color={i === commandIndex ? theme.colors.primary : theme.colors.dim}>
+                  {i === commandIndex ? "❯ " : "  "}
+                </Text>
+                <Text color={theme.colors.toolName}>/{command.name}</Text>
+                <Text color={i === commandIndex ? theme.colors.userText : theme.colors.dim}>
+                  {" — "}{command.description}
+                </Text>
+                {i === commandIndex ? (
+                  <Text color={theme.colors.accent}>   (Tab fill · Enter run)</Text>
+                ) : null}
               </Text>
             ))
           )}
@@ -155,27 +162,31 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: Input
         paddingX={theme.spacing.panelPaddingX}
       >
         <Text color={theme.colors.primary}>{"> "}</Text>
-        <TextInput
-          value={value}
-          onChange={handleTextInputChange}
-          placeholder={isBusy ? "working… (Esc to cancel)" : "Type a message, / for commands"}
-          onSubmit={(text) => {
-            // Enter with the slash menu open runs the highlighted command.
-            if (showCommandMenu && matchingCommands[commandIndex]) {
-              onSubmit(`/${matchingCommands[commandIndex].name}`);
-              setValue("");
-              setCommandIndex(0);
-              return;
-            }
-            const trimmed = text.trim();
-            if (!trimmed) return;
-            // Busy is fine: handleSubmit routes to the queue and the drain
-            // sends it when the turn settles.
-            onSubmit(trimmed);
-            setValue("");
-            historyIndex.current = -1;
-          }}
-        />
+        <Box flexGrow={1}>
+          <Text color={theme.colors.userText}>
+            <TextInput
+              value={value}
+              onChange={handleTextInputChange}
+              placeholder={isBusy ? "working… (Esc to cancel)" : "Type a message, / for commands"}
+              onSubmit={(text) => {
+                // Enter with the slash menu open runs the highlighted command.
+                if (showCommandMenu && matchingCommands[commandIndex]) {
+                  onSubmit(`/${matchingCommands[commandIndex].name}`);
+                  setValue("");
+                  setCommandIndex(0);
+                  return;
+                }
+                const trimmed = text.trim();
+                if (!trimmed) return;
+                // Busy is fine: handleSubmit routes to the queue and the drain
+                // sends it when the turn settles.
+                onSubmit(trimmed);
+                setValue("");
+                historyIndex.current = -1;
+              }}
+            />
+          </Text>
+        </Box>
       </Box>
     </Box>
   );

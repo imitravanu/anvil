@@ -4,6 +4,29 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 (major.minor.patch — breaking features bump minor while pre-1.0).
 
+## [Unreleased]
+
+### Fixed
+
+- **Phantom scrollback indicator**: the "… N earlier messages above" line
+  counted the newest (bottom-anchored) message as hidden whenever it alone was
+  taller than the transcript — a single exchange whose answer fit on screen
+  still reported "… 2 earlier messages above". The fold math now counts only
+  messages fully above the clip; a message the fold cuts through is partially
+  visible and never counted as lost.
+- **Scrollback row budget** matched to the real layout (reserve 10, not 12) so
+  the indicator and Yoga's actual list height agree.
+- **Header truncated the model name mid-word** ("Ollama · Qwen 2.5 Coder
+  (Local) [FREE] …" at 100 columns). The cockpit header now measures its own
+  deterministic left-column width and budgets the model tag to the exact
+  remainder — the right side can never squeeze the left column (which made
+  Ink wrap "▲ ANVIL" onto a second row) — and prefers a compact
+  `provider · model` tag over a mid-name "…" when space is tight (state and
+  pricing already live in the StatusBar).
+- Uncommitted TUI polish wave folded in: theme-consistent colors across the
+  chrome, styled slash-command menu, and sent-message recall entries for
+  command-driven sends.
+
 ## [0.6.2] — 2026-09-07
 
 ### Fixed

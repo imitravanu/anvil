@@ -15,9 +15,9 @@ export function MessageView({ message, expandTools }: { message: DisplayMessage;
   if (message.role === "user") {
     return (
       <Box flexDirection="column">
-        <Text dimColor>❯ you</Text>
+        <Text color={theme.colors.dim}>❯ you</Text>
         {message.images?.map((img) => (
-          <Text key={img.path} dimColor>
+          <Text key={img.path} color={theme.colors.dim}>
             {"  🖼 "}
             {img.path}
           </Text>
@@ -30,8 +30,9 @@ export function MessageView({ message, expandTools }: { message: DisplayMessage;
   if (message.role === "system") {
     return (
       <Box flexDirection="column">
-        <Text dimColor italic>
-          ℹ {message.text}
+        <Text>
+          <Text color={theme.colors.primary}>ℹ </Text>
+          <Text color={theme.colors.userText}>{sanitizeTerminalText(message.text)}</Text>
         </Text>
       </Box>
     );

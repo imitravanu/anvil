@@ -140,6 +140,10 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     pendingImagesRef.current = [];
   }, [session]);
 
+  const recordSentMessage = useCallback((text: string) => {
+    setSentHistory((prev) => (prev[prev.length - 1] === text ? prev : [...prev, text].slice(-HISTORY_RECALL_CAP)));
+  }, []);
+
   const runTurn = useCallback(
     async (text: string) => {
       // busyRef belongs to the caller (send's claim covers the whole drain —
@@ -148,7 +152,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
       pendingImagesRef.current = [];
       // Bounded state: recall needs dozens, not thousands; the transcript window
       // renders a handful while history truth lives in the session file.
-      setSentHistory((prev) => [...prev, text].slice(-HISTORY_RECALL_CAP));
+      recordSentMessage(text);
       const userMsg: DisplayMessage = {
         id: randomUUID(),
         role: "user",
@@ -497,6 +501,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     clearMessages,
     replaceMessages,
     sentHistory,
+    recordSentMessage,
   };
 }
 
