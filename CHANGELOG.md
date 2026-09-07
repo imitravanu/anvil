@@ -4,9 +4,29 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 (major.minor.patch — breaking features bump minor while pre-1.0).
 
-## [Unreleased]
+## [0.6.3] — 2026-09-08
 
 ### Fixed
+
+- **`grep` could freeze the whole app irrecoverably** on a catastrophic-
+  backtracking regex. Patterns come from the model and run synchronously —
+  Esc/cancel cannot interrupt them. Verified: `(a|aa)+$` hangs Node for >6s
+  on a 38-character line. Two independent bounds now protect the scan:
+  a pre-flight shape check rejects the explosive class (unboundedly-repeated
+  groups with alternation or variable-length repetition inside — bounded
+  repeats and exact `{n}` folds stay allowed) and each line is tested on its
+  first 4 KB, with long-line coverage surfaced honestly in the output.
+  The bomb pattern now returns an actionable error in ~1 ms; normal patterns
+  are unaffected.
+- Lockfile workspace entries resynced (they still said 0.1.0 from an earlier
+  release while the packages were at 0.6.x).
+
+### Improved
+
+- Previous wave (same day): the phantom "… N earlier messages above"
+  indicator, the scrollback row budget, the adaptive cockpit header (no more
+  mid-name "…" truncation), and theme-consistent chrome.
+- Version bumped to 0.6.3 across core/tui/cli.
 
 - **Phantom scrollback indicator**: the "… N earlier messages above" line
   counted the newest (bottom-anchored) message as hidden whenever it alone was
@@ -339,7 +359,8 @@ onboarding, sub-agent delegation, and MCP (stdio) support.
 
 - Verification/eval harness, provider certification, project memory & git-native workflow, distribution (see `docs/ROADMAP.md`).
 
-[Unreleased]: https://github.com/mitravanu/anvil/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/mitravanu/anvil/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/mitravanu/anvil/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/mitravanu/anvil/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/mitravanu/anvil/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/mitravanu/anvil/compare/v0.5.1...v0.6.0

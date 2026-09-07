@@ -1,10 +1,25 @@
-# Anvil Roadmap — Phases 17–20
+# Anvil Roadmap — Phases 0, 17–20
 
-> **Status:** PROPOSED (2026-09-06, post-audit) — v0.6.0 hardening is tracked separately in
-> `docs/PHASE-16-SPEC.md` and ships first.
+> **Status:** PROPOSED (2026-09-08, post-audit) — v0.6.0 hardening tracked in
+> `docs/PHASE-16-SPEC.md` ships first. Phase 0 is a new prerequisite for Phase 17.
 > **Principle:** Anvil's loop is feature-rich; what it lacks is *measurable quality* and
 > *distribution*. These phases close that. Feature sprawl (LSP, agent teams, MCP-server mode)
-> is deliberately deferred — see §5.
+> is deliberately deferred — see §6.
+
+---
+
+## Phase 0 — Visual Regression Testing for TUI (NEW)
+
+**Prerequisite for Phase 17** — eval harness needs stable, deterministic TUI rendering.
+The Phase 15 frame capture scripts (`capture-frames.sh`, `mock-openai-server.mjs`, `ui-preview.tsx`)
+are manual-only; no CI gate, no baseline comparison, no cross-size/theme matrix.
+
+- Automated frame capture via `npm run visual:capture` (headless PTY + deterministic mock server)
+- 8 scenarios × 6 terminal sizes (80×24, 120×40, 200×60) × 2 themes (dark, highContrast) = 96 baselines
+- Pixel-diff via `pixelmatch` (0.1% threshold) with `npm run visual:diff`; CI gate on every PR
+- Baseline promotion: `npm run visual:approve` copies current → baseline, stages for commit
+- Artifacts uploaded on failure for visual review
+- Spec: `docs/PHASE-0-VISUAL-REGRESSION-SPEC.md`
 
 ---
 
@@ -52,12 +67,13 @@ The 7 unit-tested-only providers have been open debt since 0.2.0.
 
 ---
 
-## 5. Deliberately deferred (do NOT build next)
+## 6. Deliberately deferred (do NOT build next)
 
 - **LSP integration** — large surface, marginal gain while tools + `get_outline` cover the need.
 - **Agent teams / swarms** — demo value over daily value; revisit after the harness can score
   multi-agent quality.
 - **Anvil as an MCP server** — useful eventually; only worth building once Phases 17–20 land.
 
-Sequencing rule: 17 before everything else — it converts later phases from "we think it works"
-into "it measurably works", including the Phase 11–15 wave this roadmap builds on.
+Sequencing rule: **0 before 17 before everything else** — Phase 0 locks TUI rendering so the
+eval harness (17) measures agent quality, not UI flakiness. Phase 17 then converts later phases
+from "we think it works" into "it measurably works", including the Phase 11–15 wave this roadmap builds on.

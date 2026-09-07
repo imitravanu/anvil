@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { executeTool } from "../index.js";
 import type { ToolContext } from "../types.js";
+import { grepPatternError, GREP_PATTERN_MAX_LENGTH, GREP_LINE_TEST_MAX } from "../grep.js";
 
 let root: string;
 let ctx: ToolContext;
@@ -41,5 +42,50 @@ describe("grep", () => {
     const result = await executeTool("grep", { pattern: "([unclosed" }, ctx);
     expect(result.isError).toBe(true);
     expect((result.output as { error: string }).error).toContain("Invalid regular expression");
+  });
+
+  it("rejects catastrophic backtracking shapes before they can hang the scan", async () => {
+    // (a|aa)+$ hangs Node for >6s on a 38-char line (verified) — and the
+    // engine is synchronous, so no cancellation can interrupt it.
+    const result = await executeTool("grep", { pattern: "(a|aa)+$" }, ctx);
+    expect(result.isError).toBe(true);
+    expect((result.output as { error: string }).error).toContain("Unsafe pattern");
+  });
+
+  it("rejects nested-quantifier and alternation-in-repeated-group shapes", () => {
+    for (const bad of [
+      "(a+)+",
+      "(a*)*",
+      "(?:foo|bar)+",
+      "(a{1,3})*",
+      "(?:(?:ab)+)+",
+      "(a|aa)+$",
+      "(ab|cd)*",
+      "((?:x|y){2,})+",
+    ]) {
+      expect(grepPatternError(bad), `should reject ${bad}`).not.toBeNull();
+    }
+  });
+
+  it("allows legitimate fixed-text repeats, plain alternation, and simple patterns", () => {
+    for (const good of [
+      "(?:ab)+", // fixed text repeated — linear, no backtracking bomb
+      "(?:ab{2})+", // exact-inner quantifier folds to a fixed string — still linear
+      "foo|bar",
+      "(foo|bar)", // alternation but NOT in a repeated group
+      "const \\w+ =",
+      "todo|fixme",
+      "^export function",
+      "(?:[a-z]+):",
+      "(?<name>\\w+)\\s*=",
+    ]) {
+      expect(grepPatternError(good), `should allow ${good}`).toBeNull();
+    }
+  });
+
+  it("enforces the pattern length cap and exposes bounds for the line test", () => {
+    expect(grepPatternError("a".repeat(GREP_PATTERN_MAX_LENGTH + 1))).toContain("safety limit");
+    expect(grepPatternError("")).toContain("empty");
+    expect(Number.isInteger(GREP_LINE_TEST_MAX) && GREP_LINE_TEST_MAX > 0).toBe(true);
   });
 });

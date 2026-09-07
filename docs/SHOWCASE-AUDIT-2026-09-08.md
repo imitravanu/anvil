@@ -50,3 +50,27 @@ TUI hardening wave from the working tree folded in.
   never-hidden + exact-fold boundary)
 - build: success
 - frames: clean at 30x100 (header full tag, indicator honest, no stacking)
+
+## Follow-up pass (same day — version 0.6.3)
+
+Deeper dive into the provider layer, MCP transport, tool layer, and headless
+mode. Verified clean: Gemini thoughtSignature round-trips history → session
+file → replay; free-model sync timer is cleared in `finally`; MCP client
+routes numeric AND string JSON-RPC ids, fails pending calls fast on transport
+death; bash safe-list refuses root-wipes de-shelled and de-substituted; path
+containment resolves symlinked ancestors; headless prepends its SIGINT
+handler so the graceful-cancel path wins over the CLI exit handler.
+
+**Found and fixed: `grep` ReDoS freeze.** `grep` compiles a model-supplied
+JavaScript regex and tests file lines synchronously — no cancellation can
+interrupt it. Empirically `(a|aa)+$` hangs Node for >6s on a 38-character
+line while `(a+)+$` is optimized away, so the risk is real on the exact
+runtime Anvil ships on. Fix: pre-flight shape check
+(`grepPatternError` — rejects unboundedly-repeated groups containing
+alternation or variable-length repetition; bounded repeats and exact `{n}`
+folds stay legal) plus a per-line 4 KB test bound with an honest
+`longLinesTruncated` note. The bomb now errors in ~1 ms with an actionable
+message; normal searches are untouched. 4 new tests (core 281).
+
+Final state: typecheck 3/3 clean; tests 407 passed (core 281, tui 118, cli 8);
+build success; version 0.6.3 across all packages; lockfile resynced.
