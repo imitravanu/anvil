@@ -20,7 +20,9 @@
   "scripts": {
     "build": "tsc -p .",
     "typecheck": "tsc -p . --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "visual": "vitest run src/__visual__/visual.test.tsx",
+    "visual:update": "VISUAL_UPDATE=1 vitest run src/__visual__/visual.test.tsx"
   },
   "dependencies": {
     "@anvil/core": "*",

@@ -1,0 +1,11 @@
+╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                  │
+│  Time-Travel Checkpoint Rewind                     ↑/↓: navigate · Enter: restore · Esc: cancel  │
+│                                                                                                  │
+│    #1 (HH:MM:SS pm) 1 file snapshotted                                                            │
+│    #2 (HH:MM:SS pm) 2 files snapshotted                                                           │
+│    #3 (HH:MM:SS pm) 3 files snapshotted                                                           │
+│    #4 (HH:MM:SS pm) 4 files snapshotted                                                           │
+│  ❯ #5 (HH:MM:SS pm) 5 files snapshotted [Press Enter to restore]                                  │
+│                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

@@ -1,0 +1,37 @@
+ … 1 earlier message above — full history in the session file
+ ❯ you
+ what does the module export?
+
+ anvil
+ Here's what I found in src/index.ts:
+
+     Summary
+ The module exports three functions:
+
+ 1. boot() — starts the server
+ 2. shutdown() — stops it gracefully
+ 3. reload() — hot reloads config
+
+ ▎ export function boot(port: number): Server {
+ ▎   return createServer({ port, tls: true });
+ ▎ }
+ ▎
+
+ ▍ Note: reload() requires the config watcher to be enabled.
+
+ Function │ Async │ Safe
+ ─────────┼───────┼─────
+ boot     │ no    │ yes
+ shutdown │ yes   │ yes
+
+ Next I'll check the tests.
+
+ ❯ you
+ check the files
+
+ anvil
+ Let me look around first.
+    ✓ list_files Listed 10 files under .
+    ✓ grep grep "boot": 12 matches
+
+ ℹ Checkpoint #1: 1 file snapshotted — /rewind 1 to undo.

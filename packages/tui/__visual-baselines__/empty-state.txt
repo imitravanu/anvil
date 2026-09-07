@@ -1,0 +1,13 @@
+                                              ▲ ANVIL
+                                       Terminal coding agent
+                                  Ollama · Qwen 2.5 Coder (Local)
+
+                 Just type a task — I can read, edit, and run code in this project.
+
+                             Try:
+                             /help — list commands
+                             /model — switch model or provider
+                             /session — resume a past conversation
+                             /connect — add or update a provider API key
+
+                                               v0.6.3

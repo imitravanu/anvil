@@ -74,3 +74,24 @@ message; normal searches are untouched. 4 new tests (core 281).
 
 Final state: typecheck 3/3 clean; tests 407 passed (core 281, tui 118, cli 8);
 build success; version 0.6.3 across all packages; lockfile resynced.
+
+## Visual regression gate — Phase 0.1 (text-first, deterministic frame capture)
+
+Implemented per `docs/PHASE-0-VISUAL-REGRESSION-SPEC.md`, amended to a
+**text-frame** approach: Ink's headless Yoga layout is byte-stable, so the
+ANSI-stripped stdout frame *is* the rendered terminal. Text baselines (~2 KB
+each) are human-reviewable in PRs and need no PTY / puppeteer / native deps.
+
+- Harness: `packages/tui/src/__visual__/visual.test.tsx` — parameterized fake
+  stdout (explicit columns/rows), ANSI-stripped + trailing-whitespace-trimmed,
+  deterministic fixtures (no Date.now/timers/network; rewind-modal timestamps
+  normalized to `HH:MM:SS`).
+- 11 scenarios: empty state, chat exchange (markdown tables/code/tool cards),
+  permission prompt with unified diff, mission deck (active + collapsed plan),
+  cockpit header at 100/130 cols, compact header at 60 cols, status bar,
+  verification + sub-agent card, rewind modal (5 checkpoints).
+- `expectVisual` creates-or-compares; `VISUAL_UPDATE=1` regenerates. Negative
+  test confirmed: a corrupted baseline fails with a focused diff (1 failed),
+  and restoring it returns 11/11 green.
+- npm scripts: `visual` (compare), `visual:update` (regenerate).
+- Result: 247/247 tui tests pass (incl. 11 visual), `tsc -p packages/tui` clean.
