@@ -54,23 +54,24 @@ export interface UseSessionCommandsResult {
 
 /** Build display messages from a stored history (text parts only). */
 function seedFromHistory(history: ConversationMessage[]): DisplayMessage[] {
-  return history
-    .map((msg): DisplayMessage | null => {
-      const text = msg.content
-        .filter((c) => c.type === "text")
-        .map((c) => (c as { text: string }).text)
-        .join("\n");
-      if (!text) return null; // tool_call / tool_result parts are not replayed into the view
-      return {
-        id: `${msg.role}-${Math.random().toString(36).slice(2)}`,
-        role: msg.role,
-        text,
-        streaming: false,
-        toolCalls: [],
-        subAgents: [],
-      };
-    })
-    .filter((m): m is DisplayMessage => m !== null);
+  const out: DisplayMessage[] = [];
+  for (let i = 0; i < history.length; i++) {
+    const msg = history[i];
+    const text = msg.content
+      .filter((c) => c.type === "text")
+      .map((c) => (c as { text: string }).text)
+      .join("\n");
+    if (!text) continue; // tool_call / tool_result parts are not replayed into the view
+    out.push({
+      id: `${msg.role}-${i}`,
+      role: msg.role,
+      text,
+      streaming: false,
+      toolCalls: [],
+      subAgents: [],
+    });
+  }
+  return out;
 }
 
 /**
@@ -114,8 +115,11 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
   const persist = () => {
     try {
       saveSession(session.toStoredSession(activeProviderId, currentModel));
-    } catch {
-      // disk failures must not take the chat down; the next turn will retry
+    } catch (err) {
+      // Disk failures must not take the chat down; log so the user knows
+      // their session wasn't saved and can retry manually with /save.
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[anvil] session auto-save failed: ${msg}\n`);
     }
   };
 
