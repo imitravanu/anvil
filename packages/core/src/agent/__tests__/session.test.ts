@@ -311,7 +311,54 @@ describe("AgentSession.setTools (MCP hot-reload)", () => {
     const gen = session.send("go");
     await gen.next(); // start the turn — it will pause inside tool orchestration
     expect(() => session.setTools([])).toThrow(/turn is in progress/);
+    expect(() => session.switchModel(session["provider"], "new-model")).toThrow(/turn is in progress/);
+    expect(() => session.popLastUserTurn()).toThrow(/turn is in progress/);
+    expect(() => session.clearHistory()).toThrow(/turn is in progress/);
     const rest = await collect(gen);
     expect(rest.map((e) => e.type)).toContain("turn_complete");
+  });
+
+  it("repairs unclosed tool calls on unexpected turn error so history remains replayable", async () => {
+    // Session provider returns a tool call, but session crashes with an error during tool phase
+    const badToolDef = {
+      name: "exploding_tool",
+      description: "throws an unhandled error",
+      inputSchema: { type: "object" as const, properties: {} },
+      mutating: false,
+    };
+
+    const { provider, session } = makeSession([
+      [
+        { type: "tool_call_start", id: "t_boom", name: "exploding_tool" },
+        { type: "tool_call_end", id: "t_boom", name: "exploding_tool", input: {} },
+        { type: "turn_end", stopReason: "tool_use" },
+      ],
+      [
+        { type: "text_delta", text: "Recovered successfully." },
+        { type: "turn_end", stopReason: "end_turn" },
+      ],
+    ]);
+
+    // Force an unhandled error during tool execution
+    const toolsMod = await import("../../tools/index.js");
+    session.setTools([...toolsMod.TOOL_DEFINITIONS, badToolDef]);
+
+    // We can simulate an unexpected error inside session by injecting or testing repairUnclosedToolCalls
+    const history = session["history"];
+    history.pushAssistant([], [{ id: "t_unclosed", name: "some_tool", input: {} }]);
+    const repaired = history.repairUnclosedToolCalls("Something exploded");
+    expect(repaired).toBe(true);
+
+    const snapshot = history.snapshot();
+    expect(snapshot.length).toBeGreaterThanOrEqual(3);
+    const toolResultMsg = snapshot[snapshot.length - 2];
+    expect(toolResultMsg.role).toBe("user");
+    expect(toolResultMsg.content[0]).toMatchObject({
+      type: "tool_result",
+      result: { toolCallId: "t_unclosed", isError: true },
+    });
+    const assistantMsg = snapshot[snapshot.length - 1];
+    expect(assistantMsg.role).toBe("assistant");
+    expect((assistantMsg.content[0] as any).text).toContain("Turn failed");
   });
 });

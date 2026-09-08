@@ -272,7 +272,8 @@ async function collectFiles(targetAbs: string, projectRoot: string): Promise<str
 }
 
 export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
-  const relPath = (input as { path?: string })?.path ?? ".";
+  const rawPath = (input as { path?: unknown })?.path;
+  const relPath = typeof rawPath === "string" ? rawPath : ".";
   let abs: string;
   try {
     abs = resolveWithinRoot(ctx.projectRoot, relPath);

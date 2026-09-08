@@ -102,8 +102,14 @@ export async function* translateChatCompletionsChunkStream(
   }
 }
 
-export function toOpenAIMessages(messages: ConversationMessage[]): Record<string, unknown>[] {
+export function toOpenAIMessages(
+  messages: ConversationMessage[],
+  systemPrompt?: string
+): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = [];
+  if (systemPrompt && systemPrompt.trim()) {
+    out.push({ role: "system", content: systemPrompt });
+  }
   for (const m of messages) {
     const text = m.content
       .filter((c) => c.type === "text")
@@ -132,8 +138,20 @@ export function toOpenAIMessages(messages: ConversationMessage[]): Record<string
           : {}),
       });
     } else {
-      // Vision: user turns with attachments become content-part arrays
-      // (data URL for the image); plain turns stay string content.
+      // In the OpenAI API, any role: "tool" results responding to assistant tool_calls
+      // must immediately follow the assistant message. Emit tool results first.
+      for (const c of m.content) {
+        if (c.type === "tool_result") {
+          out.push({
+            role: "tool",
+            tool_call_id: c.result.toolCallId,
+            content: c.result.content,
+          });
+        }
+      }
+
+      // Vision / user text: user turns with attachments or notes follow tool results
+      // (never preceding them, which would trigger an OpenAI 400 Bad Request).
       const images = m.content.filter((c) => c.type === "image") as Array<{
         mediaType: string;
         data: string;
@@ -147,15 +165,6 @@ export function toOpenAIMessages(messages: ConversationMessage[]): Record<string
         out.push({ role: "user", content: parts });
       } else if (text) {
         out.push({ role: "user", content: text });
-      }
-      for (const c of m.content) {
-        if (c.type === "tool_result") {
-          out.push({
-            role: "tool",
-            tool_call_id: c.result.toolCallId,
-            content: c.result.content,
-          });
-        }
       }
     }
   }
@@ -215,7 +224,7 @@ export function createChatCompletionsStyleProvider(
         const stream = await client.chat.completions.create(
           {
             model: request.model,
-            messages: toOpenAIMessages(request.messages) as never,
+            messages: toOpenAIMessages(request.messages, request.systemPrompt) as never,
             ...(request.tools.length ? { tools: toOpenAITools(request.tools) as never } : {}),
             [maxTokensParam]: request.maxTokens,
             stream: true,

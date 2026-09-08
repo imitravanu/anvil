@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 import { resolveWithinRoot } from "./paths.js";
+import { atomicWriteText } from "../atomicWrite.js";
 
 export const MAX_WRITE_BYTES = 512 * 1024;
 
@@ -22,7 +23,14 @@ export const definition: ToolDefinition = {
 };
 
 export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
-  const { path: relPath, content } = input as { path: string; content: string };
+  const { path: relPath, content } = (input ?? {}) as { path?: string; content?: string };
+  if (typeof relPath !== "string" || typeof content !== "string") {
+    return {
+      output: { error: "write_file requires string arguments: path, content" },
+      isError: true,
+      summary: "write_file failed: missing required arguments (path, content)",
+    };
+  }
   const bytes = Buffer.byteLength(content, "utf8");
   if (bytes > MAX_WRITE_BYTES) {
     return {
@@ -45,16 +53,7 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   } catch {
     // new file
   }
-  await fs.mkdir(path.dirname(abs), { recursive: true });
-  if (ctx.signal.aborted) throw new Error("Aborted before writing");
-  await fs.writeFile(abs, content, "utf8");
-  if (existed && prevMode !== undefined) {
-    try {
-      await fs.chmod(abs, prevMode);
-    } catch {
-      // best-effort: the write itself succeeded
-    }
-  }
+  await atomicWriteText(abs, content, { mode: prevMode, signal: ctx.signal });
   return {
     output: { path: relPath, bytes, overwrote: existed },
     isError: false,
@@ -65,7 +64,10 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
 // Permission-prompt preview, computed WITHOUT writing. Capped: previewing a
 // huge file must not drag megabytes into the prompt.
 export const describe = async (input: unknown, ctx: ToolContext): Promise<string> => {
-  const { path: relPath, content } = input as { path: string; content: string };
+  const { path: relPath, content } = (input ?? {}) as { path?: string; content?: string };
+  if (typeof relPath !== "string") {
+    return "write_file (missing path)";
+  }
   const bytes = Buffer.byteLength(content ?? "", "utf8");
   try {
     const abs = resolveWithinRoot(ctx.projectRoot, relPath);

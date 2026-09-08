@@ -43,10 +43,13 @@ export class TuiPermissionBroker implements PermissionBroker {
   private pump(): void {
     if (this.current || this.queue.length === 0) return;
     const next = this.queue.shift()!;
+    let resolved = false;
     this.current = {
       toolName: next.toolName,
       summary: next.summary,
       resolve: (approved: boolean) => {
+        if (resolved) return;
+        resolved = true;
         this.current = null;
         this.notify();
         next.resolve(approved);

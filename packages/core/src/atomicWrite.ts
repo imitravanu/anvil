@@ -47,3 +47,33 @@ export function atomicWriteJson(file: string, data: unknown, opts?: { mode?: num
     throw err;
   }
 }
+
+/**
+ * Write text atomically: temp file in the same directory (+ optional mode,
+ * applied before rename) then rename over the target.
+ */
+export async function atomicWriteText(
+  file: string,
+  content: string,
+  opts?: { mode?: number; signal?: AbortSignal }
+): Promise<void> {
+  if (opts?.signal?.aborted) throw new Error("Aborted before writing");
+  await fs.promises.mkdir(path.dirname(file), { recursive: true });
+  const tmp = `${file}.tmp.${process.pid}.${tmpSeq++}`;
+  try {
+    if (opts?.mode !== undefined) {
+      await fs.promises.writeFile(tmp, content, { encoding: "utf8", mode: opts.mode });
+    } else {
+      await fs.promises.writeFile(tmp, content, "utf8");
+    }
+    if (opts?.signal?.aborted) throw new Error("Aborted before renaming");
+    await fs.promises.rename(tmp, file);
+  } catch (err) {
+    try {
+      await fs.promises.unlink(tmp);
+    } catch {
+      // already gone
+    }
+    throw err;
+  }
+}

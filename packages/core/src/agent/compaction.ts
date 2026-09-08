@@ -57,6 +57,48 @@ export function estimateTokens(messages: ConversationMessage[]): number {
   return Math.ceil(chars / 4) + images * IMAGE_TOKEN_FLOOR;
 }
 
+export function findCleanCompactionCut(
+  history: ConversationMessage[],
+  targetCut: number
+): number {
+  if (targetCut <= 0 || targetCut >= history.length) return targetCut;
+
+  // Precompute tool call/result intervals in O(N) to avoid O(N^2) scans
+  const callIndices = new Map<string, number>();
+  const intervals: Array<{ start: number; end: number }> = [];
+
+  for (let i = 0; i < history.length; i++) {
+    for (const c of history[i].content) {
+      if (c.type === "tool_call") {
+        callIndices.set(c.call.id, i);
+      } else if (c.type === "tool_result") {
+        const start = callIndices.get(c.result.toolCallId);
+        if (start !== undefined) {
+          intervals.push({ start, end: i });
+        }
+      }
+    }
+  }
+
+  const isSplit = (cut: number): boolean => {
+    return intervals.some((inv) => inv.start < cut && cut <= inv.end);
+  };
+
+  if (!isSplit(targetCut)) return targetCut;
+
+  // First try shifting cut backwards so the incomplete tool interaction is kept in recent
+  for (let cut = targetCut - 1; cut > 0; cut--) {
+    if (!isSplit(cut)) return cut;
+  }
+
+  // If shifting backwards leaves nothing to summarize, try shifting forwards
+  for (let cut = targetCut + 1; cut < history.length; cut++) {
+    if (!isSplit(cut)) return cut;
+  }
+
+  return targetCut;
+}
+
 export async function compactIfNeeded(
   history: ConversationMessage[],
   contextWindow: number,
@@ -75,8 +117,14 @@ export async function compactIfNeeded(
     return { history, result: { compacted: false } };
   }
 
-  const toSummarize = history.slice(0, history.length - KEEP_RECENT_MESSAGES);
-  const recent = history.slice(history.length - KEEP_RECENT_MESSAGES);
+  const targetCut = history.length - KEEP_RECENT_MESSAGES;
+  const cut = findCleanCompactionCut(history, targetCut);
+  if (cut <= 0 || cut >= history.length) {
+    return { history, result: { compacted: false } };
+  }
+
+  const toSummarize = history.slice(0, cut);
+  const recent = history.slice(cut);
 
   const summaryText = await summarizeMessages(toSummarize, provider, model, signal);
   if (!summaryText.trim()) {

@@ -297,7 +297,7 @@ describe("Phase 8 (A) — durable loop", () => {
     expect(events.some((e) => e.type === "cancelled")).toBe(true);
     expect(events.some((e) => e.type === "tool_started")).toBe(false);
     expect(fs.existsSync(outFile)).toBe(false);
-    release(true); // hygiene: settle the orphaned broker promise
+    release?.(true); // hygiene: settle the orphaned broker promise
   });
 
   it("control ledger entries carry no fabricated token attribution", async () => {

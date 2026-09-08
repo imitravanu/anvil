@@ -176,8 +176,16 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     const parsed = parseCommand(text);
     if (parsed) {
       const command = COMMANDS.find((c) => c.name === parsed.name);
-      if (command) command.run(parsed.args, ctx);
-      else printSystemMessage(`Unknown command: /${parsed.name}. Try /help.`);
+      if (command) {
+        try {
+          await command.run(parsed.args, ctx);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          printSystemMessage(`Command /${parsed.name} failed: ${msg}`);
+        }
+      } else {
+        printSystemMessage(`Unknown command: /${parsed.name}. Try /help.`);
+      }
       return;
     }
     // Regular turn: run it, then auto-save regardless of how it ended

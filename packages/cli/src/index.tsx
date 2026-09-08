@@ -39,7 +39,7 @@ import { runGoalHeadless } from "./goalRunner.js";
 // NOTE: process-group kill is Unix-only; on Windows each child is killed
 // individually as a best effort (see transport fallbacks).
 process.on("exit", killAllMcpServers);
-for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]] as const) {
+for (const [sig, code] of [["SIGTERM", 143], ["SIGHUP", 129]] as const) {
   process.on(sig, () => {
     try {
       killAllMcpServers();
@@ -48,6 +48,18 @@ for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]] a
     }
   });
 }
+
+// For SIGINT: If an active runner (headless session or TUI) has attached a handler,
+// let it perform graceful cancellation. Only exit immediately if no other listener is attached.
+process.on("SIGINT", () => {
+  if (process.listenerCount("SIGINT") <= 1) {
+    try {
+      killAllMcpServers();
+    } finally {
+      process.exit(130);
+    }
+  }
+});
 
 const VERSION = CORE_VERSION;
 

@@ -76,7 +76,8 @@ describe("pairRows", () => {
     // rows[4]/rows[5] paired: only the name differs
     expect(segs.get(4)!.filter((s) => s.changed).map((s) => s.text)).toEqual(["oldName"]);
     expect(segs.get(5)!.filter((s) => s.changed).map((s) => s.text)).toEqual(["newName"]);
-    // rows[8]/rows[9] paired; rows[10] unpaired add → fully changed
-    expect(segs.get(10)!.every((s) => s.changed)).toBe(true);
+    // rows[8]/rows[9] paired; rows[10] unpaired add → all non-whitespace words changed, whitespace not changed
+    expect(segs.get(10)!.filter((s) => !/^\s+$/.test(s.text)).every((s) => s.changed)).toBe(true);
+    expect(segs.get(10)!.filter((s) => /^\s+$/.test(s.text)).every((s) => !s.changed)).toBe(true);
   });
 });

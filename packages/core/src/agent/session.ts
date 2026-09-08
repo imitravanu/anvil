@@ -161,6 +161,9 @@ export class AgentSession {
    * A same-provider model change keeps history.
    */
   switchModel(provider: ModelProvider, model: string): { historyCleared: boolean } {
+    if (this.isSending) {
+      throw new Error("Cannot change model while a turn is in progress.");
+    }
     const providerChanged = provider.id !== this.provider.id;
     this.provider = provider;
     this.options = { ...this.options, model };
@@ -180,11 +183,17 @@ export class AgentSession {
    * to unwind.
    */
   popLastUserTurn(): string | null {
+    if (this.isSending) {
+      throw new Error("Cannot unwind history while a turn is in progress.");
+    }
     return this.history.popLastUserTurn();
   }
 
   /** Wipe conversation history (the `/clear` command). */
   clearHistory(): void {
+    if (this.isSending) {
+      throw new Error("Cannot clear history while a turn is in progress.");
+    }
     this.history.clear();
     this.lastInputTokens = 0;
     this.lastUsage = null;
@@ -780,6 +789,7 @@ export class AgentSession {
         this.history.pushToolResults(prepared, outcomes, turnNotes);
       }
     } catch (err: any) {
+      this.history.repairUnclosedToolCalls(err?.message ?? String(err));
       if (controller.signal.aborted) {
         yield { type: "cancelled" };
         return;

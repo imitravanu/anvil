@@ -103,9 +103,10 @@ export function boot(port: number): Server {
 
 Next I'll check the tests.`;
 
+let fixtureSeq = 0;
 function msg(over: Partial<DisplayMessage> & { role: DisplayMessage["role"]; text: string }): DisplayMessage {
   return {
-    id: "fixture",
+    id: `fixture-${++fixtureSeq}`,
     streaming: false,
     toolCalls: [],
     subAgents: [],

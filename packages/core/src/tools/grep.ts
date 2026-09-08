@@ -110,7 +110,8 @@ export function grepPatternError(pattern: string): string | null {
   return null;
 }
 
-async function* textFiles(dir: string): AsyncGenerator<string> {
+async function* textFiles(dir: string, signal?: AbortSignal): AsyncGenerator<string> {
+  if (signal?.aborted) return;
   let entries;
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
@@ -118,10 +119,11 @@ async function* textFiles(dir: string): AsyncGenerator<string> {
     return;
   }
   for (const entry of entries) {
+    if (signal?.aborted) return;
     if (entry.isDirectory() && EXCLUDED_DIRS.has(entry.name)) continue;
     const abs = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      yield* textFiles(abs);
+      yield* textFiles(abs, signal);
     } else if (entry.isFile()) {
       yield abs;
     }
@@ -146,12 +148,19 @@ export const definition: ToolDefinition = {
 };
 
 export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
-  const { pattern, path: relDir = ".", maxResults = 200 } = input as {
-    pattern: string;
+  const { pattern, path: relDir = ".", maxResults = 200 } = (input ?? {}) as {
+    pattern?: string;
     path?: string;
     maxResults?: number;
   };
-  const absDir = resolveWithinRoot(ctx.projectRoot, relDir);
+  if (typeof pattern !== "string" || !pattern) {
+    return {
+      output: { error: "grep requires a non-empty string argument: pattern" },
+      isError: true,
+      summary: "grep failed: missing required pattern",
+    };
+  }
+  const absDir = resolveWithinRoot(ctx.projectRoot, typeof relDir === "string" ? relDir : ".");
   const unsafe = grepPatternError(pattern);
   if (unsafe !== null) {
     return {
@@ -179,7 +188,14 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   // scanned file. The cost of honesty — when exactly maxResults matches exist
   // in total, the scan runs to the end to prove nothing was omitted — is
   // bounded by the size gates above.
-  scan: for await (const abs of textFiles(absDir)) {
+  scan: for await (const abs of textFiles(absDir, ctx.signal)) {
+    if (ctx.signal.aborted) {
+      return {
+        output: { matches, truncated: true, aborted: true },
+        isError: true,
+        summary: `grep cancelled`,
+      };
+    }
     // Size-gate BEFORE reading: readFile would pull the whole file (any size)
     // into memory just to skip it — a multi-gigabyte log or artifact would
     // spike the heap on every scan.

@@ -75,9 +75,10 @@ export async function takeSnapshot(projectRoot: string, id: number, paths: strin
         continue;
       }
       const content = Buffer.alloc(stat.size);
-      await fh.read(content, 0, stat.size, 0);
-      total += content.length;
-      files.push({ path: p, content });
+      const { bytesRead } = await fh.read(content, 0, stat.size, 0);
+      const finalBuf = bytesRead === stat.size ? content : content.subarray(0, bytesRead);
+      total += finalBuf.length;
+      files.push({ path: p, content: finalBuf });
     } catch {
       // Missing file is a legitimate snapshot (rewind deletes the creation);
       // only real read failures skip. Distinguish via existence.

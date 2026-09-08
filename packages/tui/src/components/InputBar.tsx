@@ -116,6 +116,15 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: Input
       const idx = raw.search(/[\r\n]/);
       const before = raw.slice(0, idx);
       const after = raw.slice(idx + 1).replace(/[\r\n]+/g, "");
+      // If there was text after the newline, the user pasted multiline content.
+      // Do not prematurely submit the first line and corrupt the rest;
+      // flatten newlines to spaces so the user sees the full draft.
+      if (after.trim().length > 0) {
+        const sanitized = raw.replace(/[\r\n]+/g, " ");
+        setValue(sanitized);
+        historyIndex.current = -1;
+        return;
+      }
       if (before.trim()) {
         onSubmit(before.trim());
       }

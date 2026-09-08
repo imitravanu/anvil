@@ -115,7 +115,7 @@ export function pairRows(
       out.set(addIdx[p], add);
     }
     const allChanged = (idx: number): WordSeg[] =>
-      tokenize(textOf(rows[idx])).map((text) => ({ text, changed: true }));
+      tokenize(textOf(rows[idx])).map((text) => ({ text, changed: !isSpace(text) }));
     for (let p = paired; p < delIdx.length; p++) out.set(delIdx[p], allChanged(delIdx[p]));
     for (let p = paired; p < addIdx.length; p++) out.set(addIdx[p], allChanged(addIdx[p]));
   }

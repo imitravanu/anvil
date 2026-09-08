@@ -97,7 +97,7 @@ export function MessageList({ messages, model, expandTools }: { messages: Displa
         overflow="hidden"
         justifyContent="flex-end"
       >
-        {messages.map((message, index) => (
+        {messages.slice(hidden).map((message, index) => (
           <Box key={message.id} marginTop={index > 0 ? 1 : 0} flexShrink={0}>
             <MessageView message={message} expandTools={expandTools} />
           </Box>

@@ -1,7 +1,4 @@
  … 1 earlier message above — full history in the session file
- ❯ you
- what does the module export?
-
  anvil
  Here's what I found in src/index.ts:
 

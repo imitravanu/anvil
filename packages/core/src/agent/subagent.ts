@@ -4,6 +4,7 @@ import type { ToolDefinition } from "../tools/types.js";
 import { AgentSession } from "./session.js";
 import type { PermissionBroker } from "./types.js";
 import type { Checkpoint } from "./checkpoints.js";
+import { buildSystemPrompt } from "../config/rules.js";
 
 // ---------------------------------------------------------------------------
 // sub-agent runner. A sub-agent is a real AgentSession with a fresh
@@ -70,7 +71,7 @@ export async function* runSubAgentLive(opts: {
   tools?: ToolDefinition[];
 }): AsyncGenerator<SubAgentProgress, SubAgentRun> {
   const sub = new AgentSession(opts.provider, {
-    systemPrompt: SUB_AGENT_SYSTEM_PROMPT,
+    systemPrompt: buildSystemPrompt(SUB_AGENT_SYSTEM_PROMPT, opts.projectRoot),
     model: opts.model,
     maxTokens: SUB_AGENT_MAX_TOKENS,
     projectRoot: opts.projectRoot,

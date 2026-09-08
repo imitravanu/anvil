@@ -172,6 +172,32 @@ describe("toOpenAIMessages", () => {
       { role: "tool", tool_call_id: "c1", content: "a.ts\nb.ts" },
     ]);
   });
+
+  it("prepends system prompt if provided", () => {
+    const messages: ConversationMessage[] = [
+      { role: "user", content: [{ type: "text", text: "hello" }] },
+    ];
+    expect(toOpenAIMessages(messages, "You are a helpful assistant.")).toEqual([
+      { role: "system", content: "You are a helpful assistant." },
+      { role: "user", content: "hello" },
+    ]);
+  });
+
+  it("emits tool results before text in the same turn to satisfy OpenAI protocol", () => {
+    const messages: ConversationMessage[] = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Note: please check files" },
+          { type: "tool_result", result: { toolCallId: "call_1", content: "done" } },
+        ],
+      },
+    ];
+    expect(toOpenAIMessages(messages)).toEqual([
+      { role: "tool", tool_call_id: "call_1", content: "done" },
+      { role: "user", content: "Note: please check files" },
+    ]);
+  });
 });
 
 describe("provider factories", () => {

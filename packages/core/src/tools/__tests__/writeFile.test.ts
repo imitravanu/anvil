@@ -65,4 +65,16 @@ describe("write_file", () => {
     expect(result.isError).toBe(false);
     expect((await fs.stat(target)).mode & 0o777).toBe(0o755);
   });
+
+  it("handles missing or malformed input without throwing TypeErrors", async () => {
+    const result1 = await executeTool("write_file", {}, ctx);
+    expect(result1.isError).toBe(true);
+    expect(result1.summary).toContain("missing required arguments");
+
+    const result2 = await executeTool("write_file", { path: 123 as any, content: "ok" }, ctx);
+    expect(result2.isError).toBe(true);
+
+    const preview = await writeFileTool.describe({}, ctx);
+    expect(preview).toContain("missing path");
+  });
 });

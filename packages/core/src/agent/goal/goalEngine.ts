@@ -360,6 +360,11 @@ export class GoalEngine {
     });
   }
 
+  /** Cancel the running mission turn/session. */
+  cancel(): void {
+    this.session.cancel();
+  }
+
   /**
    * Run the complete autonomous goal lifecycle over this engine's own
    * (headless) session.

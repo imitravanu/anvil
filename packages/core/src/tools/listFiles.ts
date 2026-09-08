@@ -19,7 +19,16 @@ function globToRegex(pattern: string): RegExp {
   return new RegExp(`^${escaped}$`);
 }
 
-async function walk(dir: string, root: string, out: string[]): Promise<void> {
+export const MAX_FILES = 10_000;
+
+async function walk(
+  dir: string,
+  root: string,
+  out: string[],
+  signal?: AbortSignal,
+  maxFiles: number = MAX_FILES
+): Promise<void> {
+  if (signal?.aborted || out.length >= maxFiles) return;
   let entries;
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
@@ -27,10 +36,11 @@ async function walk(dir: string, root: string, out: string[]): Promise<void> {
     return; // unreadable dir — skip silently
   }
   for (const entry of entries) {
+    if (signal?.aborted || out.length >= maxFiles) return;
     if (entry.isDirectory() && EXCLUDED_DIRS.has(entry.name)) continue;
     const abs = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      await walk(abs, root, out);
+      await walk(abs, root, out, signal, maxFiles);
     } else if (entry.isFile()) {
       out.push(path.relative(root, abs).split(path.sep).join("/"));
     }
@@ -66,18 +76,35 @@ function matchesPattern(file: string, pattern: string): boolean {
 }
 
 export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
-  const { path: relDir = ".", pattern } = input as { path?: string; pattern?: string };
-  const absDir = resolveWithinRoot(ctx.projectRoot, relDir);
+  const { path: relDir = ".", pattern } = (input ?? {}) as { path?: string; pattern?: string };
+  const safeRelDir = typeof relDir === "string" ? relDir : ".";
+  const absDir = resolveWithinRoot(ctx.projectRoot, safeRelDir);
   const all: string[] = [];
   // Walk from absDir, but report paths relative to the PROJECT ROOT — the model
   // feeds these straight into other tools, all of which are root-relative.
-  await walk(absDir, ctx.projectRoot, all);
-  const files = (pattern ? all.filter((f) => matchesPattern(f, pattern)) : all).sort();
+  await walk(absDir, ctx.projectRoot, all, ctx.signal, MAX_FILES);
+  if (ctx.signal.aborted) {
+    return {
+      output: { files: [], count: 0, pattern, aborted: true },
+      isError: true,
+      summary: "list_files cancelled",
+    };
+  }
+  const safePattern = typeof pattern === "string" && pattern.trim() ? pattern : undefined;
+  const files = (safePattern ? all.filter((f) => matchesPattern(f, safePattern)) : all).sort();
+  const truncated = all.length >= MAX_FILES;
   return {
-    output: { files, count: files.length, pattern },
+    output: {
+      files,
+      count: files.length,
+      pattern: safePattern,
+      ...(truncated ? { truncated: true, note: `Results capped at ${MAX_FILES} files.` } : {}),
+    },
     isError: false,
-    summary: pattern
-      ? `Found ${files.length} file${files.length === 1 ? "" : "s"} matching "${pattern}"`
-      : `Listed ${files.length} file${files.length === 1 ? "" : "s"} under ${relDir}`,
+    summary:
+      (safePattern
+        ? `Found ${files.length} file${files.length === 1 ? "" : "s"} matching "${safePattern}"`
+        : `Listed ${files.length} file${files.length === 1 ? "" : "s"} under ${safeRelDir}`) +
+      (truncated ? ` (capped at ${MAX_FILES})` : ""),
   };
 };

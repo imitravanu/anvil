@@ -3,6 +3,7 @@ import { createTwoFilesPatch } from "diff";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 import { MAX_WRITE_BYTES } from "./writeFile.js";
 import { resolveWithinRoot } from "./paths.js";
+import { atomicWriteText } from "../atomicWrite.js";
 
 interface EditInput {
   path: string;
@@ -36,6 +37,12 @@ async function computeEdit(
   input: EditInput,
   ctx: ToolContext
 ): Promise<{ abs: string; current: string; updated: string; diff: string }> {
+  if (!input || typeof input.path !== "string" || typeof input.old_str !== "string" || typeof input.new_str !== "string") {
+    throw new EditValidationError(
+      "edit_file requires string arguments: path, old_str, new_str",
+      "edit_file failed: missing or invalid required arguments (path, old_str, new_str)"
+    );
+  }
   const abs = resolveWithinRoot(ctx.projectRoot, input.path);
   // Same cap as read/write: editing a multi-megabyte file would blow the
   // model's context (and this read happens in describe(), pre-permission).
@@ -102,11 +109,10 @@ export const execute: ToolExecutor = async (rawInput, ctx: ToolContext) => {
     return {
       output: { error: (err as Error).message },
       isError: true,
-      summary: `edit_file failed on ${input.path}: ${(err as Error).message}`,
+      summary: `edit_file failed on ${input?.path ?? "file"}: ${(err as Error).message}`,
     };
   }
-  if (ctx.signal.aborted) throw new Error("Aborted before writing");
-  await fs.writeFile(result.abs, result.updated, "utf8");
+  await atomicWriteText(result.abs, result.updated, { signal: ctx.signal });
   const { added, removed } = diffChurn(result.diff);
   return {
     // The diff itself rides in output (visible via /expand); the card shows a

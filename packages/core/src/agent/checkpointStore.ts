@@ -35,6 +35,8 @@ function serializeCheckpoints(checkpoints: readonly Checkpoint[]): SerializedChe
   }));
 }
 
+let tmpSeq = 0;
+
 export async function saveCheckpointsAsync(
   sessionId: string,
   checkpoints: readonly Checkpoint[],
@@ -53,7 +55,7 @@ export async function saveCheckpointsAsync(
     return;
   }
   const serialized = serializeCheckpoints(checkpoints);
-  const tmp = `${targetPath}.tmp.${process.pid}`;
+  const tmp = `${targetPath}.tmp.${process.pid}.${Date.now()}.${++tmpSeq}`;
   try {
     await fsPromises.mkdir(path.dirname(targetPath), { recursive: true });
     await fsPromises.writeFile(tmp, JSON.stringify({ version: 1, checkpoints: serialized }, null, 2), "utf-8");

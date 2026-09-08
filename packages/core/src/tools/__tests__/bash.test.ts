@@ -171,10 +171,13 @@ describe("run_command read-only safe-list", () => {
       "cat /etc/passwd", "cat ~/.ssh/id_rsa", "head -20 /etc/hosts",
       "tail -5 /var/log/syslog", "stat /etc/shadow", "du /usr", "file /bin/bash",
       "cat ../outside.txt", "wc -l ../../etc/passwd",
+      "ls /etc", "ls ~/.ssh", "ls ../outside",
     ]) {
       expect(isReadOnlyCommand(cmd, root), cmd).toBe(false);
     }
     expect(isReadOnlyCommand("cat ./file.txt", root)).toBe(true);
+    expect(isReadOnlyCommand("ls ./src", root)).toBe(true);
     expect(isReadOnlyCommand("cat /etc/passwd")).toBe(false); // no root: fail closed
+    expect(isReadOnlyCommand("ls /etc")).toBe(false); // no root: fail closed
   });
 });

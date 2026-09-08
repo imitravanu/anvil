@@ -19,7 +19,14 @@ export const definition: ToolDefinition = {
 };
 
 export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
-  const { path: relPath } = input as { path: string };
+  const { path: relPath } = (input ?? {}) as { path?: string };
+  if (typeof relPath !== "string") {
+    return {
+      output: { error: "read_file requires a string argument: path" },
+      isError: true,
+      summary: "read_file failed: missing required path",
+    };
+  }
   const abs = resolveWithinRoot(ctx.projectRoot, relPath);
   const buf = await fs.readFile(abs); // throws (ENOENT etc.) — executeTool wraps as isError
   const truncated = buf.length > MAX_BYTES;

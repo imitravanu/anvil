@@ -100,4 +100,14 @@ describe("InputBar", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
     app.unmount();
   });
+
+  it("sanitizes multiline paste into spaces and does not submit prematurely", async () => {
+    const { app, onSubmit } = idleBar();
+    await tick();
+    app.stdin.write("line one\nline two\n");
+    await tick();
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(frameText(app.lastFrame)).toContain("line one line two");
+    app.unmount();
+  });
 });

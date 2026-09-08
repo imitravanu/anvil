@@ -161,4 +161,36 @@ export class HistoryStore {
     if (turnNotes.length > 0) parts.push({ type: "text", text: turnNotes.join("\n") });
     this.messages.push({ role: "user", content: parts });
   }
+
+  /**
+   * Check if the history ends with an assistant message containing tool calls
+   * that were never answered with tool_result parts in a subsequent user message.
+   * If so, closes the tool calls with synthetic error tool_results and appends
+   * an assistant error notice so role alternation is preserved and providers
+   * do not reject the history on subsequent turns.
+   */
+  repairUnclosedToolCalls(errorMessage: string): boolean {
+    if (this.messages.length === 0) return false;
+    const last = this.messages[this.messages.length - 1];
+    if (last.role !== "assistant") return false;
+    const toolCalls = last.content.filter(
+      (c): c is { type: "tool_call"; call: AccumulatedToolCall } => c.type === "tool_call"
+    );
+    if (toolCalls.length === 0) return false;
+
+    const parts: ConversationMessage["content"] = toolCalls.map((tc) => ({
+      type: "tool_result",
+      result: {
+        toolCallId: tc.call.id,
+        content: JSON.stringify({ error: `Tool execution aborted: ${errorMessage}` }),
+        isError: true,
+      },
+    }));
+    this.messages.push({ role: "user", content: parts });
+    this.messages.push({
+      role: "assistant",
+      content: [{ type: "text", text: `Turn failed: ${errorMessage}` }],
+    });
+    return true;
+  }
 }

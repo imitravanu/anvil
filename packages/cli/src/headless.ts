@@ -38,28 +38,46 @@ export class HeadlessPermissionBroker implements PermissionBroker {
   }
 }
 
+export const MAX_STDIN_BYTES = 1024 * 1024; // 1 MB cap
+export const MAX_STDIN_WAIT_MS = 30_000; // 30s hard timeout
+
 /**
  * Reads all buffered data from stdin until EOF (for piped usage).
  * A parent process that spawns Anvil with an open-but-silent inherited pipe
  * would otherwise block boot forever — after `idleMs` with no data (default
  * 5s) we assume there is nothing more and proceed, noting it on stderr.
+ * Capped by maxBytes and hard timeout against infinite/slow streaming pipes.
  */
-export async function readStdin(idleMs = 5_000): Promise<string> {
+export async function readStdin(
+  idleMs = 5_000,
+  maxBytes = MAX_STDIN_BYTES,
+  maxWaitMs = MAX_STDIN_WAIT_MS
+): Promise<string> {
   if (process.stdin.isTTY) return "";
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];
+    let totalBytes = 0;
     let settled = false;
+    let hardTimer: NodeJS.Timeout | undefined;
     const finish = (text: string) => {
       if (settled) return;
       settled = true;
       clearTimeout(idle);
+      if (hardTimer) clearTimeout(hardTimer);
       process.stdin.removeListener("data", onData);
       process.stdin.removeListener("end", onEnd);
       process.stdin.removeListener("error", onError);
       resolve(text);
     };
     const onData = (chunk: Buffer) => {
-      chunks.push(Buffer.from(chunk));
+      const buf = Buffer.from(chunk);
+      totalBytes += buf.length;
+      chunks.push(buf);
+      if (totalBytes >= maxBytes) {
+        process.stderr.write(`[anvil] stdin exceeded ${Math.round(maxBytes / 1024)} KB — truncating\n`);
+        finish(Buffer.concat(chunks).subarray(0, maxBytes).toString("utf8"));
+        return;
+      }
       // Data arriving resets the idle window — a slow but live pipe is fine.
       clearTimeout(idle);
       idle = setTimeout(onIdle, idleMs);
@@ -74,6 +92,10 @@ export async function readStdin(idleMs = 5_000): Promise<string> {
       finish(Buffer.concat(chunks).toString("utf8"));
     };
     let idle = setTimeout(onIdle, idleMs);
+    hardTimer = setTimeout(() => {
+      process.stderr.write(`[anvil] stdin reached hard timeout (${Math.round(maxWaitMs / 1000)}s) — continuing\n`);
+      finish(Buffer.concat(chunks).toString("utf8"));
+    }, maxWaitMs);
     process.stdin.on("data", onData);
     process.stdin.on("end", onEnd);
     process.stdin.on("error", onError);
@@ -101,13 +123,15 @@ export async function runHeadless(opts: HeadlessOptions): Promise<number> {
     ...(opts.mcpTools !== undefined ? { tools: opts.mcpTools } : {}),
   });
 
+  let abortCount = 0;
   const abortHandler = () => {
+    abortCount++;
+    if (abortCount > 1) {
+      process.exit(130);
+    }
     session.cancel();
   };
-  // Prepend: index.tsx registers a last-resort exit handler at import time.
-  // Listener order is registration order, so without prepending, that handler
-  // process.exit()s before this one can cancel the session — piped stdout is
-  // truncated and the graceful-cancel path never runs.
+  // Prepend: allows session.cancel() to run cleanly on the first SIGINT.
   process.prependListener("SIGINT", abortHandler);
 
   try {

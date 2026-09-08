@@ -195,6 +195,12 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
           }
           applyEvent(event, updateAssistant, setUsage, setMessages, setPlan, setTestStatus);
         }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        updateAssistant((m) => ({
+          ...m,
+          errorText: friendlyError(msg),
+        }));
       } finally {
         // Mark streaming done either way — completion, cancellation, or error.
         updateAssistant((m) => ({ ...m, streaming: false }));
@@ -323,6 +329,13 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
           applyEvent(event, updateAssistant, setUsage, setMessages, setPlan, setTestStatus);
           onEvent?.(event);
         }
+      } catch (err: unknown) {
+        outcome.errored = true;
+        const msg = err instanceof Error ? err.message : String(err);
+        updateAssistant((m) => ({
+          ...m,
+          errorText: friendlyError(msg),
+        }));
       } finally {
         updateAssistant((m) => ({ ...m, streaming: false }));
         onTurnSettledRef.current?.();

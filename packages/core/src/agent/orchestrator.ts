@@ -79,7 +79,13 @@ export class ToolOrchestrator {
             this.deps.recordLedger({ eventType: "tool_auto_allowed", tool: call.name, inputHash: t.p.key, outcome: "ok", elapsedMs: 0 });
             yield { type: "tool_started", id: call.id, name: call.name, input: call.input };
             this.deps.recordLedger({ eventType: "tool_started", tool: call.name, inputHash: t.p.key, outcome: "ok", elapsedMs: 0 });
-            const autoResult = await executeTool(call.name, call.input, { projectRoot, signal });
+            let autoResult: ToolExecutionResult;
+            try {
+              autoResult = await executeTool(call.name, call.input, { projectRoot, signal });
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : String(err);
+              autoResult = { output: { error: `Tool execution failed: ${msg}` }, isError: true, summary: `Error: ${msg}` };
+            }
             yield { type: "tool_finished", id: call.id, name: call.name, result: autoResult };
             this.deps.recordLedger({ eventType: "tool_finished", tool: call.name, inputHash: t.p.key, outcome: autoResult.isError ? "error" : "ok", elapsedMs: Date.now() - t.startedAt });
             runResults.set(call.id, autoResult);
@@ -135,10 +141,16 @@ export class ToolOrchestrator {
       }
       yield { type: "tool_started", id: call.id, name: call.name, input: call.input };
       this.deps.recordLedger({ eventType: "tool_started", tool: call.name, inputHash: t.p.key, outcome: "ok", elapsedMs: 0 });
-      const result = await executeTool(call.name, call.input, {
-        projectRoot,
-        signal,
-      });
+      let result: ToolExecutionResult;
+      try {
+        result = await executeTool(call.name, call.input, {
+          projectRoot,
+          signal,
+        });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        result = { output: { error: `Tool execution failed: ${msg}` }, isError: true, summary: `Error: ${msg}` };
+      }
       yield { type: "tool_finished", id: call.id, name: call.name, result };
       this.deps.recordLedger({ eventType: "tool_finished", tool: call.name, inputHash: t.p.key, outcome: result.isError ? "error" : "ok", elapsedMs: Date.now() - t.startedAt });
       runResults.set(call.id, result);
@@ -156,12 +168,17 @@ export class ToolOrchestrator {
       this.deps.recordLedger({ eventType: "tool_started", tool: t.p.call.name, inputHash: t.p.key, outcome: "ok", elapsedMs: 0 });
     }
     const outputs = await Promise.all(
-      toRun.map((t) =>
-        executeTool(t.p.call.name, t.p.call.input, {
-          projectRoot,
-          signal,
-        })
-      )
+      toRun.map(async (t) => {
+        try {
+          return await executeTool(t.p.call.name, t.p.call.input, {
+            projectRoot,
+            signal,
+          });
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { output: { error: `Tool execution failed: ${msg}` }, isError: true, summary: `Error: ${msg}` };
+        }
+      })
     );
     for (let i = 0; i < toRun.length; i++) {
       const t = toRun[i];

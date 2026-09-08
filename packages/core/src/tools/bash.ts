@@ -131,7 +131,7 @@ const READ_ONLY_BINARIES = new Set([
 // they would read arbitrary host files with no prompt (`cat ~/.ssh/id_rsa`)
 // — the exact hole the read_file tool's path containment exists to close —
 // so their path arguments must resolve inside the project root.
-const FILE_READER_BINARIES = new Set(["cat", "head", "tail", "wc", "file", "stat", "du", "tree"]);
+const FILE_READER_BINARIES = new Set(["ls", "cat", "head", "tail", "wc", "file", "stat", "du", "tree"]);
 
 /** True iff every positional argument resolves inside projectRoot. */
 function pathsInsideRoot(args: readonly string[], projectRoot: string): boolean {
@@ -205,8 +205,17 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
     const child = spawn("bash", ["-c", command], {
       cwd: ctx.projectRoot,
       detached: true,
-      // Commands do not need Anvil's credentials or arbitrary parent environment.
-      env: { PATH: process.env.PATH ?? "/usr/bin:/bin", LANG: process.env.LANG ?? "C.UTF-8" },
+      // Commands do not need Anvil's credentials or arbitrary parent environment,
+      // but standard system/user variables (HOME, USER, TMPDIR) are essential for git, npm, etc.
+      env: {
+        PATH: process.env.PATH ?? "/usr/bin:/bin",
+        LANG: process.env.LANG ?? "C.UTF-8",
+        ...(process.env.HOME ? { HOME: process.env.HOME } : {}),
+        ...(process.env.USER ? { USER: process.env.USER } : {}),
+        ...(process.env.LOGNAME ? { LOGNAME: process.env.LOGNAME } : {}),
+        ...(process.env.TMPDIR ? { TMPDIR: process.env.TMPDIR } : {}),
+        ...(process.env.SHELL ? { SHELL: process.env.SHELL } : {}),
+      },
     });
     const stdout = captureStream(child.stdout);
     const stderr = captureStream(child.stderr);

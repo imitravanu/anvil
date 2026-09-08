@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded, mergeSummaryIntoHistory } from "../compaction.js";
+import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded, findCleanCompactionCut, mergeSummaryIntoHistory } from "../compaction.js";
 import { FakeProvider } from "./fakeProvider.js";
 import type { ScriptEntry } from "./fakeProvider.js";
 import { AgentSession } from "../index.js";
@@ -88,6 +88,25 @@ describe("compactIfNeeded", () => {
     const { history: out, result } = await compactIfNeeded(makeHistory(10), 1000, 990, provider, model);
     expect(result.compacted).toBe(false);
     expect(out).toHaveLength(10);
+  });
+
+  it("findCleanCompactionCut shifts cut point to keep tool_call and tool_result together", () => {
+    const history: ConversationMessage[] = [
+      textMsg("user", "start"),
+      {
+        role: "assistant",
+        content: [{ type: "tool_call", call: { id: "call_1", name: "read_file", input: {} } }],
+      },
+      {
+        role: "user",
+        content: [{ type: "tool_result", result: { toolCallId: "call_1", content: "file data" } }],
+      },
+      textMsg("assistant", "done"),
+    ];
+    // If targetCut is 2 (between call_1 at 1 and result_1 at 2), it would split them.
+    // It should retreat cut to 1 so that both call_1 and result_1 remain together in recent.
+    const cut = findCleanCompactionCut(history, 2);
+    expect(cut).toBe(1);
   });
 });
 
