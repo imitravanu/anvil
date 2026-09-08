@@ -119,12 +119,44 @@ Result on 2026-09-09: ALL GREEN — typecheck 0 errors across all 3 packages; co
 suite 293/293 across 43 files (incl. 6 new timeout tests + 1 truncation test);
 full monorepo build succeeds (cli bundle 6.3 mb); working tree shows only §1 files.
 
+### 5.1 LIVE PROVIDER VERIFICATION — OpenRouter (N1, partially closed)
+
+With an OpenRouter key linked (`~/.anvil/credentials.json:openrouterApiKey`, never
+logged), the adapter was verified against the REAL `openrouter.ai/api/v1` gateway
+on 2026-09-09 — not mocks:
+
+- **Free-model sync (boot/picker path)**: real `/models` fetch → 21 free models
+  live, 18 tool-capable → `syncFreeModels` merge detected genuine churn
+  (6 newlyFree / 3 noLongerFree) → registry 45→51 → cache persisted to
+  `~/.anvil/models-cache.json` (was 2 days stale, past the 10-min TTL).
+- **Plain streaming**: real SSE through `createOpenRouterProvider` (shared
+  `translateChatCompletionsChunkStream`): text deltas + usage + `end_turn`.
+  `cohere/north-mini-code:free` replied exactly `ANVIL-LIVE-OK`.
+- **Tool-call round-trip**: OpenAI `tool_calls` deltas → Anvil events:
+  `tool_call_start(get_weather)` → cumulative deltas `{"city": "Paris"}` →
+  `tool_call_end` with parsed input → `stopReason: "tool_use"`.
+- **Error channel**: 429 rate-limits from saturated free models surface as a
+  clean `{type:"error"}` event (terminal, no turn_end) — the hardened path works.
+
+Notes: free-tier 429s are per-model; the free-model list churns daily, so the
+repeatable script takes `OPENROUTER_MODEL` override. `openrouter/free` (auto
+router) injects its own prompt — its reply text is not the adapter's concern
+(input tokens showed the router's overhead; streaming itself was correct).
+
+**Now repeatable**: `npx tsx packages/core/scripts/verify-openrouter.ts`
+(key from `OPENROUTER_API_KEY` env, else the credentials file; 3 phases above;
+exit 1 on any failure).
+
+
 ## 6. SUGGESTED NEXT SLICES (owner picks order)
 
-- N1: **Live provider-adapter smoke test** — the least-verifiable area. Re-verify
-  adapter wire-format assumptions against current SDKs (`@anthropic-ai/sdk
-  0.122.0`, `@google/genai 2.19.0`, `openai 7.8.0`) with the ship's
-  `core/scripts/verify-*.ts`.
+- N1: **Live provider-adapter smoke test** — OpenRouter is DONE (record §5.1:
+  real-gateway sync + streaming + tool-call round-trip all pass, repeatable via
+  `core/scripts/verify-openrouter.ts`). Still open: Anthropic + OpenAI (no keys on
+  file) and Gemini (key present in the credentials file, not yet re-verified live
+  against the current SDK) — re-verify adapter wire-format assumptions with the
+  ship's `core/scripts/verify-*.ts` (`@anthropic-ai/sdk 0.122.0`,
+  `@google/genai 2.19.0`, `openai 7.8.0`) as keys/network allow.
 - N2: **Structured observability** — a lightweight log sink for provider retries,
   circuit opens, and compaction events (event-emitted today, not persisted).
 - N3: **Session retention/GC** — prune stale `~/.anvil/sessions` + checkpoints per

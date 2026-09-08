@@ -17,6 +17,9 @@ All notable changes to Anvil are documented here. The format follows
 - Second CI workflow (`.github/workflows/ci.yml`) running the full monorepo build, strict
   typecheck, and the complete unit test suite on every push/PR — the 290+ unit tests were
   previously unguarded in CI (only the visual matrix was gated).
+- `core/scripts/verify-openrouter.ts`: repeatable live smoke test for the OpenRouter
+  adapter (free-model sync, streaming completion, tool-call round-trip) against the real
+  gateway; key read from `OPENROUTER_API_KEY` or `~/.anvil/credentials.json`, never logged.
 - Expanded model registry with latest frontier models (Claude 3.7 Sonnet, Claude 3.5 Sonnet/Haiku,
   GPT-4o, GPT-4o mini, o3-mini, Gemini 2.0 Flash, Gemini 1.5 Pro/Flash).
 
