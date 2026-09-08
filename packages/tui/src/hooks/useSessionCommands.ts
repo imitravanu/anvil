@@ -116,10 +116,10 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     try {
       saveSession(session.toStoredSession(activeProviderId, currentModel));
     } catch (err) {
-      // Disk failures must not take the chat down; log so the user knows
-      // their session wasn't saved and can retry manually with /save.
+      // Disk failures must not take the chat down; inform the user in-chat
+      // so their session layout isn't corrupted and they can retry with /save.
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`[anvil] session auto-save failed: ${msg}\n`);
+      printSystemMessage(`Session auto-save failed: ${msg}`);
     }
   };
 

@@ -71,11 +71,8 @@ describe("retainOutput", () => {
   });
 
   it("handles null and undefined", () => {
-    // null serializes to "null" then parses back to null
     expect(retainOutput(null)).toBeNull();
-    // undefined serializes to "undefined" (String fallback) then parses... but JSON.parse fails
-    const undefinedResult = retainOutput(undefined);
-    expect(undefinedResult).toBeDefined();
+    expect(retainOutput(undefined)).toBeUndefined();
   });
 
   it("handles primitive values", () => {
@@ -99,7 +96,7 @@ describe("useAgentController - message handling", () => {
     });
 
     const api: { current: ReturnType<typeof useAgentController> | null } = { current: null };
-    render(<Harness session={session} api={api} />);
+    const app = render(<Harness session={session} api={api} />);
     await new Promise((r) => setTimeout(r, 30));
 
     await api.current!.send("hello");
@@ -109,6 +106,7 @@ describe("useAgentController - message handling", () => {
     const userMsg = messages.find((m: DisplayMessage) => m.role === "user");
     expect(userMsg).toBeDefined();
     expect(userMsg!.text).toBe("hello");
+    app.unmount();
   });
 
   it("accumulates text_delta events into assistant message", async () => {
@@ -128,7 +126,7 @@ describe("useAgentController - message handling", () => {
     });
 
     const api: { current: ReturnType<typeof useAgentController> | null } = { current: null };
-    render(<Harness session={session} api={api} />);
+    const app = render(<Harness session={session} api={api} />);
     await new Promise((r) => setTimeout(r, 30));
 
     await api.current!.send("test");
@@ -137,6 +135,7 @@ describe("useAgentController - message handling", () => {
     const assistantMsg = api.current!.messages.find((m: DisplayMessage) => m.role === "assistant");
     expect(assistantMsg).toBeDefined();
     expect(assistantMsg!.text).toBe("Hello world");
+    app.unmount();
   });
 
   it("clears isBusy after turn completes", async () => {
@@ -152,7 +151,7 @@ describe("useAgentController - message handling", () => {
     });
 
     const api: { current: ReturnType<typeof useAgentController> | null } = { current: null };
-    render(<Harness session={session} api={api} />);
+    const app = render(<Harness session={session} api={api} />);
     await new Promise((r) => setTimeout(r, 30));
 
     await api.current!.send("test");
@@ -161,6 +160,7 @@ describe("useAgentController - message handling", () => {
     // After turn completes, isBusy should be false
     expect(api.current!.isBusy).toBe(false);
     expect(api.current!.messages.length).toBeGreaterThan(0);
+    app.unmount();
   });
 });
 
@@ -182,7 +182,7 @@ describe("useAgentController - usage tracking", () => {
     });
 
     const api: { current: ReturnType<typeof useAgentController> | null } = { current: null };
-    render(<Harness session={session} api={api} />);
+    const app = render(<Harness session={session} api={api} />);
     await new Promise((r) => setTimeout(r, 30));
 
     await api.current!.send("test");
@@ -190,6 +190,7 @@ describe("useAgentController - usage tracking", () => {
 
     expect(api.current!.usage.inputTokens).toBe(100);
     expect(api.current!.usage.outputTokens).toBe(50);
+    app.unmount();
   });
 });
 
@@ -215,7 +216,7 @@ describe("useAgentController - tool calls and events", () => {
     });
 
     const api: { current: ReturnType<typeof useAgentController> | null } = { current: null };
-    render(<Harness session={session} api={api} />);
+    const app = render(<Harness session={session} api={api} />);
     await new Promise((r) => setTimeout(r, 30));
 
     await api.current!.send("read test.txt");
@@ -225,6 +226,7 @@ describe("useAgentController - tool calls and events", () => {
     const assistantMsg = api.current!.messages.find((m: DisplayMessage) => m.role === "assistant");
     expect(assistantMsg).toBeDefined();
     expect(api.current!.isBusy).toBe(false);
+    app.unmount();
   });
 
   it("handles gated turn completion", async () => {
@@ -247,7 +249,7 @@ describe("useAgentController - tool calls and events", () => {
     });
 
     const api: { current: ReturnType<typeof useAgentController> | null } = { current: null };
-    render(<Harness session={session} api={api} />);
+    const app = render(<Harness session={session} api={api} />);
     await new Promise((r) => setTimeout(r, 30));
 
     const sendPromise = api.current!.send("test");
@@ -262,5 +264,6 @@ describe("useAgentController - tool calls and events", () => {
     const assistantMsg = api.current!.messages.find((m: DisplayMessage) => m.role === "assistant");
     expect(assistantMsg).toBeDefined();
     expect(assistantMsg!.streaming).toBe(false);
+    app.unmount();
   });
 });

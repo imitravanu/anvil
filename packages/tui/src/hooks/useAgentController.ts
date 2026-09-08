@@ -31,6 +31,7 @@ export const OUTPUT_RETAIN_MAX = 6000;
 const RETAIN_STRING_MAX = 2000;
 
 export function retainOutput(output: unknown): unknown {
+  if (output === undefined) return undefined;
   let text: string;
   try {
     // Cap long strings DURING serialization: stringifying a multi-megabyte
