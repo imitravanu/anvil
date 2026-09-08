@@ -5,6 +5,7 @@ export const PROVIDER_LABELS: Record<string, string> = {
   openai: "OpenAI",
   gemini: "Google Gemini",
   openrouter: "OpenRouter",
+  orcarouter: "Orcarouter",
   groq: "Groq",
   github: "GitHub Models",
   cerebras: "Cerebras",

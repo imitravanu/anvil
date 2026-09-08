@@ -21,6 +21,7 @@ import {
   registerModels,
   syncFreeModels,
   createOpenRouterFreeSource,
+  createOrcarouterFreeSource,
   toToolDefinitions,
   MCP_TOOL_PREFIX,
   ProviderSelectionError,
@@ -314,10 +315,13 @@ async function bootChat(flags: Record<string, string>): Promise<void> {
 
   // one owner for free-model syncing — the coordinator. Single-flight
   // + TTL mean boot, picker, and /sync can never double-fetch or silently diverge.
-  if (providers.openrouter?.isConfigured()) {
+  if (providers.openrouter?.isConfigured() || providers.orcarouter?.isConfigured()) {
     void syncFreeModels({
-      sources: [createOpenRouterFreeSource()],
-      apiKeyBySource: { openrouter: ctx.creds.openrouterApiKey },
+      sources: [createOpenRouterFreeSource(), createOrcarouterFreeSource()],
+      apiKeyBySource: {
+        openrouter: ctx.creds.openrouterApiKey,
+        orcarouter: ctx.creds.orcarouterApiKey,
+      },
     });
   }
 

@@ -72,6 +72,7 @@ const PROVIDER_ORDER: ProviderId[] = [
   "openai",
   "gemini",
   "openrouter",
+  "orcarouter",
   "groq",
   "github",
   "cerebras",

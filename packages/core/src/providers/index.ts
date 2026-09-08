@@ -3,6 +3,7 @@ import { createAnthropicProvider } from "./anthropic.js";
 import { createOpenAIProvider } from "./openai.js";
 import { createGeminiProvider } from "./gemini.js";
 import { createOpenRouterProvider } from "./openrouter.js";
+import { createOrcarouterProvider } from "./orcarouter.js";
 import { createGroqProvider } from "./groq.js";
 import { createCerebrasProvider } from "./cerebras.js";
 import { createGitHubModelsProvider } from "./github.js";
@@ -12,9 +13,11 @@ import { createOllamaProvider } from "./ollama.js";
 export * from "./types.js";
 export * from "./registry.js";
 export { OPENROUTER_BASE_URL, createOpenRouterProvider, fetchOpenRouterFreeModels, syncOpenRouterModels } from "./openrouter.js";
+export { ORCAROUTER_BASE_URL, createOrcarouterProvider, fetchOrcarouterFreeModels, isFreeModelId } from "./orcarouter.js";
 export {
   DEFAULT_SYNC_TTL_MS,
   createOpenRouterFreeSource,
+  createOrcarouterFreeSource,
   syncFreeModels,
   noteRateLimited,
   isRateLimited,
@@ -44,6 +47,7 @@ export interface ProviderCredentials {
   openaiApiKey?: string;
   geminiApiKey?: string;
   openrouterApiKey?: string;
+  orcarouterApiKey?: string;
   groqApiKey?: string;
   cerebrasApiKey?: string;
   githubApiKey?: string;
@@ -57,6 +61,7 @@ export function createProviders(creds: ProviderCredentials): Record<ProviderId, 
     openai: createOpenAIProvider(creds.openaiApiKey),
     gemini: createGeminiProvider(creds.geminiApiKey),
     openrouter: createOpenRouterProvider(creds.openrouterApiKey),
+    orcarouter: createOrcarouterProvider(creds.orcarouterApiKey),
     groq: createGroqProvider(creds.groqApiKey),
     cerebras: createCerebrasProvider(creds.cerebrasApiKey),
     github: createGitHubModelsProvider(creds.githubApiKey),

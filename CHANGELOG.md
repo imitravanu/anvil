@@ -20,6 +20,15 @@ All notable changes to Anvil are documented here. The format follows
 - `core/scripts/verify-openrouter.ts`: repeatable live smoke test for the OpenRouter
   adapter (free-model sync, streaming completion, tool-call round-trip) against the real
   gateway; key read from `OPENROUTER_API_KEY` or `~/.anvil/credentials.json`, never logged.
+- **Orcarouter provider (free-only)**: new OpenAI-compatible adapter for
+  `api.orcarouter.ai/v1` alongside OpenRouter. Paid models are auto-hidden by policy:
+  the live source's free-id gate (`-free` suffix / `orcarouter/free`) drops paid ids
+  before they can reach the registry or picker, and the picker now renders only
+  free models (`visibleModels()`), which also declutters OpenRouter's paid entries.
+  Both routers auto-sync through the single free-model coordinator (boot, picker,
+  and `/sync`), so free-list churn — models going free, paid, or away — updates the
+  registry automatically. Orcarouter's "No available capacity" (503) errors are
+  treated as retryable rate-limit-class failures.
 - Expanded model registry with latest frontier models (Claude 3.7 Sonnet, Claude 3.5 Sonnet/Haiku,
   GPT-4o, GPT-4o mini, o3-mini, Gemini 2.0 Flash, Gemini 1.5 Pro/Flash).
 

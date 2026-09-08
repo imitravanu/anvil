@@ -3,11 +3,12 @@ import { Box, Text, useInput } from "ink";
 import type { ModelInfo, ModelProvider, ProviderId } from "@anvil/core";
 import {
   DEFAULT_SYNC_TTL_MS,
-  MODEL_REGISTRY,
   createOpenRouterFreeSource,
+  createOrcarouterFreeSource,
   isModelsCacheFresh,
   isRateLimited,
   syncFreeModels,
+  visibleModels,
 } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 import { groupByProvider } from "../util/grouping.js";
@@ -43,7 +44,7 @@ export function ModelPicker({
   onClose: () => void;
 }) {
   const theme = useTheme();
-  const [models, setModels] = useState<ModelInfo[]>(() => [...MODEL_REGISTRY]);
+  const [models, setModels] = useState<ModelInfo[]>(() => visibleModels());
   // Type-to-filter: a registry of 40+ models is un-navigable with arrows
   // alone. Printable keys extend the filter, Backspace retracts, Esc clears
   // it first and closes only when empty.
@@ -55,12 +56,17 @@ export function ModelPicker({
 
   // the coordinator is the single owner — single-flight + TTL mean
   // this can never double-fetch; a failure is reported, never swallowed.
+  // Both free routers sync here (OpenRouter + Orcarouter): paid models are
+  // dropped at each source, and /models churn (models going free/paid/away)
+  // lands in the registry automatically.
   useEffect(() => {
     let active = true;
-    if (providers.openrouter?.isConfigured()) {
-      syncFreeModels({ sources: [createOpenRouterFreeSource()] }).then((report) => {
+    if (providers.openrouter?.isConfigured() || providers.orcarouter?.isConfigured()) {
+      syncFreeModels({
+        sources: [createOpenRouterFreeSource(), createOrcarouterFreeSource()],
+      }).then((report) => {
         if (!active) return;
-        setModels([...MODEL_REGISTRY]);
+        setModels(visibleModels());
         if (report.refreshedAt) setCacheNote(null);
         else if (report.errors.length > 0) {
           setCacheNote("Free-model sync failing — prices may be out of date.");

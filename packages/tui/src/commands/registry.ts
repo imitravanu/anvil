@@ -6,6 +6,7 @@ import {
   TOOL_DEFINITIONS,
   collectMcpToolDefs,
   createOpenRouterFreeSource,
+  createOrcarouterFreeSource,
   listSessions,
   loadSession,
   renameSession,
@@ -67,7 +68,7 @@ export const COMMANDS: Command[] = [
       // force through the single coordinator; errors are reported,
       // never swallowed.
       const report = await syncFreeModels({
-        sources: [createOpenRouterFreeSource()],
+        sources: [createOpenRouterFreeSource(), createOrcarouterFreeSource()],
         ttlMs: 0,
       });
       let msg = report.refreshedAt

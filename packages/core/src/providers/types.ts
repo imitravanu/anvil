@@ -64,6 +64,7 @@ export type ProviderId =
   | "openai"
   | "gemini"
   | "openrouter"
+  | "orcarouter"
   | "groq"
   | "cerebras"
   | "github"

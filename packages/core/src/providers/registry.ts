@@ -315,6 +315,27 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsVision: false,
     isFree: false,
   },
+  // Orcarouter models: free-only policy — the source's isFreeModelId() gate
+  // drops paid ids at fetch time, so paid models never enter the registry
+  // (live-verified 2026-09: fusion/auto family is paid and stays hidden).
+  {
+    id: "orcarouter/free",
+    providerId: "orcarouter",
+    displayName: "Free Models Router (Free)",
+    contextWindow: 128_000,
+    supportsTools: true,
+    supportsVision: false,
+    isFree: true,
+  },
+  {
+    id: "qwen/qwen3.8-27b-free",
+    providerId: "orcarouter",
+    displayName: "Qwen: Qwen3.8 27B (Free)",
+    contextWindow: 128_000,
+    supportsTools: true,
+    supportsVision: false,
+    isFree: true,
+  },
   // Groq models (100% Free Tier, fast LPU inference)
   {
     id: "llama-3.3-70b-versatile",
@@ -487,6 +508,17 @@ export function unregisterModels(ids: string[]): void {
     }
   }
   _reindex();
+}
+
+/**
+ * Registry view for pickers: free models only. Paid entries (isFree === false)
+ * are auto-hidden everywhere a user chooses a model — zero clutter, no
+ * [PAID] rows, no navigation cost. Lookups elsewhere (StatusBar, format,
+ * Header) keep using the full MODEL_REGISTRY so a paid default chosen via
+ * --model still renders its metadata correctly.
+ */
+export function visibleModels(): ModelInfo[] {
+  return MODEL_REGISTRY.filter((m) => m.isFree !== false);
 }
 
 _reindex();

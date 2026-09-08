@@ -93,6 +93,90 @@ export function createOpenRouterFreeSource(): FreeModelSource {
   return { id: "openrouter", fetchFreeModels: (key) => fetchOpenRouterFreeModels(key) };
 }
 
+// --- Orcarouter free-model source (OpenAI-compatible sibling of OpenRouter). ---
+
+export const ORCAROUTER_BASE_URL = "https://api.orcarouter.ai/v1";
+
+/**
+ * Orcarouter's /models endpoint carries NO pricing metadata — the free/paid
+ * split is signaled only by the model id: a "-free" suffix, plus the
+ * "orcarouter/free" auto-router alias (live-verified 2026-09: the "fusion"
+ * family and "auto" are paid and must never pass this gate).
+ */
+export function isFreeModelId(id: string): boolean {
+  return id.endsWith("-free") || id === "orcarouter/free";
+}
+
+/** "qwen/qwen3.8-27b-free" → "Qwen: Qwen3.8 27B"; "orcarouter/free" → "Free Models Router". */
+function prettifyOrcarouterName(rawId: string): string {
+  if (rawId === "orcarouter/free") return "Free Models Router";
+  const slash = rawId.indexOf("/");
+  const vendor = slash > 0 ? rawId.slice(0, slash) : "";
+  const rest = slash > 0 ? rawId.slice(slash + 1) : rawId;
+  const cleaned = rest
+    .replace(/-free$/i, "")
+    .replace(/[-_]/g, " ")
+    .trim();
+  const title = cleaned
+    .replace(/\b([a-z])/g, (c) => c.toUpperCase())
+    // "27b" → "27B" (parameter-size convention; there's no word boundary
+    // between a digit and the letter that follows it).
+    .replace(/([0-9])([a-z])/g, (_m, d: string, l: string) => d + l.toUpperCase());
+  return vendor ? `${vendor.charAt(0).toUpperCase() + vendor.slice(1)}: ${title}` : title;
+}
+
+export async function fetchOrcarouterFreeModels(apiKey?: string): Promise<ModelInfo[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4000);
+  try {
+    const headers: Record<string, string> = {};
+    if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+
+    const res = await fetch(`${ORCAROUTER_BASE_URL}/models`, { signal: controller.signal, headers });
+    if (!res.ok) {
+      throw new Error(`Orcarouter /models returned HTTP ${res.status}: ${res.statusText}`);
+    }
+
+    const json = (await res.json()) as { data?: Array<any> };
+    if (!Array.isArray(json?.data)) {
+      throw new Error("Orcarouter /models response missing data array");
+    }
+
+    // Free-only gate: paid ids are dropped HERE, at the source, so a paid
+    // model can never reach the registry, the picker, or merge demotion.
+    // The id check is the provider's only free signal — there is no pricing
+    // field to consult (unlike OpenRouter's pricing.prompt/completion).
+    const freeModels: ModelInfo[] = [];
+    for (const m of json.data) {
+      if (typeof m.id !== "string" || !isFreeModelId(m.id)) continue;
+      const rawName = typeof m.name === "string" && m.name.length > 0 ? m.name : m.id;
+      freeModels.push({
+        id: m.id,
+        providerId: "orcarouter",
+        displayName: `${prettifyOrcarouterName(rawName)} (Free)`,
+        contextWindow: typeof m.context_length === "number" ? m.context_length : 128_000,
+        supportsTools: true,
+        supportsVision: false,
+        isFree: true,
+      });
+    }
+
+    // Auto-router alias first (mirrors the openrouter/free convention).
+    freeModels.sort((a, b) => {
+      if (a.id === "orcarouter/free") return -1;
+      if (b.id === "orcarouter/free") return 1;
+      return a.displayName.localeCompare(b.displayName);
+    });
+    return freeModels;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export function createOrcarouterFreeSource(): FreeModelSource {
+  return { id: "orcarouter", fetchFreeModels: (key) => fetchOrcarouterFreeModels(key) };
+}
+
 // --- Recorded 429/rate-limit health with exponential backoff and circuit breaker. ---
 
 const rateLimited = new Map<string, Set<string>>(); // sourceId -> model ids
@@ -199,7 +283,9 @@ export function getConsecutiveRateLimitCount(sourceId: string, modelId: string):
 
 /** Loose detector for rate-limit/quota errors so the agent loop can RECORD them. */
 export function isRateLimitMessage(message: string): boolean {
-  return /\b429\b|rate\s*[- ]?limit|quota|too many requests/i.test(message);
+  // "No available capacity" (orcarouter free models, HTTP 503) is the same
+  // operational reality as a 429 — transient, self-healing, retry-with-backoff.
+  return /\b429\b|rate\s*[- ]?limit|quota|too many requests|no available capacity/i.test(message);
 }
 
 const MIN_RETRY_WAIT_S = 1;

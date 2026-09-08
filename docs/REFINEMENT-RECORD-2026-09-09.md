@@ -163,6 +163,37 @@ Same day, key already on file (`~/.anvil/credentials.json:geminiApiKey`), real
   429 surfaced as a clean terminal `{type:"error"}` event (hardened path OK).
   `gemini-3.6-flash` has free-tier quota and is the right default for key testing.
 
+### 5.3 ORCAROUTER PROVIDER (free-only) — implementation + live checks
+
+Orcarouter (`https://api.orcarouter.ai/v1`, OpenAI-compatible, key on file in
+opencode's auth store) added as a provider alongside OpenRouter:
+
+- **Free-only policy, enforced at the source**: orcarouter's `/models` carries NO
+  pricing metadata — free/paid is signaled only by the id. `isFreeModelId()`
+  (`-free` suffix, or the `orcarouter/free` alias) gates the live fetch, so paid
+  ids (live-verified: `fusion`, `fusion-flash`, `fusion-mini`, `auto`) can never
+  enter the registry. The picker additionally renders `visibleModels()` only —
+  paid entries (including OpenRouter's static `deepseek/deepseek-v3.2`) are
+  auto-hidden from model selection everywhere.
+- **Auto-sync**: CLI boot, the TUI picker, and `/sync` all pass both sources
+  (OpenRouter + Orcarouter) through the single-flight/TTL coordinator; churn
+  (new free models, models going paid, models vanishing — e.g.
+  `deepseek/deepseek-v4-flash-free` disappeared from orcarouter between the
+  owner's last use and this implementation) updates the registry automatically.
+- **Live verification** (real gateway, real key): Phase 1 gate holds — exactly
+  `orcarouter/free` + `qwen/qwen3.8-27b-free` returned, zero paid leak. The
+  key is scoped: the alias `orcarouter/free` returns a clean 403
+  "key does not have access" (surfaced as a terminal error event); the concrete
+  `qwen/qwen3.8-27b-free` is authorized but the free pool was at capacity
+  during testing ("503 No available capacity" — same operational class as a
+  429, now detected by `isRateLimitMessage` for auto-retry). Streaming/tool
+  round-trip on this provider remains to be observed when capacity allows;
+  the wire format is the shared, live-verified chat-completions path.
+- **Tests**: new `orcarouter.test.ts` (15 tests): id gate, paid-drop at source,
+  header handling, error surfacing, provider wiring, `visibleModels()` hiding,
+  default-model resolution, dual-source sync merge, single-source-failure
+  isolation, dedup. Suite: 305 passed.
+
 ## 6. SUGGESTED NEXT SLICES (owner picks order)
 
 - N1: **Live provider-adapter smoke test** — OpenRouter DONE (§5.1: real-gateway

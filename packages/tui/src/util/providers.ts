@@ -22,6 +22,7 @@ export const PROVIDER_META: ProviderMeta[] = [
   { id: "openai", shortLabel: PROVIDER_LABELS.openai, marketLabel: "OpenAI", field: "openaiApiKey" },
   { id: "gemini", shortLabel: PROVIDER_LABELS.gemini, marketLabel: "Google Gemini (Free Tier)", field: "geminiApiKey" },
   { id: "openrouter", shortLabel: PROVIDER_LABELS.openrouter, marketLabel: "OpenRouter (Free Models)", field: "openrouterApiKey" },
+  { id: "orcarouter", shortLabel: PROVIDER_LABELS.orcarouter, marketLabel: "Orcarouter (Free Models Only)", field: "orcarouterApiKey" },
   { id: "groq", shortLabel: PROVIDER_LABELS.groq, marketLabel: "Groq (100% Free & Blazing Fast)", field: "groqApiKey", placeholder: "gsk_..." },
   { id: "github", shortLabel: PROVIDER_LABELS.github, marketLabel: "GitHub Models (Free GPT-4o-mini with PAT)", field: "githubApiKey", placeholder: "ghp_..." },
   { id: "cerebras", shortLabel: PROVIDER_LABELS.cerebras, marketLabel: "Cerebras (1M Free Tokens/day)", field: "cerebrasApiKey", placeholder: "csk_..." },
