@@ -3,3 +3,5 @@ dist/
 .anvil/
 *.tsbuildinfo
 *.tgz
+packages/tui/__visual-current__/
+packages/tui/__visual-diffs__/

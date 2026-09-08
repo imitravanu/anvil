@@ -8,7 +8,11 @@
     "build": "npm run build -w @anvil/core && npm run build -w @anvil/tui && npm run build -w @anvil/cli",
     "dev": "npm run dev --workspace=packages/cli",
     "typecheck": "npm run typecheck -w @anvil/core && npm run typecheck -w @anvil/tui && npm run typecheck -w @anvil/cli",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "visual": "npm run visual -w @anvil/tui",
+    "visual:capture": "npm run visual:capture -w @anvil/tui",
+    "visual:diff": "npm run visual:diff -w @anvil/tui",
+    "visual:approve": "npm run visual:approve -w @anvil/tui"
   },
   "devDependencies": {
     "typescript": "^5.7.2",

@@ -1,0 +1,39 @@
+name: Visual Regression Gate (Phase 0)
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  visual-regression:
+    name: Pixelmatch TUI Matrix (3 sizes x 2 themes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build monorepo
+        run: npm run build
+
+      - name: Capture visual frames
+        run: npm run visual:capture
+
+      - name: Pixel-diff against committed baselines
+        run: npm run visual:diff
+
+      - name: Upload visual diff artifacts on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-diffs
+          path: packages/tui/__visual-diffs__/

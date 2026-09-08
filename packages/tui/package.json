@@ -22,7 +22,10 @@
     "typecheck": "tsc -p . --noEmit",
     "test": "vitest run",
     "visual": "vitest run src/__visual__/visual.test.tsx",
-    "visual:update": "VISUAL_UPDATE=1 vitest run src/__visual__/visual.test.tsx"
+    "visual:update": "VISUAL_UPDATE=1 vitest run src/__visual__/visual.test.tsx",
+    "visual:capture": "node scripts/visual-capture.mjs",
+    "visual:diff": "node scripts/visual-diff.mjs",
+    "visual:approve": "node scripts/visual-approve.mjs"
   },
   "dependencies": {
     "@anvil/core": "*",
@@ -32,8 +35,14 @@
     "react": "^18.3.1"
   },
   "devDependencies": {
+    "@types/pixelmatch": "^5.2.6",
+    "@types/pngjs": "^6.0.5",
     "@types/react": "^18.3.12",
+    "ansi-to-html": "^0.7.2",
     "ink-testing-library": "^4.0.0",
+    "pixelmatch": "^7.2.0",
+    "pngjs": "^7.0.0",
+    "puppeteer-core": "^25.10.0",
     "typescript": "^5.7.2",
     "vitest": "^4.1.11"
   }
