@@ -126,9 +126,11 @@ describe("Orcarouter provider + registry", () => {
     expect(visible.length).toBe(MODEL_REGISTRY.length - 1);
   });
 
-  it("resolves orcarouter/free as the provider default", () => {
+  // Live 2026-09: scoped keys 403 on the `orcarouter/free` alias but can call
+  // concrete `-free` ids — so the concrete model must be the registry default.
+  it("resolves the concrete free model (not the scoped-403 alias) as the provider default", () => {
     const sel = resolveProviderSelection({ creds: { orcarouterApiKey: "orca-key" } });
-    expect(sel).toEqual({ providerId: "orcarouter", model: "orcarouter/free" });
+    expect(sel).toEqual({ providerId: "orcarouter", model: "qwen/qwen3.8-27b-free" });
   });
 });
 

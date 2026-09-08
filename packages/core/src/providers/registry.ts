@@ -319,18 +319,18 @@ export const MODEL_REGISTRY: ModelInfo[] = [
   // drops paid ids at fetch time, so paid models never enter the registry
   // (live-verified 2026-09: fusion/auto family is paid and stays hidden).
   {
-    id: "orcarouter/free",
+    id: "qwen/qwen3.8-27b-free",
     providerId: "orcarouter",
-    displayName: "Free Models Router (Free)",
+    displayName: "Qwen: Qwen3.8 27B (Free)",
     contextWindow: 128_000,
     supportsTools: true,
     supportsVision: false,
     isFree: true,
   },
   {
-    id: "qwen/qwen3.8-27b-free",
+    id: "orcarouter/free",
     providerId: "orcarouter",
-    displayName: "Qwen: Qwen3.8 27B (Free)",
+    displayName: "Free Models Router (Free)",
     contextWindow: 128_000,
     supportsTools: true,
     supportsVision: false,
