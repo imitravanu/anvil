@@ -147,16 +147,32 @@ router) injects its own prompt — its reply text is not the adapter's concern
 (key from `OPENROUTER_API_KEY` env, else the credentials file; 3 phases above;
 exit 1 on any failure).
 
+### 5.2 LIVE PROVIDER VERIFICATION — Gemini (N1)
+
+Same day, key already on file (`~/.anvil/credentials.json:geminiApiKey`), real
+`generativelanguage.googleapis.com`:
+
+- **Plain streaming** (`gemini-3.6-flash` via `verify-gemini.ts`): text deltas +
+  usage (18 in / 7 out) + `STOP` → `end_turn`. Reply: "Hello to you, my friend."
+- **Tool-call round-trip** (`gemini-3.6-flash`): whole-call `functionCall` →
+  `tool_call_start(get_weather)` → `tool_call_end` with parsed
+  `{"city":"Paris"}` → `stopReason: "tool_use"`. No deltas — correct, Gemini's
+  shape carries the complete call in one part (adapter comment says as much).
+- **Quota finding**: `gemini-3.1-pro-preview` returns free-tier quota errors with
+  `limit: 0` — confirms the registry's "not eligible for free tier" note; the
+  429 surfaced as a clean terminal `{type:"error"}` event (hardened path OK).
+  `gemini-3.6-flash` has free-tier quota and is the right default for key testing.
 
 ## 6. SUGGESTED NEXT SLICES (owner picks order)
 
-- N1: **Live provider-adapter smoke test** — OpenRouter is DONE (record §5.1:
-  real-gateway sync + streaming + tool-call round-trip all pass, repeatable via
-  `core/scripts/verify-openrouter.ts`). Still open: Anthropic + OpenAI (no keys on
-  file) and Gemini (key present in the credentials file, not yet re-verified live
-  against the current SDK) — re-verify adapter wire-format assumptions with the
-  ship's `core/scripts/verify-*.ts` (`@anthropic-ai/sdk 0.122.0`,
-  `@google/genai 2.19.0`, `openai 7.8.0`) as keys/network allow.
+- N1: **Live provider-adapter smoke test** — OpenRouter DONE (§5.1: real-gateway
+  sync + streaming + tool-call round-trip, repeatable via
+  `core/scripts/verify-openrouter.ts`); Gemini DONE (§5.2: plain streaming +
+  tool-call round-trip on `gemini-3.6-flash`; note `gemini-3.1-pro-preview` has
+  zero free-tier quota). Still open: Anthropic + OpenAI (no keys on file) —
+  re-verify adapter wire-format assumptions with the ship's
+  `core/scripts/verify-*.ts` (`@anthropic-ai/sdk 0.122.0`, `openai 7.8.0`) as
+  keys/network allow.
 - N2: **Structured observability** — a lightweight log sink for provider retries,
   circuit opens, and compaction events (event-emitted today, not persisted).
 - N3: **Session retention/GC** — prune stale `~/.anvil/sessions` + checkpoints per
