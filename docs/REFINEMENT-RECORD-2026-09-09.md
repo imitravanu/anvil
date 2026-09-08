@@ -1,0 +1,131 @@
+# REFINEMENT RECORD — robustness + stability slice (2026-09-09)
+
+> Status: IMPLEMENTED + VERIFIED (gates in §5). Follows the repo's record
+> conventions (`HARDENING-RECORD.md`, `AUDIT-2026-09-06.md`): verified facts,
+> exact file lists, decisions with rejected alternatives, and the verification
+> commands that must be re-run before any "done" claim.
+
+## 0. SCOPE — what this slice does and does not do
+
+IN: four code-refinement items from a chief-engineer code review, each with tests:
+1. **Bounded `read_file`** — stop materializing whole files before the 512 KB cap
+   (a multi-GB log could spike/OOM the heap just to keep a 512 KB head).
+2. **`run_command` preview guard** — `describe()` no longer reaches into a
+   malformed input object (the one path feeding the permission prompt).
+3. **Tunable command/test timeouts** — `ANVIL_RUN_COMMAND_TIMEOUT_MS` and
+   `ANVIL_RUN_TEST_TIMEOUT_MS`, sanitized and clamped to [1 s, 10 m].
+4. **Compaction fallback** — reactive compaction now still fires when a provider
+   emits no `usage` event (previously `lastInputTokens` never moved, silently
+   disabling the loop-top compaction check on a growing history).
+
+PLUS (this record's own shipping/polish):
+5. **CI unit-test + typecheck gate** — a second GitHub Actions workflow
+   (`ci.yml`) so every push/PR runs build + strict typecheck + the full unit
+   suite; the existing `visual-regression.yml` already covers the visual gate.
+
+OUT (deliberately deferred): live provider-adapter smoke tests against current
+SDK versions (registry model IDs rot fastest; needs keys/network), a structured
+observability/logging layer, and a session-retention/GC command. See §6.
+
+## 1. CHANGES (exact file list — `git status` must show only these + docs)
+
+```
+MODIFIED:
+  packages/core/src/tools/readFile.ts               # open→fstat→bounded-read; true totalBytes
+  packages/core/src/tools/readFile.test.ts          # +1 truncation test
+  packages/core/src/tools/bash.ts                   # describe() null guard + runCommandTimeoutMs()
+  packages/core/src/tools/bash.test.ts              # +3 timeout tests (+afterEach import)
+  packages/core/src/tools/verifyTests.ts            # runTestTimeoutMs() + bounded duration
+  packages/core/src/tools/verifyTests.test.ts       # +3 timeout tests
+  packages/core/src/agent/session.ts                # sawUsage flag + estimateTokens fallback
+NEW:
+  .github/workflows/ci.yml                          # typecheck + unit-test gate
+  docs/REFINEMENT-RECORD-2026-09-09.md              # this file
+```
+
+## 2. DESIGN DETAILS
+
+### 2.1 Bounded read_file (`tools/readFile.ts`)
+- Open a `FileHandle`, `stat()` it, then read at most `MAX_BYTES` from the SAME
+  open file description — the pattern already used by `checkpoints.ts`. The
+  stat and read observe the same file, so a concurrent writer can't race the
+  size check against the read (the old `fs.readFile`-then-slice had that TOCTOU
+  and hoisted the whole file into memory).
+- `output.totalBytes` stays the TRUE file size from `stat` (preserves the public
+  contract: "how much was truncated"), while `content` and `summary` reflect only
+  the bounded head. Locked in by the new truncation test.
+- Rejected alternative: keep `fs.readFile` and slice — unbounded memory remains.
+
+### 2.2 Command preview guard (`tools/bash.ts`)
+- `describe` now reads `command` defensively with a typeof check and reports
+  `"(malformed input)"` on bad input instead of throwing (was caught upstream,
+  but it is the sole path feeding the permission prompt).
+
+### 2.3 Tunable timeouts (`bash.ts`, `verifyTests.ts`)
+- `runCommandTimeoutMs()` / `runTestTimeoutMs()` read an env override, fall back
+  to the built-in (120 s / 60 s) when unset or non-finite, and clamp to
+  [1_000, 600_000] ms so a hostile/typo'd value can neither busy-freeze a turn
+  (`0`) nor park it for an hour. The `setTimeout` and the "Timed out after …
+  ms" summary both use the resolved value. Defaults unchanged → zero behavior
+  change by default.
+
+### 2.4 Compaction fallback (`agent/session.ts`)
+- `lastInputTokens` only ever moved via the provider `usage` event. A provider
+  that never emits usage left it stale, so the reactive compaction check at the
+  loop top (`this.lastInputTokens >= contextWindow * COMPACTION_THRESHOLD`) could
+  never fire as history grew. A per-request `sawUsage` flag now triggers
+  `estimateTokens(this.history.snapshot())` right after the assistant turn is
+  recorded, biasing conservative (earlier compaction beats an unhandled provider
+  context overflow). Providers that do emit usage are unaffected (flag true).
+
+### 2.5 CI unit-test gate (`.github/workflows/ci.yml`)
+- New workflow on push/PR to `master`/`main`: `npm ci` → `npm run build` →
+  `npm run typecheck` → `npm test`. Build runs BEFORE downstream typecheck/test
+  because tui/cli resolve `@anvil/core` from its built `dist/` in the workspace.
+- Kept separate from `visual-regression.yml` (visual matrix + artifact upload)
+  so the unit gate is fast, clear, and independent.
+
+## 3. AUDIT CORRECTIONS (things I flagged in review, then verified as NOT bugs)
+
+1. **Gemini synthetic call-id counter is global/monotonic** — CORRECT AS-IS.
+   Cross-turn AND cross-session uniqueness is exactly the contract the unit test
+   pins ("synthesizes call ids unique across turns"). Replacing it would add risk
+   for no benefit. No change.
+2. **Free-model registry merge isn't atomic** — CORRECT AS-IS. `mergeFreeModels`
+   is fully synchronous (no `await`), so under single-threaded JS the shared
+   `MODEL_REGISTRY` is never observed mid-merge. No change.
+
+## 4. REMAINING RISKS (not introduced here, still open)
+
+- Model registry rows hardcode frontier IDs verified at write-time; they rot
+  fastest of any static data. Free-model sync covers OpenRouter only.
+- `read_file`/`write_file`/`edit_file` caps (512 KB) are tuned for model context,
+  not large-file workflows; large-file reads stay bounded by the tool caps.
+- No structured logging/metrics; diagnosing a production session post-hoc relies
+  on the session file + run ledger.
+
+## 5. VERIFICATION (run exactly, in order)
+
+```bash
+cd /home/mitravanu/Projects/anvil
+npm run typecheck              # 0 errors, all 3 packages
+npx vitest run src/tools/__tests__/readFile.test.ts src/tools/__tests__/bash.test.ts src/tools/__tests__/verifyTests.test.ts src/agent/__tests__/session.test.ts src/agent/__tests__/compaction.test.ts src/agent/__tests__/proactiveCompaction.test.ts
+npm test -w @anvil/core        # full core suite
+npm run build                  # esbuild bundle OK
+git status --porcelain         # only §1 files
+```
+
+Result on 2026-09-09: ALL GREEN — typecheck 0 errors across all 3 packages; core
+suite 293/293 across 43 files (incl. 6 new timeout tests + 1 truncation test);
+full monorepo build succeeds (cli bundle 6.3 mb); working tree shows only §1 files.
+
+## 6. SUGGESTED NEXT SLICES (owner picks order)
+
+- N1: **Live provider-adapter smoke test** — the least-verifiable area. Re-verify
+  adapter wire-format assumptions against current SDKs (`@anthropic-ai/sdk
+  0.122.0`, `@google/genai 2.19.0`, `openai 7.8.0`) with the ship's
+  `core/scripts/verify-*.ts`.
+- N2: **Structured observability** — a lightweight log sink for provider retries,
+  circuit opens, and compaction events (event-emitted today, not persisted).
+- N3: **Session retention/GC** — prune stale `~/.anvil/sessions` + checkpoints per
+  a retention policy.

@@ -14,11 +14,30 @@ All notable changes to Anvil are documented here. The format follows
 - New npm workflow scripts: `visual:capture`, `visual:diff`, and `visual:approve`.
 - Automated GitHub Actions CI workflow (`.github/workflows/visual-regression.yml`) to gate PRs
   against visual regressions and upload diff artifacts on failure.
+- Second CI workflow (`.github/workflows/ci.yml`) running the full monorepo build, strict
+  typecheck, and the complete unit test suite on every push/PR — the 290+ unit tests were
+  previously unguarded in CI (only the visual matrix was gated).
 - Expanded model registry with latest frontier models (Claude 3.7 Sonnet, Claude 3.5 Sonnet/Haiku,
   GPT-4o, GPT-4o mini, o3-mini, Gemini 2.0 Flash, Gemini 1.5 Pro/Flash).
 
 ### Fixed & Hardened
 
+- **Bounded `read_file`**: reads no longer materialize the whole file before applying the 512 KB
+  context cap. Reads are now `open` → `fstat` → bounded read on the same open file handle (the
+  pattern already used by checkpoints), removing both a TOCTOU between the size check and the
+  read and the unbounded memory spike on huge files. `totalBytes` still reports the true file
+  size, so truncation honesty is unchanged and now pinned by a dedicated test.
+- **`run_command` preview guard**: the permission-prompt `describe()` path no longer throws when
+  handed a malformed input object; it reports `"(malformed input)"` instead.
+- **Tunable tool timeouts**: `ANVIL_RUN_COMMAND_TIMEOUT_MS` and `ANVIL_RUN_TEST_TIMEOUT_MS`
+  override the built-in command/test timeouts (120 s / 60 s), sanitized and clamped to
+  [1 s, 10 min] so a hostile or typo'd value can neither busy-freeze a turn nor park it for an
+  hour. Defaults are unchanged, and the "Timed out after … ms" summary reports the resolved value.
+- **Compaction fallback without `usage` events**: `lastInputTokens` previously only moved when a
+  provider emitted a `usage` event, so a provider that never does silently disabled the reactive
+  context-compaction check while history grew. A per-request `sawUsage` flag now falls back to
+  `estimateTokens()` on the current history snapshot, biasing conservative (compacting a bit
+  early beats an unhandled provider context overflow). Providers that do emit `usage` are unaffected.
 - **Auto-save error reporting**: Session persist errors now route cleanly into the TUI transcript
   via `printSystemMessage` instead of writing raw text to `stderr`, preventing terminal screen
   corruption and row coordinate desync.

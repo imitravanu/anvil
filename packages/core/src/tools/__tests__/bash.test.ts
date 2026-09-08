@@ -1,10 +1,10 @@
 import { execSync, spawnSync } from "node:child_process";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { executeTool } from "../index.js";
-import { isBlockedCommand } from "../bash.js";
+import { isBlockedCommand, runCommandTimeoutMs } from "../bash.js";
 import type { ToolContext } from "../types.js";
 
 let root: string;
@@ -69,6 +69,35 @@ describe("run_command", () => {
     const result = await executeTool("run_command", { command: "printf '%s' \"$ANVIL_TEST_SECRET\"" }, ctx);
     expect((result.output as { stdout: string }).stdout).toBe("");
     delete process.env.ANVIL_TEST_SECRET;
+  });
+});
+
+describe("run_command timeout override (ANVIL_RUN_COMMAND_TIMEOUT_MS)", () => {
+  const KEY = "ANVIL_RUN_COMMAND_TIMEOUT_MS";
+  const saved = process.env[KEY];
+
+  afterEach(() => {
+    if (saved === undefined) delete process.env[KEY];
+    else process.env[KEY] = saved;
+  });
+
+  it("defaults to the built-in when unset or non-numeric", () => {
+    delete process.env[KEY];
+    expect(runCommandTimeoutMs()).toBe(120_000);
+    process.env[KEY] = "not-a-number";
+    expect(runCommandTimeoutMs()).toBe(120_000);
+  });
+
+  it("clamps hostile values into [1s, 10m]", () => {
+    process.env[KEY] = "0";
+    expect(runCommandTimeoutMs()).toBe(1_000);
+    process.env[KEY] = "999999999";
+    expect(runCommandTimeoutMs()).toBe(600_000);
+  });
+
+  it("honors a valid override", () => {
+    process.env[KEY] = "45000";
+    expect(runCommandTimeoutMs()).toBe(45_000);
   });
 });
 

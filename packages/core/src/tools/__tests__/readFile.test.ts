@@ -37,4 +37,20 @@ describe("read_file", () => {
     expect(result.isError).toBe(true);
     expect((result.output as { error: string }).error).toMatch(/escapes project root/);
   });
+
+  it("truncates a file larger than the read cap but reports its true size", async () => {
+    // The cap is 512KB (not exported); write just past it so the truncated path
+    // is exercised without allocating or transmitting the whole file.
+    const cap = 512 * 1024;
+    await fs.writeFile(path.join(root, "big.txt"), "x".repeat(cap + 64));
+    const result = await executeTool("read_file", { path: "big.txt" }, ctx);
+    expect(result.isError).toBe(false);
+    const output = result.output as { content: string; totalBytes: number; truncated: boolean };
+    // True byte count comes from stat, not from the bounded buffer.
+    expect(output.totalBytes).toBe(cap + 64);
+    expect(output.truncated).toBe(true);
+    // The echoed content is bounded to the cap — the file tail is never buffered.
+    expect(output.content.length).toBeLessThan(cap + 64);
+    expect(result.summary).toContain(", truncated");
+  });
 });

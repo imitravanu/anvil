@@ -1,0 +1,36 @@
+name: CI — Typecheck & Tests
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  typecheck-test:
+    name: Typecheck + Unit Tests (core / tui / cli)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Build first: tui/cli typecheck (tsc) resolves @anvil/core from its built
+      # dist/ (package.json "files": ["dist"], "main"/"types" → dist). Building
+      # core before running downstream typecheck/test keeps every workspace on
+      # the freshly compiled API surface, matching the local monorepo flow.
+      - name: Build monorepo
+        run: npm run build
+
+      - name: Typecheck all packages (strict)
+        run: npm run typecheck
+
+      - name: Run unit test suite (workspaces)
+        run: npm test

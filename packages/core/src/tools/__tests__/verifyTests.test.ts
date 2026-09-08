@@ -5,9 +5,39 @@ import os from "node:os";
 import {
   detectTestCommand,
   runTestVerification,
+  runTestTimeoutMs,
   execute,
   definition,
 } from "../verifyTests.js";
+
+describe("runTestTimeoutMs override (ANVIL_RUN_TEST_TIMEOUT_MS)", () => {
+  const KEY = "ANVIL_RUN_TEST_TIMEOUT_MS";
+  const saved = process.env[KEY];
+
+  afterEach(() => {
+    if (saved === undefined) delete process.env[KEY];
+    else process.env[KEY] = saved;
+  });
+
+  it("defaults to the built-in when unset or non-numeric", () => {
+    delete process.env[KEY];
+    expect(runTestTimeoutMs()).toBe(60_000);
+    process.env[KEY] = "abc";
+    expect(runTestTimeoutMs()).toBe(60_000);
+  });
+
+  it("clamps hostile values into [1s, 10m]", () => {
+    process.env[KEY] = "0";
+    expect(runTestTimeoutMs()).toBe(1_000);
+    process.env[KEY] = "1e9";
+    expect(runTestTimeoutMs()).toBe(600_000);
+  });
+
+  it("honors a valid override", () => {
+    process.env[KEY] = "30000";
+    expect(runTestTimeoutMs()).toBe(30_000);
+  });
+});
 
 describe("detectTestCommand", () => {
   let tmpDir: string;

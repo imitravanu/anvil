@@ -443,6 +443,11 @@ export class AgentSession {
         const openCalls = new Map<string, { name: string; inputJson: string }>();
         let stopReason: string | undefined;
         let rateLimitRetry: number | null = null;
+        // Providers that emit no usage leave lastInputTokens stale (it only
+        // moves via the usage event), which would silently disable reactive
+        // compaction on a growing history. This flag triggers a token-estimate
+        // fallback after the turn so the next loop-top check still fires.
+        let sawUsage = false;
 
         for await (const event of stream) {
           switch (event.type) {
@@ -488,6 +493,7 @@ export class AgentSession {
               break;
             }
             case "usage":
+              sawUsage = true;
               this.lastInputTokens = event.inputTokens;
               this.lastUsage = { inputTokens: event.inputTokens, outputTokens: event.outputTokens };
               yield { type: "usage", inputTokens: event.inputTokens, outputTokens: event.outputTokens };
@@ -539,6 +545,16 @@ export class AgentSession {
         // before anything else — including for plain text turns, which must
         // still be part of the conversation the provider sees next turn.
         this.history.pushAssistant(textParts, toolCalls);
+
+        // Compaction fallback: the next loop-top check reads lastInputTokens,
+        // which only moves via a usage event. If this provider sent none, fall
+        // back to a token estimate of the (now snapshot-consistent) history so
+        // reactive compaction still fires as the conversation grows instead of
+        // silently stalling. Conservative bias — over-estimating compacts early,
+        // which beats an unhandled provider context overflow.
+        if (!sawUsage) {
+          this.lastInputTokens = estimateTokens(this.history.snapshot());
+        }
 
         if (stopReason !== "tool_use") {
           // Closed-loop TDD auto-verification: if mutations occurred and autoVerify is active,

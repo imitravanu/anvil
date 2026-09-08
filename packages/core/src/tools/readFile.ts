@@ -28,16 +28,38 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
     };
   }
   const abs = resolveWithinRoot(ctx.projectRoot, relPath);
-  const buf = await fs.readFile(abs); // throws (ENOENT etc.) — executeTool wraps as isError
-  const truncated = buf.length > MAX_BYTES;
-  const text = buf.subarray(0, MAX_BYTES).toString("utf8");
+  // Open-then-fstat-then-bounded-read (the checkpoints.ts pattern): reading a
+  // multi-GB file in full just to keep the first 512KB would spike the heap on
+  // every accidental read of a log or artifact. The stat and the read observe
+  // the same open file description, so the size check cannot be raced by a
+  // concurrent writer (the old --readAll-then-slice had that TOCTOU).
+  const fh = await fs.open(abs, "r"); // throws (ENOENT etc.) — executeTool wraps as isError
+  let buf: Buffer;
+  let totalBytes: number;
+  let truncated: boolean;
+  try {
+    const stat = await fh.stat();
+    totalBytes = stat.size;
+    // Read at most MAX_BYTES; for larger files the size is known from stat, so
+    // the rest is never materialized into memory.
+    const toRead = Math.min(totalBytes, MAX_BYTES);
+    const content = Buffer.alloc(toRead);
+    const { bytesRead } = await fh.read(content, 0, toRead, 0);
+    buf = bytesRead === toRead ? content : content.subarray(0, bytesRead);
+    truncated = totalBytes > MAX_BYTES;
+  } finally {
+    await fh.close();
+  }
+  const text = buf.toString("utf8");
   const content = text
     .split("\n")
     .map((line, i) => `${String(i + 1).padStart(6)}\t${line}`)
     .join("\n");
   return {
-    output: { path: relPath, totalBytes: buf.length, truncated, content },
+    // totalBytes is the TRUE file size (from stat), so callers see how much was
+    // truncated; content carries only the bounded head.
+    output: { path: relPath, totalBytes, truncated, content },
     isError: false,
-    summary: `Read ${relPath} (${buf.length} bytes${truncated ? ", truncated" : ""})`,
+    summary: `Read ${relPath} (${totalBytes} bytes${truncated ? ", truncated" : ""})`,
   };
 };

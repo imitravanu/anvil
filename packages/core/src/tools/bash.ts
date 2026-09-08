@@ -4,6 +4,20 @@ import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 
 const MAX_STREAM_BYTES = 20 * 1024; // per stream
 export const RUN_COMMAND_TIMEOUT_MS = 120_000;
+// Sanity bounds for the env override — a hostile or typo'd value must neither
+// busy-freeze the turn (`0`) nor park it for an hour (huge values).
+const MIN_COMMAND_TIMEOUT_MS = 1_000;
+const MAX_COMMAND_TIMEOUT_MS = 600_000;
+
+/**
+ * Command timeout in ms, overridable via ANVIL_RUN_COMMAND_TIMEOUT_MS and
+ * clamped to [1s, 10m]. Unset or non-finite → the built-in default.
+ */
+export function runCommandTimeoutMs(): number {
+  const raw = Number(process.env.ANVIL_RUN_COMMAND_TIMEOUT_MS);
+  if (!Number.isFinite(raw)) return RUN_COMMAND_TIMEOUT_MS;
+  return Math.min(Math.max(Math.round(raw), MIN_COMMAND_TIMEOUT_MS), MAX_COMMAND_TIMEOUT_MS);
+}
 
 interface CapturedStream {
   text: string;
@@ -231,10 +245,11 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
     };
     let timedOut = false;
     const onAbort = () => killTree();
+    const timeoutMs = runCommandTimeoutMs();
     const timeout = setTimeout(() => {
       timedOut = true;
       killTree();
-    }, RUN_COMMAND_TIMEOUT_MS);
+    }, timeoutMs);
     if (ctx.signal.aborted) onAbort();
     ctx.signal.addEventListener("abort", onAbort, { once: true });
 
@@ -272,7 +287,7 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
         summary: aborted
           ? `Cancelled: ${command}`
           : timedOut
-            ? `Timed out after ${RUN_COMMAND_TIMEOUT_MS}ms: ${command}`
+            ? `Timed out after ${timeoutMs}ms: ${command}`
             : `Ran: ${command} (exit ${code})`,
       });
     });
@@ -280,5 +295,6 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
 };
 
 export const describe = async (input: unknown): Promise<string> => {
-  return `Run command: ${(input as { command: string }).command}`;
+  const command = (input as { command?: unknown } | null | undefined)?.command;
+  return `Run command: ${typeof command === "string" ? command : "(malformed input)"}`;
 };

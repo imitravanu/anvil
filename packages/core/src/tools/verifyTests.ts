@@ -7,6 +7,21 @@ import { resolveWithinRoot } from "./paths.js";
 export const RUN_TEST_TIMEOUT_MS = 60_000;
 export const MAX_TEST_OUTPUT_BYTES = 30 * 1024;
 
+// Sanity bounds for the env override — a hostile value must not busy-freeze
+// the turn (`0`) nor park it for an hour (huge values).
+const MIN_TEST_TIMEOUT_MS = 1_000;
+const MAX_TEST_TIMEOUT_MS = 600_000;
+
+/**
+ * Test-runner timeout in ms, overridable via ANVIL_RUN_TEST_TIMEOUT_MS and
+ * clamped to [1s, 10m]. Unset or non-finite → the built-in default.
+ */
+export function runTestTimeoutMs(): number {
+  const raw = Number(process.env.ANVIL_RUN_TEST_TIMEOUT_MS);
+  if (!Number.isFinite(raw)) return RUN_TEST_TIMEOUT_MS;
+  return Math.min(Math.max(Math.round(raw), MIN_TEST_TIMEOUT_MS), MAX_TEST_TIMEOUT_MS);
+}
+
 export interface TestRunResult {
   passed: boolean;
   exitCode: number;
@@ -170,10 +185,11 @@ export async function runTestVerification(
     };
 
     let timedOut = false;
+    const timeoutMs = runTestTimeoutMs();
     const timer = setTimeout(() => {
       timedOut = true;
       killTree();
-    }, RUN_TEST_TIMEOUT_MS);
+    }, timeoutMs);
 
     const onAbort = () => killTree();
     if (signal?.aborted) onAbort();
@@ -203,7 +219,7 @@ export async function runTestVerification(
       if (signal?.aborted) {
         summary = `Tests cancelled: ${fullCommand}`;
       } else if (timedOut) {
-        summary = `Tests timed out after ${RUN_TEST_TIMEOUT_MS}ms: ${fullCommand}`;
+        summary = `Tests timed out after ${timeoutMs}ms: ${fullCommand}`;
       } else if (passed) {
         summary = `All tests passed: ${fullCommand}`;
       } else {
