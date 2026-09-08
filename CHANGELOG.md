@@ -4,6 +4,40 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 (major.minor.patch — breaking features bump minor while pre-1.0).
 
+## [0.7.0] — 2026-09-09
+
+### Added
+
+- **Phase 0 Visual Regression Matrix Gate**: Full cross-size (80×24, 120×40, 200×60) ×
+  cross-theme (dark, highContrast) deterministic visual baseline suite with pixel-level diffing
+  via `pixelmatch` (strict 0.1% threshold) across 8 core UI scenarios (48 baselines total).
+- New npm workflow scripts: `visual:capture`, `visual:diff`, and `visual:approve`.
+- Automated GitHub Actions CI workflow (`.github/workflows/visual-regression.yml`) to gate PRs
+  against visual regressions and upload diff artifacts on failure.
+- Expanded model registry with latest frontier models (Claude 3.7 Sonnet, Claude 3.5 Sonnet/Haiku,
+  GPT-4o, GPT-4o mini, o3-mini, Gemini 2.0 Flash, Gemini 1.5 Pro/Flash).
+
+### Fixed & Hardened
+
+- **Auto-save error reporting**: Session persist errors now route cleanly into the TUI transcript
+  via `printSystemMessage` instead of writing raw text to `stderr`, preventing terminal screen
+  corruption and row coordinate desync.
+- **`retainOutput` edge cases**: Correctly preserves `undefined` tool output without failing `JSON.parse`
+  or labeling un-truncated results as truncated.
+- **Tool execution resilience**: Wrapped tool execution across all orchestrator paths in try/catch
+  boundaries to gracefully report errors without crashing the session loop.
+- **Context compaction boundary protection**: Added `findCleanCompactionCut()` to avoid splitting
+  tool call/result pairs during compaction, preventing provider history rejection.
+- **History integrity repair**: Added `HistoryStore.repairUnclosedToolCalls()` to synthesize error
+  results for orphaned tool calls after unexpected turn errors, preserving strict role alternation.
+- **Session mutation concurrency guards**: Prevented concurrent execution of `switchModel`,
+  `popLastUserTurn`, and `clearHistory` while an active turn is in flight.
+- **Safe atomic writes**: Added `atomicWriteText()` with `AbortSignal` support across file write and
+  edit operations.
+- **Sub-agent and input hardening**: Sub-agents inherit project rules in system prompts; multiline
+  paste in `InputBar` flattens newlines to spaces; headless mode stdin timeout (30s) and cap (1 MB).
+- Fixed unmounted component instances across TUI test suites to eliminate listener leaks.
+
 ## [0.6.3] — 2026-09-08
 
 ### Fixed
@@ -359,7 +393,8 @@ onboarding, sub-agent delegation, and MCP (stdio) support.
 
 - Verification/eval harness, provider certification, project memory & git-native workflow, distribution (see `docs/ROADMAP.md`).
 
-[Unreleased]: https://github.com/mitravanu/anvil/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/mitravanu/anvil/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/mitravanu/anvil/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/mitravanu/anvil/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/mitravanu/anvil/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/mitravanu/anvil/compare/v0.6.0...v0.6.1
