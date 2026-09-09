@@ -315,14 +315,34 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsVision: false,
     isFree: false,
   },
-  // Orcarouter models: free-only policy — the source's isFreeModelId() gate
-  // drops paid ids at fetch time, so paid models never enter the registry
-  // (live-verified 2026-09: fusion/auto family is paid and stays hidden).
+  // Orcarouter models: free-only policy — the source reads the public
+  // pricing catalog's is_free_tier flag, so paid models never enter the
+  // registry (live-verified 2026-09: fusion/auto family is paid and stays
+  // hidden; Qwen3.8 27B was DELISTED and replaced by GLM 5.3 Flash — sync
+  // auto-demotes it to (Paid) on next refresh).
   {
-    id: "qwen/qwen3.8-27b-free",
+    id: "z-ai/glm-5.3-flash-free",
     providerId: "orcarouter",
-    displayName: "Qwen: Qwen3.8 27B (Free)",
-    contextWindow: 128_000,
+    displayName: "Z.ai: GLM 5.3 Flash (Free)",
+    contextWindow: 1_000_000,
+    supportsTools: true,
+    supportsVision: true,
+    isFree: true,
+  },
+  {
+    id: "deepseek/deepseek-v4-flash-free",
+    providerId: "orcarouter",
+    displayName: "DeepSeek: DeepSeek V4 Flash (Free)",
+    contextWindow: 1_048_576,
+    supportsTools: true,
+    supportsVision: false,
+    isFree: true,
+  },
+  {
+    id: "tencent/hy3-free",
+    providerId: "orcarouter",
+    displayName: "Tencent: Hy3 (Free)",
+    contextWindow: 262_144,
     supportsTools: true,
     supportsVision: false,
     isFree: true,

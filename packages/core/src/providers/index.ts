@@ -13,7 +13,14 @@ import { createOllamaProvider } from "./ollama.js";
 export * from "./types.js";
 export * from "./registry.js";
 export { OPENROUTER_BASE_URL, createOpenRouterProvider, fetchOpenRouterFreeModels, syncOpenRouterModels } from "./openrouter.js";
-export { ORCAROUTER_BASE_URL, createOrcarouterProvider, fetchOrcarouterFreeModels, isFreeModelId } from "./orcarouter.js";
+export {
+  ORCAROUTER_BASE_URL,
+  ORCAROUTER_PRICING_URL,
+  ORCAROUTER_KNOWN_FREE_IDS,
+  createOrcarouterProvider,
+  fetchOrcarouterFreeModels,
+  isFreeModelId,
+} from "./orcarouter.js";
 export {
   DEFAULT_SYNC_TTL_MS,
   createOpenRouterFreeSource,

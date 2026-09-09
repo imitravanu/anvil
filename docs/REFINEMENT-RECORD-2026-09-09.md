@@ -168,37 +168,48 @@ Same day, key already on file (`~/.anvil/credentials.json:geminiApiKey`), real
 Orcarouter (`https://api.orcarouter.ai/v1`, OpenAI-compatible, key on file in
 opencode's auth store) added as a provider alongside OpenRouter:
 
-- **Free-only policy, enforced at the source**: orcarouter's `/models` carries NO
-  pricing metadata — free/paid is signaled only by the id. `isFreeModelId()`
-  (`-free` suffix, or the `orcarouter/free` alias) gates the live fetch, so paid
-  ids (live-verified: `fusion`, `fusion-flash`, `fusion-mini`, `auto`) can never
-  enter the registry. The picker additionally renders `visibleModels()` only —
-  paid entries (including OpenRouter's static `deepseek/deepseek-v3.2`) are
-  auto-hidden from model selection everywhere.
+- **Free-only policy, enforced at the source**: free discovery reads the PUBLIC
+  key-less pricing catalog (`/api/pricing`, `is_free_tier: true` flag) — keyed
+  `/v1/models` is stale (still lists the delisted qwen; misses the new ids) and
+  carries no pricing. `isFreeModelId()` (`-free` suffix / `orcarouter/free`
+  alias) remains the sync shape's id gate, so paid ids (live-verified: `fusion`
+  family, `auto`) can never enter the registry. Free is decided by the flag
+  alone — never `model_ratio: 0` (image endpoints ride at zero cost) and never
+  the suffix (a listing can go stale). The picker additionally renders
+  `visibleModels()` only — paid entries (including OpenRouter's static
+  `deepseek/deepseek-v3.2`) are auto-hidden from model selection everywhere.
 - **Auto-sync**: CLI boot, the TUI picker, and `/sync` all pass both sources
   (OpenRouter + Orcarouter) through the single-flight/TTL coordinator; churn
-  (new free models, models going paid, models vanishing — e.g.
-  `deepseek/deepseek-v4-flash-free` disappeared from orcarouter between the
-  owner's last use and this implementation) updates the registry automatically.
-- **Live verification** (real gateway, real key): Phase 1 gate holds — exactly
-  `orcarouter/free` + `qwen/qwen3.8-27b-free` returned, zero paid leak. The
-  key is scoped: the alias `orcarouter/free` returns a clean 403
-  "key does not have access" (surfaced as a terminal error event); the concrete
-  `qwen/qwen3.8-27b-free` is authorized but the free pool was at capacity
-  during testing ("503 No available capacity" — same operational class as a
-  429, now detected by `isRateLimitMessage` for auto-retry). Streaming/tool
-  round-trip on this provider remains to be observed when capacity allows;
-  the wire format is the shared, live-verified chat-completions path.
-  Follow-up probe (raw curl, adapter-independent): the unlisted
-  `deepseek/deepseek-v4-flash-free` route still EXISTS but returns 403
-  `model_access_denied` (reason `block_key_scope`, scope `key`) — the owner's
-  key is scoped to a narrow model set; only `qwen/qwen3.8-27b-free` is in
-  scope among free ids, and its pool was saturated. Fix is on the owner's
-  console side (widen key scope at orcarouter.ai/console/token), not in Anvil.
-- **Tests**: new `orcarouter.test.ts` (15 tests): id gate, paid-drop at source,
-  header handling, error surfacing, provider wiring, `visibleModels()` hiding,
-  default-model resolution, dual-source sync merge, single-source-failure
-  isolation, dedup. Suite: 305 passed.
+  (new free models, models going paid, models vanishing) updates the registry
+  automatically — a retirement demotes to `(Paid)`, never deletes.
+- **2026-09-09 free-tier swap** (official OrcaRouter post + pricing catalog):
+  `Qwen3.8 27B` DELISTED, replaced by `z-ai/glm-5.3-flash-free` (Z.ai GLM 5.3
+  Flash: 320B/18B MoE, 1M ctx, text+image+video in, tools). Live catalog flags
+  exactly three free ids: `deepseek/deepseek-v4-flash-free`,
+  `tencent/hy3-free`, `z-ai/glm-5.3-flash-free`. Static seeds + provider
+  default updated (GLM first); sync auto-demotes qwen on next refresh. New
+  `core/scripts/verify-orcarouter.ts`: key-less catalog sync + streaming +
+  tool-call round-trip (default GLM, `ORCAROUTER_MODEL` override).
+- **Live verification** (real gateway, real key): Phase 1 catalog sync holds —
+  exactly the 3 flagged ids + `orcarouter/free` alias, zero paid leak, with
+  live display names / context windows / tool+vision flags flowing through.
+  The owner's key is scoped: GLM + tencent + alias all return a clean 403
+  `model_access_denied` (reason `block_key_scope`, scope `key`; surfaced as a
+  terminal error event with the manage URL) — fix is on the owner's console
+  side (widen key scope at orcarouter.ai/console/token), not in Anvil.
+  Streaming/tool round-trip on this provider remains to be observed once a
+  key with free-model scope is available; the wire format is the shared,
+  live-verified chat-completions path. Earlier probes (superseded by the
+  swap): qwen `503 model_not_found` "No available capacity" (retired, not
+  saturated); unlisted deepseek route 403 scope-blocked; scope check fires
+  before existence (even a bogus id 403s identically), so ids can't be
+  probed — the catalog is the only source of truth.
+- **Tests**: `orcarouter.test.ts` rewritten for the pricing shape (19 tests):
+  id gate, flag-only paid-drop (ratio-0 image + stale-suffix cases), live
+  metadata mapping (names/ctx/tools/vision), key-less fetch proof,
+  zero-free/HTTP failures, provider wiring, `visibleModels()` hiding,
+  GLM default-model resolution, dual-source sync merge, qwen demotion path,
+  single-source-failure isolation, dedup. Suite: 309 passed.
 
 ## 6. SUGGESTED NEXT SLICES (owner picks order)
 

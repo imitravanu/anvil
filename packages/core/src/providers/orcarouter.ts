@@ -5,15 +5,22 @@ import { ORCAROUTER_BASE_URL } from "./freeModels.js";
 /**
  * Orcarouter (https://api.orcarouter.ai) — OpenAI-compatible model router,
  * sibling of the OpenRouter integration: same chat-completions wire format,
- * different gateway and credential. Its /models endpoint carries no pricing
- * metadata — the free/paid split is signaled ONLY by the model id (see
- * `isFreeModelId` in freeModels.ts). Free-only policy lives there, so paid
+ * different gateway and credential. Free discovery uses the PUBLIC
+ * key-less pricing catalog (`is_free_tier: true` flag) — the keyed
+ * /v1/models listing is stale and carries no pricing — and `isFreeModelId`
+ * remains the sync shape's id gate. Free-only policy lives there, so paid
  * models can never reach the registry or the picker.
  */
 // Backward-compat re-exports: the base URL, fetch implementation, and
 // free-id gate live in freeModels.ts (the single owner of free-model
 // discovery), mirroring openrouter.ts.
-export { ORCAROUTER_BASE_URL, fetchOrcarouterFreeModels, isFreeModelId } from "./freeModels.js";
+export {
+  ORCAROUTER_BASE_URL,
+  ORCAROUTER_PRICING_URL,
+  ORCAROUTER_KNOWN_FREE_IDS,
+  fetchOrcarouterFreeModels,
+  isFreeModelId,
+} from "./freeModels.js";
 
 export function createOrcarouterProvider(apiKey: string | undefined): ModelProvider {
   return createChatCompletionsStyleProvider({

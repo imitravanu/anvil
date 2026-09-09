@@ -96,70 +96,111 @@ export function createOpenRouterFreeSource(): FreeModelSource {
 // --- Orcarouter free-model source (OpenAI-compatible sibling of OpenRouter). ---
 
 export const ORCAROUTER_BASE_URL = "https://api.orcarouter.ai/v1";
+/** Public, key-less pricing catalog — the source of truth for free ids (live-verified 2026-09). */
+export const ORCAROUTER_PRICING_URL = "https://api.orcarouter.ai/api/pricing";
+
+/** Canonical free ids from the live pricing catalog (2026-09-09). Fallback only. */
+export const ORCAROUTER_KNOWN_FREE_IDS = [
+  "deepseek/deepseek-v4-flash-free",
+  "tencent/hy3-free",
+  "z-ai/glm-5.3-flash-free",
+] as const;
 
 /**
- * Orcarouter's /models endpoint carries NO pricing metadata — the free/paid
- * split is signaled only by the model id: a "-free" suffix, plus the
- * "orcarouter/free" auto-router alias (live-verified 2026-09: the "fusion"
- * family and "auto" are paid and must never pass this gate).
+ * Orcarouter's /models endpoint carries NO pricing metadata AND is stale
+ * (live-verified 2026-09: delisted qwen still listed, new GLM free ids
+ * missing) — free/paid is signaled only by the id: a "-free" suffix, plus
+ * the "orcarouter/free" auto-router alias (the "fusion" family and "auto"
+ * are paid and must never pass this gate).
  */
 export function isFreeModelId(id: string): boolean {
   return id.endsWith("-free") || id === "orcarouter/free";
 }
 
-/** "qwen/qwen3.8-27b-free" → "Qwen: Qwen3.8 27B"; "orcarouter/free" → "Free Models Router". */
-function prettifyOrcarouterName(rawId: string): string {
-  if (rawId === "orcarouter/free") return "Free Models Router";
+/** "orcarouter/free" → "Free Models Router"; vendor prefix title-cased. */
+function prettifyOrcarouterVendor(rawId: string): string {
   const slash = rawId.indexOf("/");
-  const vendor = slash > 0 ? rawId.slice(0, slash) : "";
-  const rest = slash > 0 ? rawId.slice(slash + 1) : rawId;
-  const cleaned = rest
-    .replace(/-free$/i, "")
-    .replace(/[-_]/g, " ")
-    .trim();
-  const title = cleaned
-    .replace(/\b([a-z])/g, (c) => c.toUpperCase())
-    // "27b" → "27B" (parameter-size convention; there's no word boundary
-    // between a digit and the letter that follows it).
-    .replace(/([0-9])([a-z])/g, (_m, d: string, l: string) => d + l.toUpperCase());
-  return vendor ? `${vendor.charAt(0).toUpperCase() + vendor.slice(1)}: ${title}` : title;
+  if (slash <= 0) return "";
+  const vendor = rawId.slice(0, slash);
+  // "z-ai" → "Z.ai" (matches the provider's own "Z.ai: ..." display names).
+  if (vendor.toLowerCase() === "z-ai") return "Z.ai";
+  return vendor.charAt(0).toUpperCase() + vendor.slice(1);
 }
 
+/**
+ * Free models via the PUBLIC pricing catalog — key-less, authoritative
+ * (`is_free_tier: true`), with live display names, context windows, and
+ * tool/vision capability flags. The keyed /v1/models listing is stale
+ * (still shows the delisted qwen; misses the new ids) and carries no
+ * pricing — do not use it for free discovery.
+ *
+ * Paid models are dropped HERE, at the source, so a paid model can never
+ * reach the registry, the picker, or merge demotion. Free is decided ONLY
+ * by the authoritative `is_free_tier` flag — never by `model_ratio: 0`
+ * (image/video endpoints ride along at 0 cost; image generation is not
+ * free chat) and never by the id suffix (a catalog listing can go stale).
+ *
+ * `orcarouter/free` is NOT in the pricing catalog (it's a named router,
+ * not a priced model) and is appended manually — documented behavior,
+ * key must whitelist it explicitly per the Free Models docs.
+ */
 export async function fetchOrcarouterFreeModels(apiKey?: string): Promise<ModelInfo[]> {
+  void apiKey; // key-less public catalog; signature kept for FreeModelSource.
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 4000);
+  const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    const headers: Record<string, string> = {};
-    if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
-
-    const res = await fetch(`${ORCAROUTER_BASE_URL}/models`, { signal: controller.signal, headers });
+    const res = await fetch(ORCAROUTER_PRICING_URL, { signal: controller.signal });
     if (!res.ok) {
-      throw new Error(`Orcarouter /models returned HTTP ${res.status}: ${res.statusText}`);
+      throw new Error(`Orcarouter pricing catalog returned HTTP ${res.status}: ${res.statusText}`);
     }
 
     const json = (await res.json()) as { data?: Array<any> };
     if (!Array.isArray(json?.data)) {
-      throw new Error("Orcarouter /models response missing data array");
+      throw new Error("Orcarouter pricing catalog response missing data array");
     }
 
-    // Free-only gate: paid ids are dropped HERE, at the source, so a paid
-    // model can never reach the registry, the picker, or merge demotion.
-    // The id check is the provider's only free signal — there is no pricing
-    // field to consult (unlike OpenRouter's pricing.prompt/completion).
     const freeModels: ModelInfo[] = [];
     for (const m of json.data) {
-      if (typeof m.id !== "string" || !isFreeModelId(m.id)) continue;
-      const rawName = typeof m.name === "string" && m.name.length > 0 ? m.name : m.id;
+      // Single authority: the is_free_tier flag. The -free suffix is the
+      // provider's documented convention but NOT a fallback — id and flag
+      // have demonstrably disagreed (stale qwen still "-free", absent
+      // from live data), so the flag alone decides.
+      if (m.is_free_tier !== true) continue;
+      if (typeof m.model_name !== "string" || m.model_name.length === 0) continue;
+
+      const id: string = m.model_name;
+      const params: unknown = m.supported_parameters;
+      const modalities: unknown = m.input_modalities;
       freeModels.push({
-        id: m.id,
+        id,
         providerId: "orcarouter",
-        displayName: `${prettifyOrcarouterName(rawName)} (Free)`,
+        displayName:
+          typeof m.display_name === "string" && m.display_name.length > 0
+            ? m.display_name
+            : `${prettifyOrcarouterVendor(id)}: ${id} (Free)`,
         contextWindow: typeof m.context_length === "number" ? m.context_length : 128_000,
-        supportsTools: true,
-        supportsVision: false,
+        supportsTools: Array.isArray(params) && params.includes("tools"),
+        supportsVision:
+          Array.isArray(modalities) && (modalities.includes("image") || modalities.includes("video")),
         isFree: true,
       });
     }
+    if (freeModels.length === 0) {
+      throw new Error("Orcarouter pricing catalog listed zero free-tier models");
+    }
+
+    // Named auto-router: not a priced model, so never in the catalog —
+    // appended explicitly (documents as covering the free tier; keys must
+    // whitelist it per the provider docs).
+    freeModels.push({
+      id: "orcarouter/free",
+      providerId: "orcarouter",
+      displayName: "Free Models Router (Free)",
+      contextWindow: 128_000,
+      supportsTools: true,
+      supportsVision: false,
+      isFree: true,
+    });
 
     // Auto-router alias first (mirrors the openrouter/free convention).
     freeModels.sort((a, b) => {
