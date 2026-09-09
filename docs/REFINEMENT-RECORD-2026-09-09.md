@@ -189,6 +189,12 @@ opencode's auth store) added as a provider alongside OpenRouter:
   429, now detected by `isRateLimitMessage` for auto-retry). Streaming/tool
   round-trip on this provider remains to be observed when capacity allows;
   the wire format is the shared, live-verified chat-completions path.
+  Follow-up probe (raw curl, adapter-independent): the unlisted
+  `deepseek/deepseek-v4-flash-free` route still EXISTS but returns 403
+  `model_access_denied` (reason `block_key_scope`, scope `key`) — the owner's
+  key is scoped to a narrow model set; only `qwen/qwen3.8-27b-free` is in
+  scope among free ids, and its pool was saturated. Fix is on the owner's
+  console side (widen key scope at orcarouter.ai/console/token), not in Anvil.
 - **Tests**: new `orcarouter.test.ts` (15 tests): id gate, paid-drop at source,
   header handling, error surfacing, provider wiring, `visibleModels()` hiding,
   default-model resolution, dual-source sync merge, single-source-failure
