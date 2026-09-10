@@ -170,9 +170,9 @@ Total:        ~400 unit tests + 48 visual baselines
 
 | Item | Status | Phase |
 |---|---|---|
-| Phase 16 hardening fixes | SPEC PREPARED, not implemented | Next |
+| Phase 0 Visual Matrix Expansion | DONE (96 baselines across 6 sizes) | Phase 0 |
 | U11 MCP Tool UX | Open (permission prompts for external tools) | With Phase 10 maturity |
-| Phase 17-20 roadmap items | PROPOSED | After Phase 16 + Phase 0 |
+| Phase 17-20 roadmap items | PROPOSED | After Phase 0 |
 
 ---
 
@@ -190,15 +190,16 @@ Phase 16 → Phase 0 (visual regression) → Phase 17 → Phase 18 → Phase 19 
 ---
 
 ## 4. Phase 16 — v0.6.0 Hardening, Security & Release
-
-> **Status:** SPEC PREPARED — ready for implementation
-> **Priority:** 🔴 CRITICAL (contains a security fix)
-> **Target:** Anvil v0.6.0 → v0.8.0
+ 
+> **Status:** COMPLETED & SHIPPED (in v0.6.0–v0.6.3)
+> **Priority:** RESOLVED
+> **Target:** Anvil v0.6.0
 > **Spec:** [PHASE-16-SPEC.md](file:///home/mitravanu/Projects/anvil/docs/PHASE-16-SPEC.md)
+> **Audit Record:** [AUDIT-2026-09-06.md](file:///home/mitravanu/Projects/anvil/docs/AUDIT-2026-09-06.md)
 
 ### 4.1 Objective
 
-The Phase 11-15 wave is feature-complete and green (382/382 tests), but the audit found **one critical security hole, several honesty/robustness defects, and two flows never live-verified**. This phase hardens the wave to releasable quality. **No new features.**
+The Phase 11-15 wave was hardened, closed, and shipped. All 7 audit findings were resolved, tested, and released across v0.6.0–v0.6.3:
 
 ### 4.2 Fix List (7 items, in execution order)
 
@@ -310,14 +311,14 @@ No eval harness, provider certification, memory, or distribution work — that i
 ---
 
 ## 5. Phase 0 — Visual Regression Testing for TUI
-
-> **Status:** DRAFT — prerequisite for Phase 17
-> **Priority:** 🟡 HIGH (gates eval harness reliability)
+ 
+> **Status:** COMPLETED (v0.7.0 + 96 baselines) — prerequisite for Phase 17 fulfilled
+> **Priority:** 🟢 GREEN
 > **Spec:** [PHASE-0-VISUAL-REGRESSION-SPEC.md](file:///home/mitravanu/Projects/anvil/docs/PHASE-0-VISUAL-REGRESSION-SPEC.md)
 
 ### 5.1 Objective
 
-The Phase 15 frame capture scripts (`capture-frames.sh`, `mock-openai-server.mjs`, `ui-preview.tsx`) are manual-only; no CI gate, no baseline comparison, no cross-size/theme matrix. This phase automates visual regression detection.
+Automate visual regression detection with a deterministic PTY capture engine, pixelmatch diff gate, and comprehensive matrix. Successfully expanded to 96 baselines (8 scenarios × 6 sizes × 2 themes) and gated in CI.
 
 > [!NOTE]
 > Much of this infrastructure already exists in v0.7.0 (`visual:capture`, `visual:diff`, `visual:approve` scripts + 48 baselines + CI workflow). This phase **hardens and expands** that foundation.
