@@ -1,0 +1,8 @@
+{
+  "name": "Create index.js barrel re-exporting modules",
+  "category": "multifile",
+  "prompt": "Create src/index.js as a barrel export file that re-exports all named exports from src/math.js and src/format.js.",
+  "timeoutMs": 30000,
+  "maxTokens": 4096,
+  "fast": true
+}

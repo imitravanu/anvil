@@ -1,0 +1,8 @@
+{
+  "name": "Restructure flat server config into nested object",
+  "category": "migration",
+  "prompt": "In config/app.json, restructure the top-level keys port and host into a nested server object: \"server\": { \"port\": 8080, \"host\": \"localhost\" }, keeping name at the top level.",
+  "timeoutMs": 30000,
+  "maxTokens": 4096,
+  "fast": true
+}

@@ -170,9 +170,9 @@ Total:        ~400 unit tests + 48 visual baselines
 
 | Item | Status | Phase |
 |---|---|---|
-| Phase 0 Visual Matrix Expansion | DONE (96 baselines across 6 sizes) | Phase 0 |
+| Phase 17 Verification Harness | DONE (15 benchmark tasks + runner + CI gate) | Phase 17 |
 | U11 MCP Tool UX | Open (permission prompts for external tools) | With Phase 10 maturity |
-| Phase 17-20 roadmap items | PROPOSED | After Phase 0 |
+| Phase 18–20 roadmap items | PROPOSED | After Phase 17 |
 
 ---
 
@@ -411,9 +411,9 @@ Already in `@anvil/tui` devDependencies:
 
 ## 6. Phase 17 — Verification Harness (Agent Evals)
 
-> **Status:** PROPOSED — the single biggest maturity jump
-> **Priority:** 🟡 HIGH
-> **Prerequisite:** Phase 0 (visual regression) must be complete
+> **Status:** COMPLETED & VERIFIED (v0.8.0 prep)
+> **Priority:** 🟢 GREEN
+> **Progress Record:** [PHASE-17-PROGRESS.md](file:///home/mitravanu/Projects/anvil/docs/PHASE-17-PROGRESS.md)
 
 ### 6.1 Objective
 

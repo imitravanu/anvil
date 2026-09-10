@@ -1,0 +1,8 @@
+{
+  "name": "Add modulo operation to math module",
+  "category": "feature",
+  "prompt": "In src/math.js, add and export a new function modulo(a, b) that returns a % b. If b === 0, throw an Error(\"Modulo by zero\").",
+  "timeoutMs": 30000,
+  "maxTokens": 4096,
+  "fast": true
+}

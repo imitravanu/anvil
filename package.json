@@ -12,7 +12,9 @@
     "visual": "npm run visual -w @anvil/tui",
     "visual:capture": "npm run visual:capture -w @anvil/tui",
     "visual:diff": "npm run visual:diff -w @anvil/tui",
-    "visual:approve": "npm run visual:approve -w @anvil/tui"
+    "visual:approve": "npm run visual:approve -w @anvil/tui",
+    "eval": "npx tsx evals/run.ts",
+    "eval:report": "npx tsx evals/run.ts --report"
   },
   "devDependencies": {
     "typescript": "^5.7.2",

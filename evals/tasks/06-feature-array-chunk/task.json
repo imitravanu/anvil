@@ -1,0 +1,8 @@
+{
+  "name": "Implement array chunking helper",
+  "category": "feature",
+  "prompt": "In src/chunk.js, implement and export chunk(array, size). It should split array into sub-arrays of maximum length size. Return [] if array is empty.",
+  "timeoutMs": 30000,
+  "maxTokens": 4096,
+  "fast": true
+}

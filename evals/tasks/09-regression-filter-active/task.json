@@ -1,0 +1,8 @@
+{
+  "name": "Restore deleted user filter condition",
+  "category": "regression",
+  "prompt": "In src/users.js, getActiveUsers(users) has a regression where it forgot to filter out deleted users. Restore the condition !user.isDeleted alongside user.active.",
+  "timeoutMs": 30000,
+  "maxTokens": 4096,
+  "fast": true
+}

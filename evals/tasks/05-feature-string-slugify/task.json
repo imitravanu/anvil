@@ -1,0 +1,8 @@
+{
+  "name": "Implement string slugify utility",
+  "category": "feature",
+  "prompt": "In src/slugify.js, implement and export slugify(text). It should convert text to lowercase, replace non-alphanumeric characters with hyphens, collapse consecutive hyphens into a single hyphen, and trim hyphens from ends.",
+  "timeoutMs": 30000,
+  "maxTokens": 4096,
+  "fast": true
+}

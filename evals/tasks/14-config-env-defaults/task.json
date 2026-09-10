@@ -1,0 +1,8 @@
+{
+  "name": "Add pool configuration defaults to .env.example",
+  "category": "config",
+  "prompt": "In .env.example, append two new configuration lines: DATABASE_POOL_MIN=2 and DATABASE_POOL_MAX=10.",
+  "timeoutMs": 30000,
+  "maxTokens": 4096,
+  "fast": true
+}

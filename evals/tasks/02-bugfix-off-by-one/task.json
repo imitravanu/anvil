@@ -1,0 +1,8 @@
+{
+  "name": "Fix off-by-one error in pagination",
+  "category": "bugfix",
+  "prompt": "In src/paginate.js, paginate(items, page, pageSize) calculates startIndex = page * pageSize when it should be (page - 1) * pageSize. Fix it so page 1 returns the first pageSize items.",
+  "timeoutMs": 30000,
+  "maxTokens": 4096,
+  "fast": true
+}

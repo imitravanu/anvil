@@ -1,0 +1,8 @@
+{
+  "name": "Migrate deprecated logger calls across services",
+  "category": "migration",
+  "prompt": "Replace all occurrences of logger.warnLegacy(...) with logger.warn(...) across src/serviceA.js, src/serviceB.js, and src/serviceC.js.",
+  "timeoutMs": 30000,
+  "maxTokens": 4096,
+  "fast": true
+}

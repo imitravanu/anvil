@@ -1,0 +1,8 @@
+{
+  "name": "Implement simple bounded cache with size eviction",
+  "category": "feature",
+  "prompt": "In src/cache.js, implement SimpleCache. It takes maxSize in constructor (default 3), has get(key) returning the value or undefined, and set(key, value). If set causes size > maxSize, delete the oldest set key.",
+  "timeoutMs": 30000,
+  "maxTokens": 4096,
+  "fast": true
+}

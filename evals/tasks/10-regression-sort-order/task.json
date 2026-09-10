@@ -1,0 +1,8 @@
+{
+  "name": "Fix inverted priority sort order",
+  "category": "regression",
+  "prompt": "In src/priority.js, sortByPriority(items) is sorting ascending by mistake. Change the comparator to sort descending so highest priority items come first.",
+  "timeoutMs": 30000,
+  "maxTokens": 4096,
+  "fast": true
+}

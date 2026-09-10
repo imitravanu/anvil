@@ -1,0 +1,8 @@
+{
+  "name": "Extract shared role constants to constants.js",
+  "category": "multifile",
+  "prompt": "Extract the ROLES object from src/auth.js into a new file src/constants.js. Export ROLES from src/constants.js and import it in both src/auth.js and src/permissions.js.",
+  "timeoutMs": 30000,
+  "maxTokens": 4096,
+  "fast": true
+}

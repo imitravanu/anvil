@@ -34,3 +34,6 @@ jobs:
 
       - name: Run unit test suite (workspaces)
         run: npm test
+
+      - name: Run fast agent evaluation suite
+        run: npm run eval -- --fast --mock

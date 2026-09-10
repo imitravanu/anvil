@@ -1,0 +1,5 @@
+{
+  "name": "my-app",
+  "port": 8080,
+  "host": "localhost"
+}

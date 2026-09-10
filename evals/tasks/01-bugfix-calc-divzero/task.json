@@ -1,0 +1,8 @@
+{
+  "name": "Fix divide-by-zero in calculator",
+  "category": "bugfix",
+  "prompt": "In src/calc.js, divide(a, b) currently divides directly without checking for zero. Update divide(a, b) to throw an Error(\"Cannot divide by zero\") when b === 0.",
+  "timeoutMs": 30000,
+  "maxTokens": 4096,
+  "fast": true
+}
