@@ -37,3 +37,6 @@ jobs:
 
       - name: Run fast agent evaluation suite
         run: npm run eval -- --fast --mock
+
+      - name: Run provider certification suite (mock verification)
+        run: npm run certify -- --mock --all

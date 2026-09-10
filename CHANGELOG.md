@@ -4,6 +4,32 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 (major.minor.patch — breaking features bump minor while pre-1.0).
 
+## [0.8.0] — 2026-09-11
+
+### Added
+
+- **Phase 17 Benchmark Evaluation Harness**:
+  - 15 diverse benchmark tasks across 6 categories (bugfix, feature addition, refactoring/migration, regression detection, multifile extraction, and repo configuration) stored under `evals/tasks/`.
+  - Evaluation runner (`evals/run.ts`, `npm run eval`) with isolated temp repo worktrees, test verification scripts, and cost/token accounting.
+  - Deterministic offline mock provider (`createEvalMockProvider`) for instantaneous, zero-cost CI validation (`npm run eval -- --fast --mock`).
+- **Phase 18 Provider Certification Suite**:
+  - Automated 5-criterion test harness in `@anvil/core` (`packages/core/src/cert/`): streaming text, tool-call round-trips, multi-turn context continuity (3 turns), deterministic error containment (404/invalid model), and rate-limit backoff / circuit-breaker handling.
+  - Certified status tracking in model registry (`certified: "live" | "broken" | "untested"`, `certifiedAt`).
+  - Interactive `/model` picker badging (`[✅ live]`, `[❌ broken]`, `[⚠ untested]`).
+  - CLI `--version` output displaying latest certification timestamp (`anvil 0.8.0 (certified: 2026-09-10)`).
+  - Standalone certification CLI `scripts/certify-provider.ts` and shell runner `scripts/certify-all.sh`.
+- **Phase 19 Project Memory & Git-Native Workflow**:
+  - Persistent, per-project markdown knowledge storage in `.anvil/memory.md` bounded to 32KB (`MAX_MEMORY_BYTES`), with automatic creation of `.anvil/.gitignore`.
+  - Injected deterministically into system prompt at session start after project rules: `<base prompt>` → `[rules]` → `[memory]`.
+  - New `update_memory` tool allowing the agent to preserve findings, architectural conventions, and directory notes across sessions.
+  - Autonomous Goal Engine auto-commit: opt-in setting `autoCommit: true` in `settings.json` automatically creates git milestone commits (`anvil(goal): milestone <id> — <title>`).
+  - Git-native TUI commands: `/diff <branch>` (e.g. `/diff main`) for cross-branch unified diffs in `DiffModal`, and `/pr` for creating GitHub pull requests via `gh pr create --fill`.
+- **Phase 20 Distribution & CI Pipeline**:
+  - Clean `npm publish` readiness with standardized `exports`, `main`, `types`, and `prepublishOnly` scripts across `@anvil/core`, `@anvil/tui`, and `@anvil/cli`.
+  - GitHub Actions CI pipeline expanded to gate build, strict typecheck, unit tests, fast evaluation benchmarks, visual regression pixel testing, and provider certification.
+  - Automated GitHub Actions release pipeline (`.github/workflows/release.yml`) for publishing to npm and creating GitHub releases on `v*` tags.
+  - Support for `npx @anvil/cli` zero-install usage and `npm install -g @anvil/cli`.
+
 ## [0.7.0] — 2026-09-09
 
 ### Added
@@ -433,7 +459,8 @@ onboarding, sub-agent delegation, and MCP (stdio) support.
 
 - Verification/eval harness, provider certification, project memory & git-native workflow, distribution (see `docs/ROADMAP.md`).
 
-[Unreleased]: https://github.com/mitravanu/anvil/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/mitravanu/anvil/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/mitravanu/anvil/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/mitravanu/anvil/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/mitravanu/anvil/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/mitravanu/anvil/compare/v0.6.1...v0.6.2

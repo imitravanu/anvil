@@ -35,7 +35,12 @@ export function loadProjectMemory(projectRoot: string): ProjectMemory | null {
       const fd = fs.openSync(resolved, "r");
       try {
         const buf = Buffer.alloc(MAX_MEMORY_BYTES);
-        fs.readSync(fd, buf, 0, MAX_MEMORY_BYTES, 0);
+        // Keep the NEWEST slice of the memory: entries are appended at the
+        // tail, so reading the file head would silently hide the most recent
+        // knowledge from the model while the file itself keeps growing.
+        // (Write-side capping in appendToMemory prevents growth past the cap,
+        // but hand-edited or legacy files can still exceed it.)
+        fs.readSync(fd, buf, 0, MAX_MEMORY_BYTES, stat.size - MAX_MEMORY_BYTES);
         raw = buf.toString("utf8") + "\n[memory truncated at 32KB]";
       } finally {
         fs.closeSync(fd);
@@ -60,6 +65,10 @@ export function loadProjectMemory(projectRoot: string): ProjectMemory | null {
 /**
  * Appends a new entry to .anvil/memory.md with an ISO timestamp header.
  * Auto-creates .anvil/ directory and .anvil/.gitignore to exclude memory.md if needed.
+ * Enforces MAX_MEMORY_BYTES on write: when an append would exceed the cap, the
+ * OLDEST entries are dropped (newest-first retention) so the file never outgrows
+ * the cap and the read side never needs to hide recent knowledge.
+ * Throws if the entry alone exceeds the cap — refusing beats silently corrupting.
  */
 export function appendToMemory(projectRoot: string, entry: string): void {
   const anvilDir = path.join(projectRoot, ".anvil");
@@ -79,12 +88,60 @@ export function appendToMemory(projectRoot: string, entry: string): void {
 
   const memoryFile = path.join(projectRoot, MEMORY_RELATIVE_PATH);
   const timestamp = new Date().toISOString();
-  const fileExists = fs.existsSync(memoryFile);
-  const prefix = fileExists ? "\n\n" : "";
   const header = `### [${timestamp}]\n`;
-  const text = `${prefix}${header}${entry.trim()}\n`;
+  const newSection = `${header}${entry.trim()}\n`;
 
-  fs.appendFileSync(memoryFile, text, "utf8");
+  if (Buffer.byteLength(newSection, "utf8") > MAX_MEMORY_BYTES) {
+    throw new Error(
+      `Memory entry alone exceeds the ${MAX_MEMORY_BYTES}-byte cap — store a shorter note.`
+    );
+  }
+
+  const fileExists = fs.existsSync(memoryFile);
+  const existing = fileExists ? fs.readFileSync(memoryFile, "utf8") : "";
+  const appended = `${fileExists ? "\n\n" : ""}${newSection}`;
+
+  if (Buffer.byteLength(existing, "utf8") + Buffer.byteLength(appended, "utf8") <= MAX_MEMORY_BYTES) {
+    fs.appendFileSync(memoryFile, appended, "utf8");
+    return;
+  }
+
+  // Over cap: rebuild keeping only the newest sections that fit (oldest
+  // dropped). Section separators are "\n\n"; the final content is
+  //   kept[0] \n\n kept[1] \n\n … \n\n newSection
+  const sections = splitMemorySections(existing);
+  // total tracks (bytes of kept sections so far + one separator each) plus
+  // the trailing separator before newSection. Greedy, newest-first.
+  let total = Buffer.byteLength(newSection, "utf8");
+  const kept: string[] = []; // newest-first accumulation
+  for (let i = sections.length - 1; i >= 0; i--) {
+    const sectionBytes = Buffer.byteLength(sections[i], "utf8");
+    if (total + sectionBytes + 2 > MAX_MEMORY_BYTES) break;
+    total += sectionBytes + 2;
+    kept.push(sections[i]); // sections[i] is older than what's already kept
+  }
+  const rewritten =
+    kept.length > 0 ? `${kept.reverse().join("\n\n")}\n\n${newSection}` : newSection;
+  fs.writeFileSync(memoryFile, rewritten, "utf8");
+}
+
+/** Section header line begins a new entry. Files written by us always start
+ * with one; legacy/hand-edited content without any header is one section. */
+const SECTION_HEADER_RE = /^### \[/;
+
+function splitMemorySections(content: string): string[] {
+  const sections: string[] = [];
+  let current: string | null = null;
+  for (const line of content.split("\n")) {
+    if (SECTION_HEADER_RE.test(line)) {
+      if (current !== null) sections.push(current);
+      current = line;
+    } else if (current !== null) {
+      current += "\n" + line;
+    }
+  }
+  if (current !== null && current.trim().length > 0) sections.push(current);
+  return sections;
 }
 
 /**

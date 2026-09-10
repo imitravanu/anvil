@@ -1,0 +1,79 @@
+name: Release & Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    name: Publish to npm & Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build all packages
+        run: npm run build
+
+      - name: Typecheck all workspaces
+        run: npm run typecheck
+
+      - name: Run full unit test suite
+        run: npm test
+
+      - name: Run evaluation benchmark gate
+        run: npm run eval -- --fast --mock
+
+      - name: Run provider certification gate
+        run: npm run certify -- --mock --all
+
+      - name: Publish @anvil/core
+        run: npm publish -w @anvil/core --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @anvil/tui
+        run: npm publish -w @anvil/tui --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @anvil/cli
+        run: npm publish -w @anvil/cli --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Package npm tarballs for release
+        run: |
+          mkdir -p dist-tarballs
+          npm pack -w @anvil/core --pack-destination dist-tarballs
+          npm pack -w @anvil/tui --pack-destination dist-tarballs
+          npm pack -w @anvil/cli --pack-destination dist-tarballs
+
+      - name: Generate SHA256 checksums
+        working-directory: dist-tarballs
+        run: sha256sum *.tgz > SHA256SUMS
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist-tarballs/*.tgz \
+            dist-tarballs/SHA256SUMS \
+            --title "Anvil $GITHUB_REF_NAME" \
+            --generate-notes

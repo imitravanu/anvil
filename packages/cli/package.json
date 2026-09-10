@@ -1,11 +1,13 @@
 {
   "name": "@anvil/cli",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "A terminal-based AI coding agent with interactive permission prompts.",
   "author": "mitravanu",
   "license": "MIT",
   "keywords": ["ai", "coding-agent", "terminal", "cli", "ink"],
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
     "anvil": "bin/anvil.cjs"
   },

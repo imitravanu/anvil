@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { definition, execute } from "../updateMemory.js";
-import { loadProjectMemory } from "../../config/memory.js";
+import { loadProjectMemory, MAX_MEMORY_BYTES } from "../../config/memory.js";
 import type { ToolContext } from "../types.js";
 
 let tmpDir: string;
@@ -49,5 +49,13 @@ describe("update_memory tool", () => {
     const gitignore = path.join(tmpDir, ".anvil", ".gitignore");
     expect(fs.existsSync(gitignore)).toBe(true);
     expect(fs.readFileSync(gitignore, "utf8")).toContain("memory.md");
+  });
+
+  it("surfaces a memory-cap failure as a tool error", async () => {
+    const res = await execute({ entry: "Y".repeat(MAX_MEMORY_BYTES + 10) }, ctx);
+    expect(res.isError).toBe(true);
+    expect(res.summary).toContain("update_memory failed");
+    // Nothing was written.
+    expect(fs.existsSync(path.join(tmpDir, ".anvil", "memory.md"))).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 # Anvil — Complete Roadmap & Agent Build Guide
 
-> **Version:** 0.7.0 (current) → 0.8.0 (target)
-> **Last Updated:** 2026-09-10
+> **Version:** 0.8.0 (current)
+> **Last Updated:** 2026-09-11
 > **Purpose:** This document is the **single source of truth** for all remaining Anvil development. It contains everything an agent needs to understand the project, what's been built, and what to build next — with full specifications, file lists, acceptance criteria, and sequencing constraints.
 
 ---
@@ -164,7 +164,7 @@ Visual:       48 baseline frames (8 scenarios × 3 sizes × 2 themes)
 Total:        ~400 unit tests + 48 visual baselines
 ```
 
-### Current Version: **0.7.0**
+### Current Version: **0.8.0**
 
 ### What Remains Open
 
@@ -173,8 +173,8 @@ Total:        ~400 unit tests + 48 visual baselines
 | Phase 17 Verification Harness | DONE (15 benchmark tasks + runner + CI gate) | Phase 17 |
 | Phase 18 Provider Certification | DONE (5-criteria cert harness + registry status + CLI/UI surfacing) | Phase 18 |
 | Phase 19 Project Memory & Git Workflow | DONE (.anvil/memory.md + update_memory + auto-commit + /diff + /pr) | Phase 19 |
+| Phase 20 Distribution & CI Pipeline | DONE (npm publish packaging + CI matrix + release workflow) | Phase 20 |
 | U11 MCP Tool UX | Open (permission prompts for external tools) | With Phase 10 maturity |
-| Phase 20 Distribution & CI Pipeline | PROPOSED | After Phase 19 |
 
 
 ---
@@ -715,7 +715,7 @@ export interface AnvilSettings {
 
 ## 9. Phase 20 — Distribution & CI Pipeline
 
-> **Status:** PROPOSED
+> **Status:** COMPLETED (see [PHASE-20-PROGRESS.md](PHASE-20-PROGRESS.md))
 > **Priority:** 🟢 MEDIUM
 > **Prerequisite:** Phase 17-19 (eval harness, certification, memory)
 

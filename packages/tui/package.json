@@ -1,6 +1,6 @@
 {
   "name": "@anvil/tui",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Ink terminal UI for the Anvil coding agent.",
   "author": "mitravanu",
   "license": "MIT",
@@ -17,8 +17,16 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p .",
+    "prepublishOnly": "npm run build",
     "typecheck": "tsc -p . --noEmit",
     "test": "vitest run",
     "visual": "vitest run src/__visual__/visual.test.tsx",

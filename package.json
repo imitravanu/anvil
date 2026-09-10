@@ -16,7 +16,8 @@
     "eval": "npx tsx evals/run.ts",
     "eval:report": "npx tsx evals/run.ts --report",
     "certify": "npx tsx scripts/certify-provider.ts",
-    "certify:all": "bash scripts/certify-all.sh"
+    "certify:all": "bash scripts/certify-all.sh",
+    "prepublishOnly": "npm run build"
   },
 
   "devDependencies": {

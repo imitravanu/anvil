@@ -68,16 +68,28 @@ permission prompt with a real unified diff.
 
 ## Install
 
+### Global install via npm
 ```bash
-# from a checkout of this repo
-cd packages/cli && npm pack
-npm install -g ./anvil-cli-<version>.tgz   # see the filename npm pack prints
+npm install -g @anvil/cli
 
-# then run it from any directory
-cd ~/my-project && anvil
+# run from any project directory
+cd ~/my-project
+anvil
 ```
 
-The packages are prepared for npm publishing; inspect `npm pack --dry-run` before a release.
+### Try without installing (npx)
+```bash
+npx @anvil/cli
+```
+
+### Build from source
+```bash
+git clone https://github.com/mitravanu/anvil.git
+cd anvil
+npm ci
+npm run build
+npm run test
+```
 
 ## First-run setup
 

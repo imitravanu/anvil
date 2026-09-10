@@ -54,6 +54,21 @@ describe("loadProjectMemory", () => {
     expect(mem?.content).toContain("[memory truncated at 32KB]");
     expect(mem?.sizeBytes).toBe(huge.length);
   });
+
+  it("keeps the NEWEST memory slice when file exceeds MAX_MEMORY_BYTES", () => {
+    const anvilDir = path.join(tmpDir, ".anvil");
+    fs.mkdirSync(anvilDir, { recursive: true });
+    // Old filler fills the cap; the marker lives at the tail (newest). A
+    // head-read would hide it; the tail-read must surface it.
+    const filler = "O".repeat(MAX_MEMORY_BYTES);
+    const marker = "NEWEST_MARKER_" + "Z".repeat(100);
+    fs.writeFileSync(path.join(anvilDir, "memory.md"), filler + marker, "utf8");
+
+    const mem = loadProjectMemory(tmpDir);
+    expect(mem).not.toBeNull();
+    expect(mem?.content).toContain("NEWEST_MARKER_");
+    expect(mem?.content).toContain("[memory truncated at 32KB]");
+  });
 });
 
 describe("appendToMemory", () => {
@@ -74,6 +89,29 @@ describe("appendToMemory", () => {
     // Should have 2 timestamp headers
     const matches = mem?.content.match(/### \[/g);
     expect(matches?.length).toBe(2);
+  });
+
+  it("drops the OLDEST entries when an append would exceed the cap", () => {
+    const big = "B".repeat(MAX_MEMORY_BYTES / 2);
+    appendToMemory(tmpDir, `FIRST_${big}`);
+    appendToMemory(tmpDir, `SECOND_${big}`);
+    appendToMemory(tmpDir, "THIRD_keepme");
+
+    const mem = loadProjectMemory(tmpDir);
+    expect(mem).not.toBeNull();
+    expect(mem?.sizeBytes).toBeLessThanOrEqual(MAX_MEMORY_BYTES);
+    expect(mem?.content).toContain("THIRD_keepme");
+    expect(mem?.content).toContain("SECOND_");
+    // The file never grows past the cap, so the oldest entry is gone.
+    expect(mem?.content).not.toContain("FIRST_");
+  });
+
+  it("refuses an entry that alone exceeds the cap", () => {
+    expect(() => appendToMemory(tmpDir, "X".repeat(MAX_MEMORY_BYTES + 10))).toThrow(
+      new RegExp(`exceeds the ${MAX_MEMORY_BYTES}-byte cap`)
+    );
+    // Nothing was written (the throw happens before any file I/O).
+    expect(fs.existsSync(path.join(tmpDir, ".anvil", "memory.md"))).toBe(false);
   });
 });
 

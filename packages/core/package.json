@@ -1,6 +1,6 @@
 {
   "name": "@anvil/core",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Core agent loop, provider adapters, sessions, and tools for Anvil.",
   "author": "mitravanu",
   "license": "MIT",
@@ -9,8 +9,16 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run build",
     "typecheck": "tsc -p . --noEmit",
     "test": "vitest run"
   },
