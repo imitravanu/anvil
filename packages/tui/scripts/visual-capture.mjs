@@ -33,8 +33,11 @@ const outDir = process.argv.includes("--approve")
 // --- Matrix Definitions ---
 
 const SIZES = [
+  { name: "40x20", cols: 40, rows: 20 },
   { name: "80x24", cols: 80, rows: 24 },
+  { name: "100x30", cols: 100, rows: 30 },
   { name: "120x40", cols: 120, rows: 40 },
+  { name: "160x50", cols: 160, rows: 50 },
   { name: "200x60", cols: 200, rows: 60 },
 ];
 
