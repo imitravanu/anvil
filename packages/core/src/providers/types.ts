@@ -88,6 +88,8 @@ export interface ModelProvider {
   streamCompletion(request: CompletionRequest): AsyncGenerator<StreamEvent>;
 }
 
+export type CertificationStatus = "live" | "broken" | "untested";
+
 export interface ModelInfo {
   id: string; // what you pass as `model` in CompletionRequest
   providerId: string;
@@ -96,4 +98,7 @@ export interface ModelInfo {
   supportsTools: boolean;
   supportsVision: boolean;
   isFree?: boolean;
+  certified?: CertificationStatus;
+  certifiedAt?: string; // ISO timestamp
 }
+

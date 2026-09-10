@@ -171,8 +171,10 @@ Total:        ~400 unit tests + 48 visual baselines
 | Item | Status | Phase |
 |---|---|---|
 | Phase 17 Verification Harness | DONE (15 benchmark tasks + runner + CI gate) | Phase 17 |
+| Phase 18 Provider Certification | DONE (5-criteria cert harness + registry status + CLI/UI surfacing) | Phase 18 |
 | U11 MCP Tool UX | Open (permission prompts for external tools) | With Phase 10 maturity |
-| Phase 18–20 roadmap items | PROPOSED | After Phase 17 |
+| Phase 19–20 roadmap items | PROPOSED | After Phase 18 |
+
 
 ---
 
@@ -533,10 +535,11 @@ export interface EvalReport {
 ---
 
 ## 7. Phase 18 — Provider Certification
-
-> **Status:** PROPOSED
-> **Priority:** 🟢 MEDIUM
+ 
+> **Status:** COMPLETED (see `docs/PHASE-18-PROGRESS.md`)
+> **Priority:** RESOLVED
 > **Prerequisite:** Phase 17 (eval harness)
+
 
 ### 7.1 Objective
 

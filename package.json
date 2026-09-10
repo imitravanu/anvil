@@ -14,8 +14,11 @@
     "visual:diff": "npm run visual:diff -w @anvil/tui",
     "visual:approve": "npm run visual:approve -w @anvil/tui",
     "eval": "npx tsx evals/run.ts",
-    "eval:report": "npx tsx evals/run.ts --report"
+    "eval:report": "npx tsx evals/run.ts --report",
+    "certify": "npx tsx scripts/certify-provider.ts",
+    "certify:all": "bash scripts/certify-all.sh"
   },
+
   "devDependencies": {
     "typescript": "^5.7.2",
     "@types/node": "^22.10.2"

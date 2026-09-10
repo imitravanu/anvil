@@ -33,6 +33,17 @@ export function formatPricingTag(isFree: boolean | undefined): string {
   return kind === "free" ? " [FREE]" : kind === "paid" ? " [PAID]" : "";
 }
 
+/** Certification badge: " [✅ live]", " [❌ broken]", or " [⚠ untested]". */
+export function formatCertificationBadge(
+  certified: "live" | "broken" | "untested" | undefined
+): string {
+  if (certified === "live") return " [✅ live]";
+  if (certified === "broken") return " [❌ broken]";
+  if (certified === "untested") return " [⚠ untested]";
+  return "";
+}
+
+
 /** Code-point-aware truncation ("…"). Never use String#length for this — CJK/emoji. */
 export function curtail(text: string, max: number): string {
   if (max <= 0) return "";

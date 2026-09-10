@@ -178,12 +178,16 @@ export function ModelPicker({
     const pricingTag = nameAlreadySaysFree ? "" : formatPricingTag(row.model.isFree);
     const limited = isRateLimited(row.model.providerId, row.model.id);
 
+    const certBadge = row.model.certified;
+
     if (!row.enabled) {
       return (
         <Text key={row.model.id} color={theme.colors.dim}>
           {marker}
           {row.model.displayName}
-          {pricingTag} {limited ? "[rate-limited] " : ""}(no API key)
+          {pricingTag}
+          {certBadge === "live" ? " [✅ live]" : certBadge === "broken" ? " [❌ broken]" : certBadge === "untested" ? " [⚠ untested]" : ""}
+          {limited ? " [rate-limited]" : ""} (no API key)
         </Text>
       );
     }
@@ -196,11 +200,20 @@ export function ModelPicker({
         ) : kind === "paid" ? (
           <Text color={theme.colors.dim}> [PAID]</Text>
         ) : null}
+        {certBadge === "live" ? (
+          <Text color={theme.colors.toolDone}> [✅ live]</Text>
+        ) : certBadge === "broken" ? (
+          <Text color={theme.colors.toolError}> [❌ broken]</Text>
+        ) : certBadge === "untested" ? (
+          <Text color={theme.colors.dim}> [⚠ untested]</Text>
+        ) : null}
+
         {limited ? <Text color={theme.colors.toolRunning}> [rate-limited]</Text> : null}
         {isCurrent ? " (current)" : ""}
       </Text>
     );
   };
+
 
   // Group the visible window under section headers (headers are display-only,
   // never selectable — navigation above already skips disabled rows).

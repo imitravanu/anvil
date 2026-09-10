@@ -1,4 +1,4 @@
-import { ModelInfo } from "./types.js";
+import { ModelInfo, CertificationStatus } from "./types.js";
 
 // Two indexes: provider-qualified (exact) and id -> first entry. Keying by id
 // alone used to let the same id registered under a second provider silently
@@ -27,6 +27,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     contextWindow: 200_000,
     supportsTools: true,
     supportsVision: true,
+    certified: "untested",
   },
   {
     id: "claude-sonnet-5",
@@ -35,6 +36,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     contextWindow: 200_000,
     supportsTools: true,
     supportsVision: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "claude-3-7-sonnet-20250219",
@@ -43,6 +46,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     contextWindow: 200_000,
     supportsTools: true,
     supportsVision: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "claude-3-5-sonnet-20241022",
@@ -51,6 +56,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     contextWindow: 200_000,
     supportsTools: true,
     supportsVision: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "claude-3-5-haiku-20241022",
@@ -59,6 +66,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     contextWindow: 200_000,
     supportsTools: true,
     supportsVision: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "gpt-5.1",
@@ -67,6 +76,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     contextWindow: 400_000,
     supportsTools: true,
     supportsVision: true,
+    certified: "untested",
   },
   {
     id: "gpt-4o",
@@ -75,6 +85,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     contextWindow: 128_000,
     supportsTools: true,
     supportsVision: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "gpt-4o-mini",
@@ -83,6 +95,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     contextWindow: 128_000,
     supportsTools: true,
     supportsVision: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "o3-mini",
@@ -91,6 +105,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     contextWindow: 200_000,
     supportsTools: true,
     supportsVision: false,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     // Default Gemini model. Live-verified 2026-09 with a free-tier key:
@@ -103,6 +119,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "gemini-2.0-flash",
@@ -112,6 +130,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "gemini-1.5-pro",
@@ -120,6 +140,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     contextWindow: 2_097_152,
     supportsTools: true,
     supportsVision: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "gemini-1.5-flash",
@@ -129,6 +151,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     // Live-verified 2026-09: gemini-2.5-pro is no longer available to new
@@ -141,6 +165,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     contextWindow: 1_000_000,
     supportsTools: true,
     supportsVision: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   // OpenRouter models: free models are listed first so fallback and picker prioritize them.
   {
@@ -151,6 +177,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "google/gemma-4-31b-it:free",
@@ -160,6 +188,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "google/gemma-4-26b-a4b-it:free",
@@ -169,6 +199,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "poolside/laguna-s-2.1:free",
@@ -178,6 +210,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "poolside/laguna-xs-2.1:free",
@@ -187,6 +221,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "cohere/north-mini-code:free",
@@ -196,6 +232,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "z-ai/glm-5.2:free",
@@ -205,6 +243,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "nvidia/nemotron-3.5-lightning:free",
@@ -214,6 +254,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -223,6 +265,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "nvidia/nemotron-3-super-120b-a12b:free",
@@ -232,6 +276,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "minimax/minimax-m3:free",
@@ -241,6 +287,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "minimax/minimax-m2.7:free",
@@ -250,6 +298,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "thinkingmachines/inkling:free",
@@ -259,6 +309,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "thinkingmachines/inkling-small:free",
@@ -268,6 +320,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "dots-studio/dots-3-note-preview:free",
@@ -277,6 +331,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "inclusionai/ling-3.0-flash-fin:free",
@@ -286,6 +342,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "liquid/lfm-2.5-2.6b:free",
@@ -295,6 +353,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
@@ -304,6 +364,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   // Paid / credits required models:
   {
@@ -314,6 +376,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: false,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   // Orcarouter models: free-only policy — the source reads the public
   // pricing catalog's is_free_tier flag, so paid models never enter the
@@ -328,6 +392,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "deepseek/deepseek-v4-flash-free",
@@ -337,6 +403,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "tencent/hy3-free",
@@ -346,6 +414,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "orcarouter/free",
@@ -355,6 +425,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   // Groq models (100% Free Tier, fast LPU inference)
   {
@@ -365,6 +437,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "llama-3.1-8b-instant",
@@ -374,6 +448,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "qwen-2.5-coder-32b",
@@ -383,6 +459,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   // GitHub Models (Free with GitHub account / Personal Access Token)
   {
@@ -393,6 +471,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "meta-llama-3.3-70b-instruct",
@@ -402,6 +482,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "mistral-large-2411",
@@ -411,6 +493,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   // Cerebras models (1 Million free tokens/day)
   {
@@ -421,6 +505,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "llama3.1-8b",
@@ -430,6 +516,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   // Mistral AI models (Experimentation Free Tier)
   {
@@ -440,6 +528,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "mistral-small-latest",
@@ -449,6 +539,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   // Ollama models ($0, 100% Local and Offline)
   {
@@ -459,6 +551,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
   {
     id: "llama3.2:latest",
@@ -468,6 +562,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-10T18:00:00.000Z",
   },
 ];
 
@@ -541,4 +637,34 @@ export function visibleModels(): ModelInfo[] {
   return MODEL_REGISTRY.filter((m) => m.isFree !== false);
 }
 
+export function setModelCertification(
+  id: string,
+  providerId: string,
+  status: CertificationStatus,
+  certifiedAt?: string
+): boolean {
+  const model = getModel(id, providerId);
+  if (!model) return false;
+  model.certified = status;
+  model.certifiedAt = certifiedAt ?? new Date().toISOString();
+  return true;
+}
+
+export function getLatestCertificationDate(): string | null {
+  let latest: string | null = null;
+  for (const m of MODEL_REGISTRY) {
+    if (m.certifiedAt) {
+      if (!latest || m.certifiedAt > latest) {
+        latest = m.certifiedAt;
+      }
+    }
+  }
+  return latest;
+}
+
+export function getModelsByCertification(status: CertificationStatus): ModelInfo[] {
+  return MODEL_REGISTRY.filter((m) => (m.certified ?? "untested") === status);
+}
+
 _reindex();
+

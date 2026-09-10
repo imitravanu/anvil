@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collapsePlan, curtail, displayModelLabel, providerLabel, providerOfModel } from "../format.js";
+import { collapsePlan, curtail, displayModelLabel, formatCertificationBadge, providerLabel, providerOfModel } from "../format.js";
 
 describe("format helpers", () => {
   it("displayModelLabel resolves a known registry model and falls back to the id", () => {
@@ -65,5 +65,12 @@ describe("format helpers", () => {
 
   it("collapsePlan handles an empty plan", () => {
     expect(collapsePlan("", 80)).toEqual({ lines: [], hidden: 0 });
+  });
+
+  it("formatCertificationBadge returns correct badge for each status", () => {
+    expect(formatCertificationBadge("live")).toBe(" [✅ live]");
+    expect(formatCertificationBadge("broken")).toBe(" [❌ broken]");
+    expect(formatCertificationBadge("untested")).toBe(" [⚠ untested]");
+    expect(formatCertificationBadge(undefined)).toBe("");
   });
 });

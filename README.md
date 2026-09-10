@@ -112,7 +112,31 @@ Selection precedence: CLI flag → env var → `~/.anvil/settings.json` → firs
 An explicitly selected provider that has no configured API key fails with an actionable error;
 it never silently falls back to another provider.
 
+### Supported Providers & Certification (Phase 18)
+
+Every model provider adapter undergoes strict verification across 5 criteria: streaming text deltas, tool calling round-trips, 3-turn context continuity, clean error containment (404/invalid model), and rate-limit/circuit-breaker resilience (`npm run certify`).
+
+| Provider | Environment Variable / Key | Free Tier | Primary Certified Models | Tools | Vision | Status |
+|---|---|---|---|---|---|---|
+| **Anthropic** | `ANTHROPIC_API_KEY` | Paid | `claude-sonnet-5`, `claude-3.7-sonnet`, `claude-3.5-sonnet`, `claude-3.5-haiku` | Yes | Yes | ✅ live |
+| **OpenAI** | `OPENAI_API_KEY` | Paid | `gpt-4o`, `gpt-4o-mini`, `o3-mini` | Yes | Yes | ✅ live |
+| **Google Gemini** | `GEMINI_API_KEY` | Free & Paid | `gemini-3.6-flash`, `gemini-2.0-flash`, `gemini-1.5-pro`, `gemini-1.5-flash` | Yes | Yes | ✅ live |
+| **OpenRouter** | `OPENROUTER_API_KEY` | Free & Paid | `openrouter/free`, `google/gemma-4-31b-it:free`, `meta-llama/llama-3.3-70b-instruct:free` | Yes | Yes | ✅ live |
+| **Orcarouter** | `ORCAROUTER_API_KEY` | Free & Paid | `orcarouter/free`, `orcarouter/deepseek-r1:free`, `orcarouter/llama-3.3-70b:free` | Yes | Yes | ✅ live |
+| **Groq** | `GROQ_API_KEY` | Free Tier | `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, `qwen-2.5-coder-32b` | Yes | No | ✅ live |
+| **GitHub Models** | `GITHUB_TOKEN` / PAT | Free Preview | `gpt-4o-mini`, `meta-llama-3.3-70b-instruct`, `mistral-large-2411` | Yes | Mini: Yes | ✅ live |
+| **Cerebras** | `CEREBRAS_API_KEY` | Free Tier (1M/day) | `llama3.3-70b`, `llama3.1-8b` | Yes | No | ✅ live |
+| **Mistral AI** | `MISTRAL_API_KEY` | Free Experimentation | `codestral-latest`, `mistral-small-latest` | Yes | No | ✅ live |
+| **Ollama** | None / `OLLAMA_HOST` | 100% Free / Local | `qwen2.5-coder:latest`, `llama3.2:latest` | Yes | Model-dependent | ✅ live |
+
+Re-run provider certification anytime:
+```bash
+npm run certify -- --mock --all   # instant deterministic mock pass
+./scripts/certify-all.sh          # runs all providers with configured keys
+```
+
 ### Slash commands
+
 
 Type `/` and a **command menu appears automatically** — arrow through it, Enter to run, Tab to
 fill. Or type the command directly:

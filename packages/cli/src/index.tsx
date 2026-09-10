@@ -27,10 +27,12 @@ import {
   ProviderSelectionError,
   resolveProviderSelection,
   buildSystemPrompt,
+  getLatestCertificationDate,
   type ModelProvider,
   type ProviderId,
   type ToolDefinition,
 } from "@anvil/core";
+
 import { App, FirstRunSetup, TuiPermissionBroker, isThemeName, loadCustomThemes } from "@anvil/tui";
 import { runHeadless, readStdin } from "./headless.js";
 import { runGoalHeadless } from "./goalRunner.js";
@@ -428,9 +430,15 @@ const first = argv[0];
 
 // Honored anywhere — `anvil -y --help` used to open an interactive chat.
 if (argv.includes("--version") || argv.includes("-v")) {
-  console.log(`anvil ${VERSION}`);
+  const certDate = getLatestCertificationDate();
+  if (certDate) {
+    console.log(`anvil ${VERSION} (certified: ${certDate.slice(0, 10)})`);
+  } else {
+    console.log(`anvil ${VERSION}`);
+  }
   process.exit(0);
 }
+
 if (argv.includes("--help") || argv.includes("-h")) {
   console.log(HELP);
   process.exit(0);
