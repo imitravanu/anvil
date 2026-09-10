@@ -172,8 +172,9 @@ Total:        ~400 unit tests + 48 visual baselines
 |---|---|---|
 | Phase 17 Verification Harness | DONE (15 benchmark tasks + runner + CI gate) | Phase 17 |
 | Phase 18 Provider Certification | DONE (5-criteria cert harness + registry status + CLI/UI surfacing) | Phase 18 |
+| Phase 19 Project Memory & Git Workflow | DONE (.anvil/memory.md + update_memory + auto-commit + /diff + /pr) | Phase 19 |
 | U11 MCP Tool UX | Open (permission prompts for external tools) | With Phase 10 maturity |
-| Phase 19–20 roadmap items | PROPOSED | After Phase 18 |
+| Phase 20 Distribution & CI Pipeline | PROPOSED | After Phase 19 |
 
 
 ---
@@ -606,7 +607,7 @@ export interface ModelInfo {
 
 ## 8. Phase 19 — Project Memory & Git-Native Workflow
 
-> **Status:** PROPOSED
+> **Status:** COMPLETED (see [PHASE-19-PROGRESS.md](PHASE-19-PROGRESS.md))
 > **Priority:** 🟢 MEDIUM
 > **Prerequisite:** Phase 17 (eval harness scores memory's value)
 

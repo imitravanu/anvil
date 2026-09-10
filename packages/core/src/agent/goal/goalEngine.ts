@@ -10,6 +10,7 @@ import { AgentOptions } from "../types.js";
 import { ModelProvider } from "../../providers/types.js";
 import { buildSystemPrompt } from "../../config/rules.js";
 import { TOOL_DEFINITIONS } from "../../tools/index.js";
+import { autoCommitMilestone } from "../../git/gitUtils.js";
 
 export const MAX_GOAL_TURNS = 10;
 
@@ -46,7 +47,9 @@ export interface GoalMissionDeps {
   projectRoot: string;
   sendTurn: GoalTurnRunner;
   summarizeChanges(): Promise<{ path: string }[]>;
+  autoCommit?: boolean;
 }
+
 
 function emptyOutcome(): GoalTurnOutcome {
   return { text: "", errored: false, verificationFailed: false, permissionDenied: false, cancelled: false };
@@ -123,7 +126,9 @@ export interface GoalEngineOptions {
   maxTurns?: number;
   tools?: AgentOptions["tools"];
   autoVerify?: boolean | string;
+  autoCommit?: boolean;
 }
+
 
 /**
  * The mission protocol: awareness → decomposition → evidence-gated milestone
@@ -288,6 +293,18 @@ export async function* runGoalMission(
 
     milestone.status = "completed";
     milestone.summary = (reviewVerdict.replace(/^YES\s*—?\s*/i, "") || outcome.text).slice(0, 300);
+
+    if (deps.autoCommit) {
+      const commitRes = await autoCommitMilestone(deps.projectRoot, milestone.id, milestone.title);
+      if (commitRes.committed && commitRes.hash) {
+        yield {
+          type: "milestone_progress",
+          milestone,
+          detail: `Committed milestone ${milestone.id}: ${commitRes.hash}`,
+        };
+      }
+    }
+
     yield {
       type: "milestone_completed",
       milestone,
@@ -345,9 +362,11 @@ export async function* runGoalMission(
 export class GoalEngine {
   private readonly session: AgentSession;
   private readonly maxTurns: number;
+  private readonly autoCommit: boolean;
 
   constructor(options: GoalEngineOptions) {
     this.maxTurns = options.maxTurns ?? MAX_GOAL_TURNS;
+    this.autoCommit = options.autoCommit ?? false;
     const basePrompt = buildSystemPrompt(GOAL_AGENT_SYSTEM_PROMPT, options.projectRoot);
     this.session = new AgentSession(options.provider, {
       systemPrompt: basePrompt,
@@ -374,6 +393,7 @@ export class GoalEngine {
       projectRoot: this.session.projectRoot,
       summarizeChanges: () => this.session.summarizeChanges(),
       sendTurn: (prompt, milestone) => this.sendTurn(prompt, milestone),
+      autoCommit: this.autoCommit,
     }, this.maxTurns);
   }
 

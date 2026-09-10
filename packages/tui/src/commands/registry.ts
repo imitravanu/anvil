@@ -7,6 +7,8 @@ import {
   collectMcpToolDefs,
   createOpenRouterFreeSource,
   createOrcarouterFreeSource,
+  createPullRequest,
+  getBranchDiff,
   listSessions,
   loadSession,
   renameSession,
@@ -33,8 +35,9 @@ export const COMMANDS: Command[] = [
         image: "e.g. /image diagram.png — then ask about it",
         ledger: "e.g. /ledger — what ran, what failed, tokens spent",
         retry: "e.g. /retry actually use python 3.12 — retry with corrected wording",
-        diff: "e.g. /diff — see every file the session touched",
+        diff: "e.g. /diff or /diff main — review session edits or branch diff",
         goal: "e.g. /goal add user auth — autonomous plan, execution & critique",
+        pr: "e.g. /pr — create a GitHub pull request via gh",
         mcp: "e.g. /mcp reconnect — refresh all servers",
         model: "e.g. /model — Enter switches, Esc cancels",
         rewind: "e.g. /rewind 2 — restore checkpoint #2 (plain /rewind lists them)",
@@ -151,8 +154,13 @@ export const COMMANDS: Command[] = [
   },
   {
     name: "diff",
-    description: "Review file changes made this session (vs pre-change snapshots)",
-    run: (_args, ctx) => ctx.showDiff(),
+    description: "Review file changes: /diff (session changes) or /diff <branch>",
+    run: (args, ctx) => ctx.showDiff(args[0]),
+  },
+  {
+    name: "pr",
+    description: "Create a GitHub pull request for the current branch (via gh)",
+    run: (_args, ctx) => ctx.createPr(),
   },
   {
     name: "rewind",
@@ -226,6 +234,7 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
     setIsThemePickerOpen,
     setExpandTools,
     setIsDiffOpen,
+    setBranchDiff,
     setIsRewindOpen,
     setGoal,
     launchGoal,
@@ -429,10 +438,33 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
       printSystemMessage(replacement ? "Retrying with your corrected message." : "Retrying your last message.");
       void send(text);
     },
-    showDiff: () => {
+    showDiff: (branch?: string) => {
       if (isBusy) {
         printSystemMessage("Cannot diff while a turn is in flight.");
         return;
+      }
+      if (branch) {
+        void getBranchDiff(session.projectRoot, branch)
+          .then((diff) => {
+            if (setBranchDiff && setIsDiffOpen) {
+              setBranchDiff({ branch, diff });
+              setIsDiffOpen(true);
+            } else {
+              if (!diff.trim()) {
+                printSystemMessage(`No differences between branch "${branch}" and HEAD.`);
+              } else {
+                printSystemMessage(capLines(diff.split("\n")).join("\n"));
+              }
+            }
+          })
+          .catch((err: unknown) => {
+            printSystemMessage(`Diff against "${branch}" failed: ${err instanceof Error ? err.message : String(err)}`);
+          });
+        return;
+      }
+
+      if (setBranchDiff) {
+        setBranchDiff(null);
       }
       if (setIsDiffOpen) {
         setIsDiffOpen(true);
@@ -456,6 +488,24 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
         })
         .catch((err: unknown) => {
           printSystemMessage(`Diff failed: ${err instanceof Error ? err.message : String(err)}`);
+        });
+    },
+    createPr: () => {
+      if (isBusy) {
+        printSystemMessage("Cannot create PR while a turn is in flight.");
+        return;
+      }
+      printSystemMessage("Creating GitHub pull request (gh pr create --fill)...");
+      void createPullRequest(session.projectRoot)
+        .then((res) => {
+          if (res.success) {
+            printSystemMessage(`✓ Pull request created: ${res.url}`);
+          } else {
+            printSystemMessage(`✗ Pull request failed: ${res.error}`);
+          }
+        })
+        .catch((err: unknown) => {
+          printSystemMessage(`✗ Pull request failed: ${err instanceof Error ? err.message : String(err)}`);
         });
     },
     mcp: (sub?: string) => {

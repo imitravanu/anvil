@@ -66,12 +66,14 @@ export function loadProjectRules(projectRoot: string): ProjectRules | null {
   return null;
 }
 
+import { loadProjectMemory, buildSystemPromptWithMemory } from "./memory.js";
+
 /**
- * Injects project-specific rules into the base system prompt if discovered.
+ * Injects project-specific rules and project memory into the base system prompt.
  */
 export function buildSystemPrompt(basePrompt: string, projectRoot: string): string {
   const rules = loadProjectRules(projectRoot);
-  if (!rules) return basePrompt;
-
-  return `${basePrompt}\n\n[Project-specific rules from ${rules.source}]\n${rules.content}`;
+  const memory = loadProjectMemory(projectRoot);
+  return buildSystemPromptWithMemory(basePrompt, projectRoot, rules, memory);
 }
+

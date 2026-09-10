@@ -55,6 +55,38 @@ describe("DiffModal", () => {
     expect(out).toContain("next");
     unmount();
   });
+
+  it("renders branch diff when branchDiff prop is provided", () => {
+    const session = mockSession({});
+    const onClose = vi.fn();
+    const branchDiff = {
+      branch: "main",
+      diff: "@@ -1,2 +1,2 @@\n-feature_a\n+feature_b",
+    };
+    const { lastFrame, unmount } = renderThemed(
+      <DiffModal session={session} onClose={onClose} branchDiff={branchDiff} />
+    );
+
+    const out = frameText(lastFrame);
+    expect(out).toContain("Branch Diff (main...HEAD)");
+    expect(out).toContain("feature_a");
+    expect(out).toContain("feature_b");
+    unmount();
+  });
+
+  it("renders clean notice when branchDiff has no changes", () => {
+    const session = mockSession({});
+    const onClose = vi.fn();
+    const branchDiff = { branch: "main", diff: "" };
+    const { lastFrame, unmount } = renderThemed(
+      <DiffModal session={session} onClose={onClose} branchDiff={branchDiff} />
+    );
+
+    const out = frameText(lastFrame);
+    expect(out).toContain("Branch Diff (main...HEAD)");
+    expect(out).toContain('No differences between branch "main" and HEAD.');
+    unmount();
+  });
 });
 
 describe("RewindModal", () => {

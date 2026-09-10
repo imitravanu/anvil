@@ -74,4 +74,55 @@ describe("TUI Command Registry & /goal", () => {
     expect(launchGoal).toHaveBeenCalledWith("build dashboard");
     expect(send).not.toHaveBeenCalled();
   });
+
+  it("parses and runs /diff with optional branch argument", () => {
+    const parsedNoArg = parseCommand("/diff");
+    expect(parsedNoArg).toEqual({ name: "diff", args: [] });
+
+    const parsedBranch = parseCommand("/diff main");
+    expect(parsedBranch).toEqual({ name: "diff", args: ["main"] });
+
+    const diffCmd = COMMANDS.find((c) => c.name === "diff");
+    expect(diffCmd).toBeDefined();
+
+    const mockCtx: Partial<CommandContext> = {
+      showDiff: vi.fn(),
+    };
+
+    diffCmd?.run([], mockCtx as CommandContext);
+    expect(mockCtx.showDiff).toHaveBeenCalledWith(undefined);
+
+    diffCmd?.run(["main"], mockCtx as CommandContext);
+    expect(mockCtx.showDiff).toHaveBeenCalledWith("main");
+  });
+
+  it("parses and runs /pr command", () => {
+    const parsed = parseCommand("/pr");
+    expect(parsed).toEqual({ name: "pr", args: [] });
+
+    const prCmd = COMMANDS.find((c) => c.name === "pr");
+    expect(prCmd).toBeDefined();
+
+    const mockCtx: Partial<CommandContext> = {
+      createPr: vi.fn(),
+    };
+
+    prCmd?.run([], mockCtx as CommandContext);
+    expect(mockCtx.createPr).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects /diff and /pr when session is busy", () => {
+    const printSystemMessage = vi.fn();
+    const deps: Partial<CommandHandlerDeps> = {
+      isBusy: true,
+      printSystemMessage,
+    };
+    const handlers = makeHandlers(deps as CommandHandlerDeps);
+
+    handlers.showDiff("main");
+    expect(printSystemMessage).toHaveBeenCalledWith("Cannot diff while a turn is in flight.");
+
+    handlers.createPr();
+    expect(printSystemMessage).toHaveBeenCalledWith("Cannot create PR while a turn is in flight.");
+  });
 });

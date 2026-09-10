@@ -290,5 +290,54 @@ Let's begin.`;
       const { result } = await collect(engine, "Create the widget file");
       expect(result.criticVerdict).toContain("mission accomplished");
     });
+
+    it("creates git commits automatically per milestone when autoCommit is true", async () => {
+      const { execSync } = await import("node:child_process");
+      execSync("git init", { cwd: tmpDir });
+      execSync("git config user.name 'Test Runner'", { cwd: tmpDir });
+      execSync("git config user.email 'test@example.com'", { cwd: tmpDir });
+
+      fs.writeFileSync(path.join(tmpDir, "initial.txt"), "hello");
+      execSync("git add -A && git commit -m 'initial'", { cwd: tmpDir });
+
+      // Create an uncommitted file that will be picked up by autoCommitMilestone
+      fs.writeFileSync(path.join(tmpDir, "feature.txt"), "new feature content");
+
+      const planResponse: StreamEvent[] = [
+        {
+          type: "text_delta",
+          text: JSON.stringify([{ id: "1", title: "Add feature file", criteria: "feature.txt exists" }]),
+        },
+        { type: "turn_end", stopReason: "end_turn" },
+      ];
+
+      const script: ScriptEntry[] = [
+        planResponse,
+        textTurn("Milestone 1 completed: created feature.txt"),
+        textTurn("YES — feature file added."),
+        textTurn("Critic: LGTM"),
+      ];
+
+      const provider = new FakeProvider(script);
+      const engine = new GoalEngine({
+        provider,
+        model: "fake-model",
+        projectRoot: tmpDir,
+        permissionBroker: { async requestPermission() { return true; } },
+        autoVerify: false,
+        autoCommit: true,
+      });
+
+      const { events, result } = await collect(engine, "Add feature file");
+      expect(result.success).toBe(true);
+
+      const log = execSync("git log -n 1 --pretty=format:%s", { cwd: tmpDir }).toString();
+      expect(log).toBe("anvil(goal): milestone 1 — Add feature file");
+
+      const commitProgress = events.find(
+        (e: any) => e.type === "milestone_progress" && e.detail.startsWith("Committed milestone 1:")
+      );
+      expect(commitProgress).toBeDefined();
+    });
   });
 });

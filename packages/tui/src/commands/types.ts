@@ -35,8 +35,10 @@ export interface CommandContext {
   retryLast: (replacement?: string) => void;
   // /image: stage an image file for the next message
   attachImage: (path: string) => void;
-  // /diff: review every file change the session made (vs pre-change snapshots)
-  showDiff: () => void;
+  // /diff: review every file change the session made or compare branch to HEAD
+  showDiff: (branch?: string) => void;
+  // /pr: create a GitHub pull request via gh CLI
+  createPr: () => void;
   // /mcp: no arg → server status; "reconnect" → refresh all
   mcp: (sub?: string) => void;
   // /goal: launch an autonomous multi-step engineering mission
@@ -79,6 +81,7 @@ export interface CommandHandlerDeps {
   setExpandTools: Dispatch<SetStateAction<boolean>>;
   expandTools: boolean;
   setIsDiffOpen?: Dispatch<SetStateAction<boolean>>;
+  setBranchDiff?: Dispatch<SetStateAction<{ branch: string; diff: string } | null>>;
   setIsRewindOpen?: Dispatch<SetStateAction<boolean>>;
   setGoal?: Dispatch<SetStateAction<DisplayGoal | null>>;
   send: (text: string) => Promise<void>;

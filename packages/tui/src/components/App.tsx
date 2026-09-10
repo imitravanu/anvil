@@ -137,6 +137,7 @@ export function App({
   const [isConnectOpen, setIsConnectOpen] = useState(false);
   const [isThemePickerOpen, setIsThemePickerOpen] = useState(false);
   const [isDiffOpen, setIsDiffOpen] = useState(false);
+  const [branchDiff, setBranchDiff] = useState<{ branch: string; diff: string } | null>(null);
   const [isRewindOpen, setIsRewindOpen] = useState(false);
   // full tool-output display, toggled by /expand. Session-scoped,
   // never persisted — a resumed session starts compact.
@@ -174,6 +175,7 @@ export function App({
     setExpandTools,
     expandTools,
     setIsDiffOpen,
+    setBranchDiff,
     setIsRewindOpen,
     setGoal,
     send,
@@ -280,7 +282,14 @@ export function App({
         {pendingPermission ? (
           <PermissionPrompt request={pendingPermission} broker={broker} />
         ) : isDiffOpen ? (
-          <DiffModal session={session} onClose={() => setIsDiffOpen(false)} />
+          <DiffModal
+            session={session}
+            branchDiff={branchDiff}
+            onClose={() => {
+              setIsDiffOpen(false);
+              setBranchDiff(null);
+            }}
+          />
         ) : isRewindOpen ? (
           <RewindModal
             session={session}

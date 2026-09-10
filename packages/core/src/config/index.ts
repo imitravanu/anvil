@@ -7,7 +7,9 @@ import { AnvilSettings } from "./types.js";
 export type { AnvilSettings } from "./types.js";
 export * from "./mcp.js";
 export * from "./rules.js";
+export * from "./memory.js";
 export { anvilHome }; // single home-dir resolver (see atomicWrite.ts)
+
 
 const CREDENTIALS_PATH = (): string => path.join(anvilHome(), "credentials.json");
 const SETTINGS_PATH = (): string => path.join(anvilHome(), "settings.json");

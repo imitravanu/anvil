@@ -37,6 +37,7 @@ export interface UseSessionCommandsDeps {
   setExpandTools: React.Dispatch<React.SetStateAction<boolean>>;
   expandTools: boolean;
   setIsDiffOpen?: React.Dispatch<React.SetStateAction<boolean>>;
+  setBranchDiff?: React.Dispatch<React.SetStateAction<{ branch: string; diff: string } | null>>;
   setIsRewindOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   setGoal?: React.Dispatch<React.SetStateAction<DisplayGoal | null>>;
   send: (text: string) => Promise<void>;
@@ -104,6 +105,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     setExpandTools,
     expandTools,
     setIsDiffOpen,
+    setBranchDiff,
     setIsRewindOpen,
     setGoal,
     send,
@@ -168,6 +170,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     setExpandTools,
     expandTools,
     setIsDiffOpen,
+    setBranchDiff,
     setIsRewindOpen,
     setGoal,
     send,

@@ -9,6 +9,7 @@ import * as outline from "./outline.js";
 import * as verifyTests from "./verifyTests.js";
 import * as updatePlan from "./updatePlan.js"; // plan scratchpad
 import * as delegateTask from "./delegateTask.js"; // sub-agent delegation tool
+import * as updateMemory from "./updateMemory.js"; // project memory tool
 
 interface RegisteredTool {
   definition: ToolDefinition;
@@ -35,7 +36,10 @@ const REGISTRY: RegisteredTool[] = [
   { definition: updatePlan.definition, execute: updatePlan.execute },
   // Session intercepts delegate_task and runs a sub-agent.
   { definition: delegateTask.definition, execute: delegateTask.execute },
+  // Project memory persistence (.anvil/memory.md)
+  { definition: updateMemory.definition, execute: updateMemory.execute },
 ];
+
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = REGISTRY.map((t) => t.definition);
 

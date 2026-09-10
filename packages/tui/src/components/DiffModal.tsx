@@ -5,9 +5,15 @@ import { useTheme } from "../theme/theme.js";
 import { ColorizedDiff } from "../diff/colorizeDiff.js";
 import { curtail } from "../util/format.js";
 
+export interface BranchDiffInfo {
+  branch: string;
+  diff: string;
+}
+
 export interface DiffModalProps {
   session: AgentSession;
   onClose: () => void;
+  branchDiff?: BranchDiffInfo | null;
 }
 
 /** Tabs visible in the strip at once — the strip must stay a single row. */
@@ -15,7 +21,7 @@ function visibleTabs(width: number): number {
   return Math.max(1, Math.floor((width - 4) / 28));
 }
 
-export function DiffModal({ session, onClose }: DiffModalProps) {
+export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
   const theme = useTheme();
   const { stdout } = useStdout();
   const termWidth = stdout?.columns ?? 80;
@@ -27,10 +33,14 @@ export function DiffModal({ session, onClose }: DiffModalProps) {
 
   const [changes, setChanges] = useState<SessionFileChange[]>([]);
   const [activeIdx, setActiveIdx] = useState<number>(0);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(!branchDiff);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (branchDiff !== undefined && branchDiff !== null) {
+      setLoading(false);
+      return;
+    }
     let active = true;
     void session
       .summarizeChanges()
@@ -50,7 +60,7 @@ export function DiffModal({ session, onClose }: DiffModalProps) {
     return () => {
       active = false;
     };
-  }, [session]);
+  }, [session, branchDiff]);
 
   useInput((input, key) => {
     if (key.escape || input === "q") {
@@ -58,7 +68,7 @@ export function DiffModal({ session, onClose }: DiffModalProps) {
       return;
     }
 
-    if (changes.length > 0) {
+    if (!branchDiff && changes.length > 0) {
       if (key.tab || key.rightArrow || input === "l") {
         setActiveIdx((prev: number) => (prev + 1) % changes.length);
       } else if (key.leftArrow || input === "h") {
@@ -96,6 +106,40 @@ export function DiffModal({ session, onClose }: DiffModalProps) {
         <Text color={theme.colors.toolError}>Failed to compute the session diff: {error}</Text>
         <Box marginTop={1}>
           <Text dimColor>Press Esc to close.</Text>
+        </Box>
+      </Box>
+    );
+  }
+
+  if (branchDiff) {
+    const hasContent = Boolean(branchDiff.diff && branchDiff.diff.trim().length > 0);
+    return (
+      <Box
+        flexDirection="column"
+        borderStyle="round"
+        borderColor={theme.colors.primary}
+        paddingX={1}
+        height={height}
+        overflow="hidden"
+      >
+        <Box justifyContent="space-between" flexShrink={0} paddingX={1}>
+          <Text bold color={theme.colors.primary}>
+            Branch Diff ({branchDiff.branch}...HEAD)
+          </Text>
+          <Text dimColor>Esc / q: close</Text>
+        </Box>
+        <Box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} marginY={1} overflow="hidden">
+          {hasContent ? (
+            <ColorizedDiff
+              diff={branchDiff.diff}
+              maxRows={Math.max(3, height - 6)}
+              maxText={Math.max(20, termWidth - 10)}
+            />
+          ) : (
+            <Text dimColor italic>
+              No differences between branch &quot;{branchDiff.branch}&quot; and HEAD.
+            </Text>
+          )}
         </Box>
       </Box>
     );
