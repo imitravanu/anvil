@@ -126,6 +126,7 @@ npm run gate
 ## §4. Phase 4 — Deployment & Immediate Protection
 
 * **No 7-Day "Warn-Week":** The gate activates in **hard-fail mode immediately upon landing**. Immediate active protection from Day 1.
+* **D-day declared: 2026-09-12.** Hard-fail is active from this date; the gate is the definition of done for all subsequent work.
 * **Clean Baseline Checkpoint:** The 46 modified files from pre-Phase 21 maintenance are verified and committed prior to starting Phase 21 security tasks.
 * **CI Integration:** Wire `npm run gate` into GitHub Actions (`ci.yml`) to ensure every remote PR satisfies the exact same local verification.
 
