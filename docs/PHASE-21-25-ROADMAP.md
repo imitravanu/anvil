@@ -1445,7 +1445,31 @@ AgentTeam
 
 ---
 
-### 25.6 — v1.0.0 Release Criteria
+### 25.6 — Native Guardian Engine & Built-In Anti-Slop System (`anvil gate` & Turn Interceptor)
+
+> **Priority:** FUTURE FLAGSHIP CAPABILITY (Planned for Phase 25 v1.0.0)  
+> **Prerequisite:** Baseline stabilization (Phases 21–24: Security, Logic Bugs, Stability, and Refactoring) must be 100% complete and verified before implementing native engine interceptors.
+
+**The Vision:**
+Transform Anvil from an AI coding assistant that relies on external verification scripts into the first AI coding assistant with an **active, built-in mechanical immune system against AI slop**.
+
+**Deliverables:**
+1. **`anvil init --guarded` (Instant Repo Provisioning):**
+   - Automatically provisions language-tailored `AGENTS.md` and repository gates into any target project (TypeScript, Python, Rust, Go).
+   - Generates `.fresh-allowlist.json` to inventory and drain existing legacy debt.
+2. **Native Pre-Turn Slop Interceptor (Pre-Commit Immune System):**
+   - Hook into Anvil's internal turn loop (`session.ts:send()`).
+   - Intercept file diffs before presenting turns or writing to disk.
+   - Automatically self-correct forbidden shortcuts (`as any`, empty catches, raw error formatting, hardcoded UI colors) before user review.
+3. **Native CLI Command: `anvil gate`:**
+   - Add first-class `anvil gate` subcommand directly to `@anvil/cli`.
+   - Runs fast multi-stage verification (diff scanner, build, typecheck, tests, and eval benchmark) natively.
+4. **Adaptive Ratchet & Codebase Health Telemetry:**
+   - Tracks codebase freshness metrics, duplication score, and allowlist drain rate across sessions.
+
+---
+
+### 25.7 — v1.0.0 Release Criteria
 
 - [ ] All Phase 21–24 fixes stable for ≥2 weeks
 - [ ] At least one Phase 25 feature shipped and stable
