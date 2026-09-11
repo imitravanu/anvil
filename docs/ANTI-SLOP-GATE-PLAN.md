@@ -24,14 +24,21 @@ Build the two core modules in `@anvil/core` before any rules mandate them. Zero 
 ### 1.1 Safe Error Message Extractor (V6 Resolved)
 * **Path:** `packages/core/src/errors.ts` *(leaf module alongside `atomicWrite.ts`, avoiding sibling naming collisions with `packages/tui/src/util/errors.ts`)*.
 * **Export:** Exported from `@anvil/core` root (`packages/core/src/index.ts`).
-* **Implementation:**
+* **Implementation (as built — type predicate, zero casts):**
   ```ts
+  function hasMessage(err: unknown): err is { message: string } {
+    return (
+      typeof err === "object" &&
+      err !== null &&
+      "message" in err &&
+      typeof (err as { message: unknown }).message === "string"
+    );
+  }
+
   export function getErrorMessage(err: unknown): string {
     if (err instanceof Error) return err.message;
     if (typeof err === "string") return err;
-    if (err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string") {
-      return (err as { message: string }).message;
-    }
+    if (hasMessage(err)) return err.message;
     return String(err);
   }
   ```

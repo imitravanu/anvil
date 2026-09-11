@@ -23,6 +23,12 @@ export const RATE_LIMIT_MAX_DELAY_MS = 30_000;
 export const MAX_SUBAGENT_DEPTH = 3;
 export const MAX_CONCURRENT_SUBAGENTS = 5;
 
+// Session Review Baseline Bounds (caps the ring-independent /diff baseline
+// so a long session touching many files cannot grow memory without bound;
+// eviction drops the oldest-seen path first and /diff degrades gracefully)
+export const BASELINE_MAX_PATHS = 200;
+export const BASELINE_MAX_BYTES = 8 * 1024 * 1024; // 8 MB total snapshot bytes
+
 // Guardian Gate Verification Defaults
 export const DEFAULT_GATE_TIMEOUT_MS = 180_000; // 3 minutes timeout per gate step
 

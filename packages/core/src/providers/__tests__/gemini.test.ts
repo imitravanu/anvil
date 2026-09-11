@@ -167,3 +167,37 @@ describe("translateGeminiChunkStream", () => {
     expect(events[events.length - 1].type).toBe("error");
   });
 });
+
+describe("GeminiProvider pre-stream errors", () => {
+  it("unwraps nested-JSON failures instead of surfacing the raw blob", async () => {
+    const { GeminiProvider } = await import("../gemini.js");
+    const provider = new GeminiProvider("fake-key-for-test");
+    const nested = new Error(
+      JSON.stringify({ error: { message: "Quota exceeded for gemini-3.6-flash" } })
+    );
+    Object.defineProperty(provider, "client", {
+      value: {
+        models: {
+          generateContentStream: async () => {
+            throw nested;
+          },
+        },
+      },
+    });
+    const events: StreamEvent[] = [];
+    for await (const e of provider.streamCompletion({
+      model: "gemini-3.6-flash",
+      systemPrompt: "",
+      messages: [],
+      tools: [],
+      maxTokens: 64,
+    })) {
+      events.push(e);
+    }
+    const errors = events.filter((e) => e.type === "error");
+    expect(errors).toHaveLength(1);
+    expect((errors[0] as { message: string }).message).toBe(
+      "Quota exceeded for gemini-3.6-flash"
+    );
+  });
+});

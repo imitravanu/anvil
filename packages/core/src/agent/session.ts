@@ -29,6 +29,7 @@ import {
   type CheckpointMeta,
 } from "./checkpoints.js";
 import { loadCheckpoints, saveCheckpointsAsync } from "./checkpointStore.js";
+import { BASELINE_MAX_BYTES, BASELINE_MAX_PATHS } from "../config/constants.js";
 
 /**
  * Abortable wait for the automatic rate-limit retry. Rejects on abort so the
@@ -87,6 +88,7 @@ export class AgentSession {
   // file the session touched even after many snapshots. Restore/rewind uses
   // the ring; the baseline is review-only.
   private baselineByPath = new Map<string, Buffer | null>();
+  private baselineBytes = 0;
   private checkpointSeq = 0;
   readonly id: string;
   title: string | null; // null until the first user message sets a default
@@ -328,11 +330,25 @@ export class AgentSession {
   /**
    * First-seen-per-path merge into the review baseline. A file previously
    * snapped (by a direct write or a merged sub-agent) keeps its ORIGINAL
-   * content — the oldest snapshot per path is the session baseline.
+   * content — the oldest snapshot per path is the session baseline. Bounded
+   * by BASELINE_MAX_PATHS / BASELINE_MAX_BYTES (oldest-seen evicted first):
+   * eviction only narrows /diff coverage, it never corrupts history.
    */
   private recordBaseline(cp: Checkpoint): void {
     for (const f of cp.files) {
-      if (!this.baselineByPath.has(f.path)) this.baselineByPath.set(f.path, f.content);
+      if (this.baselineByPath.has(f.path)) continue;
+      this.baselineByPath.set(f.path, f.content);
+      this.baselineBytes += f.content?.length ?? 0;
+      while (
+        this.baselineByPath.size > BASELINE_MAX_PATHS ||
+        this.baselineBytes > BASELINE_MAX_BYTES
+      ) {
+        const oldest = this.baselineByPath.keys().next();
+        if (oldest.done) break;
+        const dropped = this.baselineByPath.get(oldest.value);
+        this.baselineBytes -= dropped?.length ?? 0;
+        this.baselineByPath.delete(oldest.value);
+      }
     }
   }
 

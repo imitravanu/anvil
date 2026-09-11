@@ -264,3 +264,27 @@ describe("rewind checkpoints", () => {
     expect(fs.readFileSync(file, "utf-8")).toBe("before-sub");
   });
 });
+
+describe("review baseline bounds", () => {
+  it("evicts oldest-seen paths once over cap, newest survive", async () => {
+    const { BASELINE_MAX_PATHS } = await import("../../config/constants.js");
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-baseline-"));
+    try {
+      const session = new AgentSession(new FakeProvider([]), {
+        ...BASE_OPTIONS,
+        projectRoot: tmp,
+      });
+      const files = Array.from({ length: BASELINE_MAX_PATHS + 10 }, (_, i) => ({
+        path: `f${i}.txt`,
+        content: Buffer.from("x"),
+      }));
+      session["recordBaseline"]({ id: 1, ts: "", files, skipped: 0 });
+      const baseline = session["baselineByPath"] as Map<string, Buffer | null>;
+      expect(baseline.size).toBeLessThanOrEqual(BASELINE_MAX_PATHS);
+      expect(baseline.has("f0.txt")).toBe(false); // oldest evicted first
+      expect(baseline.has(`f${BASELINE_MAX_PATHS + 9}.txt`)).toBe(true);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});

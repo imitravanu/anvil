@@ -183,7 +183,13 @@ export class GeminiProvider extends BaseProvider {
       throw new Error("Gemini client not initialized");
     }
 
-    const stream = await this.client.models.generateContentStream({
+    // Pre-stream failures (bad key, 404 model, quota) bypass the in-stream
+    // translator, so unwrap here — otherwise base.ts surfaces the raw nested
+    // JSON blob. Abort rejections keep their signal; session.ts still maps
+    // them to `cancelled` via its own aborted check.
+    let stream;
+    try {
+      stream = await this.client.models.generateContentStream({
       model: request.model,
       contents: toGeminiContents(request.messages) as never,
       config: {
@@ -205,6 +211,9 @@ export class GeminiProvider extends BaseProvider {
           : {}),
       } as never,
     });
+    } catch (err) {
+      throw new Error(geminiErrorMessage(err));
+    }
 
     return translateGeminiChunkStream(
       stream as unknown as AsyncIterable<RawGeminiChunk>
