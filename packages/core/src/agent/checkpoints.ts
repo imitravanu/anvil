@@ -167,6 +167,26 @@ export async function summarizeSessionChanges(
       if (!baseline.has(f.path)) baseline.set(f.path, f.content);
     }
   }
+  return diffBaseline(projectRoot, baseline);
+}
+
+/**
+ * Same review from a pre-built per-path baseline map — the session keeps a
+ * first-seen baseline across ALL snapshots (not just the evicting ring), so
+ * /diff and the goal debrief report every file this session touched even
+ * after the checkpoint ring (CHECKPOINT_KEEP) dropped the earliest snapshots.
+ */
+export async function summarizeSessionChangesFromBaseline(
+  projectRoot: string,
+  baseline: ReadonlyMap<string, Buffer | null>
+): Promise<SessionFileChange[]> {
+  return diffBaseline(projectRoot, baseline);
+}
+
+async function diffBaseline(
+  projectRoot: string,
+  baseline: ReadonlyMap<string, Buffer | null>
+): Promise<SessionFileChange[]> {
   const out: SessionFileChange[] = [];
   for (const [p, original] of baseline) {
     let abs: string;

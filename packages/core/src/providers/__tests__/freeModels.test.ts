@@ -12,6 +12,7 @@ import {
 import {
   DEFAULT_SYNC_TTL_MS,
   fetchOpenRouterFreeModels,
+  getConsecutiveRateLimitCount,
   getRateLimitedModels,
   isRateLimited,
   isRateLimitMessage,
@@ -151,6 +152,25 @@ describe("Phase 8 (B) — free-model coordinator", () => {
     expect(isRateLimited("phase8-test", "p8b-health-a")).toBe(true);
     expect(isRateLimited("phase8-test", "other")).toBe(false);
     expect(Object.keys(getRateLimitedModels())).toContain("phase8-test");
+  });
+
+  it("prunes health records when a model is demoted (audit fix #3)", async () => {
+    registerModel({ ...freeModel("p8b-prune-a", "phase8-test"), displayName: "P8B Prune (Free)" });
+    noteRateLimited("phase8-test", "p8b-prune-a");
+    noteRateLimited("phase8-test", "p8b-prune-a"); // consecutive 429s → backoff
+    expect(isRateLimited("phase8-test", "p8b-prune-a")).toBe(true);
+
+    // Live list no longer contains p8b-prune-a → demotion must prune its
+    // rate-limit mark and backoff counters, not leak them forever.
+    const src = fakeSource("p8b-prune", [freeModel("p8b-prune-sibling", "phase8-test")]);
+    const report = await syncFreeModels({ sources: [src], ttlMs: 0 });
+
+    expect(report.results[0].noLongerFree).toContain("p8b-prune-a");
+    expect(isRateLimited("phase8-test", "p8b-prune-a")).toBe(false);
+    expect(getConsecutiveRateLimitCount("phase8-test", "p8b-prune-a")).toBe(0);
+    // Unrelated health records are untouched.
+    noteRateLimited("phase8-test", "p8b-prune-keep");
+    expect(isRateLimited("phase8-test", "p8b-prune-keep")).toBe(true);
   });
 
   it("different credentials fly separately (no cross-cred sharing)", async () => {

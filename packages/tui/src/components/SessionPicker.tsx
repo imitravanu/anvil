@@ -20,7 +20,17 @@ export function SessionPicker({
   onClose: () => void;
 }) {
   const theme = useTheme();
-  const sessions = listSessions(); // already sorted most-recent-first
+  // Load once per mount (initializer), never in the render body: the old
+  // per-render listSessions() re-scanned the sessions dir on every parent
+  // re-render, and a corrupt dir threw inside render and crashed the frame.
+  const [loaded] = useState(() => {
+    try {
+      return { sessions: listSessions(), failed: false };
+    } catch {
+      return { sessions: [], failed: true };
+    }
+  });
+  const sessions = loaded.sessions; // already sorted most-recent-first
   const [selected, setSelected] = useState(0);
 
   useInput((_input, key) => {
@@ -45,7 +55,9 @@ export function SessionPicker({
       <Text color={theme.colors.primary}>
         Saved sessions{sessions.length > 0 ? ` (${selected + 1}/${sessions.length})` : ""} — Enter to resume, Esc to cancel
       </Text>
-      {sessions.length === 0 ? (
+      {loaded.failed ? (
+        <Text color={theme.colors.toolError}>Could not load saved sessions (sessions dir unreadable).</Text>
+      ) : sessions.length === 0 ? (
         <Text dimColor>No saved sessions yet.</Text>
       ) : (
         <>

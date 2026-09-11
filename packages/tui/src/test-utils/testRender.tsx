@@ -10,6 +10,7 @@ export interface ThemedRender {
   lastFrame: () => string | undefined;
   unmount: () => void;
   stdin: { write: (data: string) => void };
+  rerender: (ui: React.ReactElement) => void;
 }
 
 export function renderThemed(ui: React.ReactElement): ThemedRender {
@@ -18,6 +19,8 @@ export function renderThemed(ui: React.ReactElement): ThemedRender {
     lastFrame: () => rendered.lastFrame(),
     unmount: () => rendered.unmount(),
     stdin: rendered.stdin,
+    rerender: (next: React.ReactElement) =>
+      rendered.rerender(<ThemeContext.Provider value={THEMES.dark}>{next}</ThemeContext.Provider>),
   };
 }
 

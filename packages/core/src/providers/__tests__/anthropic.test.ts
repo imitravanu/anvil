@@ -217,4 +217,18 @@ describe("toAnthropicMessages", () => {
       { type: "tool_use", id: "t2", name: "run", input: { cmd: "ls" } },
     ]);
   });
+
+  it("passes the real image MIME through (no png hardcode)", () => {
+    for (const mediaType of ["image/png", "image/jpeg", "image/webp", "image/gif"]) {
+      const messages = [
+        {
+          role: "user" as const,
+          content: [{ type: "image" as const, mediaType, data: "QUJD" }],
+        },
+      ];
+      expect(toAnthropicMessages(messages)[0].content).toEqual([
+        { type: "image", source: { type: "base64", media_type: mediaType, data: "QUJD" } },
+      ]);
+    }
+  });
 });

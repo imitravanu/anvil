@@ -20,34 +20,48 @@ export function createEvalMockProvider(task: EvalTask): ModelProvider {
 
         // Check if task has expected files in assertions/expected/
         const expectedDir = path.join(task.taskDir, "assertions", "expected");
+        const expectedFiles: { relPath: string; content: string }[] = [];
         if (fs.existsSync(expectedDir)) {
-          const entries = fs.readdirSync(expectedDir, { withFileTypes: true, recursive: true });
-          for (const entry of entries) {
-            if (entry.isFile()) {
-              const fullExpectedPath = path.join(entry.parentPath || expectedDir, entry.name);
-              const relPath = path.relative(expectedDir, fullExpectedPath);
-              const content = fs.readFileSync(fullExpectedPath, "utf8");
-              const inputObj = { path: relPath, content };
-
-              const callId = `call_${Math.random().toString(36).slice(2, 9)}`;
-              yield {
-                type: "tool_call_start",
-                id: callId,
-                name: "write_file",
-              };
-              yield {
-                type: "tool_call_delta",
-                id: callId,
-                cumulativeInputJson: JSON.stringify(inputObj),
-              };
-              yield {
-                type: "tool_call_end",
-                id: callId,
-                name: "write_file",
-                input: inputObj,
-              };
+          // Manual recursion: readdirSync's `recursive` option and
+          // entry.parentPath are Node >=22.5 APIs, while the engines floor is
+          // >=20 and CI runs Node 20 — guarded by not using them.
+          const stack = [expectedDir];
+          while (stack.length > 0) {
+            const dir = stack.pop()!;
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const abs = path.join(dir, entry.name);
+              if (entry.isDirectory()) {
+                stack.push(abs);
+              } else if (entry.isFile()) {
+                expectedFiles.push({
+                  relPath: path.relative(expectedDir, abs),
+                  content: fs.readFileSync(abs, "utf8"),
+                });
+              }
             }
           }
+          expectedFiles.sort((a, b) => a.relPath.localeCompare(b.relPath));
+        }
+        for (const { relPath, content } of expectedFiles) {
+          const inputObj = { path: relPath, content };
+
+          const callId = `call_${Math.random().toString(36).slice(2, 9)}`;
+          yield {
+            type: "tool_call_start",
+            id: callId,
+            name: "write_file",
+          };
+          yield {
+            type: "tool_call_delta",
+            id: callId,
+            cumulativeInputJson: JSON.stringify(inputObj),
+          };
+          yield {
+            type: "tool_call_end",
+            id: callId,
+            name: "write_file",
+            input: inputObj,
+          };
         }
 
         yield {

@@ -144,6 +144,11 @@ export function ModelPicker({
       setFilter((f) => f + input);
       return;
     }
+    if (ordered.length === 0) {
+      // Empty filter match: nothing to move to or confirm (the old modulo
+      // by zero produced selected=NaN and a "NaN/0" header).
+      return;
+    }
     if (key.upArrow || key.downArrow) {
       const dir = key.upArrow ? -1 : 1;
       let next = selected;
@@ -234,7 +239,9 @@ export function ModelPicker({
   return (
     <Box flexDirection="column" flexShrink={0} borderStyle="round" borderColor={theme.colors.primary} paddingX={1}>
       <Text color={theme.colors.primary}>
-        Select a model ({selected + 1}/{ordered.length}) — type to filter, Enter to switch, Esc to cancel
+        {ordered.length > 0
+          ? `Select a model (${selected + 1}/${ordered.length}) — type to filter, Enter to switch, Esc to cancel`
+          : "No models match the filter — backspace to clear it, Esc to cancel"}
       </Text>
       {filter && (
         <Text dimColor>

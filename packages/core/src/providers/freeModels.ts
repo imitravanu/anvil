@@ -322,6 +322,35 @@ export function getConsecutiveRateLimitCount(sourceId: string, modelId: string):
   return consecutiveRateLimits.get(`${sourceId}:${modelId}`) ?? 0;
 }
 
+/**
+ * Prune stale health records for models that are no longer free (audit fix #3).
+ *
+ * When a free-model sync demotes a model (the source stopped listing it), its
+ * rate-limit backoff counters, circuit-breaker state, and 429 marks would
+ * otherwise sit in process-visible maps forever — a slow leak, and worse, a
+ * demoted-then-re-added model could surface a STALE "open" breaker from its
+ * previous life. Pruning is keyed by modelId across sources: the registry's
+ * model ids are unique, and the worst-case misfire (an id collision across a
+ * real provider) merely clears backoff state, which is benign and self-healing.
+ */
+export function pruneHealthForModels(modelIds: readonly string[]): void {
+  const gone = new Set(modelIds);
+  if (gone.size === 0) return;
+  for (const [sourceId, set] of rateLimited) {
+    for (const modelId of [...set]) {
+      if (gone.has(modelId)) set.delete(modelId);
+    }
+    if (set.size === 0) rateLimited.delete(sourceId);
+  }
+  const stripSource = (key: string): string => key.slice(key.indexOf(":") + 1);
+  for (const key of [...consecutiveRateLimits.keys()]) {
+    if (gone.has(stripSource(key))) consecutiveRateLimits.delete(key);
+  }
+  for (const key of [...circuitBreakers.keys()]) {
+    if (gone.has(stripSource(key))) circuitBreakers.delete(key);
+  }
+}
+
 /** Loose detector for rate-limit/quota errors so the agent loop can RECORD them. */
 export function isRateLimitMessage(message: string): boolean {
   // "No available capacity" (orcarouter free models, HTTP 503) is the same
@@ -432,6 +461,11 @@ function mergeFreeModels(
         .replace(/\s*\(Paid\)\s*$/i, "")
         .trim() + " (Paid)";
       noLongerFree.push(m.id);
+      // Health records for a demoted model are stale by definition (audit
+      // fix #3): clear its 429 backoff, breaker state, and rate-limit mark
+      // so a re-added model starts clean instead of inheriting an old
+      // "open" breaker or half-spent backoff from its previous life.
+      pruneHealthForModels([m.id]);
     } else if (m.isFree === false && liveIds.has(m.id)) {
       m.isFree = true;
       m.displayName = m.displayName.replace(/\s*\(Paid\)\s*$/i, "").trim() + " (Free)";
@@ -440,7 +474,10 @@ function mergeFreeModels(
   }
 
   for (const liveModel of live) {
-    if (!MODEL_REGISTRY.some((m) => m.id === liveModel.id)) {
+    // Scope by provider: an id collision across providers (e.g. gpt-4o-mini
+    // on both OpenAI and GitHub) must not suppress registration — each
+    // provider owns its own row.
+    if (!MODEL_REGISTRY.some((m) => m.id === liveModel.id && m.providerId === liveModel.providerId)) {
       registerModel({ ...liveModel, isFree: true });
       newlyFree.push(liveModel.id);
     }

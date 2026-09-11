@@ -12,6 +12,10 @@ import { createOllamaProvider } from "./ollama.js";
 
 export * from "./types.js";
 export * from "./registry.js";
+export { BaseProvider } from "./base.js";
+export { AnthropicProvider } from "./anthropic.js";
+export { ChatCompletionsStyleProvider } from "./openai.js";
+export { GeminiProvider } from "./gemini.js";
 export { OPENROUTER_BASE_URL, createOpenRouterProvider, fetchOpenRouterFreeModels, syncOpenRouterModels } from "./openrouter.js";
 export {
   ORCAROUTER_BASE_URL,

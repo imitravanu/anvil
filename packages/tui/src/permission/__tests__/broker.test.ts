@@ -65,6 +65,79 @@ describe("TuiPermissionBroker", () => {
     watch();
   });
 
+  it("abort rejects the current head AND all queued requests (no orphaned promises)", async () => {
+    const broker = new TuiPermissionBroker();
+    const controller = new AbortController();
+    broker.attachAbortSignal(controller.signal);
+    let current: PendingPermissionRequest | null = null;
+    broker.subscribe((req) => {
+      current = req;
+    });
+    const first = broker.requestPermission("edit_file", "diff 1");
+    const second = broker.requestPermission("run_command", "cmd 2");
+    expect((current as PendingPermissionRequest | null)?.toolName).toBe("edit_file");
+    let firstSettled: boolean | undefined;
+    let secondSettled: boolean | undefined;
+    void first.then((v) => {
+      firstSettled = v;
+    });
+    void second.then((v) => {
+      secondSettled = v;
+    });
+    controller.abort();
+    await expect(first).resolves.toBe(false);
+    await expect(second).resolves.toBe(false);
+    expect(firstSettled).toBe(false);
+    expect(secondSettled).toBe(false);
+    expect(current).toBeNull();
+  });
+
+  it("attaching an already-aborted signal rejects immediately", async () => {
+    const broker = new TuiPermissionBroker();
+    const controller = new AbortController();
+    controller.abort();
+    const pending = broker.requestPermission("edit_file", "diff");
+    broker.attachAbortSignal(controller.signal);
+    await expect(pending).resolves.toBe(false);
+  });
+
+  it("abort handler can attach to a fresh signal each turn", async () => {
+    const broker = new TuiPermissionBroker();
+    const first = new AbortController();
+    broker.attachAbortSignal(first.signal);
+    first.abort();
+    // Second turn, new signal: must still attach and reject.
+    const second = new AbortController();
+    broker.attachAbortSignal(second.signal);
+    const pending = broker.requestPermission("run_command", "cmd");
+    second.abort();
+    await expect(pending).resolves.toBe(false);
+  });
+
+  it("clearSessionApprovals drops always-allow grants", async () => {
+    const broker = new TuiPermissionBroker();
+    broker.approveAlwaysForSession("edit_file");
+    await expect(broker.requestPermission("edit_file", "x")).resolves.toBe(true);
+    broker.clearSessionApprovals();
+    // After clearing, the request must queue (not auto-approve).
+    let settled = false;
+    const pending = broker.requestPermission("edit_file", "x").then((v) => {
+      settled = v;
+      return v;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    // Clean up: deny the queued prompt.
+    let current: PendingPermissionRequest | null = null;
+    const unsub = broker.subscribe((req) => {
+      current = req;
+    });
+    // subscribe fires immediately with current state
+    (current as PendingPermissionRequest | null)?.resolve(false);
+    await expect(pending).resolves.toBe(false);
+    unsub();
+  });
+
   it("double-resolve is idempotent and does not consume next queued request", async () => {
     const broker = new TuiPermissionBroker();
     let current: PendingPermissionRequest | null = null;

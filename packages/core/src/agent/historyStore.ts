@@ -159,6 +159,10 @@ export class HistoryStore {
     }
     const parts: ConversationMessage["content"] = [...ordered];
     if (turnNotes.length > 0) parts.push({ type: "text", text: turnNotes.join("\n") });
+    // A declared `tool_use` turn can yield zero tool_call_end parts (e.g. a
+    // stop-reason with no content blocks). Pushing an empty user message would
+    // corrupt provider replay (malformed payloads, broken alternation) — skip it.
+    if (parts.length === 0) return;
     this.messages.push({ role: "user", content: parts });
   }
 

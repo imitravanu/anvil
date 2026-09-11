@@ -4,11 +4,65 @@ import path from "node:path";
 import os from "node:os";
 import {
   detectTestCommand,
+  extraTestEnvNames,
   runTestVerification,
   runTestTimeoutMs,
   execute,
   definition,
 } from "../verifyTests.js";
+
+describe("extraTestEnvNames (ANVIL_TEST_ENV_ALLOW)", () => {
+  const KEY = "ANVIL_TEST_ENV_ALLOW";
+  const saved = process.env[KEY];
+
+  afterEach(() => {
+    if (saved === undefined) delete process.env[KEY];
+    else process.env[KEY] = saved;
+  });
+
+  it("is empty when unset", () => {
+    delete process.env[KEY];
+    expect(extraTestEnvNames()).toEqual([]);
+  });
+
+  it("parses comma-separated names and rejects shell metachars", () => {
+    process.env[KEY] = "DATABASE_URL, NODE_ENV ,BAD;NAME,  ,$(EVIL)";
+    expect(extraTestEnvNames()).toEqual(["DATABASE_URL", "NODE_ENV"]);
+  });
+
+  it("passes allowed vars through to the test child", async () => {
+    process.env[KEY] = "ANVIL_TEST_PASSTHROUGH";
+    process.env.ANVIL_TEST_PASSTHROUGH = "hello-child";
+    try {
+      const result = await runTestVerification(
+        process.cwd(),
+        "echo \"out:$ANVIL_TEST_PASSTHROUGH\"",
+        undefined,
+        new AbortController().signal
+      );
+      expect(result.passed).toBe(true);
+      expect(result.output).toContain("out:hello-child");
+    } finally {
+      delete process.env.ANVIL_TEST_PASSTHROUGH;
+    }
+  });
+
+  it("does NOT pass through unlisted vars", async () => {
+    delete process.env[KEY];
+    process.env.ANVIL_TEST_UNLISTED = "should-not-appear";
+    try {
+      const result = await runTestVerification(
+        process.cwd(),
+        "echo \"out:${ANVIL_TEST_UNLISTED:-absent}\"",
+        undefined,
+        new AbortController().signal
+      );
+      expect(result.output).toContain("out:absent");
+    } finally {
+      delete process.env.ANVIL_TEST_UNLISTED;
+    }
+  });
+});
 
 describe("runTestTimeoutMs override (ANVIL_RUN_TEST_TIMEOUT_MS)", () => {
   const KEY = "ANVIL_RUN_TEST_TIMEOUT_MS";

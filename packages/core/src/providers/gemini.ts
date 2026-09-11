@@ -1,20 +1,13 @@
 import { GoogleGenAI } from "@google/genai";
 import { CompletionRequest, ConversationMessage, ModelProvider, StreamEvent } from "./types.js";
+import { BaseProvider } from "./base.js";
 
-/**
- * Minimal structural view of a Gemini generateContentStream chunk. Gemini's
- * function-calling shape is "whole call at once" — a part carries the complete
- * functionCall — so there is no incremental delta buffering here.
- */
 export interface RawGeminiChunk {
   candidates?: Array<{
     content?: {
       parts?: Array<{
         text?: string;
         functionCall?: { id?: string; name?: string; args?: unknown };
-        // Gemini 3.x "thought signatures": opaque blobs returned on parts and
-        // required to be echoed back in replayed history (esp. functionCall
-        // parts) — see ai.google.dev/gemini-api/docs/thought-signatures
         thoughtSignature?: string;
       }>;
     };
@@ -31,8 +24,6 @@ export function mapGeminiFinishReason(
 ): "end_turn" | "tool_use" | "max_tokens" | "error" | "unknown" {
   if (reason === "STOP") return "end_turn";
   if (reason === "MAX_TOKENS") return "max_tokens";
-  // Safety/system blocks are failures, not normal turns — they must never
-  // look like end_turn to the loop.
   if (
     reason === "SAFETY" ||
     reason === "RECITATION" ||
@@ -45,16 +36,8 @@ export function mapGeminiFinishReason(
   return "unknown";
 }
 
-// Module-level: synthetic ids must be unique across turns, not just within
-// one. toGeminiContents rebuilds its id→name map over the FULL history, so a
-// per-turn counter colliding (gemini_call_1 every turn) misattributes replays.
 let geminiCallCounter = 0;
 
-/**
- * Gemini error messages sometimes arrive as one or two layers of nested JSON
- * (e.g. a 429 quota error whose message is itself a JSON blob). Unwrap to the
- * human-readable message instead of dumping the whole object into the chat.
- */
 export function geminiErrorMessage(err: unknown): string {
   const fallback = err instanceof Error ? err.message : String(err);
   const unwrap = (text: string): string | null => {
@@ -68,7 +51,7 @@ export function geminiErrorMessage(err: unknown): string {
   };
   const direct = unwrap(fallback);
   if (direct !== null) {
-    const deeper = unwrap(direct); // the outer message may itself be a JSON blob
+    const deeper = unwrap(direct);
     return deeper ?? direct;
   }
   return fallback.length > 600 ? fallback.slice(0, 600) + "…" : fallback;
@@ -79,9 +62,6 @@ export async function* translateGeminiChunkStream(
 ): AsyncGenerator<StreamEvent> {
   let sawFunctionCall = false;
   let finishReason: string | null = null;
-  // Gemini attaches usageMetadata to many chunks with growing/cumulative
-  // values. The contract says usage is emitted exactly once per turn, so we
-  // buffer the latest counts and emit after the stream ends.
   let usage: { inputTokens: number; outputTokens: number } | null = null;
 
   try {
@@ -101,7 +81,6 @@ export async function* translateGeminiChunkStream(
             id,
             name,
             input: part.functionCall.args ?? {},
-            // Must round-trip through history or the next request 400s
             ...(part.thoughtSignature
               ? { providerMetadata: { thoughtSignature: part.thoughtSignature } }
               : {}),
@@ -125,10 +104,6 @@ export async function* translateGeminiChunkStream(
     yield { type: "usage", ...usage };
   }
 
-  // Stop-reason precedence is honesty-critical: a cutoff or block must never
-  // masquerade as a normal tool turn. MAX_TOKENS wins over calls (the turn was
-  // cut); mapped errors (safety etc.) win over everything except transport
-  // errors (already yielded above). Plain STOP + calls is the only tool_use.
   const mapped = mapGeminiFinishReason(finishReason);
   if (mapped === "error") {
     yield { type: "turn_end", stopReason: "error" };
@@ -144,9 +119,6 @@ export async function* translateGeminiChunkStream(
 }
 
 export function toGeminiContents(messages: ConversationMessage[]): Record<string, unknown>[] {
-  // Gemini's functionResponse parts are keyed by tool name, but our
-  // ToolResultInput only carries the toolCallId — recover the name from the
-  // assistant tool_call that produced it.
   const callNames = new Map<string, string>();
   for (const m of messages) {
     for (const c of m.content) {
@@ -161,8 +133,6 @@ export function toGeminiContents(messages: ConversationMessage[]): Record<string
       if (c.type === "text") {
         parts.push({ text: c.text });
       } else if (c.type === "image") {
-        // @google/genai expects camelCase here (unlike the functionCall/
-        // functionResponse parts, which it accepts in wire format).
         parts.push({ inlineData: { mimeType: c.mediaType, data: c.data } });
       } else if (c.type === "tool_call") {
         const signature = c.call.providerMetadata?.thoughtSignature;
@@ -173,8 +143,6 @@ export function toGeminiContents(messages: ConversationMessage[]): Record<string
             args:
               typeof c.call.input === "object" && c.call.input !== null ? c.call.input : {},
           },
-          // Echo the thought signature back — Gemini 3.x rejects replayed
-          // function-call history without it.
           ...(typeof signature === "string" ? { thoughtSignature: signature } : {}),
         });
       } else {
@@ -195,50 +163,55 @@ export function toGeminiContents(messages: ConversationMessage[]): Record<string
   return contents;
 }
 
+export class GeminiProvider extends BaseProvider {
+  readonly id = "gemini" as const;
+  readonly displayName = "Google Gemini";
+
+  private readonly client: GoogleGenAI | null;
+
+  constructor(apiKey: string | undefined) {
+    super();
+    this.client = apiKey ? new GoogleGenAI({ apiKey }) : null;
+  }
+
+  isConfigured(): boolean {
+    return !!this.client;
+  }
+
+  protected async doStream(request: CompletionRequest): Promise<AsyncGenerator<StreamEvent>> {
+    if (!this.client) {
+      throw new Error("Gemini client not initialized");
+    }
+
+    const stream = await this.client.models.generateContentStream({
+      model: request.model,
+      contents: toGeminiContents(request.messages) as never,
+      config: {
+        ...(request.systemPrompt ? { systemInstruction: request.systemPrompt } : {}),
+        maxOutputTokens: request.maxTokens,
+        abortSignal: request.signal,
+        ...(request.tools.length
+          ? {
+              tools: [
+                {
+                  functionDeclarations: request.tools.map((t) => ({
+                    name: t.name,
+                    description: t.description,
+                    parameters: t.inputSchema as never,
+                  })),
+                },
+              ],
+            }
+          : {}),
+      } as never,
+    });
+
+    return translateGeminiChunkStream(
+      stream as unknown as AsyncIterable<RawGeminiChunk>
+    );
+  }
+}
+
 export function createGeminiProvider(apiKey: string | undefined): ModelProvider {
-  const client = apiKey ? new GoogleGenAI({ apiKey }) : null;
-
-  return {
-    id: "gemini",
-    displayName: "Google Gemini",
-    isConfigured: () => !!client,
-
-    async *streamCompletion(request: CompletionRequest): AsyncGenerator<StreamEvent> {
-      if (!client) {
-        yield { type: "error", message: "Gemini API key not configured." };
-        return;
-      }
-
-      try {
-        const stream = await client.models.generateContentStream({
-          model: request.model,
-          contents: toGeminiContents(request.messages) as never,
-          config: {
-            ...(request.systemPrompt ? { systemInstruction: request.systemPrompt } : {}),
-            maxOutputTokens: request.maxTokens,
-            abortSignal: request.signal,
-            ...(request.tools.length
-              ? {
-                  tools: [
-                    {
-                      functionDeclarations: request.tools.map((t) => ({
-                        name: t.name,
-                        description: t.description,
-                        parameters: t.inputSchema as never,
-                      })),
-                    },
-                  ],
-                }
-              : {}),
-          } as never,
-        });
-
-        yield* translateGeminiChunkStream(
-          stream as unknown as AsyncIterable<RawGeminiChunk>
-        );
-      } catch (err) {
-        yield { type: "error", message: geminiErrorMessage(err) };
-      }
-    },
-  };
+  return new GeminiProvider(apiKey);
 }

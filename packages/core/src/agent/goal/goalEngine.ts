@@ -295,13 +295,29 @@ export async function* runGoalMission(
     milestone.summary = (reviewVerdict.replace(/^YES\s*—?\s*/i, "") || outcome.text).slice(0, 300);
 
     if (deps.autoCommit) {
-      const commitRes = await autoCommitMilestone(deps.projectRoot, milestone.id, milestone.title);
-      if (commitRes.committed && commitRes.hash) {
+      // Commit ONLY what this session touched (the /diff baseline): an
+      // untracked .env or unrelated worktree change must never be swept in.
+      let touched: string[] = [];
+      try {
+        touched = (await deps.summarizeChanges()).map((c) => c.path);
+      } catch {
+        touched = [];
+      }
+      if (touched.length === 0) {
         yield {
           type: "milestone_progress",
           milestone,
-          detail: `Committed milestone ${milestone.id}: ${commitRes.hash}`,
+          detail: `Skipped auto-commit for milestone ${milestone.id}: no session-touched files.`,
         };
+      } else {
+        const commitRes = await autoCommitMilestone(deps.projectRoot, milestone.id, milestone.title, touched);
+        if (commitRes.committed && commitRes.hash) {
+          yield {
+            type: "milestone_progress",
+            milestone,
+            detail: `Committed milestone ${milestone.id}: ${commitRes.hash}`,
+          };
+        }
       }
     }
 
@@ -417,6 +433,18 @@ export class GoalEngine {
       } else if (event.type === "verification_started") {
         if (milestone) {
           yield { type: "milestone_progress", milestone, detail: "Running automated test verification..." };
+        }
+      } else if (event.type === "verification_gave_up") {
+        // Verification abandoned mid-mission: tests were last seen failing.
+        // A milestone ending this turn must not claim success, and the deck
+        // must say why.
+        outcome.verificationFailed = true;
+        if (milestone) {
+          yield {
+            type: "milestone_progress",
+            milestone,
+            detail: "Automated verification gave up after its repair budget — tests may still be failing.",
+          };
         }
       } else if (event.type === "tool_started") {
         if (milestone) {

@@ -186,6 +186,31 @@ describe("rewind checkpoints", () => {
     }
   });
 
+  it("R5: denied or errored file batches mint no checkpoint and evict nothing", async () => {
+    const file = path.join(tmp, "a.txt");
+    fs.writeFileSync(file, "original");
+    // Broker denies everything: the write never runs.
+    const denyBroker = { async requestPermission() { return false; } };
+    const provider = new FakeProvider([
+      [
+        { type: "tool_call_end", id: "w0", name: "write_file", input: { path: file, content: "NEVER" } },
+        { type: "turn_end", stopReason: "tool_use" },
+      ],
+      textTurn(),
+    ]);
+    const session = new AgentSession(provider, {
+      ...BASE_OPTIONS,
+      projectRoot: tmp,
+      permissionBroker: denyBroker,
+    });
+    const events = await runOneTurn(session);
+    expect(events.map((e) => e.type)).toContain("tool_permission_denied");
+    expect(events.some((e) => e.type === "checkpoint")).toBe(false);
+    expect(session.getCheckpoints()).toEqual([]);
+    expect(session.getRunLedger().some((e) => e.eventType === "checkpoint_created")).toBe(false);
+    expect(fs.readFileSync(file, "utf-8")).toBe("original");
+  });
+
   it("takeSnapshot: missing file snapshots null, directories skip", async () => {
     const missing = path.join(tmp, "nope.txt");
     const dir = path.join(tmp, "sub");

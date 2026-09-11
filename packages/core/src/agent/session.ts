@@ -20,7 +20,7 @@ import { ToolOrchestrator, type RunnableCall } from "./orchestrator.js";
 import { HistoryStore } from "./historyStore.js";
 import {
   Checkpoint,
-  summarizeSessionChanges,
+  summarizeSessionChangesFromBaseline,
   type SessionFileChange,
   capCheckpoints,
   checkpointMeta,
@@ -81,6 +81,12 @@ export class AgentSession {
   private toolDefs: ToolDefinition[];
   // Rewind: in-memory ring of pre-mutation file snapshots (never persisted).
   private checkpoints: Checkpoint[] = [];
+  // First-seen pre-mutation content per path across the WHOLE session. The
+  // ring above is capped (CHECKPOINT_KEEP) and evicts the earliest snapshots;
+  // this map never evicts, so /diff and the goal debrief keep reporting every
+  // file the session touched even after many snapshots. Restore/rewind uses
+  // the ring; the baseline is review-only.
+  private baselineByPath = new Map<string, Buffer | null>();
   private checkpointSeq = 0;
   readonly id: string;
   title: string | null; // null until the first user message sets a default
@@ -110,6 +116,9 @@ export class AgentSession {
       // Persistent rewind ring: resumed sessions keep their undo history.
       this.checkpoints = loadCheckpoints(this.id);
       this.checkpointSeq = this.checkpoints.reduce((m, cp) => Math.max(m, cp.id), 0);
+      // Rebuild the review baseline from whatever the persisted ring holds
+      // (first-seen per path) — the best available after a restart.
+      for (const cp of this.checkpoints) this.recordBaseline(cp);
       // Proactive compaction seed: a resumed session has no measured usage,
       // so the reactive loop-top check would sail past an oversized history
       // and the first request would die on the provider's context limit.
@@ -126,10 +135,11 @@ export class AgentSession {
   /**
    * /diff review: file changes this session made, diffed against the
    * pre-change snapshots. Contents never leave the session — the caller
-   * gets finished diffs, not snapshot bytes.
+   * gets finished diffs, not snapshot bytes. Uses the ring-independent
+   * baseline so capped checkpoint eviction never hides changes.
    */
   summarizeChanges(): Promise<SessionFileChange[]> {
-    return summarizeSessionChanges(this.options.projectRoot, this.checkpoints);
+    return summarizeSessionChangesFromBaseline(this.options.projectRoot, this.baselineByPath);
   }
 
   /** Read-only view of the conversation history (exposed for tests / future phases). */
@@ -248,6 +258,7 @@ export class AgentSession {
         ...this.checkpoints,
         { ...cp, id: this.checkpointSeq },
       ]);
+      this.recordBaseline({ ...cp, id: this.checkpointSeq });
     }
     await this.persistCheckpoints();
     this.recordLedger({ eventType: "checkpoint_merged", outcome: "ok", elapsedMs: 0 });
@@ -312,6 +323,17 @@ export class AgentSession {
   /** Best-effort persist of the rewind ring. Awaited to avoid data loss on crash. */
   private async persistCheckpoints(): Promise<void> {
     await saveCheckpointsAsync(this.id, this.checkpoints);
+  }
+
+  /**
+   * First-seen-per-path merge into the review baseline. A file previously
+   * snapped (by a direct write or a merged sub-agent) keeps its ORIGINAL
+   * content — the oldest snapshot per path is the session baseline.
+   */
+  private recordBaseline(cp: Checkpoint): void {
+    for (const f of cp.files) {
+      if (!this.baselineByPath.has(f.path)) this.baselineByPath.set(f.path, f.content);
+    }
   }
 
   /**
@@ -566,39 +588,62 @@ export class AgentSession {
                 ? detectTestCommand(this.options.projectRoot)
                 : null;
 
-          if (testCmd && turn.mutationsOccurred && turn.verifyRepairsUsed < MAX_VERIFY_REPAIRS) {
-            yield { type: "verification_started", command: testCmd };
-            this.recordLedger({ eventType: "verification_started", tool: testCmd, outcome: "ok", elapsedMs: 0 });
-            const verifyStart = Date.now();
-            const verifyResult = await runTestVerification(
-              this.options.projectRoot,
-              testCmd,
-              undefined,
-              controller.signal
-            );
-            const elapsed = Date.now() - verifyStart;
+          if (testCmd && turn.mutationsOccurred) {
+            if (turn.verifyRepairsUsed < MAX_VERIFY_REPAIRS) {
+              yield { type: "verification_started", command: testCmd };
+              this.recordLedger({ eventType: "verification_started", tool: testCmd, outcome: "ok", elapsedMs: 0 });
+              const verifyStart = Date.now();
+              const verifyResult = await runTestVerification(
+                this.options.projectRoot,
+                testCmd,
+                undefined,
+                controller.signal
+              );
+              const elapsed = Date.now() - verifyStart;
 
-            if (controller.signal.aborted) {
-              yield { type: "cancelled" };
-              return;
-            }
+              if (controller.signal.aborted) {
+                yield { type: "cancelled" };
+                return;
+              }
 
-            if (verifyResult.passed) {
-              yield { type: "verification_result", passed: true, summary: verifyResult.summary };
-              this.recordLedger({ eventType: "verification_finished", tool: testCmd, outcome: "ok", elapsedMs: elapsed });
+              if (verifyResult.passed) {
+                yield { type: "verification_result", passed: true, summary: verifyResult.summary };
+                this.recordLedger({ eventType: "verification_finished", tool: testCmd, outcome: "ok", elapsedMs: elapsed });
+              } else {
+                turn.verifyRepairsUsed += 1;
+                yield { type: "verification_result", passed: false, summary: verifyResult.summary };
+                this.recordLedger({ eventType: "verification_finished", tool: testCmd, outcome: "error", elapsedMs: elapsed });
+
+                const repairMsg =
+                  `[Automated Test Verification Failed]\n` +
+                  `The test command \`${testCmd}\` failed (exit ${verifyResult.exitCode}):\n` +
+                  `${verifyResult.failureTrace ?? verifyResult.output}\n\n` +
+                  `Analyze the test failure, use edit_file or write_file to repair the issue, and ensure the tests pass.`;
+                this.history.pushUserText(repairMsg);
+                continue;
+              }
             } else {
-              turn.verifyRepairsUsed += 1;
-              yield { type: "verification_result", passed: false, summary: verifyResult.summary };
-              this.recordLedger({ eventType: "verification_finished", tool: testCmd, outcome: "error", elapsedMs: elapsed });
-
-              const repairMsg =
-                `[Automated Test Verification Failed]\n` +
-                `The test command \`${testCmd}\` failed (exit ${verifyResult.exitCode}):\n` +
-                `${verifyResult.failureTrace ?? verifyResult.output}\n\n` +
-                `Analyze the test failure, use edit_file or write_file to repair the issue, and ensure the tests pass.`;
-              this.history.pushUserText(repairMsg);
-              continue;
+              // Repair budget exhausted. Say so honestly instead of letting
+              // turn_complete masquerade as verified — the tests were last
+              // seen failing and this mutation got no gate.
+              yield { type: "verification_gave_up", command: testCmd };
+              this.recordLedger({ eventType: "verification_gave_up", tool: testCmd, outcome: "error", elapsedMs: 0 });
             }
+          }
+
+          if (stopReason === "error") {
+            // Provider-side refusal (today: Gemini content/safety blocks, mapped
+            // to turn_end "error" by the adapter). The turn produced no usable
+            // result: completing here would recordSuccess, emit turn_complete,
+            // and let the goal engine count a filtered turn as clean work.
+            // (Verification above still ran first, so earlier mutations in this
+            // turn were gated; a failed gate `continue`s into repair as usual.)
+            yield {
+              type: "error",
+              message:
+                "The model declined to complete this turn (content filter or safety block) — no usable response was produced.",
+            };
+            return;
           }
 
           recordSuccess(this.provider.id, this.options.model);
@@ -752,23 +797,25 @@ export class AgentSession {
           }
           toRun.push({ p, startedAt: Date.now() });
         }
-        // Rewind: snapshot write_file/edit_file targets BEFORE any permission
-        // prompt or execution. Matched by NAME, pre-permission — a denied tool
-        // changes nothing, so restoring over it stays correct. Batches with no
-        // file writes (reads, run_command-only) snapshot nothing.
+        // Rewind: snapshot write_file/edit_file bytes BEFORE any permission
+        // prompt or execution (the bytes must predate the mutation). Matched
+        // by NAME. Batches with no file writes (reads, run_command-only)
+        // snapshot nothing. The snapshot joins the ring (event + ledger) only
+        // if a covered call actually mutated — a denied or errored batch mints
+        // no checkpoint, emits no event, and evicts nothing from the
+        // CHECKPOINT_KEEP ring. The review baseline still records first-seen
+        // originals either way (harmless for denied calls: nothing changed).
         const rewindTargets = [...new Set(prepared.flatMap((p) => {
           if (p.call.name !== "write_file" && p.call.name !== "edit_file") return [];
           const target = (p.call.input as { path?: unknown } | undefined)?.path;
           return typeof target === "string" && target.length > 0 ? [target] : [];
         }))];
+        let pendingCp: Checkpoint | null = null;
         if (rewindTargets.length > 0) {
           const cp = await takeSnapshot(this.options.projectRoot, this.checkpointSeq + 1, rewindTargets);
           if (cp.files.length > 0) {
-            this.checkpointSeq = cp.id;
-            this.checkpoints = capCheckpoints([...this.checkpoints, cp]);
-            await this.persistCheckpoints();
-            this.recordLedger({ eventType: "checkpoint_created", outcome: "ok", elapsedMs: 0 });
-            yield { type: "checkpoint", id: cp.id, files: cp.files.length };
+            this.recordBaseline(cp);
+            pendingCp = cp;
           }
         }
         // Declared parallel policy + execution live in the orchestrator;
@@ -797,6 +844,26 @@ export class AgentSession {
           const outcome = outcomes.get(p.call.id);
           if (p.def?.mutating && outcome && !outcome.isError) {
             turn.mutationsOccurred = true;
+          }
+        }
+        // Publish the pending snapshot only if a covered file call mutated.
+        // Silent drop otherwise: no event, no ledger row, no ring churn.
+        if (pendingCp) {
+          let coveredMutated = false;
+          for (const p of prepared) {
+            if (p.call.name !== "write_file" && p.call.name !== "edit_file") continue;
+            const outcome = outcomes.get(p.call.id);
+            if (outcome && !outcome.isError) {
+              coveredMutated = true;
+              break;
+            }
+          }
+          if (coveredMutated) {
+            this.checkpointSeq = pendingCp.id;
+            this.checkpoints = capCheckpoints([...this.checkpoints, pendingCp]);
+            await this.persistCheckpoints();
+            this.recordLedger({ eventType: "checkpoint_created", outcome: "ok", elapsedMs: 0 });
+            yield { type: "checkpoint", id: pendingCp.id, files: pendingCp.files.length };
           }
         }
 

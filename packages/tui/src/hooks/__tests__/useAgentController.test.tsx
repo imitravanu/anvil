@@ -3,6 +3,7 @@ import type React from "react";
 import { Text } from "ink";
 import { render } from "ink-testing-library";
 import { AgentSession, type StreamEvent } from "@anvil/core";
+import { TRANSCRIPT_STATE_CAP } from "../../util/displayLimits.js";
 import {
   useAgentController,
   retainOutput,
@@ -264,6 +265,31 @@ describe("useAgentController - tool calls and events", () => {
     const assistantMsg = api.current!.messages.find((m: DisplayMessage) => m.role === "assistant");
     expect(assistantMsg).toBeDefined();
     expect(assistantMsg!.streaming).toBe(false);
+    app.unmount();
+  });
+
+  it("bounds system-notice growth at TRANSCRIPT_STATE_CAP", async () => {
+    const provider = fakeProvider([]);
+    const session = new AgentSession(provider as never, {
+      systemPrompt: "test",
+      model: "fake-model",
+      maxTokens: 1024,
+      projectRoot: "/tmp",
+      permissionBroker: { async requestPermission() { return true; } },
+    });
+
+    const api: { current: ReturnType<typeof useAgentController> | null } = { current: null };
+    const app = render(<Harness session={session} api={api} />);
+    await new Promise((r) => setTimeout(r, 30));
+
+    for (let i = 0; i < TRANSCRIPT_STATE_CAP + 50; i++) {
+      api.current!.printSystemMessage(`notice ${i}`);
+    }
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(api.current!.messages.length).toBeLessThanOrEqual(TRANSCRIPT_STATE_CAP);
+    // Newest notices survive; oldest are evicted.
+    expect(api.current!.messages.at(-1)!.text).toContain(`notice ${TRANSCRIPT_STATE_CAP + 49}`);
     app.unmount();
   });
 });

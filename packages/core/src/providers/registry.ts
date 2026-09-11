@@ -24,6 +24,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     id: "claude-opus-5",
     providerId: "anthropic",
     displayName: "Claude Opus 5",
+    isFree: false,
     contextWindow: 200_000,
     supportsTools: true,
     supportsVision: true,
@@ -33,6 +34,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     id: "claude-sonnet-5",
     providerId: "anthropic",
     displayName: "Claude Sonnet 5",
+    isFree: false,
     contextWindow: 200_000,
     supportsTools: true,
     supportsVision: true,
@@ -43,6 +45,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     id: "claude-3-7-sonnet-20250219",
     providerId: "anthropic",
     displayName: "Claude 3.7 Sonnet",
+    isFree: false,
     contextWindow: 200_000,
     supportsTools: true,
     supportsVision: true,
@@ -53,6 +56,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     id: "claude-3-5-sonnet-20241022",
     providerId: "anthropic",
     displayName: "Claude 3.5 Sonnet",
+    isFree: false,
     contextWindow: 200_000,
     supportsTools: true,
     supportsVision: true,
@@ -63,6 +67,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     id: "claude-3-5-haiku-20241022",
     providerId: "anthropic",
     displayName: "Claude 3.5 Haiku",
+    isFree: false,
     contextWindow: 200_000,
     supportsTools: true,
     supportsVision: true,
@@ -73,6 +78,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     id: "gpt-5.1",
     providerId: "openai",
     displayName: "GPT-5.1",
+    isFree: false,
     contextWindow: 400_000,
     supportsTools: true,
     supportsVision: true,
@@ -82,6 +88,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     id: "gpt-4o",
     providerId: "openai",
     displayName: "GPT-4o",
+    isFree: false,
     contextWindow: 128_000,
     supportsTools: true,
     supportsVision: true,
@@ -92,6 +99,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     id: "gpt-4o-mini",
     providerId: "openai",
     displayName: "GPT-4o mini",
+    isFree: false,
     contextWindow: 128_000,
     supportsTools: true,
     supportsVision: true,
@@ -102,6 +110,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     id: "o3-mini",
     providerId: "openai",
     displayName: "o3-mini",
+    isFree: false,
     contextWindow: 200_000,
     supportsTools: true,
     supportsVision: false,
@@ -137,6 +146,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     id: "gemini-1.5-pro",
     providerId: "gemini",
     displayName: "Gemini 1.5 Pro",
+    isFree: false,
     contextWindow: 2_097_152,
     supportsTools: true,
     supportsVision: true,
@@ -162,6 +172,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     id: "gemini-3.1-pro-preview",
     providerId: "gemini",
     displayName: "Gemini 3.1 Pro (preview)",
+    isFree: false,
     contextWindow: 1_000_000,
     supportsTools: true,
     supportsVision: true,
@@ -600,8 +611,11 @@ export function registerModel(model: ModelInfo): void {
 
 export function getModel(id: string, providerId?: string): ModelInfo | undefined {
   if (providerId) {
-    const exact = _qualifiedIndex.get(_key(providerId, id));
-    if (exact) return exact;
+    // Qualified miss returns undefined — NEVER another provider's row. The
+    // old fallback fed the wrong contextWindow/flags into compaction and let
+    // certification mutate the wrong row (e.g. openrouter's gpt-4o-mini
+    // reading the openai row).
+    return _qualifiedIndex.get(_key(providerId, id));
   }
   return _idFirstIndex.get(id);
 }

@@ -192,8 +192,13 @@ export function App({
     const result = session.switchModel(provider, modelInfo.id);
     const pricingTag = formatPricingTag(modelInfo.isFree);
     if (result.historyCleared) {
+      // Fresh conversation context — stale "always allow" grants die with it,
+      // and the transcript resets so it never shows turns the new session
+      // doesn't have (which read as the model "forgetting").
+      broker.clearSessionApprovals();
+      clearMessages();
       printSystemMessage(
-        `Switched to ${provider.id}/${modelInfo.id}${pricingTag} — conversation history was cleared (different provider).`
+        `Switched to ${provider.id}/${modelInfo.id}${pricingTag} — conversation history was cleared (different provider; permission grants reset).`
       );
     } else {
       printSystemMessage(`Switched to ${provider.id}/${modelInfo.id}${pricingTag}.`);

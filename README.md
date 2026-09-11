@@ -7,24 +7,24 @@ permission prompt with a real unified diff.
 
 ## Features
 
-- **Nine providers, one interface**: Anthropic, OpenAI, Google Gemini, OpenRouter, Groq,
+- **Ten providers, one interface**: Anthropic, OpenAI, Google Gemini, OpenRouter, Orcarouter, Groq,
   GitHub Models, Cerebras, Mistral AI, and local Ollama — streaming responses, a model
-  registry (`/model` picker to switch mid-conversation), and automatic OpenRouter free-model
+  registry (`/model` picker to switch mid-conversation), and automatic OpenRouter/Orcarouter free-model
   syncing
 - **Free & local models**: keep API spend at $0 with Groq's free tier, GitHub Models, Cerebras,
   Mistral's experimentation tier, or Ollama (fully offline). Every model is tagged `[FREE]` or
   `[PAID]` in the picker and header, so pricing is always visible.
-- **Agent loop with 10 tools**: `read_file`, `write_file`, `edit_file` (unified diffs),
+- **Agent loop with 11 tools**: `read_file`, `write_file`, `edit_file` (unified diffs),
   `list_files` (glob or plain-name search), `grep`, `run_command`, `get_outline`
   (token-efficient structure outline), `verify_tests` (run the project's detected test runner),
-  `update_plan`, and `delegate_task` (sub-agent) — with cancellation and path containment
+  `update_plan`, `delegate_task` (sub-agent), and `update_memory` (project notes) — with cancellation and path containment
   to the project root
 - **Interactive permissions**: every mutating tool call shows the diff or command before it runs
   (Allow once / Always allow this session / Deny — or just press **Esc** to deny). Known
   read-only commands (`ls`, `cat`, `git status`, `node --version`, …) run without prompting;
   anything with shell metacharacters, globs, or mutating subcommands always prompts.
-- **Model picker with type-to-filter**: 36 built-in models plus live-synced OpenRouter free
-  models — searchable by name; free models sort first.
+- **Model picker with type-to-filter**: 49 built-in models plus live-synced OpenRouter/Orcarouter free
+  models — searchable by name; free models sort first. The picker lists free-tier models; paid models stay available via `--model`, env, and settings.
 - **Honest UI everywhere**: real unified diffs in permission prompts, bounded transcript with a
   "… N earlier messages above" scrollback indicator, compact actionable error messages (rate
   limits include the retry time), a per-session run ledger (`/ledger`), and file checkpoints you
@@ -130,16 +130,18 @@ Every model provider adapter undergoes strict verification across 5 criteria: st
 
 | Provider | Environment Variable / Key | Free Tier | Primary Certified Models | Tools | Vision | Status |
 |---|---|---|---|---|---|---|
-| **Anthropic** | `ANTHROPIC_API_KEY` | Paid | `claude-sonnet-5`, `claude-3.7-sonnet`, `claude-3.5-sonnet`, `claude-3.5-haiku` | Yes | Yes | ✅ live |
-| **OpenAI** | `OPENAI_API_KEY` | Paid | `gpt-4o`, `gpt-4o-mini`, `o3-mini` | Yes | Yes | ✅ live |
+| **Anthropic** | `ANTHROPIC_API_KEY` | Paid | `claude-sonnet-5`, `claude-3-7-sonnet-20250219`, `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022` | Yes | Yes | ✅ live* |
+| **OpenAI** | `OPENAI_API_KEY` | Paid | `gpt-4o`, `gpt-4o-mini`, `o3-mini` | Yes | Yes | ✅ live* |
 | **Google Gemini** | `GEMINI_API_KEY` | Free & Paid | `gemini-3.6-flash`, `gemini-2.0-flash`, `gemini-1.5-pro`, `gemini-1.5-flash` | Yes | Yes | ✅ live |
-| **OpenRouter** | `OPENROUTER_API_KEY` | Free & Paid | `openrouter/free`, `google/gemma-4-31b-it:free`, `meta-llama/llama-3.3-70b-instruct:free` | Yes | Yes | ✅ live |
-| **Orcarouter** | `ORCAROUTER_API_KEY` | Free & Paid | `orcarouter/free`, `orcarouter/deepseek-r1:free`, `orcarouter/llama-3.3-70b:free` | Yes | Yes | ✅ live |
+| **OpenRouter** | `OPENROUTER_API_KEY` | Free & Paid | `openrouter/free`, `google/gemma-4-31b-it:free` | Yes | Yes | ✅ live |
+| **Orcarouter** | `ORCAROUTER_API_KEY` | Free & Paid | `orcarouter/free`, `z-ai/glm-5.3-flash-free`, `deepseek/deepseek-v4-flash-free` | Yes | Yes | ✅ live |
 | **Groq** | `GROQ_API_KEY` | Free Tier | `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, `qwen-2.5-coder-32b` | Yes | No | ✅ live |
 | **GitHub Models** | `GITHUB_TOKEN` / PAT | Free Preview | `gpt-4o-mini`, `meta-llama-3.3-70b-instruct`, `mistral-large-2411` | Yes | Mini: Yes | ✅ live |
 | **Cerebras** | `CEREBRAS_API_KEY` | Free Tier (1M/day) | `llama3.3-70b`, `llama3.1-8b` | Yes | No | ✅ live |
 | **Mistral AI** | `MISTRAL_API_KEY` | Free Experimentation | `codestral-latest`, `mistral-small-latest` | Yes | No | ✅ live |
 | **Ollama** | None / `OLLAMA_HOST` | 100% Free / Local | `qwen2.5-coder:latest`, `llama3.2:latest` | Yes | Model-dependent | ✅ live |
+
+Status `✅ live` means the adapter passes all 5 criteria; `*` marks providers whose two newest models (`claude-opus-5`, `gpt-5.1`) are still `untested`. CI runs the deterministic mock suite; the weekly live lane (`live-eval.yml`) re-certifies against real providers and uploads the matrix (`--out`).
 
 Re-run provider certification anytime:
 ```bash
@@ -208,15 +210,11 @@ an empty input recalls messages you sent this session; typing **/** opens the co
 Anvil was built phase-by-phase against a written spec; each phase has a doc with goals, exact
 file lists, interfaces, and acceptance criteria:
 
-- `Phase 0` — monorepo scaffold (`docs/`, spec `01-PHASE-0-foundation.md`)
-- `Phase 1` — provider abstraction layer (spec `02-…`)
-- `Phase 2` — agent loop & tool system (spec `03-…`)
-- `Phase 3` — TUI shell (spec `04-…`, notes `docs/PHASE-3-NOTES.md`)
-- `Phase 4` — permissions, slash commands, model picker (spec `05-…`, notes `docs/PHASE-4-NOTES.md`)
-- `Phase 5` — session persistence & context compaction (spec `06-…`, notes `docs/PHASE-5-NOTES.md`)
-- `Phase 6` — polish & distribution (spec `07-…`)
-- `Phase 7` — free & local model providers + OpenRouter live free-model sync
-  (notes `docs/PHASE-7-NOTES.md`)
+- `Phases 0–7` — monorepo scaffold, provider abstraction layer, agent loop & tool
+  system, TUI shell, permissions/slash commands/model picker, session
+  persistence & context compaction, polish, and free & local model providers +
+  live free-model sync (notes `docs/PHASE-3-NOTES.md`, `docs/PHASE-4-NOTES.md`,
+  `docs/PHASE-5-NOTES.md`, `docs/PHASE-7-NOTES.md`)
 - `Phase 8` — truthful engine + free-model radar (spec `docs/PHASE-8-SPEC.md`,
   progress `docs/PHASE-8-PROGRESS.md`)
 - `Phase 9` — sub-agent delegation (spec `docs/PHASE-9-SPEC.md`,
@@ -226,6 +224,10 @@ file lists, interfaces, and acceptance criteria:
 - `Phases 11–16` — codebase intelligence (`get_outline`, project rules), headless mode
   (`-p`), closed-loop auto-verification, the goal engine, the cockpit UI, and hardening
   (specs and records in `docs/`; the multi-phase roadmap lives in `docs/ROADMAP.md`)
+- `Phases 0, 17–20` — visual regression testing, the agent eval harness, provider
+  certification, project memory & git workflow, and distribution & CI
+  (spec `docs/PHASE-0-VISUAL-REGRESSION-SPEC.md`, progress `docs/PHASE-17-PROGRESS.md`,
+  `docs/PHASE-18-PROGRESS.md`, `docs/PHASE-19-PROGRESS.md`, `docs/PHASE-20-PROGRESS.md`)
 
 ## MCP servers (Phase 10)
 

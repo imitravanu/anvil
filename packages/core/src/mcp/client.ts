@@ -276,12 +276,25 @@ export async function connectAllMcpServers(
         return;
       }
       const old = conns.get(srv.id);
-      try {
-        old?.transport?.close();
-      } catch {
-        // ignore cleanup failures
+      // Connect the replacement BEFORE touching the live connection: a
+      // transient failure must not convert a previously `ready` server into
+      // a dead one (the old code closed first, then stored the error).
+      const next = await connectServer(srv.id, srv, transport, opts);
+      if (next.status === "ready") {
+        try {
+          old?.transport?.close();
+        } catch {
+          // ignore cleanup failures
+        }
+        conns.set(srv.id, next);
+      } else {
+        try {
+          transport.close();
+        } catch {
+          // ignore cleanup failures
+        }
+        if (!old || old.status !== "ready") conns.set(srv.id, next);
       }
-      conns.set(srv.id, await connectServer(srv.id, srv, transport, opts));
     })
   );
   for (const [id, conn] of [...conns]) {

@@ -23,6 +23,18 @@ export async function runGoalHeadless(opts: GoalHeadlessOptions): Promise<number
     maxTurns: opts.maxTurns,
   });
 
+  // SIGINT parity with headless mode: first Ctrl+C cancels the mission
+  // gracefully, the second exits immediately.
+  let abortCount = 0;
+  const abortHandler = () => {
+    abortCount++;
+    if (abortCount > 1) {
+      process.exit(130);
+    }
+    engine.cancel();
+  };
+  process.prependListener("SIGINT", abortHandler);
+
   try {
     for await (const event of engine.run(opts.goal)) {
       switch (event.type) {
@@ -82,13 +94,19 @@ export async function runGoalHeadless(opts: GoalHeadlessOptions): Promise<number
           }
           return event.result.success ? 0 : 1;
         case "goal_failed":
-          process.stderr.write(`\n✗ Goal failed: ${event.error}\n`);
+          if (!opts.raw) {
+            process.stderr.write(`\n✗ Goal failed: ${event.error}\n`);
+          }
           return 1;
       }
     }
     return 0;
   } catch (err: unknown) {
-    process.stderr.write(`\nError in GoalEngine: ${err instanceof Error ? err.message : String(err)}\n`);
+    if (!opts.raw) {
+      process.stderr.write(`\nError in GoalEngine: ${err instanceof Error ? err.message : String(err)}\n`);
+    }
     return 1;
+  } finally {
+    process.removeListener("SIGINT", abortHandler);
   }
 }

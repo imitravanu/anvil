@@ -2,6 +2,7 @@ import { ConversationMessage, ModelProvider } from "../providers/types.js";
 import { TOOL_DEFINITIONS } from "../tools/index.js";
 import type { ToolDefinition } from "../tools/types.js";
 import { AgentSession } from "./session.js";
+import { saveCheckpointsAsync } from "./checkpointStore.js";
 import type { PermissionBroker } from "./types.js";
 import type { Checkpoint } from "./checkpoints.js";
 import { buildSystemPrompt } from "../config/rules.js";
@@ -132,14 +133,21 @@ export async function* runSubAgentLive(opts: {
     opts.signal.removeEventListener("abort", onAbort);
   }
 
+  // Hand the sub-ring to the parent even on abort/crash: files the sub
+  // changed before stopping still exist, so rewind must still reach them.
+  const checkpoints = sub.drainCheckpoints();
+  // The parent merges this ring into its own (fresh ids, persisted there).
+  // Delete the sub-session's own persisted file: without this every
+  // delegation littered ANVIL_HOME/checkpoints with orphan JSON holding raw
+  // project bytes that no session would ever load again. Best-effort — the
+  // in-memory merge above is the source of truth.
+  await saveCheckpointsAsync(sub.id, []);
   return {
     report: capReport(report),
     usage: { in: inTokens, out: outTokens },
     toolCalls,
     aborted,
     ...(failureReason ? { failureReason } : {}),
-    // Hand the sub-ring to the parent even on abort/crash: files the sub
-    // changed before stopping still exist, so rewind must still reach them.
-    checkpoints: sub.drainCheckpoints(),
+    checkpoints,
   };
 }

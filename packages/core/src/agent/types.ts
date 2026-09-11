@@ -6,6 +6,10 @@ import type { ToolDefinition } from "../tools/types.js";
 // confirmation prompt. A test harness can implement it as "always approve" or "always deny."
 export interface PermissionBroker {
   requestPermission(toolName: string, summary: string): Promise<boolean>;
+  /** Optional: attach an AbortSignal to cancel pending permission prompts on abort. */
+  attachAbortSignal?(signal: AbortSignal): void;
+  /** Optional: release a signal attached above. Called when the batch settles. */
+  detachAbortSignal?(signal: AbortSignal): void;
 }
 
 export const AUTO_APPROVE_BROKER: PermissionBroker = {
@@ -40,7 +44,11 @@ export type AgentEvent =
   | { type: "checkpoint"; id: number; files: number }
   // Closed-loop TDD auto-verification
   | { type: "verification_started"; command: string }
-  | { type: "verification_result"; passed: boolean; summary: string };
+  | { type: "verification_result"; passed: boolean; summary: string }
+  // Verification skipped because the per-turn repair budget is exhausted —
+  // tests may STILL be failing. Honest signaling: consumers must not claim
+  // pass/fail, they report "verification stopped repairing".
+  | { type: "verification_gave_up"; command: string };
 
 export interface AgentOptions {
   systemPrompt: string;

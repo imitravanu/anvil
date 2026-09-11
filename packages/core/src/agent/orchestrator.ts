@@ -4,6 +4,7 @@ import { isReadOnlyCommand } from "../tools/bash.js";
 import type { AgentEvent } from "./types.js";
 import type { RunLedgerEntry } from "./ledger.js";
 import type { PreparedCall } from "./loopGuard.js";
+import type { PermissionBroker } from "./types.js";
 
 export interface RunnableCall {
   p: PreparedCall;
@@ -12,7 +13,7 @@ export interface RunnableCall {
 
 export interface OrchestratorDeps {
   projectRoot: string;
-  permissionBroker: { requestPermission(name: string, summary: string): Promise<boolean> };
+  permissionBroker: PermissionBroker;
   signal: AbortSignal;
   recordLedger: (entry: Omit<RunLedgerEntry, "seq" | "ts">) => void;
 }
@@ -37,10 +38,18 @@ export class ToolOrchestrator {
     toRun: readonly RunnableCall[]
   ): AsyncGenerator<AgentEvent, Map<string, ToolExecutionResult>> {
     const runResults = new Map<string, ToolExecutionResult>();
-    if (this.isSerialBatch(toRun)) {
-      yield* this.runSerial(toRun, runResults);
-    } else {
-      yield* this.runConcurrent(toRun, runResults);
+    // Attach abort signal to permission broker so pending prompts are cancelled on abort.
+    // Detached in `finally`: without this every tool batch leaked one listener
+    // per turn into the broker and the signal.
+    this.deps.permissionBroker.attachAbortSignal?.(this.deps.signal);
+    try {
+      if (this.isSerialBatch(toRun)) {
+        yield* this.runSerial(toRun, runResults);
+      } else {
+        yield* this.runConcurrent(toRun, runResults);
+      }
+    } finally {
+      this.deps.permissionBroker.detachAbortSignal?.(this.deps.signal);
     }
     // The map may be missing entries for calls cut off by abort; the session
     // owns the `cancelled` event and repairs history afterwards — this class
@@ -162,6 +171,12 @@ export class ToolOrchestrator {
     runResults: Map<string, ToolExecutionResult>
   ): AsyncGenerator<AgentEvent> {
     const { projectRoot, signal } = this.deps;
+    if (signal.aborted) {
+      for (const t of toRun) {
+        this.deps.recordLedger({ eventType: "cancelled", tool: t.p.call.name, inputHash: t.p.key, outcome: "aborted", elapsedMs: 0 });
+      }
+      return;
+    }
     // Concurrent read-only batch — the shared AbortSignal reaches every call.
     for (const t of toRun) {
       yield { type: "tool_started", id: t.p.call.id, name: t.p.call.name, input: t.p.call.input };
@@ -180,6 +195,15 @@ export class ToolOrchestrator {
         }
       })
     );
+    // Cancelled mid-batch: don't emit post-abort tool_finished events — the
+    // session repairs history with synthetic cancelled results from whatever
+    // the orchestrator returns (here: nothing completed observably).
+    if (signal.aborted) {
+      for (const t of toRun) {
+        this.deps.recordLedger({ eventType: "cancelled", tool: t.p.call.name, inputHash: t.p.key, outcome: "aborted", elapsedMs: 0 });
+      }
+      return;
+    }
     for (let i = 0; i < toRun.length; i++) {
       const t = toRun[i];
       const result = outputs[i];

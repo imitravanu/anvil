@@ -115,7 +115,14 @@ export async function runEvalTask(
 
     const timeoutLimit = options.timeoutMs || task.timeoutMs || 30_000;
     const abortController = new AbortController();
-    const timeoutHandle = setTimeout(() => abortController.abort(), timeoutLimit);
+    // The old code aborted this controller but never wired it into the turn:
+    // session.send() owns its own controller, so a hung provider stalled the
+    // `for await` forever and the timeout never fired. Cancelling the session
+    // aborts the in-flight provider stream, which unwinds the loop promptly.
+    const timeoutHandle = setTimeout(() => {
+      abortController.abort();
+      session.cancel();
+    }, timeoutLimit);
 
     try {
       for await (const event of session.send(task.prompt)) {

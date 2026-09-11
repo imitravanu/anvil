@@ -70,9 +70,12 @@ example ✅, `--help` line ✅, decisions unaltered except D0 (§5.2).
   and dropped.
 - Executor resolves per call by scanning live connections (no name→server
   map), so reconnects refresh routing with no stale state.
-- Reconnect does NOT hot-add tools to the running session (`toolDefs` is
+- ~~Reconnect does NOT hot-add tools to the running session (`toolDefs` is
   fixed at construction) — `/mcp reconnect` output and README say new tools
-  need a restart. Deliberate v1 boundary, stated in UX copy.
+  need a restart. Deliberate v1 boundary, stated in UX copy.~~
+  SUPERSEDED (2026-09-10): reconnect now hot-loads tools into the running
+  session (`session.setTools`, hot-reload notice in `/mcp` output) — the v1
+  boundary was lifted after this record was written.
 - `registerExternalExecutor` dedupes by prefix (double boot/register safe).
 
 ## 5. FINDINGS (classified, per repo change-control)

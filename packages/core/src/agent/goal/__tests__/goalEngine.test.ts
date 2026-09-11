@@ -291,7 +291,7 @@ Let's begin.`;
       expect(result.criticVerdict).toContain("mission accomplished");
     });
 
-    it("creates git commits automatically per milestone when autoCommit is true", async () => {
+    it("commits ONLY session-touched files per milestone, never stray secrets", async () => {
       const { execSync } = await import("node:child_process");
       execSync("git init", { cwd: tmpDir });
       execSync("git config user.name 'Test Runner'", { cwd: tmpDir });
@@ -300,8 +300,9 @@ Let's begin.`;
       fs.writeFileSync(path.join(tmpDir, "initial.txt"), "hello");
       execSync("git add -A && git commit -m 'initial'", { cwd: tmpDir });
 
-      // Create an uncommitted file that will be picked up by autoCommitMilestone
-      fs.writeFileSync(path.join(tmpDir, "feature.txt"), "new feature content");
+      // An untracked secret the mission never touches — the old `git add -A`
+      // swept it into history; the scoped commit must leave it alone.
+      fs.writeFileSync(path.join(tmpDir, "untracked-secret.env"), "API_KEY=super-secret");
 
       const planResponse: StreamEvent[] = [
         {
@@ -311,8 +312,22 @@ Let's begin.`;
         { type: "turn_end", stopReason: "end_turn" },
       ];
 
+      // The milestone turn REALLY writes feature.txt through the session, so
+      // the auto-commit has a session-touched path to stage.
+      const writeTurn: StreamEvent[] = [
+        { type: "tool_call_start", id: "t1", name: "write_file" },
+        {
+          type: "tool_call_end",
+          id: "t1",
+          name: "write_file",
+          input: { path: "feature.txt", content: "new feature content" },
+        },
+        { type: "turn_end", stopReason: "tool_use" },
+      ];
+
       const script: ScriptEntry[] = [
         planResponse,
+        writeTurn,
         textTurn("Milestone 1 completed: created feature.txt"),
         textTurn("YES — feature file added."),
         textTurn("Critic: LGTM"),
@@ -334,10 +349,68 @@ Let's begin.`;
       const log = execSync("git log -n 1 --pretty=format:%s", { cwd: tmpDir }).toString();
       expect(log).toBe("anvil(goal): milestone 1 — Add feature file");
 
+      const committedFiles = execSync("git show --name-only --pretty=format:", { cwd: tmpDir })
+        .toString()
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      expect(committedFiles).toEqual(["feature.txt"]);
+
+      // The secret is still untracked in the worktree — never committed.
+      const status = execSync("git status --porcelain", { cwd: tmpDir }).toString();
+      expect(status).toContain("?? untracked-secret.env");
+
       const commitProgress = events.find(
         (e: any) => e.type === "milestone_progress" && e.detail.startsWith("Committed milestone 1:")
       );
       expect(commitProgress).toBeDefined();
+    });
+
+    it("skips the auto-commit when the mission touched no files", async () => {
+      const { execSync } = await import("node:child_process");
+      execSync("git init", { cwd: tmpDir });
+      execSync("git config user.name 'Test Runner'", { cwd: tmpDir });
+      execSync("git config user.email 'test@example.com'", { cwd: tmpDir });
+
+      fs.writeFileSync(path.join(tmpDir, "initial.txt"), "hello");
+      execSync("git add -A && git commit -m 'initial'", { cwd: tmpDir });
+
+      const planResponse: StreamEvent[] = [
+        {
+          type: "text_delta",
+          text: JSON.stringify([{ id: "1", title: "Only", criteria: "Do it" }]),
+        },
+        { type: "turn_end", stopReason: "end_turn" },
+      ];
+
+      const script: ScriptEntry[] = [
+        planResponse,
+        textTurn("Done, no files needed."),
+        textTurn("YES — done."),
+        textTurn("Critic: LGTM"),
+      ];
+
+      const provider = new FakeProvider(script);
+      const engine = new GoalEngine({
+        provider,
+        model: "fake-model",
+        projectRoot: tmpDir,
+        permissionBroker: { async requestPermission() { return true; } },
+        autoVerify: false,
+        autoCommit: true,
+      });
+
+      const { events, result } = await collect(engine, "Think only");
+      expect(result.success).toBe(true);
+
+      // No new commit: still exactly one commit in history.
+      const count = execSync("git rev-list --count HEAD", { cwd: tmpDir }).toString().trim();
+      expect(count).toBe("1");
+
+      const skipped = events.find(
+        (e: any) => e.type === "milestone_progress" && e.detail.includes("Skipped auto-commit")
+      );
+      expect(skipped).toBeDefined();
     });
   });
 });

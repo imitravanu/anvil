@@ -136,6 +136,9 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
       { ...sessionOptions, model: stored.metadata.model, permissionBroker: broker },
       stored
     );
+    // A resumed conversation is a different trust context: grants from the
+    // previous session must not carry over (they were never persisted).
+    broker.clearSessionApprovals();
     setSession(restored);
     setActiveProviderId(stored.metadata.providerId as ProviderId);
     setCurrentModel(stored.metadata.model);

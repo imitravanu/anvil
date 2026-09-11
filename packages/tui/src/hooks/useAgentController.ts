@@ -214,10 +214,10 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
 
   /** Append a system notice to the transcript — never sent to the model. */
   const printSystemMessage = useCallback((text: string) => {
-    setMessages((prev) => [
-      ...prev,
-      { id: randomUUID(), role: "system" as const, text, streaming: false, toolCalls: [], subAgents: [] },
-    ]);
+    appendSystemMessage(
+      setMessages,
+      text
+    );
   }, []);
 
   /** Drain queued messages after the current turn settles. The caller owns
@@ -374,6 +374,8 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         let detail: string | undefined;
         if (event.type === "tool_started") detail = `Running ${event.name}...`;
         else if (event.type === "verification_started") detail = "Running automated test verification...";
+        else if (event.type === "verification_gave_up")
+          detail = "Auto-verification gave up — repair budget exhausted.";
         else if (event.type === "verification_result")
           detail = event.passed ? "Automated verification passed." : "Automated verification FAILED.";
         if (!detail) return;
@@ -523,6 +525,22 @@ function systemMessage(text: string): DisplayMessage {
   return { id: randomUUID(), role: "system", text, streaming: false, toolCalls: [], subAgents: [] };
 }
 
+/**
+ * Append a system notice with the same transcript bound as user/assistant
+ * turns. System notices used to bypass TRANSCRIPT_STATE_CAP, so long sessions
+ * (rate-limit storms, verifications, checkpoints) grew `messages` without
+ * bound — memory growth plus per-keystroke windowing cost.
+ */
+function appendSystemMessage(
+  setMessages: React.Dispatch<React.SetStateAction<DisplayMessage[]>>,
+  text: string
+): void {
+  setMessages((prev) => {
+    const next = [...prev, systemMessage(text)];
+    return next.length > TRANSCRIPT_STATE_CAP ? next.slice(-TRANSCRIPT_STATE_CAP) : next;
+  });
+}
+
 function applyEvent(
   event: AgentEvent,
   update: (fn: (m: DisplayMessage) => DisplayMessage) => void,
@@ -596,40 +614,34 @@ function applyEvent(
       }));
       break;
     case "compacted":
-      setMessages((prev) => [
-        ...prev,
-        systemMessage(
-          `Conversation compacted to stay within context limits.\n\n${event.summary}`
-        ),
-      ]);
+      appendSystemMessage(
+        setMessages,
+        `Conversation compacted to stay within context limits.\n\n${event.summary}`
+      );
       break;
     // truthful-engine events — surfaced, never silently dropped.
     case "rate_limit_wait":
-      setMessages((prev) => [
-        ...prev,
-        systemMessage(`Rate limited — waiting ${event.seconds}s, retrying automatically…`),
-      ]);
+      appendSystemMessage(
+        setMessages,
+        `Rate limited — waiting ${event.seconds}s, retrying automatically…`
+      );
       break;
     case "budget_exhausted":
-      setMessages((prev) => [
-        ...prev,
-        systemMessage(
-          'Turn stopped after reaching its step limit. Type "continue" to keep going, or revise the task.'
-        ),
-      ]);
+      appendSystemMessage(
+        setMessages,
+        'Turn stopped after reaching its step limit. Type "continue" to keep going, or revise the task.'
+      );
       break;
     case "loop_detected":
-      setMessages((prev) => [
-        ...prev,
-        systemMessage(
-          `Loop guard: ${event.tool} was repeated 3× without progress. Further identical calls are blocked.`
-        ),
-      ]);
+      appendSystemMessage(
+        setMessages,
+        `Loop guard: ${event.tool} was repeated 3× without progress. Further identical calls are blocked.`
+      );
       break;
     case "plan_updated":
       // drive the persistent plan line, not just the transcript.
       setPlan(event.plan || null);
-      setMessages((prev) => [...prev, systemMessage(`Plan updated: ${event.plan}`)]);
+      appendSystemMessage(setMessages, `Plan updated: ${event.plan}`);
       break;
     case "verification_started":
       setTestStatus?.("running");
@@ -675,13 +687,35 @@ function applyEvent(
         return { ...m, verifications: updated };
       });
       break;
+    case "verification_gave_up":
+      // Repair budget exhausted — say so instead of letting a green status bar
+      // claim verified. The card that last failed stays failed with the reason.
+      setTestStatus?.("failed");
+      appendSystemMessage(
+        setMessages,
+        `⚠ Auto-verification gave up after its repair budget — tests may still be failing (${event.command}).`
+      );
+      update((m) => {
+        const list = m.verifications ?? [];
+        if (list.length === 0) return m;
+        const lastIdx = list.length - 1;
+        const verifications = list.map((v, i) =>
+          i === lastIdx
+            ? {
+                ...v,
+                status: "failed" as const,
+                summary: v.summary ?? "Repair attempts exhausted — tests may still be failing.",
+              }
+            : v
+        );
+        return { ...m, verifications };
+      });
+      break;
     case "checkpoint":
-      setMessages((prev) => [
-        ...prev,
-        systemMessage(
-          `Checkpoint #${event.id}: ${event.files} file${event.files === 1 ? "" : "s"} snapshotted — /rewind ${event.id} to undo.`
-        ),
-      ]);
+      appendSystemMessage(
+        setMessages,
+        `Checkpoint #${event.id}: ${event.files} file${event.files === 1 ? "" : "s"} snapshotted — /rewind ${event.id} to undo.`
+      );
       break;
     // Delegation renders as cards on the assistant turn —
     // the started card is the live progress, the finished card carries the

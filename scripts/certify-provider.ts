@@ -13,6 +13,7 @@
  *   npx tsx scripts/certify-provider.ts --all
  *   npx tsx scripts/certify-provider.ts --mock --all
  *   ANTHROPIC_API_KEY=... npx tsx scripts/certify-provider.ts --provider anthropic
+ *   npx tsx scripts/certify-provider.ts --all --out ./cert-matrix.json
  */
 
 import {
@@ -49,6 +50,7 @@ function parseArgs(args: string[]) {
   let verbose = false;
   let model: string | undefined;
   let timeoutMs = 35_000;
+  let out: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -62,10 +64,12 @@ function parseArgs(args: string[]) {
       model = args[++i];
     } else if (a === "--timeout" && i + 1 < args.length) {
       timeoutMs = parseInt(args[++i], 10) || 35_000;
+    } else if (a === "--out" && i + 1 < args.length) {
+      out = args[++i];
     }
   }
 
-  return { providerArg, all, mock, json, verbose, model, timeoutMs };
+  return { providerArg, all, mock, json, verbose, model, timeoutMs, out };
 }
 
 const CRITERION_LABELS: Record<TestCriterion, string> = {
@@ -77,7 +81,7 @@ const CRITERION_LABELS: Record<TestCriterion, string> = {
 };
 
 async function main() {
-  const { providerArg, all, mock, json, verbose, model: modelOverride, timeoutMs } = parseArgs(
+  const { providerArg, all, mock, json, verbose, model: modelOverride, timeoutMs, out } = parseArgs(
     process.argv.slice(2)
   );
 
@@ -186,6 +190,29 @@ async function main() {
     if (!json) {
       const statusBadge = res.passed ? "✅ LIVE (Certified)" : "❌ BROKEN";
       console.log(`Summary:  ${statusBadge} in ${res.totalDurationMs}ms\n`);
+    }
+  }
+
+  // Persisted matrix: without this the certification result evaporated with
+  // the process (only an in-memory registry mutation survived). The live-eval
+  // lane uploads this file as its proof artifact.
+  if (out) {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const stamped = {
+      certifiedAt: new Date().toISOString(),
+      mode: mock ? "mock" : "live",
+      totalPassed,
+      totalTested,
+      results,
+    };
+    try {
+      fs.mkdirSync(path.dirname(out), { recursive: true });
+      fs.writeFileSync(out, JSON.stringify(stamped, null, 2));
+      if (!json) console.log(`Matrix written to ${out}`);
+    } catch (err) {
+      console.error(`Failed to write matrix to ${out}: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
     }
   }
 

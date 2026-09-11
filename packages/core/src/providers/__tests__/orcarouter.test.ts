@@ -231,12 +231,12 @@ describe("Orcarouter provider + registry", () => {
   });
 
   it("visibleModels() hides paid entries from picker-style views", () => {
-    const paid = MODEL_REGISTRY.find((m) => m.isFree === false);
-    expect(paid).toBeDefined(); // the deepseek paid entry ships for lookups
+    const paid = MODEL_REGISTRY.filter((m) => m.isFree === false);
+    expect(paid.length).toBeGreaterThan(0); // paid entries ship for lookups
     const visible = visibleModels();
-    expect(visible.some((m) => m.id === paid!.id)).toBe(false);
+    for (const p of paid) expect(visible.some((m) => m.id === p.id && m.providerId === p.providerId)).toBe(false);
     expect(visible.some((m) => m.id === "orcarouter/free")).toBe(true);
-    expect(visible.length).toBe(MODEL_REGISTRY.length - 1);
+    expect(visible.length).toBe(MODEL_REGISTRY.length - paid.length);
   });
 
   // Live 2026-09: scoped keys 403 on the `orcarouter/free` alias but can call

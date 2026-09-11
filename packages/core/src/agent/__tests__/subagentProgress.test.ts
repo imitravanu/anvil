@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { AgentSession, type AgentEvent } from "../index.js";
+import { runSubAgentLive } from "../subagent.js";
 import { FakeProvider, type ScriptEntry } from "./fakeProvider.js";
 import type { StreamEvent } from "../../providers/types.js";
 
@@ -55,5 +57,51 @@ describe("live sub-agent progress", () => {
     // The turn still completes with the finished card carrying usage + report.
     expect(events.map((e) => e.type)).toContain("subagent_finished");
     expect(events.map((e) => e.type)).toContain("turn_complete");
+  });
+
+  it("deletes the sub-session checkpoint file after handing the ring to the parent", async () => {
+    const savedHome = process.env.ANVIL_HOME;
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), "anvil-sub-home-"));
+    process.env.ANVIL_HOME = home;
+    try {
+      const provider = new FakeProvider([
+        [
+          { type: "tool_call_start", id: "s1", name: "write_file" },
+          {
+            type: "tool_call_end",
+            id: "s1",
+            name: "write_file",
+            input: { path: "sub.txt", content: "from sub" },
+          },
+          { type: "turn_end", stopReason: "tool_use" },
+        ],
+        [
+          { type: "text_delta", text: "Wrote it." },
+          { type: "turn_end", stopReason: "end_turn" },
+        ],
+      ] as ScriptEntry[]);
+      const controller = new AbortController();
+      const gen = runSubAgentLive({
+        provider,
+        model: "fake-model",
+        projectRoot: root,
+        permissionBroker: { async requestPermission() { return true; } },
+        task: "write sub.txt",
+        signal: controller.signal,
+      });
+      let step = await gen.next();
+      while (!step.done) step = await gen.next();
+      const run = step.value;
+      expect(run.aborted).toBe(false);
+      expect(run.checkpoints).toHaveLength(1);
+      // No orphan checkpoint files linger for the drained sub-session.
+      const dir = path.join(home, "checkpoints");
+      const leftovers = existsSync(dir) ? await fs.readdir(dir) : [];
+      expect(leftovers).toEqual([]);
+    } finally {
+      if (savedHome === undefined) delete process.env.ANVIL_HOME;
+      else process.env.ANVIL_HOME = savedHome;
+      await fs.rm(home, { recursive: true, force: true });
+    }
   });
 });

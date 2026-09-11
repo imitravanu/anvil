@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { CompletionRequest, ConversationMessage, ModelProvider, StreamEvent } from "./types.js";
-import { ensureTurnEnd } from "./streaming.js";
+import { CompletionRequest, ConversationMessage, ModelProvider, ProviderId, StreamEvent } from "./types.js";
+import { BaseProvider } from "./base.js";
 
 export type StopReason = "end_turn" | "tool_use" | "max_tokens" | "error" | "unknown";
 
@@ -8,17 +8,9 @@ export function mapStopReason(reason: string): StopReason {
   if (reason === "tool_use") return "tool_use";
   if (reason === "max_tokens") return "max_tokens";
   if (reason === "end_turn" || reason === "stop_sequence") return "end_turn";
-  // A stop reason the provider legitimately returned that we don't recognize.
-  // Deliberately NOT "error": unknown stop reasons are not turn failures.
   return "unknown";
 }
 
-/**
- * Minimal structural view of the Anthropic streaming events this adapter
- * cares about. The SDK's own union types are supersets of this, so real
- * streams assign cleanly; keeping it structural is what lets unit tests feed
- * plain fixture objects instead of fabricating SDK classes.
- */
 export interface RawAnthropicStreamEvent {
   type: string;
   index?: number;
@@ -33,12 +25,6 @@ export interface RawAnthropicStreamEvent {
   };
 }
 
-/**
- * The Anthropic SDK ties tool-input deltas to a content block by *index*, not
- * by an id, so routing goes through an index -> toolCallId map populated at
- * `content_block_start`. This translator is a pure function of its input
- * stream, which is what the unit tests exercise directly.
- */
 export async function* translateAnthropicStream(
   raw: AsyncIterable<RawAnthropicStreamEvent>
 ): AsyncGenerator<StreamEvent> {
@@ -51,8 +37,6 @@ export async function* translateAnthropicStream(
       if (event.type === "message_start") {
         usageIn = event.message?.usage?.input_tokens ?? 0;
       } else if (event.type === "content_block_start" && event.content_block?.type === "tool_use") {
-        // A block without an id is unusable downstream (deltas/ends key by
-        // id): skip it entirely rather than emitting a nameless orphan start.
         const id = event.content_block.id;
         if (!id) continue;
         const index = event.index ?? -1;
@@ -112,9 +96,19 @@ export function toAnthropicMessages(messages: ConversationMessage[]): Anthropic.
       if (c.type === "text") {
         content.push({ type: "text", text: c.text });
       } else if (c.type === "image") {
+        // /image only admits png/jpeg/webp/gif — exactly Anthropic's supported
+        // set — so the real MIME passes through. (The old code hardcoded
+        // "image/png", which mislabeled every jpeg/webp/gif and failed.)
+        const mediaType =
+          c.mediaType === "image/jpeg" ||
+          c.mediaType === "image/png" ||
+          c.mediaType === "image/gif" ||
+          c.mediaType === "image/webp"
+            ? c.mediaType
+            : "image/png";
         content.push({
           type: "image",
-          source: { type: "base64", media_type: c.mediaType as "image/png", data: c.data },
+          source: { type: "base64", media_type: mediaType, data: c.data },
         });
       } else if (c.type === "tool_call") {
         let input: unknown = c.call.input;
@@ -144,48 +138,53 @@ export function toAnthropicMessages(messages: ConversationMessage[]): Anthropic.
   });
 }
 
+export class AnthropicProvider extends BaseProvider {
+  readonly id: ProviderId = "anthropic";
+  readonly displayName = "Anthropic";
+
+  private readonly client: Anthropic | null;
+
+  constructor(apiKey: string | undefined) {
+    super();
+    this.client = apiKey ? new Anthropic({ apiKey }) : null;
+  }
+
+  isConfigured(): boolean {
+    return !!this.client;
+  }
+
+  protected doStream(request: CompletionRequest): AsyncGenerator<StreamEvent> {
+    if (!this.client) {
+      // This shouldn't happen because isConfigured is checked in base class,
+      // but TypeScript doesn't know that.
+      throw new Error("Anthropic client not initialized");
+    }
+
+    const stream = this.client.messages.stream(
+      {
+        model: request.model,
+        max_tokens: request.maxTokens,
+        ...(request.systemPrompt ? { system: request.systemPrompt } : {}),
+        ...(request.tools.length
+          ? {
+              tools: request.tools.map((t) => ({
+                name: t.name,
+                description: t.description,
+                input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
+              })),
+            }
+          : {}),
+        messages: toAnthropicMessages(request.messages),
+      },
+      { signal: request.signal }
+    );
+
+    return translateAnthropicStream(
+      stream as unknown as AsyncIterable<RawAnthropicStreamEvent>
+    );
+  }
+}
+
 export function createAnthropicProvider(apiKey: string | undefined): ModelProvider {
-  const client = apiKey ? new Anthropic({ apiKey }) : null;
-
-  return {
-    id: "anthropic",
-    displayName: "Anthropic",
-    isConfigured: () => !!client,
-
-    async *streamCompletion(request: CompletionRequest): AsyncGenerator<StreamEvent> {
-      if (!client) {
-        yield { type: "error", message: "Anthropic API key not configured." };
-        return;
-      }
-
-      try {
-        const stream = client.messages.stream(
-          {
-            model: request.model,
-            max_tokens: request.maxTokens,
-            ...(request.systemPrompt ? { system: request.systemPrompt } : {}),
-            ...(request.tools.length
-              ? {
-                  tools: request.tools.map((t) => ({
-                    name: t.name,
-                    description: t.description,
-                    input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
-                  })),
-                }
-              : {}),
-            messages: toAnthropicMessages(request.messages),
-          },
-          { signal: request.signal }
-        );
-
-        yield* ensureTurnEnd(
-          translateAnthropicStream(
-            stream as unknown as AsyncIterable<RawAnthropicStreamEvent>
-          )
-        );
-      } catch (err) {
-        yield { type: "error", message: err instanceof Error ? err.message : String(err) };
-      }
-    },
-  };
+  return new AnthropicProvider(apiKey);
 }

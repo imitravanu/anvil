@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { PermissionPrompt } from "../PermissionPrompt.js";
+import { PermissionPrompt, mcpServerOf } from "../PermissionPrompt.js";
 import type { PendingPermissionRequest } from "../../permission/TuiPermissionBroker.js";
 import { frameText, renderThemed, tick } from "../../test-utils/testRender.js";
 
@@ -61,6 +61,43 @@ describe("PermissionPrompt", () => {
     app.stdin.write(ENTER);
     await expect(decided).resolves.toBe(true);
     expect(broker.approveAlwaysForSession).not.toHaveBeenCalled();
+    app.unmount();
+  });
+
+  it("resets the highlight when a new queued request arrives", async () => {
+    const first = makeRequest("edit_file", DIFF);
+    const broker = brokerStub();
+    const app = renderThemed(<PermissionPrompt request={first.request} broker={broker} />);
+    await tick();
+    // Move highlight down to "Always allow", then swap in the next request.
+    app.stdin.write(DOWN);
+    await tick();
+    const second = makeRequest("run_command", "Run command: rm -rf ./build");
+    app.rerender(<PermissionPrompt request={second.request} broker={broker} />);
+    await tick();
+    // Fast Enter must hit "Allow once" (row 0), not the stale "Always allow".
+    app.stdin.write(ENTER);
+    await expect(second.decided).resolves.toBe(true);
+    expect(broker.approveAlwaysForSession).not.toHaveBeenCalled();
+    app.unmount();
+  });
+
+  it("parses mcp_<server>__<tool> names (servers may contain underscores)", () => {
+    expect(mcpServerOf("mcp_my-tools__read_doc")).toEqual({ server: "my-tools", tool: "read_doc" });
+    expect(mcpServerOf("mcp_srv__t")).toEqual({ server: "srv", tool: "t" });
+    expect(mcpServerOf("edit_file")).toBeNull();
+    expect(mcpServerOf("mcp_noseparator")).toBeNull();
+    expect(mcpServerOf("mcp___tool")).toBeNull();
+  });
+
+  it("names the MCP server and warns about external visibility", async () => {
+    const { request } = makeRequest("mcp_docs__fetch", "MCP call input: {...}");
+    const app = renderThemed(<PermissionPrompt request={request} broker={brokerStub()} />);
+    await tick();
+    const out = frameText(app.lastFrame);
+    expect(out).toContain("MCP fetch (server: docs)");
+    expect(out).toContain("wants to run external tool fetch");
+    expect(out).toContain("visible to that server");
     app.unmount();
   });
 

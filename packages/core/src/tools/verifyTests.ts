@@ -96,14 +96,33 @@ function argvWithPattern(baseCommand: string, pattern: string): string[] | null 
   }
 }
 
+/**
+ * Extra env vars to pass through to the test child, beyond the scrubbed
+ * base. Suites needing DATABASE_URL, NODE_ENV=test, API keys, etc. failed
+ * spuriously under auto-verify (burning repair loops on good code).
+ * Opt-in via ANVIL_TEST_ENV_ALLOW="DATABASE_URL,NODE_ENV,API_KEY" — never
+ * inherited implicitly, so credentials still don't leak by default.
+ */
+export function extraTestEnvNames(): string[] {
+  return (process.env.ANVIL_TEST_ENV_ALLOW ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(s));
+}
+
 function childEnv(): NodeJS.ProcessEnv {
-  return {
+  const env: NodeJS.ProcessEnv = {
     PATH: process.env.PATH ?? "/usr/bin:/bin",
     HOME: process.env.HOME,
     LANG: process.env.LANG ?? "C.UTF-8",
     NO_COLOR: "1",
     CI: "1",
   };
+  for (const name of extraTestEnvNames()) {
+    const value = process.env[name];
+    if (value !== undefined) env[name] = value;
+  }
+  return env;
 }
 
 /**

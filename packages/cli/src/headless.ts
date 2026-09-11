@@ -166,6 +166,13 @@ export async function runHeadless(opts: HeadlessOptions): Promise<number> {
             process.stderr.write(`${event.passed ? "✓" : "✗"} [verify] ${event.summary}\n`);
           }
           break;
+        case "verification_gave_up":
+          if (!opts.raw) {
+            process.stderr.write(
+              `⚠ [verify] repair budget exhausted — tests may still be failing: ${event.command}\n`
+            );
+          }
+          break;
         case "error":
           process.stderr.write(`\nError: ${event.message}\n`);
           return 1;

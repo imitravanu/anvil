@@ -279,6 +279,21 @@ describe("AgentSession.switchModel / clearHistory", () => {
   });
 });
 
+describe("AgentSession provider-side turn failure", () => {
+  it("surfaces turn_end error (content filter) as error, never turn_complete", async () => {
+    const script: StreamEvent[] = [
+      { type: "text_delta", text: "I cannot help with " },
+      { type: "turn_end", stopReason: "error" },
+    ];
+    const { session } = makeSession([script]);
+    const events = await collect(session.send("do the thing"));
+    const types = events.map((e) => e.type);
+    expect(types).not.toContain("turn_complete");
+    const err = events.find((e) => e.type === "error") as { message: string } | undefined;
+    expect(err?.message).toContain("declined to complete");
+  });
+});
+
 describe("AgentSession.setTools (MCP hot-reload)", () => {
   it("swaps the tool list for the next turn", async () => {
     const script: StreamEvent[] = [

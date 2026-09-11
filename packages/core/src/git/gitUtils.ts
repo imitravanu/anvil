@@ -18,20 +18,32 @@ export interface PrResult {
 }
 
 /**
- * Stages all changes and creates an automated milestone commit.
+ * Stages exactly the session-touched paths and creates an automated milestone commit.
  * Format: "anvil(goal): milestone <id> — <title>"
- * Never throws — returns failure details if git is uninitialized or working tree is clean.
+ * Never stages the whole tree: an untracked `.env` or stray key file the mission
+ * did not touch must never be swept into history (the old `git add -A` did).
+ * With no paths the commit is refused (fail closed) — never throws, returns
+ * failure details if git is uninitialized or there is nothing to commit.
  */
 export async function autoCommitMilestone(
   projectRoot: string,
   milestoneId: string | number,
-  title: string
+  title: string,
+  paths?: readonly string[]
 ): Promise<GitCommitResult> {
   const commitMsg = `anvil(goal): milestone ${milestoneId} — ${title}`;
+  const scoped = (paths ?? []).filter((p) => typeof p === "string" && p.length > 0);
+  if (scoped.length === 0) {
+    return {
+      committed: false,
+      message: "No session-touched files to commit — refusing to stage the whole tree.",
+    };
+  }
 
   try {
-    // 1. Stage all changes
-    await execFileAsync("git", ["add", "-A"], { cwd: projectRoot });
+    // 1. Stage ONLY the session-touched paths. `--` ends flag parsing so a
+    // path beginning with `-` can never be mistaken for a git flag.
+    await execFileAsync("git", ["add", "--", ...scoped], { cwd: projectRoot });
 
     // 2. Commit
     const { stdout } = await execFileAsync("git", ["commit", "-m", commitMsg], {
@@ -71,8 +83,9 @@ export async function autoCommitMilestone(
  */
 export async function getBranchDiff(projectRoot: string, branch: string): Promise<string> {
   try {
-    // Try triple-dot diff first (branch...HEAD), fallback to branch HEAD
-    const { stdout } = await execFileAsync("git", ["diff", `${branch}...HEAD`], {
+    // Try triple-dot diff first (branch...HEAD), fallback to branch HEAD.
+    // `--` ends flag parsing so a branch beginning with `-` cannot inject flags.
+    const { stdout } = await execFileAsync("git", ["diff", `${branch}...HEAD`, "--"], {
       cwd: projectRoot,
       maxBuffer: 2 * 1024 * 1024,
     });
@@ -80,7 +93,7 @@ export async function getBranchDiff(projectRoot: string, branch: string): Promis
   } catch (err: any) {
     // Try two-dot diff or direct branch diff if triple-dot fails
     try {
-      const { stdout } = await execFileAsync("git", ["diff", branch], {
+      const { stdout } = await execFileAsync("git", ["diff", branch, "--"], {
         cwd: projectRoot,
         maxBuffer: 2 * 1024 * 1024,
       });

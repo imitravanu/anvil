@@ -253,9 +253,10 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
         model: currentModel,
         permissionBroker: broker,
       });
+      broker.clearSessionApprovals();
       setSession(fresh);
       clearMessages();
-      printSystemMessage("Conversation cleared. The previous session can be resumed with /session.");
+      printSystemMessage("Conversation cleared (permission grants reset). The previous session can be resumed with /session.");
     },
     openModelPicker: () => {
       if (isBusy) {
@@ -292,9 +293,10 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
         model: currentModel,
         permissionBroker: broker,
       });
+      broker.clearSessionApprovals();
       setSession(fresh);
       clearMessages();
-      printSystemMessage("Started a new session.");
+      printSystemMessage("Started a new session (permission grants reset).");
     },
     sessionResume: (id?: string) => {
       if (isBusy) {

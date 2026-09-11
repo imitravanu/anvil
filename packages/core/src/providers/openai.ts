@@ -8,6 +8,7 @@ import {
   ToolDefinition,
 } from "./types.js";
 import { ToolCallAssembler } from "./streaming.js";
+import { BaseProvider } from "./base.js";
 
 export function mapOpenAIFinishReason(
   reason: string | null | undefined
@@ -193,58 +194,63 @@ export interface ChatCompletionsStyleProviderOptions {
   defaultHeaders?: Record<string, string>;
 }
 
-/**
- * Factory shared by the OpenAI and OpenRouter adapters — same wire format,
- * different credentials/base URL/parameter quirks.
- */
+export class ChatCompletionsStyleProvider extends BaseProvider {
+  readonly id: ProviderId;
+  readonly displayName: string;
+
+  private readonly client: OpenAI | null;
+  private readonly maxTokensParam: "max_tokens" | "max_completion_tokens";
+
+  constructor(opts: ChatCompletionsStyleProviderOptions) {
+    super();
+    this.id = opts.id;
+    this.displayName = opts.displayName;
+    this.maxTokensParam = opts.maxTokensParam ?? "max_tokens";
+
+    this.client = opts.apiKey
+      ? new OpenAI({
+          apiKey: opts.apiKey,
+          ...(opts.baseURL ? { baseURL: opts.baseURL } : {}),
+          ...(opts.defaultHeaders ? { defaultHeaders: opts.defaultHeaders } : {}),
+        })
+      : null;
+  }
+
+  isConfigured(): boolean {
+    return !!this.client;
+  }
+
+  protected async doStream(request: CompletionRequest): Promise<AsyncGenerator<StreamEvent>> {
+    if (!this.client) {
+      throw new Error(`${this.displayName} client not initialized`);
+    }
+
+    const stream = await this.client.chat.completions.create(
+      {
+        model: request.model,
+        messages: toOpenAIMessages(request.messages, request.systemPrompt) as never,
+        ...(request.tools.length ? { tools: toOpenAITools(request.tools) as never } : {}),
+        [this.maxTokensParam]: request.maxTokens,
+        stream: true,
+        stream_options: { include_usage: true },
+      } as never,
+      { signal: request.signal }
+    );
+
+    return translateChatCompletionsChunkStream(
+      stream as unknown as AsyncIterable<RawOpenAIChunk>
+    );
+  }
+}
+
 export function createChatCompletionsStyleProvider(
   opts: ChatCompletionsStyleProviderOptions
 ): ModelProvider {
-  const client = opts.apiKey
-    ? new OpenAI({
-        apiKey: opts.apiKey,
-        ...(opts.baseURL ? { baseURL: opts.baseURL } : {}),
-        ...(opts.defaultHeaders ? { defaultHeaders: opts.defaultHeaders } : {}),
-      })
-    : null;
-  const maxTokensParam = opts.maxTokensParam ?? "max_tokens";
-
-  return {
-    id: opts.id,
-    displayName: opts.displayName,
-    isConfigured: () => !!client,
-
-    async *streamCompletion(request: CompletionRequest): AsyncGenerator<StreamEvent> {
-      if (!client) {
-        yield { type: "error", message: `${opts.displayName} API key not configured.` };
-        return;
-      }
-
-      try {
-        const stream = await client.chat.completions.create(
-          {
-            model: request.model,
-            messages: toOpenAIMessages(request.messages, request.systemPrompt) as never,
-            ...(request.tools.length ? { tools: toOpenAITools(request.tools) as never } : {}),
-            [maxTokensParam]: request.maxTokens,
-            stream: true,
-            stream_options: { include_usage: true },
-          } as never,
-          { signal: request.signal }
-        );
-
-        yield* translateChatCompletionsChunkStream(
-          stream as unknown as AsyncIterable<RawOpenAIChunk>
-        );
-      } catch (err) {
-        yield { type: "error", message: err instanceof Error ? err.message : String(err) };
-      }
-    },
-  };
+  return new ChatCompletionsStyleProvider(opts);
 }
 
 export function createOpenAIProvider(apiKey: string | undefined): ModelProvider {
-  return createChatCompletionsStyleProvider({
+  return new ChatCompletionsStyleProvider({
     id: "openai",
     displayName: "OpenAI",
     apiKey,

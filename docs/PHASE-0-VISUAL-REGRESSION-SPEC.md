@@ -1,6 +1,6 @@
 # PHASE 0 SPEC — Visual Regression Testing for TUI
 
-> **Status:** DRAFT (2026-09-08) — not in current roadmap; proposed as prerequisite for Phase 17 eval harness
+> **Status:** DONE (2026-09-10) — implemented superset: 96-PNG matrix (8 scenarios × 6 sizes × 2 themes) + 11 text-frame baselines, capture/diff/approve scripts, `visual-regression.yml` CI gate, 0.1% threshold. Note: ships text frames + PNG capture instead of the spec's node-pty/puppeteer plan.
 > **Scope:** Automated TUI frame capture + pixel-diff CI gate
 
 ---
