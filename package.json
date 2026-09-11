@@ -17,6 +17,7 @@
     "eval:report": "npx tsx evals/run.ts --report",
     "certify": "npx tsx scripts/certify-provider.ts",
     "certify:all": "bash scripts/certify-all.sh",
+    "gate": "node scripts/verify-gate.mjs",
     "prepublishOnly": "npm run build"
   },
 
