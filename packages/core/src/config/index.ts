@@ -8,6 +8,7 @@ export type { AnvilSettings } from "./types.js";
 export * from "./mcp.js";
 export * from "./rules.js";
 export * from "./memory.js";
+export * from "./constants.js";
 export { anvilHome }; // single home-dir resolver (see atomicWrite.ts)
 
 

@@ -10,4 +10,5 @@ export { atomicWriteJson, atomicWriteText, anvilHome } from "./atomicWrite.js";
 export * from "./eval/index.js";
 export * from "./cert/index.js";
 export * from "./git/index.js";
+export { getErrorMessage } from "./errors.js";
 
