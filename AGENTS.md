@@ -19,6 +19,9 @@
 4. **Check Existing Helpers First:**  
    Before authoring a new utility function or helper, check if one already exists in `@anvil/core` or your package's local utilities.
 
+5. **Consult the Pre-Execution Audit (Roadmap Items):**  
+   Before executing any item from `docs/PHASE-21-25-ROADMAP.md`, read [`docs/PHASE-21-25-AUDIT.md`](docs/PHASE-21-25-AUDIT.md) and follow its Reality Check Protocol. Some items are already fixed (22.15, 22.16), one is resolved by design and must NOT be "fixed" (22.13), and line numbers drift. Classify the item (live / fixed / by-design / unverified) before writing any code, and record the classification in the phase progress doc.
+
 ---
 
 ## 2. ⛔ STRICT DONT's (Anti-Slop Directives)
@@ -68,17 +71,24 @@
    All contributions must achieve a 100% green gate across build, typecheck, unit tests, and mock evals.  
    **Working code that skipped the entry protocol is rejected the same as broken code.** Any contribution that passes the mechanical gate but caused multi-agent collisions, skipped file ownership declarations, or violated architectural boundaries will be rejected on peer review.
 
+4. **The Guardian Gate Is a Protected Artifact:**  
+   No agent may alter `scripts/verify-gate.mjs`, `scripts/gate-manifest.json`, `.fresh-allowlist.json`, `AGENTS.md`, `docs/PHASE-21-25-AUDIT.md`, `packages/cli/src/__tests__/gate.sentinel.test.ts`, or any `.github/workflows/*.yml` without all three of: (a) declaring it in the phase progress doc, (b) regenerating the gate integrity manifest and keeping the sentinel test in sync **in the same commit**, and (c) explicit human review of the protected-path diff. The gate self-checks the hashes (Step 0.5), refuses locally without `--ack-protected-change`, and the sentinel test enforces this from **outside** the gate via CI's `npm test`.
+
 ---
 
 ## 4. 🚪 The Guardian Gate Pipeline
 
 Every contribution is mechanically verified by `npm run gate`:
 1. **Step 0:** Gate sensor test (verifies gate detection integrity).
-2. **Step 1:** Diff Slop & Quality Scanner (scans newly added lines for forbidden patterns).
-3. **Step 2:** Monorepo sequential build (`core ➔ tui ➔ cli`) with explicit timeouts.
-4. **Step 3:** TypeScript type checking across all 3 workspaces (`npm run typecheck`).
-5. **Step 4:** Unit test suite execution (`npm test`).
-6. **Step 5:** Verification harness mock runner (`npm run eval -- --fast --mock`).
+2. **Step 0.5:** Protected-artifact integrity manifest (SHA-256 of the gate, constitution, allowlist, audit, sentinel, CI workflows — any drift fails until deliberately updated with human review).
+3. **Step 1:** Slop & Boundary Scanner — scans added lines in tracked diffs **and untracked files** for forbidden patterns, validates `.fresh-allowlist.json` shape (no weaponized broad entries), detects protected-artifact tampering (refuses locally without `--ack-protected-change`), and never silently skips on error. In CI it diffs against the PR base ref.
+4. **Step 1.5:** **Residual Slop Drain Scan** — scans the FULL tree (not just the diff) for legacy violations the diff scanner can never see, so debt that would otherwise "keep regenerating" (raw error formatting, core self-imports, empty catches, hardcoded TUI colors) can only shrink. Allowlist-free by design. Migrate once → stays green forever.
+5. **Step 2:** Monorepo sequential build (`core ➔ tui ➔ cli`) with explicit timeouts.
+6. **Step 3:** TypeScript type checking across all 3 workspaces (`npm run typecheck`).
+7. **Step 4:** Unit test suite execution (`npm test`) — includes the **gate sentinel test** (`packages/cli/src/__tests__/gate.sentinel.test.ts`) which independently asserts the gate still enforces every rule.
+8. **Step 5:** Verification harness mock runner (`npm run eval -- --fast --mock`).
+
+**Commit-time enforcement:** a versioned pre-commit hook (`.githooks/pre-commit`) runs the quick gate (`node scripts/verify-gate.mjs --staged --quick`) on every commit in this clone — it refuses commits that tamper with protected artifacts or add slop. After cloning run `npm run hooks:install` once. Legitimate protected-artifact commits require the human escape hatch `git commit --no-verify` (deliberate, visible) and still go through PR review + CI's full gate. The hook itself is a protected artifact.
 
 ---
 

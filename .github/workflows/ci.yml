@@ -12,6 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history + all refs so the gate's merge-base diff works
+          # (origin/<base>...HEAD on PRs, HEAD~1 on push) and Step 1 actually
+          # sees committed deltas in CI.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -40,3 +45,10 @@ jobs:
 
       - name: Run provider certification suite (mock verification)
         run: npm run certify -- --mock --all
+
+      # Authoritative final gate: integrity manifest (Step 0.5), slop scanner
+      # (Step 1), build, typecheck, tests (includes the gate sentinel test),
+      # and eval mocks. The sentinel test (packages/cli/src/__tests__/
+      # gate.sentinel.test.ts) independently asserts the gate is intact.
+      - name: Run Guardian Gate (integrity + anti-slop + quality)
+        run: npm run gate

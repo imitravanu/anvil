@@ -1,0 +1,59 @@
+#!/bin/sh
+# Anvil Guardian pre-commit hook (hardening, 2026-09-13, rev 2 — self-contained).
+#
+# PROVEN ATTACK (do not regress): delegating the decision to the gate script
+# is NOT safe — an agent can weaken that script in the worktree and flip its
+# exit code, making the hook's decision attacker-controlled. This hook is
+# therefore SELF-CONTAINED: it trusts nothing from the worktree and only reads
+# the STAGED diff via porcelain git. Git hooks are advisory, not security —
+# `--no-verify` bypasses them by design — but the lazy attack class (staging a
+# weakened gate + re-hashed manifest) must be refused at commit time, loudly.
+#
+# The full auditability lives in `npm run gate` (build/typecheck/566 tests/
+# eval + manifest + residual scan) and in CI + PR review, which no local
+# process can skip. Install (per clone):  npm run hooks:install
+set -u
+
+# --- Layer A: protected-path tamper refusal (self-contained) ----------------
+blocked=""
+for f in $(git diff --cached --name-only); do
+  case "$f" in
+    scripts/verify-gate.mjs|scripts/gate-manifest.json|.githooks/pre-commit|\
+    AGENTS.md|.fresh-allowlist.json|docs/PHASE-21-25-AUDIT.md|\
+    packages/cli/src/__tests__/gate.sentinel.test.ts|.github/workflows/*)
+      blocked="$blocked $f" ;;
+  esac
+done
+if [ -n "$blocked" ]; then
+  echo "🔴 PROTECTED ARTIFACT CHANGE DETECTED (staged):$blocked" >&2
+  echo "   Human review required." >&2
+  echo "   Humans: git commit --no-verify (deliberate + visible; CI full gate + PR review still apply)." >&2
+  exit 1
+fi
+
+# --- Layer B: staged slop scan (context-free patterns; full scan = the gate) -
+added=$(git diff --cached -- 'packages/*/src/**/*.ts' 'packages/*/src/**/*.tsx' \
+        | grep -E '^\+' | grep -vE '^\+\+\+' || true)
+if [ -n "$added" ]; then
+  hits=""
+  h=$(printf '%s\n' "$added" | grep -nE 'instanceof[[:space:]]+Error[[:space:]]*\?[[:space:]]*[A-Za-z_$][A-Za-z0-9_$]*\.message[[:space:]]*:[[:space:]]*String\(' || true)
+  [ -n "$h" ] && hits="$hits
+(hook) raw error ternary: $h"
+  h=$(printf '%s\n' "$added" | grep -nE '\.message[[:space:]]*\?\?[[:space:]]*String\(' || true)
+  [ -n "$h" ] && hits="$hits
+(hook) ?.message ?? String: $h"
+  h=$(printf '%s\n' "$added" | grep -nE 'as[[:space:]]+(any|never)' || true)
+  [ -n "$h" ] && hits="$hits
+(hook) type escape: $h"
+  h=$(printf '%s\n' "$added" | grep -nE 'catch[[:space:]]*(\([^)]*\))?[[:space:]]*\{[[:space:]]*\}' || true)
+  [ -n "$h" ] && hits="$hits
+(hook) empty catch: $h"
+  if [ -n "$hits" ]; then
+    echo "🧟 SLOP PATTERNS DETECTED IN STAGED DIFF (context-free hook rules):" >&2
+    printf '%s\n' "$hits" >&2
+    echo "   Migrate to getErrorMessage() / typed casts etc. Full rules: npm run gate" >&2
+    exit 1
+  fi
+fi
+
+exit 0
