@@ -32,6 +32,12 @@ export const CHECKPOINT_KEEP = getEnvNumber("ANVIL_CHECKPOINT_KEEP", 5);
 // MCP Limits
 export const DEFAULT_MCP_REQUEST_TIMEOUT_MS = getEnvNumber("ANVIL_MCP_TIMEOUT_MS", 30_000);
 
+// SSE transport connect policy: bounded retries with exponential backoff
+// inside the boot/reconnect timeout budget (server keepalives hold idle streams).
+export const SSE_CONNECT_MAX_RETRIES = getEnvNumber("ANVIL_SSE_CONNECT_RETRIES", 3);
+export const SSE_CONNECT_INITIAL_DELAY_MS = getEnvNumber("ANVIL_SSE_CONNECT_RETRY_MS", 500);
+export const SSE_CONNECT_MAX_DELAY_MS = getEnvNumber("ANVIL_SSE_CONNECT_RETRY_MAX_MS", 8_000);
+
 // Subagent Limits
 export const SUB_AGENT_REPORT_MAX_CHARS = getEnvNumber("ANVIL_MAX_SUBAGENT_REPORT_CHARS", 8000);
 

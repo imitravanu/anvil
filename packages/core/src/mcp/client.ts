@@ -1,6 +1,6 @@
 import { getErrorMessage } from "../errors.js";
 import type { McpTransport } from "./transport.js";
-import { createStdioTransport } from "./transport.js";
+import { createSseTransport, createStdioTransport } from "./transport.js";
 import { loadMcpConfig } from "../config/mcp.js";
 import type { ValidatedMcpServer } from "../config/mcp.js";
 import { CORE_VERSION } from "../version.js";
@@ -257,6 +257,24 @@ export async function connectServer(
 }
 
 /**
+ * Build the right transport for a validated server entry: spawned stdio
+ * process or remote SSE stream. Centralizes the branch so boot, reconnect,
+ * and callTool-retry all behave identically per transport type.
+ */
+export async function createTransportForServer(
+  srv: ValidatedMcpServer,
+  opts?: { timeoutMs?: number }
+): Promise<McpTransport> {
+  if (srv.transport === "sse") {
+    return createSseTransport(srv.url, {
+      headers: srv.headers,
+      timeoutMs: opts?.timeoutMs ?? srv.timeoutMs,
+    });
+  }
+  return createStdioTransport(srv.command, srv.args, srv.env);
+}
+
+/**
  * Connect every configured server into `conns` (mutated in place so live
  * executors see the refresh with no stale map). Single owner for CLI boot
  * and `/mcp reconnect`. Servers removed from the config are closed and
@@ -274,7 +292,7 @@ export async function connectAllMcpServers(
     cfg.servers.map(async (srv) => {
       let transport: McpTransport;
       try {
-        transport = createStdioTransport(srv.command, srv.args, srv.env);
+        transport = await createTransportForServer(srv, opts);
       } catch (err: unknown) {
         conns.set(srv.id, { id: srv.id, status: "error", error: getErrorMessage(err), tools: [], timeoutMs: srv.timeoutMs, serverConfig: srv });
         return;
@@ -337,11 +355,7 @@ export async function reconnectServerConnection(
     // ignore cleanup failures
   }
   try {
-    const transport = createStdioTransport(
-      conn.serverConfig.command,
-      conn.serverConfig.args,
-      conn.serverConfig.env
-    );
+    const transport = await createTransportForServer(conn.serverConfig, opts);
     const fresh = await connectServer(conn.id, conn.serverConfig, transport, opts);
     if (fresh.status === "ready" && fresh.client) {
       conn.status = "ready";

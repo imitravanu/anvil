@@ -27,4 +27,24 @@ describe("formatMcpStatus", () => {
     expect(out).toContain("⚠ MCP remote: v1 is stdio-only");
     expect(out).toContain("can't be undone");
   });
+
+  it("marks remote SSE servers with their transport", () => {
+    const remote: McpServerConnection = {
+      id: "cloud",
+      status: "ready",
+      timeoutMs: 1000,
+      tools: [],
+      serverConfig: {
+        id: "cloud",
+        transport: "sse",
+        command: "",
+        args: [],
+        env: {},
+        url: "https://mcp.example.com/sse",
+        headers: {},
+        timeoutMs: 1000,
+      },
+    };
+    expect(formatMcpStatus([remote])).toContain("✓ cloud: ready — 0 tools (sse)");
+  });
 });

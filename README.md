@@ -229,11 +229,11 @@ file lists, interfaces, and acceptance criteria:
   (spec `docs/PHASE-0-VISUAL-REGRESSION-SPEC.md`, progress `docs/PHASE-17-PROGRESS.md`,
   `docs/PHASE-18-PROGRESS.md`, `docs/PHASE-19-PROGRESS.md`, `docs/PHASE-20-PROGRESS.md`)
 
-## MCP servers (Phase 10)
+## MCP servers (Phase 10 + 25.1)
 
-Anvil can call tools from local MCP servers (stdio transport only).
+Anvil can call tools from local MCP servers (stdio) and remote ones (SSE).
 Create `~/.anvil/mcp.json` (or `$ANVIL_HOME/mcp.json`, mode 0600 if you put
-secrets in `env`):
+secrets in `env` or `headers`):
 
 ```json
 {
@@ -243,6 +243,12 @@ secrets in `env`):
       "args": ["./mcp-server.js"],
       "env": { "MY_TOKEN": "..." },
       "timeoutMs": 60000
+    },
+    "cloud-tools": {
+      "transport": "sse",
+      "url": "https://mcp.example.com/sse",
+      "headers": { "Authorization": "Bearer ..." },
+      "timeoutMs": 30000
     }
   }
 }
@@ -250,16 +256,17 @@ secrets in `env`):
 
 Server tools appear as `mcp_<server>__<tool>`, gated by the normal permission
 prompt (unknown external tools are treated as mutating unless the server
-marks them read-only). `/mcp` shows per-server health; `/mcp reconnect`
-refreshes connections.
+marks them read-only). `/mcp` shows per-server health and transport;
+`/mcp reconnect` refreshes connections.
 
 Boundaries, stated plainly:
 
-- **Local stdio only.** Remote (SSE/HTTP) servers are refused with an error.
+- **Transports: stdio + SSE.** `https://` required for remote URLs (plain
+  `http://` only for localhost). Auth goes in `headers`, never in logs.
 - **No undo.** MCP and shell actions can't be rewound — only local file
   writes (`/rewind`).
 - **Servers see tool arguments.** Anything the model sends a server tool
-  (file contents included) is visible to that server process. Install only
+  (file contents included) is visible to that server. Only connect to
   servers you trust, same as any local dev tool.
 
 ## Custom themes

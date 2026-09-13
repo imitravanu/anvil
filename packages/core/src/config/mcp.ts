@@ -4,20 +4,30 @@ import { anvilHome } from "../atomicWrite.js";
 
 // ---------------------------------------------------------------------------
 // MCP server configuration (~/.anvil/mcp.json, ANVIL_HOME-honoring).
-// local stdio servers only. // ---------------------------------------------------------------------------
+// Local stdio servers (command/args/env) and remote SSE servers (url/headers).
+// Secrets in headers are never logged — see transport.ts sanitizeSseUrl().
+// ---------------------------------------------------------------------------
+
+export type McpTransportType = "stdio" | "sse";
 
 export interface McpServerConfig {
-  command: string;
+  transport?: McpTransportType;
+  command?: string;
   args?: string[];
   env?: Record<string, string>;
+  url?: string;
+  headers?: Record<string, string>;
   timeoutMs?: number;
 }
 
 export interface ValidatedMcpServer {
   id: string;
+  transport: McpTransportType;
   command: string;
   args: string[];
   env: Record<string, string>;
+  url: string;
+  headers: Record<string, string>;
   timeoutMs: number;
 }
 
@@ -44,8 +54,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 /**
  * Load + validate mcp.json. Missing/corrupt → empty config, never throws.
- * Unknown transports (url:, sse:, …) are reported as misconfigured, never
- * attempted — v1 is stdio-only and says so.
+ * Unknown transport names are reported as misconfigured, never attempted.
  */
 export function loadMcpConfig(): McpConfig {
   let text: string;
@@ -79,8 +88,35 @@ export function loadMcpConfig(): McpConfig {
       problem("server entry must be an object");
       continue;
     }
-    if (typeof cfg.url === "string" || typeof cfg.transport === "string") {
-      problem("v1 is stdio-only (command/args); remote transports are not supported");
+    // Transport selection: explicit field wins, a bare url implies sse,
+    // everything else is a local stdio server.
+    const transportRaw = cfg.transport ?? (typeof cfg.url === "string" ? "sse" : "stdio");
+    if (transportRaw !== "stdio" && transportRaw !== "sse") {
+      problem(`unknown transport ${JSON.stringify(transportRaw)} (want "stdio" | "sse")`);
+      continue;
+    }
+    const timeoutMs = cfg.timeoutMs ?? DEFAULT_MCP_TIMEOUT_MS;
+    if (typeof timeoutMs !== "number" || !Number.isInteger(timeoutMs) || timeoutMs <= 0) {
+      problem("\"timeoutMs\" must be a positive integer");
+      continue;
+    }
+    if (transportRaw === "sse") {
+      const err = validateSseEntry(cfg);
+      if (err) {
+        problem(err);
+        continue;
+      }
+      // Narrowed by validateSseEntry above; guards keep tsc honest without casts.
+      const url = typeof cfg.url === "string" ? cfg.url.trim() : "";
+      const headersRaw = cfg.headers ?? {};
+      const headers: Record<string, string> = isRecord(headersRaw)
+        ? Object.fromEntries(Object.entries(headersRaw).filter((e): e is [string, string] => typeof e[1] === "string"))
+        : {};
+      servers.push({ id, transport: "sse", command: "", args: [], env: {}, url, headers, timeoutMs });
+      continue;
+    }
+    if (typeof cfg.url === "string" || (cfg.headers !== undefined && !isRecord(cfg.headers))) {
+      problem("stdio servers use command/args/env; url/headers need \"transport\": \"sse\"");
       continue;
     }
     if (typeof cfg.command !== "string" || cfg.command.length === 0) {
@@ -97,12 +133,45 @@ export function loadMcpConfig(): McpConfig {
       problem("\"env\" must be an object of string values");
       continue;
     }
-    const timeoutMs = cfg.timeoutMs ?? DEFAULT_MCP_TIMEOUT_MS;
-    if (typeof timeoutMs !== "number" || !Number.isInteger(timeoutMs) || timeoutMs <= 0) {
-      problem("\"timeoutMs\" must be a positive integer");
-      continue;
-    }
-    servers.push({ id, command: cfg.command, args, env: env as Record<string, string>, timeoutMs });
+    servers.push({ id, transport: "stdio", command: cfg.command, args, env: env as Record<string, string>, url: "", headers: {}, timeoutMs });
   }
   return { servers, problems };
+}
+
+/** Loopback hosts where plain http is tolerated (dev servers, no secrets on the wire beyond the box). */
+function isLoopbackHostname(host: string): boolean {
+  const h = host.toLowerCase();
+  return h === "localhost" || h === "127.0.0.1" || h === "::1" || h === "[::1]";
+}
+
+/**
+ * Validate the remote half of an sse entry. Returns a problem string, or null
+ * when the entry is usable. Never logs headers or query strings — problem
+ * strings must stay safe to print (credentials live in headers/params).
+ */
+function validateSseEntry(cfg: Record<string, unknown>): string | null {
+  if (typeof cfg.url !== "string" || cfg.url.trim().length === 0) {
+    return "sse servers need \"url\" (https://…, http only for localhost)";
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(cfg.url.trim());
+  } catch {
+    return "sse \"url\" is not a valid URL";
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    return "sse \"url\" must be http(s)";
+  }
+  if (parsed.protocol === "http:" && !isLoopbackHostname(parsed.hostname)) {
+    return "sse \"url\" must be https except for localhost (no plaintext credentials on the wire)";
+  }
+  if (typeof cfg.command === "string" && cfg.command.length > 0) {
+    return "sse servers use \"url\", not \"command\"";
+  }
+  if (cfg.headers !== undefined) {
+    if (!isRecord(cfg.headers) || !Object.values(cfg.headers).every((v) => typeof v === "string")) {
+      return "\"headers\" must be an object of string values";
+    }
+  }
+  return null;
 }

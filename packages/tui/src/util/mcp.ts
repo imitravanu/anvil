@@ -15,12 +15,13 @@ export function formatMcpStatus(
     return lines.join("\n");
   }
   for (const c of conns) {
+    const via = c.serverConfig?.transport === "sse" ? " (sse)" : "";
     if (c.status === "ready") {
-      lines.push(`✓ ${c.id}: ready — ${c.tools.length} tool${c.tools.length === 1 ? "" : "s"}`);
+      lines.push(`✓ ${c.id}: ready — ${c.tools.length} tool${c.tools.length === 1 ? "" : "s"}${via}`);
     } else if (c.status === "misconfigured") {
       lines.push(`✗ ${c.id}: misconfigured — ${c.error ?? "see mcp.json"}`);
     } else {
-      lines.push(`✗ ${c.id}: error — ${c.error ?? "connection failed"} (tools unavailable)`);
+      lines.push(`✗ ${c.id}: error — ${c.error ?? "connection failed"} (tools unavailable)${via}`);
     }
   }
   lines.push("Only local file writes rewind — MCP and shell actions can't be undone.");

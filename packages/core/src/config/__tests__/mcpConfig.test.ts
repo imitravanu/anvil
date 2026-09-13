@@ -28,14 +28,24 @@ describe("mcp config", () => {
     expect(mcpConfigPath()).toBe(path.join(tmp, "mcp.json"));
   });
 
-  it("validates a good server and reports every bad one (M6)", () => {
+  it("validates good stdio/sse servers and reports every bad one (M6/25.1)", () => {
     writeMcp(
       JSON.stringify({
         servers: {
           good: { command: "node", args: ["srv.js"], env: { FOO: "1" }, timeoutMs: 5000 },
+          remote: {
+            transport: "sse",
+            url: "https://mcp.example.com/sse",
+            headers: { Authorization: "Bearer test" },
+          },
+          implied: { url: "http://localhost:3000/sse" },
           "Bad Id!": { command: "x" },
           nocommand: { args: [] },
-          remote: { url: "https://mcp.example.com" },
+          badtransport: { transport: "pigeon", command: "x" },
+          plainhttp: { transport: "sse", url: "http://mcp.example.com/sse" },
+          mixed: { transport: "sse", url: "https://mcp.example.com/sse", command: "node" },
+          nourl: { transport: "sse" },
+          badheaders: { transport: "sse", url: "https://mcp.example.com/sse", headers: { K: 42 } },
           badargs: { command: "x", args: "nope" },
           badenv: { command: "x", env: { K: 42 } },
           badtimeout: { command: "x", timeoutMs: -3 },
@@ -44,12 +54,32 @@ describe("mcp config", () => {
     );
     const cfg = loadMcpConfig();
     expect(cfg.servers).toEqual([
-      { id: "good", command: "node", args: ["srv.js"], env: { FOO: "1" }, timeoutMs: 5000 },
+      { id: "good", transport: "stdio", command: "node", args: ["srv.js"], env: { FOO: "1" }, url: "", headers: {}, timeoutMs: 5000 },
+      {
+        id: "remote",
+        transport: "sse",
+        command: "",
+        args: [],
+        env: {},
+        url: "https://mcp.example.com/sse",
+        headers: { Authorization: "Bearer test" },
+        timeoutMs: 60000,
+      },
+      {
+        id: "implied",
+        transport: "sse",
+        command: "",
+        args: [],
+        env: {},
+        url: "http://localhost:3000/sse",
+        headers: {},
+        timeoutMs: 60000,
+      },
     ]);
     expect(cfg.problems.map((p) => p.id).sort()).toEqual(
-      ["Bad Id!", "badargs", "badenv", "badtimeout", "nocommand", "remote"].sort()
+      ["Bad Id!", "badargs", "badenv", "badtimeout", "badheaders", "badtransport", "mixed", "nocommand", "nourl", "plainhttp"].sort()
     );
-    expect(cfg.problems.find((p) => p.id === "remote")!.error).toContain("stdio-only");
+    expect(cfg.problems.find((p) => p.id === "plainhttp")!.error).toContain("https");
   });
 
   it("corrupt JSON and non-object files report problems, never throw", () => {

@@ -1390,10 +1390,10 @@ Provide execution contexts to tools instead of string interception in `session.t
 - `/mcp` status shows transport type per server
 
 **Acceptance criteria:**
-- [ ] Connect to a remote MCP server over SSE
-- [ ] Tool calls work with request/response semantics
-- [ ] Connection drops trigger auto-reconnection (from 24.2)
-- [ ] All existing stdio MCP tests still pass
+- [x] Connect to a remote MCP server over SSE
+- [x] Tool calls work with request/response semantics
+- [x] Connection drops trigger auto-reconnection (from 24.2)
+- [x] All existing stdio MCP tests still pass
 
 ---
 

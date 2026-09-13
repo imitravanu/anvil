@@ -40,9 +40,12 @@ describe("MCP Client - Auto Reconnection (Phase 24.2)", () => {
       timeoutMs: 1000,
       serverConfig: {
         id: "failing-srv",
+        transport: "stdio",
         command: "non_existent_binary_for_test_12345",
         args: [],
         env: {},
+        url: "",
+        headers: {},
         timeoutMs: 500,
       },
     };
