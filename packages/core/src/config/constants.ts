@@ -35,6 +35,10 @@ export const DEFAULT_MCP_REQUEST_TIMEOUT_MS = getEnvNumber("ANVIL_MCP_TIMEOUT_MS
 // Subagent Limits
 export const SUB_AGENT_REPORT_MAX_CHARS = getEnvNumber("ANVIL_MAX_SUBAGENT_REPORT_CHARS", 8000);
 
+// Compaction summarizer input shaping: tool payloads are stripped before the
+// summarizer call, keeping only short error excerpts (outcomes live in text).
+export const SUMMARIZER_TOOL_ERROR_MAX_CHARS = getEnvNumber("ANVIL_SUMMARIZER_TOOL_ERROR_CHARS", 500);
+
 // Rate Limiting & Retry Policy
 export const RATE_LIMIT_MAX_RETRIES = 3;
 export const RATE_LIMIT_INITIAL_DELAY_MS = 1000;

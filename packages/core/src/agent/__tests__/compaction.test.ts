@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded, findCleanCompactionCut, mergeSummaryIntoHistory } from "../compaction.js";
+import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded, findCleanCompactionCut, mergeSummaryIntoHistory, toSummarizerMessages } from "../compaction.js";
 import { FakeProvider } from "./fakeProvider.js";
 import type { ScriptEntry } from "./fakeProvider.js";
 import { AgentSession } from "../index.js";
@@ -270,5 +270,42 @@ describe("compaction in the agent loop", () => {
     const events = await drain("second");
     expect(events.some((e) => e.type === "turn_complete")).toBe(true);
     expect(events.some((e) => e.type === "compacted")).toBe(false);
+  });
+});
+
+describe("toSummarizerMessages", () => {
+  it("keeps text, marks tool calls, drops successful results, keeps short errors", () => {
+    const msgs: ConversationMessage[] = [
+      { role: "user", content: [{ type: "text", text: "fix the bug" }] },
+      {
+        role: "assistant",
+        content: [{ type: "tool_call", call: { id: "c1", name: "read_file", input: { path: "a.ts" } } }],
+      },
+      {
+        role: "user",
+        content: [
+          { type: "tool_result", result: { toolCallId: "c1", content: JSON.stringify({ data: "x".repeat(5000) }) } },
+          { type: "tool_result", result: { toolCallId: "c2", content: "disk full", isError: true } },
+        ],
+      },
+      { role: "assistant", content: [{ type: "text", text: "done" }] },
+    ];
+    const out = toSummarizerMessages(msgs);
+    const flat = out.map((m) => m.content.map((c) => (c.type === "text" ? c.text : "?")).join("|")).join("\n");
+    expect(flat).toContain("fix the bug");
+    expect(flat).toContain("[tool call: read_file]");
+    expect(flat).not.toContain("x".repeat(100));
+    expect(flat).toContain("[tool error: disk full]");
+    expect(flat).toContain("done");
+  });
+
+  it("drops messages left with no text content", () => {
+    const msgs: ConversationMessage[] = [
+      {
+        role: "user",
+        content: [{ type: "tool_result", result: { toolCallId: "c1", content: "{}" } }],
+      },
+    ];
+    expect(toSummarizerMessages(msgs)).toEqual([]);
   });
 });

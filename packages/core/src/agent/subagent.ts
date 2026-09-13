@@ -143,7 +143,11 @@ export async function* runSubAgentLive(opts: {
   // delegation littered ANVIL_HOME/checkpoints with orphan JSON holding raw
   // project bytes that no session would ever load again. Best-effort — the
   // in-memory merge above is the source of truth.
-  await saveCheckpointsAsync(sub.id, []);
+  try {
+    await saveCheckpointsAsync(sub.id, []);
+  } catch (err) {
+    console.warn(`[anvil] sub-agent checkpoint cleanup failed for ${sub.id}: ${getErrorMessage(err)}`);
+  }
   return {
     report: capReport(report),
     usage: { in: inTokens, out: outTokens },

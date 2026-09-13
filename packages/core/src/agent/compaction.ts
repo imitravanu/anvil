@@ -5,7 +5,7 @@ export interface CompactionResult {
   summary?: string;
 }
 
-import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES } from "../config/constants.js";
+import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, SUMMARIZER_TOOL_ERROR_MAX_CHARS } from "../config/constants.js";
 export { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES };
 
 /**
@@ -156,6 +156,33 @@ export async function compactIfNeeded(
   };
 }
 
+/**
+ * Strip tool call/result payloads down to short text markers for the
+ * summarizer call. Full outputs stay in live history; the summary input
+ * keeps narration plus which tools ran and short error excerpts only.
+ */
+export function toSummarizerMessages(messages: ConversationMessage[]): ConversationMessage[] {
+  const out: ConversationMessage[] = [];
+  for (const m of messages) {
+    const content: ConversationMessage["content"] = [];
+    for (const c of m.content) {
+      if (c.type === "text") {
+        if (c.text.trim()) content.push(c);
+      } else if (c.type === "tool_call") {
+        content.push({ type: "text", text: `[tool call: ${c.call.name}]` });
+      } else if (c.type === "tool_result") {
+        if (c.result.isError) {
+          content.push({ type: "text", text: `[tool error: ${c.result.content.slice(0, SUMMARIZER_TOOL_ERROR_MAX_CHARS)}]` });
+        }
+      } else if (c.type === "image") {
+        content.push({ type: "text", text: "[image attached]" });
+      }
+    }
+    if (content.length > 0) out.push({ role: m.role, content });
+  }
+  return out;
+}
+
 async function summarizeMessages(
   messages: ConversationMessage[],
   provider: ModelProvider,
@@ -166,6 +193,11 @@ async function summarizeMessages(
   // text_delta events into one string) asking the model to summarize `messages` concisely,
   // preserving anything a later turn would need: decisions made, files touched, open questions.
   // No tools, no system prompt beyond the summarization instruction itself.
+  // Shape the input first: tool call/result payloads (often kilobytes of JSON)
+  // compete with the main turn for quota and context, so the summarizer sees
+  // text plus short markers — outcomes live in the surrounding narration.
+  const input = toSummarizerMessages(messages);
+  if (input.length === 0) return "";
   let text = "";
   try {
     const stream = provider.streamCompletion({
@@ -174,7 +206,7 @@ async function summarizeMessages(
         "Summarize the following coding-session conversation concisely. Preserve: decisions " +
         "made, files created or modified and why, and any unresolved questions. Omit pleasantries " +
         "and restating tool output verbatim.",
-      messages,
+      messages: input,
       tools: [],
       maxTokens: 1024,
       signal,
