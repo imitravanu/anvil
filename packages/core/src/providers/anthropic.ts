@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../errors.js";
 import Anthropic from "@anthropic-ai/sdk";
 import { CompletionRequest, ConversationMessage, ModelProvider, ProviderId, StreamEvent } from "./types.js";
 import { BaseProvider } from "./base.js";
@@ -85,7 +86,7 @@ export async function* translateAnthropicStream(
       }
     }
   } catch (err) {
-    yield { type: "error", message: err instanceof Error ? err.message : String(err) };
+    yield { type: "error", message: getErrorMessage(err) };
   }
 }
 

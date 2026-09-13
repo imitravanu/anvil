@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../errors.js";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
@@ -328,9 +329,9 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
     };
   } catch (err: any) {
     return {
-      output: { error: err.message ?? String(err) },
+      output: { error: getErrorMessage(err) },
       isError: true,
-      summary: `get_outline failed: ${err.message ?? String(err)}`,
+      summary: `get_outline failed: ${getErrorMessage(err)}`,
     };
   }
 };

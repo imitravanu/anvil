@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../errors.js";
 import type {
   ModelProvider,
   ProviderId,
@@ -116,7 +117,7 @@ async function testStreaming(
     return {
       passed: false,
       durationMs: Date.now() - start,
-      error: err instanceof Error ? err.message : String(err),
+      error: getErrorMessage(err),
     };
   }
 }
@@ -240,7 +241,7 @@ async function testToolCalls(
     return {
       passed: false,
       durationMs: Date.now() - start,
-      error: err instanceof Error ? err.message : String(err),
+      error: getErrorMessage(err),
     };
   }
 }
@@ -341,7 +342,7 @@ async function testMultiTurn(
     return {
       passed: false,
       durationMs: Date.now() - start,
-      error: err instanceof Error ? err.message : String(err),
+      error: getErrorMessage(err),
     };
   }
 }
@@ -396,7 +397,7 @@ async function testErrorPath(
   } catch (err) {
     // A caught error is also an acceptable error containment path if clean
     const durationMs = Date.now() - start;
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = getErrorMessage(err);
     return {
       passed: true,
       durationMs,
@@ -474,7 +475,7 @@ async function testRateLimit(
     return {
       passed: false,
       durationMs: Date.now() - start,
-      error: err instanceof Error ? err.message : String(err),
+      error: getErrorMessage(err),
     };
   }
 }

@@ -125,4 +125,40 @@ describe("TUI Command Registry & /goal", () => {
     handlers.createPr();
     expect(printSystemMessage).toHaveBeenCalledWith("Cannot create PR while a turn is in flight.");
   });
+
+  it("sessionRename updates session.title in memory", () => {
+    const printSystemMessage = vi.fn();
+    const mockSession = {
+      id: "session-123",
+      title: "Old Title",
+    };
+    const deps: Partial<CommandHandlerDeps> = {
+      isBusy: false,
+      session: mockSession as unknown as CommandHandlerDeps["session"],
+      printSystemMessage,
+    };
+    const handlers = makeHandlers(deps as CommandHandlerDeps);
+    handlers.sessionRename("New Title");
+
+    expect(mockSession.title).toBe("New Title");
+    expect(printSystemMessage).toHaveBeenCalledWith('Session renamed to "New Title".');
+  });
+
+  it("sessionRename rejects when session is busy", () => {
+    const printSystemMessage = vi.fn();
+    const mockSession = {
+      id: "session-123",
+      title: "Old Title",
+    };
+    const deps: Partial<CommandHandlerDeps> = {
+      isBusy: true,
+      session: mockSession as unknown as CommandHandlerDeps["session"],
+      printSystemMessage,
+    };
+    const handlers = makeHandlers(deps as CommandHandlerDeps);
+    handlers.sessionRename("New Title");
+
+    expect(mockSession.title).toBe("Old Title");
+    expect(printSystemMessage).toHaveBeenCalledWith("Cannot rename the session while a turn is in flight.");
+  });
 });

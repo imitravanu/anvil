@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { getErrorMessage } from "@anvil/core";
 import React from "react";
 import { render } from "ink";
 import {
@@ -255,7 +256,7 @@ async function connectMcpTools(
     );
     return { defs: collision.kept, connected: mcp.connected, toolCount: mcp.tools };
   } catch (err) {
-    notices.push(`MCP connect failed: ${err instanceof Error ? err.message : String(err)}`);
+    notices.push(`MCP connect failed: ${getErrorMessage(err)}`);
     return empty;
   }
 }

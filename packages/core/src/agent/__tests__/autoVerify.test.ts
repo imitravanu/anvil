@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
 import { AgentSession } from "../session.js";
-import { AUTO_APPROVE_BROKER } from "../types.js";
+import { AUTO_APPROVE_BROKER, type AgentEvent } from "../types.js";
 import { FakeProvider } from "./fakeProvider.js";
 
 describe("Closed-Loop TDD Auto-Verification in AgentSession", () => {
@@ -122,10 +122,12 @@ describe("Closed-Loop TDD Auto-Verification in AgentSession", () => {
       events.push(ev);
     }
 
-    const vResults = events.filter((e) => e.type === "verification_result") as any[];
+    const vResults = events.filter(
+      (e): e is Extract<AgentEvent, { type: "verification_result" }> => e.type === "verification_result"
+    );
     expect(vResults.length).toBe(2);
-    expect(vResults[0].passed).toBe(false); // First probe failed
-    expect(vResults[1].passed).toBe(true);  // Second probe after repair passed!
+    expect(vResults[0]?.passed).toBe(false); // First probe failed
+    expect(vResults[1]?.passed).toBe(true);  // Second probe after repair passed!
 
     const eventTypes = events.map((e) => e.type);
     expect(eventTypes).toContain("turn_complete");
@@ -133,7 +135,12 @@ describe("Closed-Loop TDD Auto-Verification in AgentSession", () => {
     // Check history: verification failure was pushed into history for the model to see
     const history = session.getHistory();
     const repairPrompt = history.find(
-      (m) => m.role === "user" && m.content.some((c) => c.type === "text" && c.text.includes("[Automated Test Verification Failed]"))
+      (m) =>
+        m.role === "user" &&
+        Array.isArray(m.content) &&
+        m.content.some(
+          (c) => "text" in c && typeof c.text === "string" && c.text.includes("[Automated Test Verification Failed]")
+        )
     );
     expect(repairPrompt).toBeDefined();
 
@@ -177,7 +184,9 @@ describe("Closed-Loop TDD Auto-Verification in AgentSession", () => {
       events.push(ev);
     }
 
-    const vResults = events.filter((e) => e.type === "verification_result") as any[];
+    const vResults = events.filter(
+      (e): e is Extract<AgentEvent, { type: "verification_result" }> => e.type === "verification_result"
+    );
     // Exactly 2 verification failure attempts allowed per turn
     expect(vResults.length).toBe(2);
     expect(events.map((e) => e.type)).toContain("turn_complete");

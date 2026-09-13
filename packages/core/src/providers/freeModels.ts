@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../errors.js";
 import { createHash } from "node:crypto";
 import { ModelInfo } from "./types.js";
 import { MODEL_REGISTRY, registerModel } from "./registry.js";
@@ -33,6 +34,20 @@ export interface SyncReport {
   errors: string[]; // every failure, never swallowed
 }
 
+export interface OpenRouterModel {
+  id: string;
+  name?: string;
+  pricing?: {
+    prompt?: string | number;
+    completion?: string | number;
+  };
+  context_length?: number;
+  supported_parameters?: string[];
+  architecture?: {
+    modality?: string;
+  };
+}
+
 /** OpenRouter deliberately mimics chat-completions; its /models endpoint is public. */
 export async function fetchOpenRouterFreeModels(apiKey?: string): Promise<ModelInfo[]> {
   const controller = new AbortController();
@@ -46,16 +61,23 @@ export async function fetchOpenRouterFreeModels(apiKey?: string): Promise<ModelI
       throw new Error(`OpenRouter /models returned HTTP ${res.status}: ${res.statusText}`);
     }
 
-    const json = (await res.json()) as { data?: Array<any> };
+    const json = (await res.json()) as { data?: Array<OpenRouterModel> };
     if (!Array.isArray(json?.data)) {
       throw new Error("OpenRouter /models response missing data array");
     }
 
     const freeModels: ModelInfo[] = [];
     for (const m of json.data) {
-      // Pricing may arrive as "0" or 0 depending on the API version — accept both.
+      // Pricing may arrive as "0", "0.0", or 0 depending on the API version.
+      const promptPrice = Number(m.pricing?.prompt);
+      const completionPrice = Number(m.pricing?.completion);
+      const hasPricing = m.pricing != null && typeof m.pricing === "object";
       const isZeroPrice =
-        String(m.pricing?.prompt ?? "") === "0" && String(m.pricing?.completion ?? "") === "0";
+        hasPricing &&
+        !isNaN(promptPrice) &&
+        promptPrice === 0 &&
+        !isNaN(completionPrice) &&
+        completionPrice === 0;
       const isFreeId =
         typeof m.id === "string" && (m.id.endsWith(":free") || m.id === "openrouter/free");
       if (!isZeroPrice && !isFreeId) continue;
@@ -98,13 +120,6 @@ export function createOpenRouterFreeSource(): FreeModelSource {
 export const ORCAROUTER_BASE_URL = "https://api.orcarouter.ai/v1";
 /** Public, key-less pricing catalog — the source of truth for free ids (live-verified 2026-09). */
 export const ORCAROUTER_PRICING_URL = "https://api.orcarouter.ai/api/pricing";
-
-/** Canonical free ids from the live pricing catalog (2026-09-09). Fallback only. */
-export const ORCAROUTER_KNOWN_FREE_IDS = [
-  "deepseek/deepseek-v4-flash-free",
-  "tencent/hy3-free",
-  "z-ai/glm-5.3-flash-free",
-] as const;
 
 /**
  * Orcarouter's /models endpoint carries NO pricing metadata AND is stale
@@ -577,7 +592,7 @@ export async function syncFreeModels(opts: {
           }
           result.ok = true;
         } catch (err) {
-          result.error = err instanceof Error ? err.message : String(err);
+          result.error = getErrorMessage(err);
         }
         return result;
       })

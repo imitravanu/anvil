@@ -1,17 +1,16 @@
+import { getErrorMessage } from "../errors.js";
 import { randomUUID } from "node:crypto";
-import { ConversationMessage, ModelProvider, StreamEvent } from "../providers/types.js";
+import { type ModelProvider, type ConversationMessage } from "../providers/types.js";
 import { getModel } from "../providers/registry.js";
-import { TOOL_DEFINITIONS, detectTestCommand, runTestVerification } from "../tools/index.js";
+import { TOOL_DEFINITIONS, getSessionToolHandler } from "../tools/index.js";
 import type { ToolExecutionResult, ToolDefinition } from "../tools/types.js";
+import { verifyTurnMutations } from "./turnVerifier.js";
 import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded, estimateTokens } from "./compaction.js";
-
-// Context window assumed for model ids not in the registry (free-form ids are
-// supported on purpose). Conservative: compaction may fire a bit early, which
-// beats an unhandled provider overflow error.
-const FALLBACK_CONTEXT_WINDOW = 32_000;
+import { FALLBACK_CONTEXT_WINDOW, MAX_VERIFY_REPAIRS } from "../config/constants.js";
+export { MAX_VERIFY_REPAIRS };
 import { SessionMetadata, StoredSession } from "../session/types.js";
 import { AgentEvent, AgentOptions, DEFAULT_MAX_INNER_ITERATIONS } from "./types.js";
-import { RunLedgerEntry, capLedger, maxSeq } from "./ledger.js";
+import { RunLedgerEntry, capLedger, maxSeq, LEDGER_CAP } from "./ledger.js";
 import { clearRateLimitRecord, getConsecutiveRateLimitCount, isCircuitOpen, isRateLimitMessage, noteRateLimited, rateLimitRetrySeconds, recordFailure, recordSuccess } from "../providers/freeModels.js";
 import { MAX_DELEGATIONS_PER_TURN, runSubAgentLive } from "./subagent.js";
 import { TurnState } from "./turnState.js";
@@ -54,8 +53,6 @@ function sleepAbortable(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-export const MAX_VERIFY_REPAIRS = 2;
-
 export interface RestoreData {
   metadata: SessionMetadata;
   history: ConversationMessage[];
@@ -64,6 +61,7 @@ export interface RestoreData {
 export class AgentSession {
   private history = new HistoryStore();
   private currentController: AbortController | null = null;
+  private pendingCancel = false;
   private isSending = false;
   private provider: ModelProvider;
   private options: AgentOptions;
@@ -150,7 +148,11 @@ export class AgentSession {
   }
 
   cancel(): void {
-    this.currentController?.abort();
+    if (this.currentController) {
+      this.currentController.abort();
+    } else {
+      this.pendingCancel = true;
+    }
   }
 
   /**
@@ -304,22 +306,22 @@ export class AgentSession {
     entry: Omit<RunLedgerEntry, "seq" | "ts">
   ): void {
     this.ledgerSeq += 1;
-    this.ledger = capLedger([
-      ...this.ledger,
-      {
-        ...entry,
-        // Measured usage rides along ONLY on completion entries (record,
-        // never predict) — control events (loop_detected, budget_exhausted,
-        // cancelled, checkpoint_created, …) must not fabricate attribution.
-        // Explicit tokens (e.g. a sub-agent's own usage) always win.
-        ...(entry.tokens ??
-          (entry.eventType === "tool_finished" && this.lastUsage
-            ? { tokens: { in: this.lastUsage.inputTokens, out: this.lastUsage.outputTokens } }
-            : {})),
-        seq: this.ledgerSeq,
-        ts: new Date().toISOString(),
-      },
-    ]);
+    this.ledger.push({
+      ...entry,
+      // Measured usage rides along ONLY on completion entries (record,
+      // never predict) — control events (loop_detected, budget_exhausted,
+      // cancelled, checkpoint_created, …) must not fabricate attribution.
+      // Explicit tokens (e.g. a sub-agent's own usage) always win.
+      ...(entry.tokens ??
+        (entry.eventType === "tool_finished" && this.lastUsage
+          ? { tokens: { in: this.lastUsage.inputTokens, out: this.lastUsage.outputTokens } }
+          : {})),
+      seq: this.ledgerSeq,
+      ts: new Date().toISOString(),
+    });
+    if (this.ledger.length > LEDGER_CAP) {
+      this.ledger = capLedger(this.ledger);
+    }
   }
 
   /** Best-effort persist of the rewind ring. Awaited to avoid data loss on crash. */
@@ -397,6 +399,10 @@ export class AgentSession {
     // A fresh controller per send() call — cancelling one turn must not poison the next.
     const controller = new AbortController();
     this.currentController = controller;
+    if (this.pendingCancel) {
+      this.pendingCancel = false;
+      controller.abort();
+    }
 
     // per-turn loop state starts clean on every send().
     // A fresh TurnState per call — budget and loop-guard state must never
@@ -446,7 +452,8 @@ export class AgentSession {
               this.lastInputTokens,
               this.provider,
               this.options.model,
-              controller.signal
+              controller.signal,
+              { summarizerModel: this.options.compactionModel }
             );
             if (result.compacted) {
               // Preserve role alternation on merge (several providers reject
@@ -454,7 +461,8 @@ export class AgentSession {
               this.history.applyCompacted(compacted);
               yield { type: "compacted", summary: result.summary! };
             }
-          } catch {
+          } catch (err) {
+            console.warn(`[session] Warning: compaction failed: ${getErrorMessage(err)}`);
             // Summarization failed (or was aborted) — proceed uncompacted.
             // An abort surfaces as `cancelled` at the next loop-top check.
           }
@@ -465,103 +473,12 @@ export class AgentSession {
           return;
         }
 
-        const stream = this.provider.streamCompletion({
-          model: this.options.model,
-          systemPrompt: this.options.systemPrompt,
-          messages: this.history.snapshot(), // snapshot — never expose the live array to the provider
-          tools: this.toolDefs,
-          maxTokens: this.options.maxTokens,
-          signal: controller.signal,
-        });
-
-        // Accumulate this turn's assistant content so it can be pushed to history once
-        // complete, and collect any tool calls to execute after the stream ends.
-        const textParts: string[] = [];
-        const toolCalls: AccumulatedToolCall[] = [];
-        const openCalls = new Map<string, { name: string; inputJson: string }>();
-        let stopReason: string | undefined;
-        let rateLimitRetry: number | null = null;
-        // Providers that emit no usage leave lastInputTokens stale (it only
-        // moves via the usage event), which would silently disable reactive
-        // compaction on a growing history. This flag triggers a token-estimate
-        // fallback after the turn so the next loop-top check still fires.
-        let sawUsage = false;
-
-        for await (const event of stream) {
-          switch (event.type) {
-            case "text_delta":
-              textParts.push(event.text);
-              yield { type: "text_delta", text: event.text };
-              break;
-            case "tool_call_start":
-              openCalls.set(event.id, { name: event.name, inputJson: "" });
-              break;
-            case "tool_call_delta": {
-              const open = openCalls.get(event.id);
-              // Cumulative buffer (see providers/streaming.ts): overwrite.
-              if (open) open.inputJson = event.cumulativeInputJson;
-              break;
-            }
-            case "tool_call_end": {
-              const open = openCalls.get(event.id);
-              let input: unknown;
-              if (event.input !== undefined && event.input !== null) {
-                input = event.input;
-              } else {
-                const raw = open?.inputJson ?? "";
-                if (raw.trim()) {
-                  try {
-                    input = JSON.parse(raw);
-                  } catch {
-                    input = {}; // tool executor reports validation errors back to the model
-                  }
-                } else {
-                  input = {};
-                }
-              }
-              openCalls.delete(event.id);
-              toolCalls.push({
-                id: event.id,
-                name: event.name ?? open?.name ?? "",
-                input,
-                // Provider-specific data (e.g. Gemini thought signatures) that
-                // must survive into the history we replay next turn.
-                ...(event.providerMetadata ? { providerMetadata: event.providerMetadata } : {}),
-              });
-              break;
-            }
-            case "usage":
-              sawUsage = true;
-              this.lastInputTokens = event.inputTokens;
-              this.lastUsage = { inputTokens: event.inputTokens, outputTokens: event.outputTokens };
-              yield { type: "usage", inputTokens: event.inputTokens, outputTokens: event.outputTokens };
-              break;
-            case "error": {
-              // Rate limits get ONE automatic retry per turn: wait out the
-              // window, then re-issue the request. Nothing has been pushed
-              // to history on this path, so the retry replays cleanly. A
-              // second 429 in the same turn surfaces as a normal error.
-              if (isRateLimitMessage(event.message)) {
-                noteRateLimited(this.provider.id, this.options.model);
-                // Exactly one circuit failure per failed request — noteRateLimited
-                // never touches the breaker, this is its single accounting point.
-                // Other errors (bad-model 404s, network) must NOT open the circuit.
-                recordFailure(this.provider.id, this.options.model);
-                if (!turn.rateLimitRetried) {
-                  turn.rateLimitRetried = true;
-                  const consecutive = getConsecutiveRateLimitCount(this.provider.id, this.options.model);
-                  rateLimitRetry = rateLimitRetrySeconds(event.message, consecutive);
-                  break; // leave the switch; the loop breaks out below
-                }
-              }
-              yield { type: "error", message: event.message };
-              return;
-            }
-            case "turn_end":
-              stopReason = event.stopReason;
-              break;
-          }
+        const streamRes = yield* this.streamAssistantTurn(controller, turn);
+        if (!streamRes) {
+          return;
         }
+
+        const { textParts, toolCalls, stopReason, rateLimitRetry, sawUsage } = streamRes;
 
         if (rateLimitRetry !== null) {
           yield { type: "rate_limit_wait", seconds: rateLimitRetry };
@@ -579,81 +496,33 @@ export class AgentSession {
           return;
         }
 
-        // Record the assistant turn (text and/or tool_use blocks) in history
-        // before anything else — including for plain text turns, which must
-        // still be part of the conversation the provider sees next turn.
         this.history.pushAssistant(textParts, toolCalls);
 
-        // Compaction fallback: the next loop-top check reads lastInputTokens,
-        // which only moves via a usage event. If this provider sent none, fall
-        // back to a token estimate of the (now snapshot-consistent) history so
-        // reactive compaction still fires as the conversation grows instead of
-        // silently stalling. Conservative bias — over-estimating compacts early,
-        // which beats an unhandled provider context overflow.
         if (!sawUsage) {
           this.lastInputTokens = estimateTokens(this.history.snapshot());
         }
 
         if (stopReason !== "tool_use") {
-          // Closed-loop TDD auto-verification: if mutations occurred and autoVerify is active,
-          // probe tests before concluding turn.
-          const testCmd =
-            typeof this.options.autoVerify === "string"
-              ? this.options.autoVerify
-              : this.options.autoVerify
-                ? detectTestCommand(this.options.projectRoot)
-                : null;
+          const vOutcome = yield* verifyTurnMutations({
+            projectRoot: this.options.projectRoot,
+            autoVerify: this.options.autoVerify,
+            mutationsOccurred: turn.mutationsOccurred,
+            verifyRepairsUsed: turn.verifyRepairsUsed,
+            maxVerifyRepairs: MAX_VERIFY_REPAIRS,
+            signal: controller.signal,
+            recordLedger: (e) => this.recordLedger(e),
+            pushRepairPrompt: (msg) => this.history.pushUserText(msg),
+          });
 
-          if (testCmd && turn.mutationsOccurred) {
-            if (turn.verifyRepairsUsed < MAX_VERIFY_REPAIRS) {
-              yield { type: "verification_started", command: testCmd };
-              this.recordLedger({ eventType: "verification_started", tool: testCmd, outcome: "ok", elapsedMs: 0 });
-              const verifyStart = Date.now();
-              const verifyResult = await runTestVerification(
-                this.options.projectRoot,
-                testCmd,
-                undefined,
-                controller.signal
-              );
-              const elapsed = Date.now() - verifyStart;
-
-              if (controller.signal.aborted) {
-                yield { type: "cancelled" };
-                return;
-              }
-
-              if (verifyResult.passed) {
-                yield { type: "verification_result", passed: true, summary: verifyResult.summary };
-                this.recordLedger({ eventType: "verification_finished", tool: testCmd, outcome: "ok", elapsedMs: elapsed });
-              } else {
-                turn.verifyRepairsUsed += 1;
-                yield { type: "verification_result", passed: false, summary: verifyResult.summary };
-                this.recordLedger({ eventType: "verification_finished", tool: testCmd, outcome: "error", elapsedMs: elapsed });
-
-                const repairMsg =
-                  `[Automated Test Verification Failed]\n` +
-                  `The test command \`${testCmd}\` failed (exit ${verifyResult.exitCode}):\n` +
-                  `${verifyResult.failureTrace ?? verifyResult.output}\n\n` +
-                  `Analyze the test failure, use edit_file or write_file to repair the issue, and ensure the tests pass.`;
-                this.history.pushUserText(repairMsg);
-                continue;
-              }
-            } else {
-              // Repair budget exhausted. Say so honestly instead of letting
-              // turn_complete masquerade as verified — the tests were last
-              // seen failing and this mutation got no gate.
-              yield { type: "verification_gave_up", command: testCmd };
-              this.recordLedger({ eventType: "verification_gave_up", tool: testCmd, outcome: "error", elapsedMs: 0 });
-            }
+          if (vOutcome.status === "cancelled") {
+            return;
+          }
+          if (vOutcome.status === "needs_repair") {
+            turn.verifyRepairsUsed += 1;
+            continue;
           }
 
           if (stopReason === "error") {
-            // Provider-side refusal (today: Gemini content/safety blocks, mapped
-            // to turn_end "error" by the adapter). The turn produced no usable
-            // result: completing here would recordSuccess, emit turn_complete,
-            // and let the goal engine count a filtered turn as clean work.
-            // (Verification above still ran first, so earlier mutations in this
-            // turn were gated; a failed gate `continue`s into repair as usual.)
             yield {
               type: "error",
               message:
@@ -667,17 +536,11 @@ export class AgentSession {
           return;
         }
 
-        // bounded, loop-safe, ordered tool orchestration.
         turn.markIteration();
 
         const turnNotes: string[] = [];
-        // Classify in DECLARED order first: the consecutive same-key streak
-        // and the declared-order contract are order-sensitive.
         const prepared: PreparedCall[] = LoopGuard.classify(toolCalls, this.toolDefs, turn);
 
-        // update_plan is handled by the session (sets this.plan + emits
-        // plan_updated) and never runs the generic executor; refused loop calls
-        // never run at all.
         const handled = new Map<string, ToolExecutionResult>();
         const toRun: RunnableCall[] = [];
         for (const p of prepared) {
@@ -691,119 +554,48 @@ export class AgentSession {
             yield { type: "loop_detected", tool: p.call.name };
             turnNotes.push(LoopGuard.warnText(p.call.name, "non-consecutive"));
           }
-          if (p.call.name === "update_plan") {
-            const plan = (p.call.input as { plan?: unknown } | undefined)?.plan;
-            if (typeof plan === "string" && plan.trim()) {
-              this.plan = plan;
-              this.recordLedger({ eventType: "plan_updated", tool: "update_plan", inputHash: p.key, outcome: "ok", elapsedMs: 0 });
-              yield { type: "plan_updated", plan };
-              handled.set(p.call.id, { output: { ok: true }, isError: false, summary: "Plan updated." });
-            } else {
-              this.recordLedger({ eventType: "tool_finished", tool: "update_plan", inputHash: p.key, outcome: "error", elapsedMs: 0 });
-              handled.set(p.call.id, {
-                output: { error: "update_plan requires a string `plan`." },
-                isError: true,
-                summary: "update_plan: plan must be a string.",
-              });
+          const sessionTool = getSessionToolHandler(p.call.name);
+          if (sessionTool) {
+            const toolGen = sessionTool(
+              p.call.input,
+              {
+                setPlan: (newPlan: string) => {
+                  this.plan = newPlan;
+                },
+                recordLedger: (entry) => {
+                  this.recordLedger(entry as RunLedgerEntry);
+                },
+                allowDelegation: this.options.allowDelegation !== false,
+                tryConsumeDelegation: (max: number) => turn.tryConsumeDelegation(max),
+                provider: this.provider,
+                model: this.options.model,
+                projectRoot: this.options.projectRoot,
+                permissionBroker: this.options.permissionBroker,
+                tools: this.toolDefs,
+                signal: controller.signal,
+                mergeSubCheckpoints: async (cps: unknown[]) => {
+                  await this.mergeSubCheckpoints(cps as Checkpoint[]);
+                },
+                recordMutation: () => {
+                  turn.mutationsOccurred = true;
+                },
+              },
+              p.key
+            );
+            let item = await toolGen.next();
+            let cancelled = false;
+            while (!item.done) {
+              yield item.value;
+              if (item.value.type === "cancelled") {
+                cancelled = true;
+              }
+              item = await toolGen.next();
             }
-            continue;
-          }
-          if (p.call.name === "delegate_task") {
-            // sub-agent delegation — intercepted like update_plan and
-            // executed inline (serially, in declared order), never in a batch.
-            const task = (p.call.input as { task?: unknown } | undefined)?.task;
-            if (!this.options.allowDelegation) {
-              this.recordLedger({ eventType: "tool_finished", tool: "delegate_task", inputHash: p.key, outcome: "error", elapsedMs: 0 });
-              handled.set(p.call.id, {
-                output: { error: "delegate_task is not available to sub-agents (depth limit)." },
-                isError: true,
-                summary: "Delegation not allowed at this depth.",
-              });
-              continue;
-            }
-            if (typeof task !== "string" || !task.trim()) {
-              this.recordLedger({ eventType: "tool_finished", tool: "delegate_task", inputHash: p.key, outcome: "error", elapsedMs: 0 });
-              handled.set(p.call.id, {
-                output: { error: "delegate_task requires a string `task`." },
-                isError: true,
-                summary: "delegate_task: task must be a string.",
-              });
-              continue;
-            }
-            if (!turn.tryConsumeDelegation(MAX_DELEGATIONS_PER_TURN)) {
-              this.recordLedger({ eventType: "tool_finished", tool: "delegate_task", inputHash: p.key, outcome: "error", elapsedMs: 0 });
-              handled.set(p.call.id, {
-                output: { error: `Delegation limit reached (${MAX_DELEGATIONS_PER_TURN} per turn).` },
-                isError: true,
-                summary: "Delegation limit reached.",
-              });
-              continue;
-            }
-            this.recordLedger({ eventType: "subagent_started", tool: "delegate_task", inputHash: p.key, outcome: "ok", elapsedMs: 0 });
-            yield { type: "subagent_started", task };
-            const subStartedAt = Date.now();
-            // Live delegation: relay the sub-agent's tool activity as
-            // subagent_progress events while the run is in flight, then take
-            // the final run (generator return value).
-            const subGen = runSubAgentLive({
-              provider: this.provider,
-              model: this.options.model,
-              projectRoot: this.options.projectRoot,
-              permissionBroker: this.options.permissionBroker,
-              task,
-              signal: controller.signal,
-              // sub-agents inherit the main session's tools (incl.
-              // MCP) minus delegate_task, under the same shared broker.
-              tools: this.toolDefs,
-            });
-            let subStep = await subGen.next();
-            while (!subStep.done) {
-              yield subStep.value;
-              subStep = await subGen.next();
-            }
-            const run = subStep.value;
-            if (run.aborted) {
-              // Merge even on abort: files changed before the stop persist.
-              await this.mergeSubCheckpoints(run.checkpoints);
-              this.recordLedger({ eventType: "cancelled", tool: "delegate_task", inputHash: p.key, outcome: "aborted", elapsedMs: Date.now() - subStartedAt });
-              // Close the tool batch honestly before stopping — sibling calls
-              // and the delegation itself need tool_results in history.
+            if (cancelled) {
               this.pushCancelledToolResults(prepared, handled, undefined, turnNotes);
-              yield { type: "cancelled" };
               return;
             }
-            // The sub-ring joins the parent ring (fresh ids, capped): rewind
-            // in the main session reaches sub-agent file writes too.
-            await this.mergeSubCheckpoints(run.checkpoints);
-            // A delegation that snapshotted files mutated the project — the
-            // auto-verify loop must gate it like any direct write.
-            if (run.checkpoints.length > 0) turn.mutationsOccurred = true;
-            this.recordLedger({
-              eventType: "subagent_finished",
-              tool: "delegate_task",
-              inputHash: p.key,
-              outcome: "ok",
-              tokens: run.usage,
-              elapsedMs: Date.now() - subStartedAt,
-            });
-            yield {
-              type: "subagent_finished",
-              toolCalls: run.toolCalls,
-              inputTokens: run.usage.in,
-              outputTokens: run.usage.out,
-              report: run.report,
-            };
-            // A crashed sub-run must not look like an empty success.
-            const subFailed = Boolean(run.failureReason);
-            handled.set(p.call.id, {
-              output: subFailed
-                ? { report: run.report, error: run.failureReason }
-                : { report: run.report },
-              isError: subFailed,
-              summary: subFailed
-                ? `Sub-agent crashed after ${run.toolCalls} tool call${run.toolCalls === 1 ? "" : "s"}: ${run.failureReason}`
-                : `Sub-agent report (${run.toolCalls} tool call${run.toolCalls === 1 ? "" : "s"}).`,
-            });
+            handled.set(p.call.id, item.value);
             continue;
           }
           if (p.refused) {
@@ -813,30 +605,9 @@ export class AgentSession {
           }
           toRun.push({ p, startedAt: Date.now() });
         }
-        // Rewind: snapshot write_file/edit_file bytes BEFORE any permission
-        // prompt or execution (the bytes must predate the mutation). Matched
-        // by NAME. Batches with no file writes (reads, run_command-only)
-        // snapshot nothing. The snapshot joins the ring (event + ledger) only
-        // if a covered call actually mutated — a denied or errored batch mints
-        // no checkpoint, emits no event, and evicts nothing from the
-        // CHECKPOINT_KEEP ring. The review baseline still records first-seen
-        // originals either way (harmless for denied calls: nothing changed).
-        const rewindTargets = [...new Set(prepared.flatMap((p) => {
-          if (p.call.name !== "write_file" && p.call.name !== "edit_file") return [];
-          const target = (p.call.input as { path?: unknown } | undefined)?.path;
-          return typeof target === "string" && target.length > 0 ? [target] : [];
-        }))];
-        let pendingCp: Checkpoint | null = null;
-        if (rewindTargets.length > 0) {
-          const cp = await takeSnapshot(this.options.projectRoot, this.checkpointSeq + 1, rewindTargets);
-          if (cp.files.length > 0) {
-            this.recordBaseline(cp);
-            pendingCp = cp;
-          }
-        }
-        // Declared parallel policy + execution live in the orchestrator;
-        // results merge here with intercepted outcomes (handled wins) and
-        // rebuild into history in EXACTLY declared call order .
+
+        const pendingCp = await this.takeRewindSnapshot(prepared);
+
         const orchestrator = new ToolOrchestrator({
           projectRoot: this.options.projectRoot,
           permissionBroker: this.options.permissionBroker,
@@ -844,10 +615,6 @@ export class AgentSession {
           recordLedger: (entry) => this.recordLedger(entry),
         });
         const runResults = yield* orchestrator.run(toRun);
-        // Abandoned batch (orchestrator returned early on abort): repair the
-        // history first so the NEXT turn replays valid tool_call/tool_result
-        // pairs, then surface the cancellation. Whatever the orchestrator did
-        // complete is preserved as the real result.
         if (controller.signal.aborted) {
           this.pushCancelledToolResults(prepared, handled, runResults, turnNotes);
           yield { type: "cancelled" };
@@ -855,54 +622,169 @@ export class AgentSession {
         }
         const outcomes = new Map<string, ToolExecutionResult>([...runResults, ...handled]);
         for (const p of prepared) {
-          // A mutation happened only if the tool actually ran and succeeded —
-          // a missing outcome (cancelled batch) or an error is not a mutation.
           const outcome = outcomes.get(p.call.id);
           if (p.def?.mutating && outcome && !outcome.isError) {
             turn.mutationsOccurred = true;
           }
         }
-        // Publish the pending snapshot only if a covered file call mutated.
-        // Silent drop otherwise: no event, no ledger row, no ring churn.
         if (pendingCp) {
-          let coveredMutated = false;
-          for (const p of prepared) {
-            if (p.call.name !== "write_file" && p.call.name !== "edit_file") continue;
-            const outcome = outcomes.get(p.call.id);
-            if (outcome && !outcome.isError) {
-              coveredMutated = true;
-              break;
-            }
-          }
-          if (coveredMutated) {
-            this.checkpointSeq = pendingCp.id;
-            this.checkpoints = capCheckpoints([...this.checkpoints, pendingCp]);
-            await this.persistCheckpoints();
-            this.recordLedger({ eventType: "checkpoint_created", outcome: "ok", elapsedMs: 0 });
-            yield { type: "checkpoint", id: pendingCp.id, files: pendingCp.files.length };
-          }
+          const cpEvent = await this.commitRewindSnapshot(pendingCp, prepared, outcomes);
+          if (cpEvent) yield cpEvent;
         }
 
-        // Loop-guard demands lead the results message as a user-role text part
-        // (the data model has no "system" role).
         this.history.pushToolResults(prepared, outcomes, turnNotes);
       }
-    } catch (err: any) {
-      this.history.repairUnclosedToolCalls(err?.message ?? String(err));
+    } catch (err: unknown) {
+      this.history.repairUnclosedToolCalls(getErrorMessage(err));
       if (controller.signal.aborted) {
         yield { type: "cancelled" };
         return;
       }
-      if (isRateLimitMessage(err?.message ?? String(err))) {
+      if (isRateLimitMessage(getErrorMessage(err))) {
         noteRateLimited(this.provider.id, this.options.model);
         recordFailure(this.provider.id, this.options.model);
       } else {
         clearRateLimitRecord(this.provider.id, this.options.model);
       }
-      yield { type: "error", message: err?.message ?? String(err) };
+      yield { type: "error", message: getErrorMessage(err) };
     } finally {
       if (this.currentController === controller) this.currentController = null;
       this.isSending = false;
     }
+  }
+
+  private async *streamAssistantTurn(
+    controller: AbortController,
+    turn: TurnState
+  ): AsyncGenerator<
+    AgentEvent,
+    {
+      textParts: string[];
+      toolCalls: AccumulatedToolCall[];
+      stopReason: string | undefined;
+      rateLimitRetry: number | null;
+      sawUsage: boolean;
+    } | null
+  > {
+    const stream = this.provider.streamCompletion({
+      model: this.options.model,
+      systemPrompt: this.options.systemPrompt,
+      messages: this.history.snapshot(),
+      tools: this.toolDefs,
+      maxTokens: this.options.maxTokens,
+      signal: controller.signal,
+    });
+
+    const textParts: string[] = [];
+    const toolCalls: AccumulatedToolCall[] = [];
+    const openCalls = new Map<string, { name: string; inputJson: string }>();
+    let stopReason: string | undefined;
+    let rateLimitRetry: number | null = null;
+    let sawUsage = false;
+
+    for await (const event of stream) {
+      switch (event.type) {
+        case "text_delta":
+          textParts.push(event.text);
+          yield { type: "text_delta", text: event.text };
+          break;
+        case "tool_call_start":
+          openCalls.set(event.id, { name: event.name, inputJson: "" });
+          break;
+        case "tool_call_delta": {
+          const open = openCalls.get(event.id);
+          if (open) open.inputJson = event.cumulativeInputJson;
+          break;
+        }
+        case "tool_call_end": {
+          const open = openCalls.get(event.id);
+          let input: unknown;
+          if (event.input !== undefined && event.input !== null) {
+            input = event.input;
+          } else {
+            const raw = open?.inputJson ?? "";
+            if (raw.trim()) {
+              try {
+                input = JSON.parse(raw);
+              } catch {
+                input = { __parseError: true, rawInput: raw.slice(0, 200) };
+              }
+            } else {
+              input = {};
+            }
+          }
+          openCalls.delete(event.id);
+          toolCalls.push({
+            id: event.id,
+            name: event.name ?? open?.name ?? "",
+            input,
+            ...(event.providerMetadata ? { providerMetadata: event.providerMetadata } : {}),
+          });
+          break;
+        }
+        case "usage":
+          sawUsage = true;
+          this.lastInputTokens = event.inputTokens;
+          this.lastUsage = { inputTokens: event.inputTokens, outputTokens: event.outputTokens };
+          yield { type: "usage", inputTokens: event.inputTokens, outputTokens: event.outputTokens };
+          break;
+        case "error": {
+          if (isRateLimitMessage(event.message)) {
+            noteRateLimited(this.provider.id, this.options.model);
+            recordFailure(this.provider.id, this.options.model);
+            if (!turn.rateLimitRetried) {
+              turn.rateLimitRetried = true;
+              const consecutive = getConsecutiveRateLimitCount(this.provider.id, this.options.model);
+              rateLimitRetry = rateLimitRetrySeconds(event.message, consecutive);
+              break;
+            }
+          }
+          yield { type: "error", message: event.message };
+          return null;
+        }
+        case "turn_end":
+          stopReason = event.stopReason;
+          break;
+      }
+    }
+
+    return { textParts, toolCalls, stopReason, rateLimitRetry, sawUsage };
+  }
+
+  private async takeRewindSnapshot(prepared: PreparedCall[]): Promise<Checkpoint | null> {
+    const rewindTargets = [...new Set(prepared.flatMap((p) => {
+      if (p.call.name !== "write_file" && p.call.name !== "edit_file") return [];
+      const target = (p.call.input as { path?: unknown } | undefined)?.path;
+      return typeof target === "string" && target.length > 0 ? [target] : [];
+    }))];
+    if (rewindTargets.length === 0) return null;
+    const cp = await takeSnapshot(this.options.projectRoot, this.checkpointSeq + 1, rewindTargets);
+    if (cp.files.length > 0) {
+      this.recordBaseline(cp);
+      return cp;
+    }
+    return null;
+  }
+
+  private async commitRewindSnapshot(
+    pendingCp: Checkpoint,
+    prepared: PreparedCall[],
+    outcomes: Map<string, ToolExecutionResult>
+  ): Promise<AgentEvent | null> {
+    let coveredMutated = false;
+    for (const p of prepared) {
+      if (p.call.name !== "write_file" && p.call.name !== "edit_file") continue;
+      const outcome = outcomes.get(p.call.id);
+      if (outcome && !outcome.isError) {
+        coveredMutated = true;
+        break;
+      }
+    }
+    if (!coveredMutated) return null;
+    this.checkpointSeq = pendingCp.id;
+    this.checkpoints = capCheckpoints([...this.checkpoints, pendingCp]);
+    await this.persistCheckpoints();
+    this.recordLedger({ eventType: "checkpoint_created", outcome: "ok", elapsedMs: 0 });
+    return { type: "checkpoint", id: pendingCp.id, files: pendingCp.files.length };
   }
 }

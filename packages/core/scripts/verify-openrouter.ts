@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../src/errors.js";
 import { createProviders, syncOpenRouterModels } from "../src/providers/index.js";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -41,7 +42,7 @@ try {
   );
 } catch (err) {
   failed = true;
-  console.error(`  sync FAILED: ${err instanceof Error ? err.message : String(err)}`);
+  console.error(`  sync FAILED: ${getErrorMessage(err)}`);
 }
 
 // Free model ids churn and free tier rate-limits are tight — override with

@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@anvil/core";
 import { useEffect, useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import type { AgentSession, SessionFileChange } from "@anvil/core";
@@ -53,7 +54,7 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
       .catch((err: unknown) => {
         // A rejected summarize must not leave the modal stuck on the spinner.
         if (active) {
-          setError(err instanceof Error ? err.message : String(err));
+          setError(getErrorMessage(err));
           setLoading(false);
         }
       });

@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../errors.js";
 import type { ToolExecutionResult } from "../tools/types.js";
 import { describeToolInput, executeTool } from "../tools/index.js";
 import { isReadOnlyCommand } from "../tools/bash.js";
@@ -76,6 +77,15 @@ export class ToolOrchestrator {
         runResults.set(call.id, result);
         continue;
       }
+      if (call.input && typeof call.input === "object" && "__parseError" in (call.input as Record<string, unknown>)) {
+        const rawInput = (call.input as { rawInput?: string }).rawInput ?? "";
+        const msg = `Malformed JSON in tool call input. Raw: ${rawInput}`;
+        const result: ToolExecutionResult = { output: { error: msg }, isError: true, summary: `${call.name}: malformed JSON input` };
+        yield { type: "tool_finished", id: call.id, name: call.name, result };
+        this.deps.recordLedger({ eventType: "tool_finished", tool: call.name, inputHash: t.p.key, outcome: "error", elapsedMs: Date.now() - t.startedAt });
+        runResults.set(call.id, result);
+        continue;
+      }
       if (def.mutating) {
         // Read-only safe-list: `ls`, `git status`, `cat` and friends are
         // positively recognized as harmless (no metacharacters, no globs —
@@ -92,7 +102,11 @@ export class ToolOrchestrator {
             try {
               autoResult = await executeTool(call.name, call.input, { projectRoot, signal });
             } catch (err: unknown) {
-              const msg = err instanceof Error ? err.message : String(err);
+              if (signal.aborted || (err instanceof Error && err.name === "AbortError")) {
+                this.deps.recordLedger({ eventType: "cancelled", tool: call.name, inputHash: t.p.key, outcome: "aborted", elapsedMs: 0 });
+                return;
+              }
+              const msg = getErrorMessage(err);
               autoResult = { output: { error: `Tool execution failed: ${msg}` }, isError: true, summary: `Error: ${msg}` };
             }
             yield { type: "tool_finished", id: call.id, name: call.name, result: autoResult };
@@ -157,7 +171,11 @@ export class ToolOrchestrator {
           signal,
         });
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
+        if (signal.aborted || (err instanceof Error && err.name === "AbortError")) {
+          this.deps.recordLedger({ eventType: "cancelled", tool: call.name, inputHash: t.p.key, outcome: "aborted", elapsedMs: 0 });
+          return;
+        }
+        const msg = getErrorMessage(err);
         result = { output: { error: `Tool execution failed: ${msg}` }, isError: true, summary: `Error: ${msg}` };
       }
       yield { type: "tool_finished", id: call.id, name: call.name, result };
@@ -190,7 +208,10 @@ export class ToolOrchestrator {
             signal,
           });
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
+          if (signal.aborted || (err instanceof Error && err.name === "AbortError")) {
+            return { output: { error: "Operation aborted" }, isError: true, summary: "Operation aborted" };
+          }
+          const msg = getErrorMessage(err);
           return { output: { error: `Tool execution failed: ${msg}` }, isError: true, summary: `Error: ${msg}` };
         }
       })

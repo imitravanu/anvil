@@ -66,12 +66,33 @@ export function dropCollidingMcpTools(
 }
 
 /**
- * Permission-prompt preview for MCP calls: server-qualified input JSON.
- * The model already receives the full JSON schema via the provider
- * adapters; the human sees the tool name plus truncated input.
+ * Permission-prompt preview for MCP calls: formatted parameters breakdown.
+ * Formats top-level arguments with bullet points for readability instead of a raw JSON blob.
  */
 export function describeMcpInput(input: unknown): Promise<string> {
-  return Promise.resolve(`MCP call input: ${JSON.stringify(input).slice(0, 200)}`);
+  if (input === null || input === undefined) {
+    return Promise.resolve("Parameters: (none)");
+  }
+  if (typeof input !== "object" || Array.isArray(input)) {
+    const serialized = JSON.stringify(input);
+    const truncated = serialized.length > 200 ? `${serialized.slice(0, 200)}…` : serialized;
+    return Promise.resolve(`Parameters: ${truncated}`);
+  }
+  const entries = Object.entries(input as Record<string, unknown>);
+  if (entries.length === 0) {
+    return Promise.resolve("Parameters: (none)");
+  }
+  const lines = entries.map(([k, v]) => {
+    let valStr: string;
+    if (typeof v === "string") {
+      valStr = v.length > 120 ? `${JSON.stringify(v.slice(0, 120))}…` : JSON.stringify(v);
+    } else {
+      const raw = JSON.stringify(v);
+      valStr = raw.length > 120 ? `${raw.slice(0, 120)}…` : raw;
+    }
+    return `  • ${k}: ${valStr}`;
+  });
+  return Promise.resolve(`Parameters:\n${lines.join("\n")}`);
 }
 
 /**

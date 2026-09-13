@@ -90,7 +90,13 @@ export function PermissionPrompt({
       paddingX={1}
     >
       <Text color={theme.colors.toolName}>
-        ⚠ {mcp ? `MCP ${mcp.tool} (server: ${mcp.server})` : request.toolName}{" "}
+        ⚠ {mcp ? (
+          <>
+            <Text color={theme.colors.accent}>[mcp:{mcp.server}]</Text> {mcp.tool}
+          </>
+        ) : (
+          request.toolName
+        )}{" "}
         <Text color={theme.colors.userText}>{label}</Text>
       </Text>
       {mcp && (

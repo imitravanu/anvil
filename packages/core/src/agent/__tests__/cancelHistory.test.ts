@@ -68,8 +68,8 @@ describe("cancellation mid-tool-batch repairs history", () => {
 
     const history = session.getHistory();
     // user + assistant(tool_call) + user(tool_result) — batch closed.
-    expect(history).toHaveLength(3);
-    const results = history[2].content.filter((c) => c.type === "tool_result");
+    const content = Array.isArray(history[2]?.content) ? history[2].content : [];
+    const results = content.filter((c) => "type" in c && c.type === "tool_result");
     expect(results).toHaveLength(1);
     expect(results[0]).toMatchObject({
       type: "tool_result",
@@ -87,4 +87,24 @@ describe("cancellation mid-tool-batch repairs history", () => {
     const after = session.getHistory();
     expect(replayed).toEqual(after.slice(0, 4));
   });
+
+  it("handles cancellation called before send() (Phase 22.1)", async () => {
+    const { session } = makeSession(
+      [
+        [
+          { type: "text_delta", text: "Should never run." },
+          { type: "turn_end", stopReason: "end_turn" },
+        ],
+      ],
+      { requestPermission: () => Promise.resolve(true) }
+    );
+
+    session.cancel(); // cancel before first send()
+    const events: AgentEvent[] = [];
+    for await (const e of session.send("hello")) events.push(e);
+
+    expect(events.some((e) => e.type === "cancelled")).toBe(true);
+    expect(events.some((e) => e.type === "turn_complete")).toBe(false);
+  });
 });
+

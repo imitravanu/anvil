@@ -5,6 +5,7 @@ import {
   type PermissionBroker,
   type ToolDefinition,
 } from "@anvil/core";
+import { renderCliEvent } from "./terminalRenderer.js";
 
 export interface HeadlessOptions {
   prompt: string;
@@ -136,61 +137,9 @@ export async function runHeadless(opts: HeadlessOptions): Promise<number> {
 
   try {
     for await (const event of session.send(opts.prompt)) {
-      switch (event.type) {
-        case "text_delta":
-          process.stdout.write(event.text);
-          break;
-        case "tool_started":
-          if (!opts.raw) {
-            process.stderr.write(`\n⚙ [${event.name}] ...\n`);
-          }
-          break;
-        case "tool_finished":
-          if (!opts.raw) {
-            const sym = event.result.isError ? "✗" : "✓";
-            process.stderr.write(`${sym} [${event.name}] ${event.result.summary}\n`);
-          }
-          break;
-        case "tool_permission_denied":
-          if (!opts.raw) {
-            process.stderr.write(`✗ [${event.name}] Permission denied (pass -y to allow)\n`);
-          }
-          break;
-        case "verification_started":
-          if (!opts.raw) {
-            process.stderr.write(`\n🧪 [verify] running ${event.command}...\n`);
-          }
-          break;
-        case "verification_result":
-          if (!opts.raw) {
-            process.stderr.write(`${event.passed ? "✓" : "✗"} [verify] ${event.summary}\n`);
-          }
-          break;
-        case "verification_gave_up":
-          if (!opts.raw) {
-            process.stderr.write(
-              `⚠ [verify] repair budget exhausted — tests may still be failing: ${event.command}\n`
-            );
-          }
-          break;
-        case "error":
-          process.stderr.write(`\nError: ${event.message}\n`);
-          return 1;
-        case "budget_exhausted":
-          // A turn cut off mid-task is NOT a success — pipelines (and the
-          // planned eval harness) key off the exit code.
-          if (!opts.raw) {
-            process.stderr.write("\nTurn stopped: step budget exhausted. Task may be incomplete.\n");
-          } else {
-            process.stderr.write("budget_exhausted\n");
-          }
-          return 2;
-        case "turn_complete":
-          process.stdout.write("\n");
-          return 0;
-        case "cancelled":
-          process.stderr.write("\nCancelled.\n");
-          return 130;
+      const rendered = renderCliEvent(event, { raw: opts.raw });
+      if (rendered?.exitCode !== undefined) {
+        return rendered.exitCode;
       }
     }
     return 0;

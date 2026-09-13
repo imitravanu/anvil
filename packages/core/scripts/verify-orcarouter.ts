@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../src/errors.js";
 import { createProviders } from "../src/providers/index.js";
 import { fetchOrcarouterFreeModels } from "../src/providers/freeModels.js";
 import { readFileSync } from "node:fs";
@@ -47,7 +48,7 @@ try {
   }
 } catch (err) {
   failed = true;
-  console.error(`  sync FAILED: ${err instanceof Error ? err.message : String(err)}`);
+  console.error(`  sync FAILED: ${getErrorMessage(err)}`);
 }
 
 // Chat phases need a scoped key; without one, report sync-only success.

@@ -67,6 +67,15 @@ describe("diffWords", () => {
     expect(Date.now() - start).toBeLessThan(1000);
     expect(del.some((s) => s.changed)).toBe(true);
   });
+
+  it("bails out to fully-changed when content token product exceeds 10,000", () => {
+    // 101 content tokens * 101 content tokens = 10,201 > 10,000
+    const a = Array.from({ length: 101 }, (_, i) => `wA${i}`).join(" ");
+    const b = Array.from({ length: 101 }, (_, i) => `wB${i}`).join(" ");
+    const result = diffWords(a, b);
+    expect(result.del.filter((s) => s.text.trim()).every((s) => s.changed)).toBe(true);
+    expect(result.add.filter((s) => s.text.trim()).every((s) => s.changed)).toBe(true);
+  });
 });
 
 describe("pairRows", () => {

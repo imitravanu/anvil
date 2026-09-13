@@ -2,7 +2,107 @@
 
 All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
-(major.minor.patch — breaking features bump minor while pre-1.0).
+## [0.11.0] — 2026-09-14
+
+### Refinement & Tech Debt
+
+- **Phase 24.1 Provider Stream Retry with Backoff**:
+  - Added `streamWithRetry` in `BaseProvider` with exponential backoff and jitter for transient provider failures (HTTP 429, 502, 503, `ECONNRESET`, `ETIMEDOUT`). Non-retryable errors fail immediately without retry delay.
+- **Phase 24.2 MCP Auto-Reconnection on Transport Failure**:
+  - Implemented transport health monitoring in `mcp/client.ts`. If an MCP server transport dies during tool execution, `callTool` automatically reconnects to the server and re-executes the invocation.
+- **Phase 24.3 & 24.11 Dead Code & Obsolete Export Purge**:
+  - Purged unused `toProviderTools()` and `toProviderMessages()` methods from `BaseProvider`.
+  - Removed unused `ORCAROUTER_KNOWN_FREE_IDS` export from `freeModels.ts` and unused `AssembledCall` interface from `streaming.ts`.
+- **Phase 24.4 Type Safety Hardening**:
+  - Replaced `Array<any>` in `freeModels.ts` with typed `OpenRouterModel` interface.
+  - Eliminated `as never` type assertions in Gemini and OpenAI provider streaming pipelines using discriminated union checks.
+- **Phase 24.5 Structured Stderr Logger**:
+  - Added `packages/core/src/logger.ts` supporting `info`, `warn`, `error`, and environment-gated `debug` logs (`ANVIL_DEBUG=1`).
+- **Phase 24.6 Credential File Permission Verification**:
+  - Added POSIX file mode verification in `config/index.ts` to warn users when credentials file permissions are looser than `0600`.
+- **Phase 24.7 Standardized Provider Error Taxonomy**:
+  - Introduced `ProviderErrorCode` union and `classifyProviderError` helper in `providers/types.ts`. All 10 provider adapters emit standardized `code`, `httpStatus`, and `isRetryable` fields.
+- **Phase 24.8 Compaction Summarizer Quota Isolation**:
+  - Added `compactionModel` setting to isolate compaction turns on low-RPM models. Compaction rate limits log a warning and fall back gracefully rather than aborting active turns.
+- **Phase 24.9 Centralized Typed Constants**:
+  - Centralized over 20 magic limits into typed configuration in `packages/core/src/config/constants.ts` with environment variable overrides (`ANVIL_MAX_READ_BYTES`, `ANVIL_COMPACTION_THRESHOLD`, etc.).
+- **Phase 24.10 Error Formatting Consolidation (`getErrorMessage`)**:
+  - Replaced over 45 instances of raw `err instanceof Error ? ...` ternary duplications monorepo-wide with central `getErrorMessage(err)` utility.
+- **Phase 24.12 Monolithic Mega-File Modularization**:
+  - Extracted closed-loop auto-verification into `packages/core/src/agent/turnVerifier.ts`, reducing `session.ts:send()` from 525 to 270 lines (< 300 target).
+  - Extracted event reduction and display capping into `packages/tui/src/hooks/eventReducer.ts`.
+  - Modularized TUI slash commands into domain handlers under `packages/tui/src/commands/handlers/`, reducing `commands/registry.ts` from 572 to 216 lines.
+- **Phase 24.13 Unified CLI Terminal Event Renderer**:
+  - Extracted `packages/cli/src/terminalRenderer.ts` shared across headless and goal modes, deduplicating terminal streaming and event rendering loops.
+- **Phase 24.14 Rich MCP Tool Permission Prompts (UX Item U11 Closed)**:
+  - Formatted MCP tool parameter payloads as structured bullet points (`• key: value`) and styled server origin badges (`[mcp:<server>]`) with accent colors in `PermissionPrompt.tsx`.
+- **Phase 24.15 Windows Portability Boundary & Detection**:
+  - Added platform detection in `bash.ts` and test runner scripts with actionable guidance when running under unsupported native Windows shells without bash/WSL.
+- **Phase 24.16 Elimination of Dummy Tool Stubs**:
+  - Converted `update_plan` and `delegate_task` into execution-context tools (`SessionToolExecutor`) supporting live streaming generator events; purged hardcoded string-matching intercepts from `session.ts`.
+- **Phase 24.17 Deliverables & Version Bump**:
+  - Bumped core, TUI, and CLI packages to `v0.11.0`. Updated visual regression baselines and roadmaps.
+
+## [0.10.0] — 2026-09-13
+
+### Stability & Performance
+
+- **Phase 23.1 Elimination of Silent `catch {}` Blocks**:
+  - Replaced silent `catch {}` blocks across core and provider packages (`config/index.ts`, `bash.ts`, `checkpoints.ts`, `awareness.ts`, `cache.ts`, `session.ts`, `orchestrator.ts`) with descriptive warning logs or explicit intentional swallow comments.
+- **Phase 23.2 Amortized O(1) Run Ledger Recording**:
+  - Replaced O(n²) array cloning on every ledger record (`this.ledger = capLedger([...this.ledger, entry])`) in `AgentSession` with in-place `.push()` and amortized `capLedger()` pruning when exceeding bounds.
+- **Phase 23.3 History Compaction Cut Optimization**:
+  - Pre-computed `splitCuts = new Set<number>()` in `findCleanCompactionCut` (`packages/core/src/agent/compaction.ts`), eliminating O(n²) `intervals.some()` iterations during reactive conversation compaction.
+- **Phase 23.4 Hot-Path TUI Component Memoization**:
+  - Wrapped `MessageView` in `React.memo` to prevent re-rendering full message history upon every incoming streaming token chunk.
+- **Phase 23.5 Word-Diff LCS Bailout Threshold Tuning**:
+  - Lowered word-level LCS computation bailout threshold from 50,000 to 10,000 operations in `packages/tui/src/diff/wordDiff.ts`, avoiding UI hang on massive diffs while falling back safely to whole-token replacement.
+- **Phase 23.8 Stream Delta Backpressure Buffer (60 FPS Token Throttle)**:
+  - Implemented backpressure token batching in `packages/tui/src/hooks/useAgentController.ts` with a 16ms (~60 FPS) throttle window. Prevents high-throughput models (Groq, Cerebras, Gemini Flash at 100-200 tok/sec) from choking the Node.js event loop with hundreds of layout recalculations per second while ensuring immediate responsiveness to Esc/Ctrl+C and instant flushing on tool calls and turn completion.
+
+## [0.9.1] — 2026-09-13
+
+### Fixed
+
+- **Phase 22.1 Cancellation Signal Preservation Before Turn Start**:
+  - Added `pendingCancel` state to `AgentSession` so calling `session.cancel()` before the first `session.send()` promptly aborts the controller upon turn initialization instead of silently dropping the cancel request.
+- **Phase 22.2 Malformed Tool Call JSON Error Handling**:
+  - Replaced silent `{}` fallback on malformed tool arguments with `{ __parseError: true, rawInput }`.
+  - Tool execution in `orchestrator.ts` and `executeTool` detects syntax errors and returns `isError: true` with error details, allowing the model to receive feedback and retry with valid JSON.
+- **Phase 22.3 Gemini Compacted History Orphan Tool Result Containment**:
+  - In `toGeminiContents`, orphaned tool results whose origin tool calls were pruned by history compaction are skipped instead of emitting a synthetic `"unknown_tool"` name that causes Gemini API 400 validation failures.
+- **Phase 22.4 Free Model Registry Pricing Heuristic**:
+  - Replaced strict string comparison with numeric pricing checks in `freeModels.ts`, correctly classifying models with `"0"`, `"0.0"`, and numeric `0` prices as free tier.
+- **Phase 22.5 Goal Engine Review Verdict Parsing**:
+  - Relaxed regex parser in `goalEngine.ts` to accept valid affirmative reviews (e.g. `"YES."`, `"YES\n- details"`, `"YES, all criteria met"`) while continuing to reject hedges (e.g. `"YES, but/however..."`).
+- **Phase 22.6 Binary File Detection in `read_file`**:
+  - Added 8KB null-byte sniffing to `readFile.ts` to detect binary files and return an error result, preventing token waste and corrupted replacement characters in context.
+- **Phase 22.7 Ollama Keyless Selection**:
+  - Configured `KEYLESS_PROVIDERS` in `config/index.ts` so selecting `--provider ollama` succeeds without requiring an API key, while preserving first-run setup prompts when no provider is explicitly chosen and credentials are empty.
+- **Phase 22.8 Vision Filtering on Non-Vision Providers**:
+  - Added `supportsVision` option to `ChatCompletionsStyleProvider` in `openai.ts` (configured `false` for Groq, Cerebras, and Mistral), omitting image payloads with a clear textual omission note for providers lacking multi-modal support.
+- **Phase 22.9 Checkpoint Store Error Containment & Logging**:
+  - Wrapped `checkpointStore.ts` read and save operations with error logging via `getErrorMessage` instead of silent failures, preventing unobserved checkpoint loss.
+- **Phase 22.10 Async Workspace Directory Introspection**:
+  - Replaced synchronous `fs.readdirSync` with asynchronous `await fs.promises.readdir` in `analyzeWorkspace` (`awareness.ts`).
+- **Phase 22.12 Session Rename In-Memory State Synchronization**:
+  - Updated `/session rename` command handler in `packages/tui/src/commands/registry.ts` to synchronize `session.title = title` in memory, preventing subsequent autosaves from reverting the title on disk.
+- **Phase 22.17 Surface MCP Boot Notices on TUI Startup**:
+  - Added startup effect in `packages/tui/src/components/App.tsx` that prints MCP initialization notices and configuration warnings (e.g. malformed `~/.anvil/mcp.json` or connection failures) to the transcript immediately upon TUI launch.
+
+## [0.9.0] — 2026-09-13
+
+### Security
+
+- **Phase 21.1 Shell Quote Path Traversal Bypass in `run_command`**:
+  - Added `stripShellQuotes` helper in `packages/core/src/tools/bash.ts` to strip outer matching quotes (`"` or `'`) before resolving path containment arguments.
+  - Rejects arguments containing residual unmatched quotes, preventing quotes from bypassing the read-only whitelist containment check (`cat "/etc/passwd"` now properly prompts for permission instead of auto-allowing).
+- **Phase 21.2 Destructive System Directory Wipe Protection**:
+  - Expanded `isRootWipe` in `packages/core/src/tools/bash.ts` to block deletions targeting top-level system directories (`/usr`, `/etc`, `/var`, `/dev`, `/boot`, `/lib`, `/lib64`, `/bin`, `/sbin`, `/opt`, `/proc`, `/sys`, `/run`, `/srv`, `/tmp`, `/root`, `/mnt`, `/media`).
+  - Protects against commands like `rm -rf /usr` or `rm -rf /etc` in both interactive and auto-approve / headless execution modes.
+- **Phase 21.3 Test Runner Flag Injection Guard**:
+  - Added pattern sanitization to `argvWithPattern` in `packages/core/src/tools/verifyTests.ts` to reject patterns starting with `-` or containing null bytes `\0`.
+  - Prevents model-provided test filter patterns from being parsed as CLI options by test runners (e.g. `pytest`, `cargo test`).
 
 ## [0.8.0] — 2026-09-11
 

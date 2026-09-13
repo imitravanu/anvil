@@ -146,7 +146,10 @@ export async function runEvalTask(
     // Ensure check.sh is executable
     try {
       fs.chmodSync(task.assertionScript, 0o755);
-    } catch {}
+    } catch {
+      // intentional: chmod is best-effort; a missing exec bit surfaces in the
+      // assertion run below as a real error instead
+    }
 
     const checkResult = spawnSync("bash", [task.assertionScript], {
       cwd: tempDir,
@@ -170,7 +173,10 @@ export async function runEvalTask(
     // Cleanup workspace
     try {
       fs.rmSync(tempDir, { recursive: true, force: true });
-    } catch {}
+    } catch {
+      // intentional: cleanup is best-effort; a leftover temp workspace is
+      // acceptable and does not affect the eval result
+    }
   }
 
   const wallClockMs = Date.now() - startTime;

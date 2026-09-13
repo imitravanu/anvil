@@ -293,3 +293,74 @@ describe("useAgentController - tool calls and events", () => {
     app.unmount();
   });
 });
+
+describe("useAgentController - Phase 23.8 stream backpressure buffer", () => {
+  it("immediately flushes text buffer before tool call event without dropped text", async () => {
+    const provider = fakeProvider([
+      [
+        { type: "text_delta", text: "Planning execution: " },
+        { type: "tool_call_start", id: "t1", name: "run_command" },
+        { type: "tool_call_delta", id: "t1", cumulativeInputJson: '{"command":"ls"}' },
+        { type: "tool_call_end", id: "t1", name: "run_command", input: { command: "ls" } },
+        { type: "turn_end", stopReason: "tool_use" },
+      ],
+      [
+        { type: "text_delta", text: "Done with bash" },
+        { type: "turn_end", stopReason: "end_turn" },
+      ],
+    ]);
+    const session = new AgentSession(provider as unknown as ConstructorParameters<typeof AgentSession>[0], {
+      systemPrompt: "test",
+      model: "fake-model",
+      maxTokens: 1024,
+      projectRoot: "/tmp",
+      permissionBroker: { async requestPermission() { return true; } },
+    });
+
+    const api: { current: ReturnType<typeof useAgentController> | null } = { current: null };
+    const app = render(<Harness session={session} api={api} />);
+    await new Promise((r) => setTimeout(r, 30));
+
+    await api.current!.send("run test");
+    await new Promise((r) => setTimeout(r, 50));
+
+    const assistantMsg = api.current!.messages.find((m: DisplayMessage) => m.role === "assistant");
+    expect(assistantMsg).toBeDefined();
+    expect(assistantMsg!.text).toContain("Planning execution: ");
+    expect(assistantMsg!.text).toContain("Done with bash");
+    expect(assistantMsg!.toolCalls.length).toBe(1);
+    expect(assistantMsg!.toolCalls[0].name).toBe("run_command");
+    app.unmount();
+  });
+
+  it("buffers rapid high-throughput token deltas and flushes cleanly on turn completion", async () => {
+    const deltas: StreamEvent[] = Array.from({ length: 50 }, (_, i) => ({
+      type: "text_delta" as const,
+      text: `tok${i} `,
+    }));
+    deltas.push({ type: "turn_end", stopReason: "end_turn" });
+
+    const provider = fakeProvider([deltas]);
+    const session = new AgentSession(provider as unknown as ConstructorParameters<typeof AgentSession>[0], {
+      systemPrompt: "test",
+      model: "fake-model",
+      maxTokens: 1024,
+      projectRoot: "/tmp",
+      permissionBroker: { async requestPermission() { return true; } },
+    });
+
+    const api: { current: ReturnType<typeof useAgentController> | null } = { current: null };
+    const app = render(<Harness session={session} api={api} />);
+    await new Promise((r) => setTimeout(r, 30));
+
+    await api.current!.send("stream fast");
+    await new Promise((r) => setTimeout(r, 50));
+
+    const assistantMsg = api.current!.messages.find((m: DisplayMessage) => m.role === "assistant");
+    expect(assistantMsg).toBeDefined();
+    expect(assistantMsg!.text).toBe(Array.from({ length: 50 }, (_, i) => `tok${i} `).join(""));
+    expect(assistantMsg!.streaming).toBe(false);
+    app.unmount();
+  });
+});
+

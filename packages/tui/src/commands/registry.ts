@@ -1,33 +1,25 @@
-import fs from "node:fs";
-import path from "node:path";
-import {
-  AgentSession,
-  MODEL_REGISTRY,
-  TOOL_DEFINITIONS,
-  collectMcpToolDefs,
-  createOpenRouterFreeSource,
-  createOrcarouterFreeSource,
-  createPullRequest,
-  getBranchDiff,
-  listSessions,
-  loadSession,
-  renameSession,
-  syncFreeModels,
-} from "@anvil/core";
 import { Command, CommandContext, CommandHandlerDeps } from "./types.js";
 import { formatLedger } from "../util/ledger.js";
-import { formatMcpStatus } from "../util/mcp.js";
-import { formatRewindList, formatRewindResult } from "../util/rewind.js";
-import { capLines, IMAGE_MAX_BYTES } from "../util/displayLimits.js";
-import { curtail, relativeTime } from "../util/format.js";
-import { SESSION_TITLE_MAX } from "../util/displayLimits.js";
+import { handleSyncFreeModels } from "./handlers/sync.js";
+import {
+  handleClearHistory,
+  handleSessionList,
+  handleSessionNew,
+  handleSessionResume,
+  handleSessionRename,
+  handleRetryLast,
+} from "./handlers/session.js";
+import { handleShowDiff, handleCreatePr } from "./handlers/diff.js";
+import { handleMcp } from "./handlers/mcp.js";
+import { handleRewind } from "./handlers/rewind.js";
+import { handleAttachImage } from "./handlers/media.js";
+import { handleLaunchGoal } from "./handlers/goal.js";
 
 export const COMMANDS: Command[] = [
   {
     name: "help",
     description: "List available commands",
     run: (_args, ctx) => {
-      // one concrete usage example per command.
       const EXAMPLES: Record<string, string> = {
         clear: "e.g. /clear — fresh transcript; the old session stays resumable",
         connect: "e.g. /connect — pick a provider, paste its API key",
@@ -55,7 +47,7 @@ export const COMMANDS: Command[] = [
     name: "clear",
     description: "Clear the conversation history",
     run: (_args, ctx) => {
-      ctx.clearHistory(); // prints its own confirmation (may mention resuming)
+      ctx.clearHistory();
     },
   },
   {
@@ -66,34 +58,7 @@ export const COMMANDS: Command[] = [
   {
     name: "sync",
     description: "Sync live free models (auto-catches pricing & model changes)",
-    run: async (_args, ctx) => {
-      ctx.printSystemMessage("Checking free-model sources for live updates...");
-      // force through the single coordinator; errors are reported,
-      // never swallowed.
-      const report = await syncFreeModels({
-        sources: [createOpenRouterFreeSource(), createOrcarouterFreeSource()],
-        ttlMs: 0,
-      });
-      let msg = report.refreshedAt
-        ? `✓ Refreshed free-model list (${report.results.reduce((m, r) => m + r.count, 0)} known free models).`
-        : "✓ No refresh needed — data is current.";
-      for (const r of report.results) {
-        if (!r.ok) {
-          msg += `\n  ✗ ${r.sourceId}: ${r.error ?? "unknown error"}`;
-          continue;
-        }
-        if (r.newlyFree.length > 0) {
-          msg += `\n  + ${r.newlyFree.length} new free: ${r.newlyFree.slice(0, 6).join(", ")}${r.newlyFree.length > 6 ? " …" : ""}`;
-        }
-        if (r.noLongerFree.length > 0) {
-          msg += `\n  - ${r.noLongerFree.length} became paid: ${r.noLongerFree.slice(0, 6).join(", ")}${r.noLongerFree.length > 6 ? " …" : ""}`;
-        }
-      }
-      if (report.errors.length > 0) {
-        msg += `\n  ⚠ ${report.errors.length} source(s) failed: ${report.errors.join("; ")}`;
-      }
-      ctx.printSystemMessage(msg);
-    },
+    run: async (_args, ctx) => handleSyncFreeModels(ctx.printSystemMessage),
   },
   {
     name: "session",
@@ -177,8 +142,6 @@ export const COMMANDS: Command[] = [
     description: "Switch theme (live preview; built-in or ~/.anvil/themes.json custom)",
     run: (args, ctx) => {
       const name = args[0];
-      // Bare /theme opens the interactive picker with live preview — the old
-      // dead-end usage message made the command look broken.
       if (name) ctx.setTheme(name);
       else ctx.openThemePicker();
     },
@@ -203,61 +166,10 @@ export function parseCommand(input: string): { name: string; args: string[] } | 
   return { name, args };
 }
 
-/**
- * P3 single-touch commands: the one constructor for CommandContext.
- * New commands add a registry entry above (+ a context method here if they
- * need session access) — App.tsx and hooks never change for new commands.
- * Built fresh per call so guards (isBusy, session identity) never go stale.
- */
 export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
-  const {
-    session,
-    providers,
-    activeProviderId,
-    currentModel,
-    sessionOptions,
-    broker,
-    mcp,
-    isBusy,
-    messages,
-    printSystemMessage,
-    clearMessages,
-    replaceMessages,
-    persist,
-    resumeFromStored,
-    send,
-    applyTheme,
-    setSession,
-    setIsModelPickerOpen,
-    setIsSessionPickerOpen,
-    setIsConnectOpen,
-    setIsThemePickerOpen,
-    setExpandTools,
-    setIsDiffOpen,
-    setBranchDiff,
-    setIsRewindOpen,
-    setGoal,
-    launchGoal,
-    addPendingImage,
-  } = deps;
+  const { isBusy, printSystemMessage, applyTheme, setIsModelPickerOpen, setIsThemePickerOpen, setIsConnectOpen, session, setExpandTools } = deps;
   return {
-    clearHistory: () => {
-      if (isBusy) {
-        printSystemMessage("Cannot clear the conversation while a turn is in flight.");
-        return;
-      }
-      // Keep the old session file intact so /clear is recoverable via
-      // /session resume, and give the cleared conversation a new session id.
-      const fresh = new AgentSession(providers[activeProviderId], {
-        ...sessionOptions,
-        model: currentModel,
-        permissionBroker: broker,
-      });
-      broker.clearSessionApprovals();
-      setSession(fresh);
-      clearMessages();
-      printSystemMessage("Conversation cleared (permission grants reset). The previous session can be resumed with /session.");
-    },
+    clearHistory: () => handleClearHistory(deps),
     openModelPicker: () => {
       if (isBusy) {
         printSystemMessage("Cannot switch models while a turn is in flight.");
@@ -266,62 +178,10 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
       setIsModelPickerOpen(true);
     },
     printSystemMessage,
-    sessionList: () => {
-      const metas = listSessions();
-      if (metas.length === 0) {
-        printSystemMessage("No saved sessions.");
-        return;
-      }
-      // Human scale: title, model, age, and a short id — full UUIDs and raw
-      // ISO timestamps are machine noise in a chat transcript.
-      printSystemMessage(
-        metas
-          .map(
-            (m) =>
-              `${m.id.slice(0, 8)}  ${curtail(m.title, SESSION_TITLE_MAX)}  ·  ${m.model}  ·  ${relativeTime(m.updatedAt)}`
-          )
-          .join("\n")
-      );
-    },
-    sessionNew: () => {
-      if (isBusy) {
-        printSystemMessage("Cannot start a new session while a turn is in flight.");
-        return;
-      }
-      const fresh = new AgentSession(providers[activeProviderId], {
-        ...sessionOptions,
-        model: currentModel,
-        permissionBroker: broker,
-      });
-      broker.clearSessionApprovals();
-      setSession(fresh);
-      clearMessages();
-      printSystemMessage("Started a new session (permission grants reset).");
-    },
-    sessionResume: (id?: string) => {
-      if (isBusy) {
-        printSystemMessage("Cannot resume a session while a turn is in flight.");
-        return;
-      }
-      if (!id) {
-        setIsSessionPickerOpen(true);
-        return;
-      }
-      const stored = loadSession(id);
-      if (!stored) {
-        printSystemMessage(`No saved session found with id ${id}.`);
-        return;
-      }
-      resumeFromStored(stored);
-    },
-    sessionRename: (title: string) => {
-      if (isBusy) {
-        printSystemMessage("Cannot rename the session while a turn is in flight.");
-        return;
-      }
-      renameSession(session.id, title);
-      printSystemMessage(`Session renamed to "${title}".`);
-    },
+    sessionList: () => handleSessionList(deps),
+    sessionNew: () => handleSessionNew(deps),
+    sessionResume: (id?: string) => handleSessionResume(deps, id),
+    sessionRename: (title: string) => handleSessionRename(deps, title),
     setTheme: applyTheme,
     openThemePicker: () => {
       if (isBusy) {
@@ -341,230 +201,18 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
       printSystemMessage(formatLedger(session.getRunLedger()));
     },
     toggleExpand: () => {
-      // Side effect outside the updater: React may invoke updaters twice
-      // (StrictMode), which duplicated the transcript notice. The message is
-      // derived from the deps' current value, not read inside the updater.
       const turningOn = !deps.expandTools;
       setExpandTools(turningOn);
       printSystemMessage(
         turningOn ? "Tool output expansion on — full results shown." : "Tool output expansion off."
       );
     },
-    rewind: (idText?: string) => {
-      if (isBusy) {
-        printSystemMessage("Cannot rewind while a turn is in flight.");
-        return;
-      }
-      if (idText === undefined) {
-        if (setIsRewindOpen) {
-          setIsRewindOpen(true);
-          return;
-        }
-        printSystemMessage(formatRewindList(session.getCheckpoints()));
-        return;
-      }
-      const idTextTrimmed = idText.trim();
-      // Strict decimal: Number() accepts hex ("0x10"), exponents, and
-      // whitespace — none of which are checkpoint ids.
-      if (!/^\d+$/.test(idTextTrimmed)) {
-        printSystemMessage(`Usage: /rewind <n> — n is a checkpoint number from /rewind.`);
-        return;
-      }
-      const id = Number(idTextTrimmed);
-      if (!Number.isSafeInteger(id) || id <= 0) {
-        printSystemMessage(`Usage: /rewind <n> — n is a checkpoint number from /rewind.`);
-        return;
-      }
-      void session.rewind(id).then((result) => {
-        printSystemMessage(formatRewindResult(result));
-        persist();
-      }).catch((err: unknown) => {
-        printSystemMessage(`Rewind failed: ${err instanceof Error ? err.message : String(err)}`);
-      });
-    },
-    attachImage: (rawPath: string) => {
-      if (isBusy) {
-        printSystemMessage("Cannot attach images while a turn is in flight.");
-        return;
-      }
-      const p = rawPath.trim();
-      if (!p) {
-        printSystemMessage("Usage: /image <path> — the image sends with your next message.");
-        return;
-      }
-      const MEDIA_BY_EXT: Record<string, string> = {
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".webp": "image/webp",
-        ".gif": "image/gif",
-      };
-      const mediaType = MEDIA_BY_EXT[path.extname(p).toLowerCase()];
-      if (!mediaType) {
-        printSystemMessage("Unsupported image type — use png, jpeg, webp, or gif.");
-        return;
-      }
-      try {
-        const buf = fs.readFileSync(p);
-        if (buf.length > IMAGE_MAX_BYTES) {
-          printSystemMessage(`Image too large (${Math.ceil(buf.length / 1024)} KB) — max 5 MB.`);
-          return;
-        }
-        addPendingImage({ mediaType, data: buf.toString("base64"), path: p });
-        const supportsVision = MODEL_REGISTRY.find((m) => m.id === currentModel)?.supportsVision;
-        const note = supportsVision === false ? " (note: this model may not support vision)" : "";
-        printSystemMessage(
-          `Image attached (${Math.ceil(buf.length / 1024)} KB) — it sends with your next message.${note}`
-        );
-      } catch (err: unknown) {
-        printSystemMessage(`Could not read image: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    },
-    retryLast: (replacement?: string) => {
-      if (isBusy) {
-        printSystemMessage("Cannot retry while a turn is in flight.");
-        return;
-      }
-      const previous = session.popLastUserTurn();
-      if (previous === null && !replacement) {
-        printSystemMessage("Nothing to retry yet.");
-        return;
-      }
-      // /retry alone re-sends the same request; /retry <text> re-asks with
-      // corrected wording — the previous exchange is dropped either way.
-      const text = replacement || previous || "";
-      // Drop the old exchange from the transcript too — the retry re-renders
-      // it fresh (new answer, new tool cards).
-      const lastUserIdx = messages.map((m) => m.role).lastIndexOf("user");
-      replaceMessages(lastUserIdx > 0 ? messages.slice(0, lastUserIdx) : []);
-      printSystemMessage(replacement ? "Retrying with your corrected message." : "Retrying your last message.");
-      void send(text);
-    },
-    showDiff: (branch?: string) => {
-      if (isBusy) {
-        printSystemMessage("Cannot diff while a turn is in flight.");
-        return;
-      }
-      if (branch) {
-        void getBranchDiff(session.projectRoot, branch)
-          .then((diff) => {
-            if (setBranchDiff && setIsDiffOpen) {
-              setBranchDiff({ branch, diff });
-              setIsDiffOpen(true);
-            } else {
-              if (!diff.trim()) {
-                printSystemMessage(`No differences between branch "${branch}" and HEAD.`);
-              } else {
-                printSystemMessage(capLines(diff.split("\n")).join("\n"));
-              }
-            }
-          })
-          .catch((err: unknown) => {
-            printSystemMessage(`Diff against "${branch}" failed: ${err instanceof Error ? err.message : String(err)}`);
-          });
-        return;
-      }
-
-      if (setBranchDiff) {
-        setBranchDiff(null);
-      }
-      if (setIsDiffOpen) {
-        setIsDiffOpen(true);
-        return;
-      }
-      void session.summarizeChanges()
-        .then((changes) => {
-          if (changes.length === 0) {
-            printSystemMessage("No file changes this session yet — /diff reviews write_file and edit_file edits.");
-            return;
-          }
-          const shown = changes.slice(0, 8);
-          const parts = shown.map((c) => {
-            const mark = c.kind === "created" ? "+" : c.kind === "deleted" ? "−" : "~";
-            const body = c.diff === null ? "(file deleted)" : capLines(c.diff.split("\n")).join("\n");
-            return `${mark} ${c.path} (${c.kind})\n${body}`;
-          });
-          let msg = parts.join("\n\n");
-          if (changes.length > shown.length) msg += `\n\n… +${changes.length - shown.length} more file(s)`;
-          printSystemMessage(msg);
-        })
-        .catch((err: unknown) => {
-          printSystemMessage(`Diff failed: ${err instanceof Error ? err.message : String(err)}`);
-        });
-    },
-    createPr: () => {
-      if (isBusy) {
-        printSystemMessage("Cannot create PR while a turn is in flight.");
-        return;
-      }
-      printSystemMessage("Creating GitHub pull request (gh pr create --fill)...");
-      void createPullRequest(session.projectRoot)
-        .then((res) => {
-          if (res.success) {
-            printSystemMessage(`✓ Pull request created: ${res.url}`);
-          } else {
-            printSystemMessage(`✗ Pull request failed: ${res.error}`);
-          }
-        })
-        .catch((err: unknown) => {
-          printSystemMessage(`✗ Pull request failed: ${err instanceof Error ? err.message : String(err)}`);
-        });
-    },
-    mcp: (sub?: string) => {
-      const conns = mcp?.list() ?? [];
-      const notices = mcp?.notices ?? [];
-      if (sub === undefined || sub === "status") {
-        printSystemMessage(formatMcpStatus(conns, notices));
-        return;
-      }
-      if (sub === "reconnect") {
-        if (isBusy) {
-          printSystemMessage("Cannot reconnect MCP servers while a turn is in flight.");
-          return;
-        }
-        if (!mcp) {
-          printSystemMessage(formatMcpStatus([], notices));
-          return;
-        }
-        printSystemMessage("Reconnecting MCP servers...");
-        void mcp.reconnect().then((report) => {
-          // Hot-reload: rebuild the session's tool list from the live
-          // connections so new servers work without a restart. Sub-agents
-          // inherit the parent list, so delegation sees them too.
-          const kept = collectMcpToolDefs(
-            mcp.list(),
-            TOOL_DEFINITIONS.map((d) => d.name)
-          );
-          let hotReloaded = "";
-          try {
-            session.setTools([...TOOL_DEFINITIONS, ...kept]);
-            hotReloaded = ` ${kept.length} MCP tool(s) live in this session.`;
-          } catch (err: unknown) {
-            hotReloaded = ` (Tools NOT hot-loaded: ${err instanceof Error ? err.message : String(err)})`;
-          }
-          const fresh = [...notices, ...report.problems.map((p) => `MCP ${p}`)];
-          printSystemMessage(
-            `Reconnected: ${report.connected} server(s), ${report.tools} tool(s).` +
-            `${hotReloaded}\n` +
-            formatMcpStatus(mcp.list(), fresh)
-          );
-        }).catch((err: unknown) => {
-          printSystemMessage(`MCP reconnect failed: ${err instanceof Error ? err.message : String(err)}`);
-        });
-        return;
-      }
-      printSystemMessage(`Unknown /mcp subcommand: ${sub}. Try /mcp or /mcp reconnect.`);
-    },
-    launchGoal: (objective: string) => {
-      if (isBusy) {
-        printSystemMessage("Cannot launch a goal while a turn is in flight.");
-        return;
-      }
-      printSystemMessage(`🎯 Autonomous Mission Initiated: "${objective}"`);
-      // The real GoalEngine mission runs over the live session (tool cards
-      // render in the transcript) and drives the Mission Deck from genuine
-      // milestone evidence.
-      void launchGoal?.(objective);
-    },
+    rewind: (idText?: string) => handleRewind(deps, idText),
+    attachImage: (rawPath: string) => handleAttachImage(deps, rawPath),
+    retryLast: (replacement?: string) => handleRetryLast(deps, replacement),
+    showDiff: (branch?: string) => handleShowDiff(deps, branch),
+    createPr: () => handleCreatePr(deps),
+    mcp: (sub?: string) => handleMcp(deps, sub),
+    launchGoal: (objective: string) => handleLaunchGoal(deps, objective),
   };
 }

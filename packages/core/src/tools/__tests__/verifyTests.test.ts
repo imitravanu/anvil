@@ -260,3 +260,23 @@ describe("verify_tests tool executor", () => {
     expect(result.summary).toContain("All tests passed");
   });
 });
+
+describe("argvWithPattern flag injection prevention (Phase 21.3)", () => {
+  it("rejects patterns that look like flags or contain null bytes", async () => {
+    const { argvWithPattern, runTestVerification } = await import("../verifyTests.js");
+    expect(argvWithPattern("pytest", "--pastebin")).toBeNull();
+    expect(argvWithPattern("cargo test", "-j1")).toBeNull();
+    expect(argvWithPattern("pytest", "test_login")).toEqual(["pytest", "test_login"]);
+    expect(argvWithPattern("npm test", "my-pattern")).toEqual(["npm", "test", "--", "my-pattern"]);
+
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-flag-injection-"));
+    try {
+      const result = await runTestVerification(tmp, "pytest", "--pastebin");
+      expect(result.passed).toBe(false);
+      expect(result.summary).toContain("unsupported runner");
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});
+

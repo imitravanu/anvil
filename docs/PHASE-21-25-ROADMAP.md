@@ -5,6 +5,12 @@
 > **Author:** Chief Engineer Audit  
 > **Origin:** Deep codebase audit of all 213 source files across `@anvil/core`, `@anvil/tui`, `@anvil/cli`  
 > **Purpose:** This document is the **actionable build guide** for any agent working on Anvil. Every task has exact file paths, line numbers, broken code, fix instructions, and acceptance criteria. Phases are sequenced — **do not skip ahead**.
+>
+> **⚠️ 2026-09-13 pre-execution audit:** read [`PHASE-21-25-AUDIT.md`](PHASE-21-25-AUDIT.md)
+> before executing any item. Three items are **already fixed** (22.15, 22.16) or
+> **resolved by design — do not "fix"** (22.13); line numbers have drifted slightly in
+> places; the Phase 23 scope ruling (23.8–23.15) lives there. Verify reality per §1.3
+> of `AGENTS.md` regardless.
 
 ---
 
@@ -688,6 +694,15 @@ npm run build && npm run typecheck && npm test && npm run eval -- --fast --mock 
 
 ## 4. Phase 23 — Stability & Performance (v0.10.0)
 
+> **📢 SCOPE RULING (2026-09-13 audit):** items **23.1–23.7** are the true stability &
+> performance scope of this phase. Items **23.8–23.15** (alternate screen buffer, mouse
+> protocol, notifications, OSC-52 clipboard, truecolor tokenizer, multi-pane nav) are
+> **terminal-platform features**, not stability work — execute them AFTER Phase 24
+> (together with Phase 25, or as a dedicated "Phase 23b — Terminal Platform"). Rationale
+> in [`PHASE-21-25-AUDIT.md`](PHASE-21-25-AUDIT.md). The item text below is retained
+> unchanged for reference.
+
+
 > **Priority:** MEDIUM — Stability and reliability  
 > **Scope:** Silent error elimination, performance fixes, CI repair  
 > **Estimated effort:** 8–12 hours
@@ -711,8 +726,8 @@ Replace all 12+ instances with logging or explicit comments:
 **Rule:** Every catch block must either log a warning OR have a comment explaining why swallowing is intentional.
 
 **Acceptance criteria:**
-- [ ] `grep -rn 'catch\s*{' packages/*/src/` returns zero uncommented instances
-- [ ] All tests pass
+- [x] `grep -rn 'catch\s*{' packages/*/src/` returns zero uncommented instances
+- [x] All tests pass
 
 ---
 
@@ -821,9 +836,9 @@ if (event.type === "text_delta") {
 ```
 
 **Acceptance criteria:**
-- [ ] 200 tokens/sec stream renders at ~60 FPS with zero dropped frames
-- [ ] Keystrokes (Esc / Ctrl+C) respond immediately during high-speed streaming
-- [ ] Tool call start/finish events immediately flush pending text without truncation
+- [x] 200 tokens/sec stream renders at ~60 FPS with zero dropped frames
+- [x] Keystrokes (Esc / Ctrl+C) respond immediately during high-speed streaming
+- [x] Tool call start/finish events immediately flush pending text without truncation
 
 ---
 
@@ -1002,9 +1017,9 @@ Implement Vim and Tab navigation:
 
 ### 23.16 — Phase 23 Deliverables
 
-- [ ] `docs/PHASE-23-PROGRESS.md`
-- [ ] `CHANGELOG.md` updated: `## [0.10.0]`
-- [ ] Version bumped to `0.10.0`
+- [x] `docs/PHASE-23-PROGRESS.md`
+- [x] `CHANGELOG.md` updated: `## [0.10.0]`
+- [x] Version bumped to `0.10.0`
 
 ---
 
@@ -1040,9 +1055,9 @@ protected async streamWithRetry(request: CompletionRequest, maxRetries = 2): Pro
 Then call `streamWithRetry` instead of `doStream` in `streamCompletion`.
 
 **Acceptance criteria:**
-- [ ] Transient 503 retries and succeeds
-- [ ] Permanent 400 fails immediately
-- [ ] 3 consecutive 503s fails after retries exhausted
+- [x] Transient 503 retries and succeeds
+- [x] Permanent 400 fails immediately
+- [x] 3 consecutive 503s fails after retries exhausted
 
 ---
 
@@ -1149,8 +1164,8 @@ export interface StreamEventError {
 Update all 10 provider adapters to map vendor errors (Google, OpenAI, Anthropic, OpenRouter) to this shared taxonomy so callers can query `event.isRetryable` directly.
 
 **Acceptance criteria:**
-- [ ] All 10 provider adapters emit typed `code` and `isRetryable`
-- [ ] Circuit breaker and backoff systems rely on `isRetryable` instead of regex string parsing
+- [x] All 10 provider adapters emit typed `code` and `isRetryable`
+- [x] Circuit breaker and backoff systems rely on `isRetryable` instead of regex string parsing
 
 ---
 
@@ -1167,8 +1182,8 @@ Update all 10 provider adapters to map vendor errors (Google, OpenAI, Anthropic,
 3. If summarizer hits a rate limit, gracefully skip compaction and allow the main turn to proceed.
 
 **Acceptance criteria:**
-- [ ] Compaction does not starve the active model of requests on low-RPM tiers
-- [ ] Rate limits during compaction gracefully fall back without aborting the session
+- [x] Compaction does not starve the active model of requests on low-RPM tiers
+- [x] Rate limits during compaction gracefully fall back without aborting the session
 
 ---
 
@@ -1194,8 +1209,8 @@ Over 20 magic numbers are hardcoded directly in tool and agent logic:
 Centralize all constants into a typed `constants.ts` with optional environment variable overrides (`ANVIL_MAX_READ_BYTES`, `ANVIL_COMPACTION_THRESHOLD`, etc.) and user settings.
 
 **Acceptance criteria:**
-- [ ] Zero loose magic limits hardcoded in tool/session source files
-- [ ] Constants can be overridden via `settings.json` or `ANVIL_*` env vars
+- [x] Zero loose magic limits hardcoded in tool/session source files
+- [x] Constants can be overridden via `settings.json` or `ANVIL_*` env vars
 
 ---
 
@@ -1221,8 +1236,8 @@ export function getErrorMessage(err: unknown): string {
 Refactor all repetitive catch blocks to use `getErrorMessage(err)`.
 
 **Acceptance criteria:**
-- [ ] Zero raw `err instanceof Error ? ...` ternary duplications in production code
-- [ ] Standardized, clean error strings across all error handlers
+- [x] Zero raw `err instanceof Error ? ...` ternary duplications in production code
+- [x] Standardized, clean error strings across all error handlers
 
 ---
 
@@ -1240,8 +1255,8 @@ Unused dead symbols and methods remain exported from earlier prototype phases:
 Purge all dead exports, unused types, and obsolete base class methods.
 
 **Acceptance criteria:**
-- [ ] Dead exports removed without breaking any consumer imports
-- [ ] Monorepo build and typecheck pass cleanly
+- [x] Dead exports removed without breaking any consumer imports
+- [x] Monorepo build and typecheck pass cleanly
 
 ---
 
@@ -1262,9 +1277,9 @@ Modularize each mega-file:
 3. **`commands/registry.ts`:** Split command handlers into individual modules under `packages/tui/src/commands/handlers/` (`model.ts`, `session.ts`, `diff.ts`, `mcp.ts`, etc.).
 
 **Acceptance criteria:**
-- [ ] `session.ts:send()` is reduced under 300 lines
-- [ ] Slash command definitions are organized into separate files under `commands/handlers/`
-- [ ] Full unit test suite passes with zero regressions
+- [x] `session.ts:send()` is reduced under 300 lines
+- [x] Slash command definitions are organized into separate files under `commands/handlers/`
+- [x] Full unit test suite passes with zero regressions
 
 ---
 
@@ -1283,8 +1298,8 @@ export function renderCliEvent(event: AgentEvent, opts?: { raw?: boolean }): voi
 Both `headless.ts` and `goalRunner.ts` delegate their event streams to this shared utility.
 
 **Acceptance criteria:**
-- [ ] CLI event formatting logic deduplicated into a single shared file
-- [ ] Headless and goal mode output formatting remains identical and tested
+- [x] CLI event formatting logic deduplicated into a single shared file
+- [x] Headless and goal mode output formatting remains identical and tested
 
 ---
 
@@ -1301,8 +1316,8 @@ Implement rich MCP tool permission previews:
 - Parse and format MCP parameters using the tool's JSON schema definitions.
 
 **Acceptance criteria:**
-- [ ] MCP tool permission prompts display clear parameter lists with server badges
-- [ ] Closes open item U11 in `docs/ANVIL-COMPLETE-ROADMAP.md`
+- [x] MCP tool permission prompts display clear parameter lists with server badges
+- [x] Closes open item U11 in `docs/ANVIL-COMPLETE-ROADMAP.md`
 
 ---
 
@@ -1321,8 +1336,8 @@ Add runtime platform detection:
    `"Anvil requires a bash-compatible shell on Windows. Please run inside Git Bash or WSL (Windows Subsystem for Linux)."`
 
 **Acceptance criteria:**
-- [ ] Windows cmd.exe fails gracefully with actionable guidance instead of throwing unhandled `EINVAL`
-- [ ] Windows Git Bash / WSL continues to work cleanly
+- [x] Windows cmd.exe fails gracefully with actionable guidance instead of throwing unhandled `EINVAL`
+- [x] Windows Git Bash / WSL continues to work cleanly
 
 ---
 
@@ -1341,16 +1356,16 @@ Provide execution contexts to tools instead of string interception in `session.t
 2. Move plan mutation and subagent dispatching cleanly into their respective tool files instead of cluttering `session.ts` with special-cased string checks.
 
 **Acceptance criteria:**
-- [ ] No dummy tool files returning hardcoded fake success strings
-- [ ] `session.ts` does not contain hardcoded string matches for `update_plan` or `delegate_task`
+- [x] No dummy tool files returning hardcoded fake success strings
+- [x] `session.ts` does not contain hardcoded string matches for `update_plan` or `delegate_task`
 
 ---
 
 ### 24.17 — Phase 24 Deliverables
 
-- [ ] `docs/PHASE-24-PROGRESS.md`
-- [ ] `CHANGELOG.md` updated: `## [0.11.0]`
-- [ ] Version bumped to `0.11.0`
+- [x] `docs/PHASE-24-PROGRESS.md`
+- [x] `CHANGELOG.md` updated: `## [0.11.0]`
+- [x] Version bumped to `0.11.0`
 
 ---
 
@@ -1516,12 +1531,15 @@ The sacred gate is now mechanically automated via a single command:
 npm run gate
 ```
 
-This single command executes the 5-step Guardian Gate:
-1. **Slop & Boundary Scanner:** Scans git diff for empty `catch {}`, `as any` / `as never`, and package boundary leaks (`@anvil/core` importing TUI or CLI).
-2. **Sequential Build Gate:** Verifies `@anvil/core` ➔ `@anvil/tui` ➔ `@anvil/cli` build order.
-3. **Typecheck Gate:** Zero TypeScript errors across all 3 monorepo packages.
-4. **Unit Test Gate:** All 494+ Vitest tests must pass.
-5. **Eval Harness Gate:** 15/15 mock benchmark evaluation tasks must pass.
+This single command executes the 8-stage Guardian Gate:
+1. **Step 0 — Sensor Test:** Verifies the slop scanner detects intentional violation fixtures.
+2. **Step 0.5 — Integrity Manifest:** SHA-256 of the gate, constitution, allowlist, audit, sentinel, and CI workflows — any drift fails until deliberately updated with human review (see [`PHASE-21-25-AUDIT.md`](PHASE-21-25-AUDIT.md) → *Gate hardening*).
+3. **Step 1 — Slop & Boundary Scanner:** Scans added lines in tracked diffs **and untracked files** for empty `catch {}`, `as any` / `as never`, raw error formatting, boundary leaks (`@anvil/core` importing TUI or CLI), hardcoded TUI colors, and placeholders. Validates the allowlist shape and detects protected-artifact tampering; never silently skips.
+4. **Step 1.5 — Residual Slop Drain Scan:** Scans the FULL tree (not just the diff) for legacy violations the diff scanner can never see — raw error formatting, core self-imports, empty catches, hardcoded TUI colors — so debt that would otherwise "keep regenerating" can only shrink. Allowlist-free; fails on any hit.
+5. **Step 2 — Sequential Build Gate:** Verifies `@anvil/core` ➔ `@anvil/tui` ➔ `@anvil/cli` build order.
+6. **Step 3 — Typecheck Gate:** Zero TypeScript errors across all 3 monorepo packages.
+7. **Step 4 — Unit Test Gate:** All **556+** Vitest tests must pass (core 391 / tui 157 / cli 18), **including the gate sentinel test** (`packages/cli/src/__tests__/gate.sentinel.test.ts`) that independently asserts the gate is intact.
+8. **Step 5 — Eval Harness Gate:** 15/15 mock benchmark evaluation tasks must pass.
 
 ```bash
 # Additional manual verification passes when modifying visual TUI or providers:

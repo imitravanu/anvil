@@ -209,4 +209,33 @@ describe("run_command read-only safe-list", () => {
     expect(isReadOnlyCommand("cat /etc/passwd")).toBe(false); // no root: fail closed
     expect(isReadOnlyCommand("ls /etc")).toBe(false); // no root: fail closed
   });
+
+  it("blocks quote-bypass in pathsInsideRoot (Phase 21.1)", async () => {
+    const { isReadOnlyCommand } = await import("../bash.js");
+    expect(isReadOnlyCommand('cat "/etc/passwd"', root)).toBe(false);
+    expect(isReadOnlyCommand("cat '/etc/shadow'", root)).toBe(false);
+    expect(isReadOnlyCommand('cat ./README.md', root)).toBe(true);
+    expect(isReadOnlyCommand('cat "README.md"', root)).toBe(true);
+  });
+
+  it("blocks system directory wipes like /usr, /etc, /dev (Phase 21.2)", () => {
+    expect(isBlockedCommand("rm -rf /usr")).not.toBeNull();
+    expect(isBlockedCommand("rm -rf /etc")).not.toBeNull();
+    expect(isBlockedCommand("rm -rf /dev")).not.toBeNull();
+    expect(isBlockedCommand("rm -rf /var")).not.toBeNull();
+    expect(isBlockedCommand("rm -rf /")).not.toBeNull();
+    expect(isBlockedCommand("rm -rf ~")).not.toBeNull();
+    expect(isBlockedCommand("rm -rf ./build")).toBeNull();
+    expect(isBlockedCommand("rm -rf ./dist")).toBeNull();
+  });
+
+  it("checks Windows shell support and provides actionable guidance on bare Windows (Phase 24.15)", async () => {
+    const { checkWindowsShellSupport } = await import("../bash.js");
+    expect(typeof checkWindowsShellSupport).toBe("function");
+    const res = checkWindowsShellSupport();
+    if (process.platform !== "win32") {
+      expect(res.supported).toBe(true);
+    }
+  });
 });
+

@@ -4,6 +4,7 @@ import { execSync } from "node:child_process";
 import { SituationalContext, GitContext, EcosystemContext } from "./types.js";
 import { loadProjectRules } from "../../config/rules.js";
 import { EXCLUDED_DIRS } from "../../tools/paths.js";
+import { getErrorMessage } from "../../errors.js";
 
 
 /**
@@ -57,8 +58,8 @@ function inspectEcosystem(projectRoot: string): EcosystemContext {
     let pkg: { scripts?: Record<string, string> } = {};
     try {
       pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
-    } catch {
-      // malformed json
+    } catch (err) {
+      console.warn(`[awareness] Warning: malformed package.json at ${pkgJsonPath}: ${getErrorMessage(err)}`);
     }
 
     let packageManager = "npm";
@@ -124,10 +125,9 @@ export async function analyzeWorkspace(projectRoot: string): Promise<Situational
 
   let topLevelEntries: string[] = [];
   try {
-    topLevelEntries = fs
-      .readdirSync(projectRoot)
-      .filter((name) => !EXCLUDED_DIRS.has(name));
-  } catch {
+    const entries = await fs.promises.readdir(projectRoot);
+    topLevelEntries = entries.filter((name) => !EXCLUDED_DIRS.has(name));
+  } catch (_err) {
     topLevelEntries = [];
   }
 

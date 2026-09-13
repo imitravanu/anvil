@@ -17,7 +17,6 @@ import { ORCAROUTER_BASE_URL } from "./freeModels.js";
 export {
   ORCAROUTER_BASE_URL,
   ORCAROUTER_PRICING_URL,
-  ORCAROUTER_KNOWN_FREE_IDS,
   fetchOrcarouterFreeModels,
   isFreeModelId,
 } from "./freeModels.js";

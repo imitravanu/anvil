@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../errors.js";
 import { ConversationMessage, ModelProvider } from "../providers/types.js";
 import { TOOL_DEFINITIONS } from "../tools/index.js";
 import type { ToolDefinition } from "../tools/types.js";
@@ -14,8 +15,9 @@ import { buildSystemPrompt } from "../config/rules.js";
 // sub-agent actions still prompt the user).
 // ---------------------------------------------------------------------------
 
+import { SUB_AGENT_REPORT_MAX_CHARS } from "../config/constants.js";
+export { SUB_AGENT_REPORT_MAX_CHARS };
 export const SUB_AGENT_MAX_ITERATIONS = 12;
-export const SUB_AGENT_REPORT_MAX_CHARS = 8000;
 export const SUB_AGENT_MAX_TOKENS = 4096;
 export const MAX_DELEGATIONS_PER_TURN = 3;
 
@@ -128,7 +130,7 @@ export async function* runSubAgentLive(opts: {
     // A crashed sub-run must not crash the main turn — but the reason must
     // reach the user (it used to vanish, leaving a silent empty report).
     aborted = true;
-    failureReason = err instanceof Error ? err.message : String(err);
+    failureReason = getErrorMessage(err);
   } finally {
     opts.signal.removeEventListener("abort", onAbort);
   }

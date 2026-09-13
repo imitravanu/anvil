@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@anvil/core";
 import {
   AgentSession,
   saveSession,
@@ -120,7 +121,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     } catch (err) {
       // Disk failures must not take the chat down; inform the user in-chat
       // so their session layout isn't corrupted and they can retry with /save.
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = getErrorMessage(err);
       printSystemMessage(`Session auto-save failed: ${msg}`);
     }
   };
@@ -190,7 +191,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
         try {
           await command.run(parsed.args, ctx);
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
+          const msg = getErrorMessage(err);
           printSystemMessage(`Command /${parsed.name} failed: ${msg}`);
         }
       } else {

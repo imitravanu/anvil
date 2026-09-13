@@ -149,7 +149,7 @@ anvil/
 | 13 | Auto-Verification & Self-Repair | 0.6.0 | 288/288 total (V1-V7) |
 | 14 | Goal Engine & Situational Awareness | 0.6.0 | 374/374 total (G1-G6) |
 | 15 | Cockpit UI | 0.6.0 | 382/382 total (UI-1 to UI-5) |
-| UI U5-U13 | Mid/Long-term UI items | 0.5.x | All DONE except U11 |
+| UI U5-U13 | Mid/Long-term UI items | 0.11.0 | All DONE (U11 completed in Phase 24) |
 | Hardening | Safety + truthfulness slice | 0.5.1 | ANVIL_HOME, guard, ledger |
 | Refinement | Robustness + stability | 0.7.0 | Bounded read, timeouts, compaction fallback |
 | Phase 0 (new) | Visual Regression Matrix | 0.7.0 | 48 baselines (8×3×2) |
@@ -157,14 +157,14 @@ anvil/
 ### Current Test Baseline
 
 ```
-@anvil/core:  290+ tests across 45+ files
-@anvil/tui:   100+ tests across 23+ files
-@anvil/cli:   8+ tests across 2+ files
-Visual:       48 baseline frames (8 scenarios × 3 sizes × 2 themes)
-Total:        ~400 unit tests + 48 visual baselines
+@anvil/core:  417 tests across 62 files
+@anvil/tui:   167 tests across 29 files
+@anvil/cli:   23 tests across 4 files
+Visual:       11 visual test frames (v0.11.0)
+Total:        607+ unit tests + visual baselines
 ```
 
-### Current Version: **0.8.0**
+### Current Version: **0.11.0**
 
 ### What Remains Open
 
@@ -174,7 +174,7 @@ Total:        ~400 unit tests + 48 visual baselines
 | Phase 18 Provider Certification | DONE (5-criteria cert harness + registry status + CLI/UI surfacing) | Phase 18 |
 | Phase 19 Project Memory & Git Workflow | DONE (.anvil/memory.md + update_memory + auto-commit + /diff + /pr) | Phase 19 |
 | Phase 20 Distribution & CI Pipeline | DONE (npm publish packaging + CI matrix + release workflow) | Phase 20 |
-| U11 MCP Tool UX | Open (permission prompts for external tools) | With Phase 10 maturity |
+| U11 MCP Tool UX | DONE (Rich permission prompts with origin badges and schema args) | Phase 24 (v0.11.0) |
 
 
 ---

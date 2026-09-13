@@ -264,12 +264,10 @@ export async function* runGoalMission(
       milestone
     );
     const reviewVerdict = review.text.trim();
-    // The prompt asks for "YES — reason" (or "NO — reason"). A bare /^YES\b/
-    // matched hedges like "Yes, but the criteria were not met..." as a PASS;
-    // accept only the prompted shape (or an exact "YES") and treat a leading
-    // NO as an explicit reject.
-    const satisfied =
-      /^YES\s*(?:—|--|:)/i.test(reviewVerdict) || reviewVerdict.toUpperCase() === "YES";
+    // Accept any response starting with YES, rejecting hedges like "Yes, but..."
+    const startsYes = /^YES\b/i.test(reviewVerdict);
+    const isHedge = /^YES\s*[,]\s*(but|however|although|except|unfortunately)/i.test(reviewVerdict);
+    const satisfied = startsYes && !isHedge;
     totalTurns += 1;
 
     if (review.cancelled) {

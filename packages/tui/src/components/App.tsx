@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@anvil/core";
 import { useEffect, useReducer, useRef, useState } from "react";
 import { Box, Text, useStdout } from "ink";
 import {
@@ -111,6 +112,14 @@ export function App({
       active = false;
     };
   }, [session.projectRoot]);
+
+  useEffect(() => {
+    if (mcp?.notices && mcp.notices.length > 0) {
+      for (const notice of mcp.notices) {
+        printSystemMessage(`⚠ ${notice}`);
+      }
+    }
+  }, []);
 
   const { stdout } = useStdout();
   const rows = stdout?.rows ?? 24;
@@ -308,7 +317,7 @@ export function App({
                 })
                 .catch((err: unknown) => {
                   printSystemMessage(
-                    `Rewind failed: ${err instanceof Error ? err.message : String(err)}`
+                    `Rewind failed: ${getErrorMessage(err)}`
                   );
                 });
             }}

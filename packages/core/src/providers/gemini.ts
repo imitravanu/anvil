@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../errors.js";
 import { GoogleGenAI } from "@google/genai";
 import { CompletionRequest, ConversationMessage, ModelProvider, StreamEvent } from "./types.js";
 import { BaseProvider } from "./base.js";
@@ -39,7 +40,7 @@ export function mapGeminiFinishReason(
 let geminiCallCounter = 0;
 
 export function geminiErrorMessage(err: unknown): string {
-  const fallback = err instanceof Error ? err.message : String(err);
+  const fallback = getErrorMessage(err);
   const unwrap = (text: string): string | null => {
     try {
       const parsed = JSON.parse(text);
@@ -146,7 +147,12 @@ export function toGeminiContents(messages: ConversationMessage[]): Record<string
           ...(typeof signature === "string" ? { thoughtSignature: signature } : {}),
         });
       } else {
-        const name = callNames.get(c.result.toolCallId) ?? "unknown_tool";
+        const name = callNames.get(c.result.toolCallId);
+        if (!name) {
+          // Orphaned tool result — the originating tool_call was compacted away.
+          // Skip rather than crash Gemini with "unknown_tool".
+          continue;
+        }
         let response: unknown;
         try {
           response = JSON.parse(c.result.content);
@@ -190,27 +196,29 @@ export class GeminiProvider extends BaseProvider {
     let stream;
     try {
       stream = await this.client.models.generateContentStream({
-      model: request.model,
-      contents: toGeminiContents(request.messages) as never,
-      config: {
-        ...(request.systemPrompt ? { systemInstruction: request.systemPrompt } : {}),
-        maxOutputTokens: request.maxTokens,
-        abortSignal: request.signal,
-        ...(request.tools.length
-          ? {
-              tools: [
-                {
-                  functionDeclarations: request.tools.map((t) => ({
-                    name: t.name,
-                    description: t.description,
-                    parameters: t.inputSchema as never,
-                  })),
-                },
-              ],
-            }
-          : {}),
-      } as never,
-    });
+        model: request.model,
+        contents: toGeminiContents(request.messages) as unknown as Parameters<
+          typeof this.client.models.generateContentStream
+        >[0]["contents"],
+        config: {
+          ...(request.systemPrompt ? { systemInstruction: request.systemPrompt } : {}),
+          maxOutputTokens: request.maxTokens,
+          abortSignal: request.signal,
+          ...(request.tools.length
+            ? {
+                tools: [
+                  {
+                    functionDeclarations: request.tools.map((t) => ({
+                      name: t.name,
+                      description: t.description,
+                      parametersJsonSchema: t.inputSchema,
+                    })),
+                  },
+                ],
+              }
+            : {}),
+        },
+      });
     } catch (err) {
       throw new Error(geminiErrorMessage(err));
     }

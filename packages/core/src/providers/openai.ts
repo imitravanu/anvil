@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../errors.js";
 import OpenAI from "openai";
 import {
   CompletionRequest,
@@ -88,7 +89,7 @@ export async function* translateChatCompletionsChunkStream(
       }
     }
   } catch (err) {
-    yield { type: "error", message: err instanceof Error ? err.message : String(err) };
+    yield { type: "error", message: getErrorMessage(err) };
     return;
   }
 
@@ -105,8 +106,10 @@ export async function* translateChatCompletionsChunkStream(
 
 export function toOpenAIMessages(
   messages: ConversationMessage[],
-  systemPrompt?: string
+  systemPrompt?: string,
+  options?: { supportsVision?: boolean }
 ): Record<string, unknown>[] {
+  const supportsVision = options?.supportsVision ?? true;
   const out: Record<string, unknown>[] = [];
   if (systemPrompt && systemPrompt.trim()) {
     out.push({ role: "system", content: systemPrompt });
@@ -160,8 +163,14 @@ export function toOpenAIMessages(
       if (images.length > 0) {
         const parts: Record<string, unknown>[] = [];
         if (text) parts.push({ type: "text", text });
-        for (const img of images) {
-          parts.push({ type: "image_url", image_url: { url: `data:${img.mediaType};base64,${img.data}` } });
+        if (supportsVision) {
+          for (const img of images) {
+            parts.push({ type: "image_url", image_url: { url: `data:${img.mediaType};base64,${img.data}` } });
+          }
+        } else {
+          for (let i = 0; i < images.length; i++) {
+            parts.push({ type: "text", text: "[Image omitted — this provider does not support vision]" });
+          }
         }
         out.push({ role: "user", content: parts });
       } else if (text) {
@@ -192,6 +201,7 @@ export interface ChatCompletionsStyleProviderOptions {
    */
   maxTokensParam?: "max_tokens" | "max_completion_tokens";
   defaultHeaders?: Record<string, string>;
+  supportsVision?: boolean;
 }
 
 export class ChatCompletionsStyleProvider extends BaseProvider {
@@ -200,12 +210,14 @@ export class ChatCompletionsStyleProvider extends BaseProvider {
 
   private readonly client: OpenAI | null;
   private readonly maxTokensParam: "max_tokens" | "max_completion_tokens";
+  protected readonly supportsVision: boolean;
 
   constructor(opts: ChatCompletionsStyleProviderOptions) {
     super();
     this.id = opts.id;
     this.displayName = opts.displayName;
     this.maxTokensParam = opts.maxTokensParam ?? "max_tokens";
+    this.supportsVision = opts.supportsVision ?? true;
 
     this.client = opts.apiKey
       ? new OpenAI({
@@ -228,12 +240,16 @@ export class ChatCompletionsStyleProvider extends BaseProvider {
     const stream = await this.client.chat.completions.create(
       {
         model: request.model,
-        messages: toOpenAIMessages(request.messages, request.systemPrompt) as never,
-        ...(request.tools.length ? { tools: toOpenAITools(request.tools) as never } : {}),
+        messages: toOpenAIMessages(request.messages, request.systemPrompt, {
+          supportsVision: this.supportsVision,
+        }) as unknown as OpenAI.ChatCompletionMessageParam[],
+        ...(request.tools.length
+          ? { tools: toOpenAITools(request.tools) as unknown as OpenAI.ChatCompletionTool[] }
+          : {}),
         [this.maxTokensParam]: request.maxTokens,
         stream: true,
         stream_options: { include_usage: true },
-      } as never,
+      },
       { signal: request.signal }
     );
 

@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { getErrorMessage } from "../errors.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -73,7 +74,7 @@ export async function autoCommitMilestone(
 
     return {
       committed: false,
-      error: err instanceof Error ? err.message : String(err),
+      error: getErrorMessage(err),
     };
   }
 }
@@ -99,7 +100,7 @@ export async function getBranchDiff(projectRoot: string, branch: string): Promis
       });
       return stdout;
     } catch {
-      throw new Error(`Failed to diff against branch "${branch}": ${err?.message ?? String(err)}`);
+      throw new Error(`Failed to diff against branch "${branch}": ${getErrorMessage(err)}`);
     }
   }
 }
@@ -123,7 +124,7 @@ export async function createPullRequest(projectRoot: string): Promise<PrResult> 
       output: out,
     };
   } catch (err: any) {
-    const msg = err?.message ?? String(err);
+    const msg = getErrorMessage(err);
     if (msg.includes("ENOENT") || msg.includes("not found")) {
       return {
         success: false,

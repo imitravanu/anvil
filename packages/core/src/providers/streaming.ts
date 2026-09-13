@@ -24,12 +24,6 @@ export async function* ensureTurnEnd(
   if (!ended && !errored) yield { type: "turn_end", stopReason: "unknown" };
 }
 
-export interface AssembledCall {
-  id: string;
-  name: string;
-  input: unknown;
-}
-
 /**
  * Buffers indexed incremental tool-call chunks (OpenAI chat-completions
  * shape) into complete calls. Documented semantics, enforced in one place:

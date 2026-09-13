@@ -108,8 +108,9 @@ describe("Phase 8 (A) — durable loop", () => {
     expect(lastStarted).toBeLessThan(firstFinished);
 
     const lastUser = [...session.getHistory()].reverse().find((m) => m.role === "user")!;
-    const results = lastUser.content.filter((c) => c.type === "tool_result");
-    expect(results.map((r) => r.result.toolCallId)).toEqual(ids);
+    const userContent = Array.isArray(lastUser.content) ? lastUser.content : [];
+    const results = userContent.filter((c) => "type" in c && c.type === "tool_result");
+    expect(results.map((r) => ("result" in r ? (r.result as { toolCallId: string }).toolCallId : undefined))).toEqual(ids);
   });
 
   it("A2: batch containing a mutating call runs strictly serially", async () => {
@@ -152,8 +153,9 @@ describe("Phase 8 (A) — durable loop", () => {
       session.getHistory().some(
         (m) =>
           m.role === "assistant" &&
+          Array.isArray(m.content) &&
           m.content.some(
-            (c) => c.type === "text" && c.text.includes("step limit") && c.text.includes("20")
+            (c) => "text" in c && typeof c.text === "string" && c.text.includes("step limit") && c.text.includes("20")
           )
       )
     ).toBe(true);
@@ -174,10 +176,11 @@ describe("Phase 8 (A) — durable loop", () => {
     expect(finishedMsg(lastExecuted)).not.toContain("loop guard");
 
     const lastUser = [...session.getHistory()].reverse().find((m) => m.role === "user")!;
-    const results = lastUser.content.filter((c) => c.type === "tool_result");
+    const userContent = Array.isArray(lastUser.content) ? lastUser.content : [];
+    const results = userContent.filter((c) => "type" in c && c.type === "tool_result");
     const refused = results[results.length - 1];
-    expect(refused.result.isError).toBe(true);
-    expect(refused.result.content).toContain("loop guard");
+    expect(refused && "result" in refused && (refused.result as { isError?: boolean }).isError).toBe(true);
+    expect(refused && "result" in refused && String((refused.result as { content?: unknown }).content)).toContain("loop guard");
 
     const ledger = session.getRunLedger();
     expect(ledger.some((e) => e.eventType === "loop_detected")).toBe(true);
@@ -338,7 +341,8 @@ describe("Phase 8 (A) — durable loop", () => {
       session.getHistory().some(
         (m) =>
           m.role === "user" &&
-          m.content.some((c) => c.type === "text" && c.text.includes("in between"))
+          Array.isArray(m.content) &&
+          m.content.some((c) => "text" in c && typeof c.text === "string" && c.text.includes("in between"))
       )
     ).toBe(true);
   });

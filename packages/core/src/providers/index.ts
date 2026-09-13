@@ -20,7 +20,6 @@ export { OPENROUTER_BASE_URL, createOpenRouterProvider, fetchOpenRouterFreeModel
 export {
   ORCAROUTER_BASE_URL,
   ORCAROUTER_PRICING_URL,
-  ORCAROUTER_KNOWN_FREE_IDS,
   createOrcarouterProvider,
   fetchOrcarouterFreeModels,
   isFreeModelId,

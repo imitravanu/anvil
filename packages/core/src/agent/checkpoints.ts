@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../errors.js";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createTwoFilesPatch } from "diff";
@@ -23,7 +24,8 @@ export interface Checkpoint {
 }
 
 /** Ring size per session. */
-export const CHECKPOINT_KEEP = 5;
+import { CHECKPOINT_KEEP } from "../config/constants.js";
+export { CHECKPOINT_KEEP };
 /** Per-file cap — matches the tool read/write caps, so any tool-touched file fits. */
 export const CHECKPOINT_FILE_MAX = 512 * 1024;
 /** Per-checkpoint byte cap across snapshotted files. */
@@ -137,7 +139,7 @@ export async function restoreCheckpoint(
         restored.push(f.path);
       }
     } catch (err: any) {
-      errors.push(`${f.path}: ${err?.message ?? String(err)}`);
+      errors.push(`${f.path}: ${getErrorMessage(err)}`);
     }
   }
   return { restored, deleted, errors };
@@ -192,7 +194,8 @@ async function diffBaseline(
     let abs: string;
     try {
       abs = resolveWithinRoot(projectRoot, p);
-    } catch {
+    } catch (err) {
+      console.warn(`[checkpoints] Warning: path resolution failed for "${p}": ${getErrorMessage(err)}`);
       continue; // hostile path in a snapshot — never becomes a review vector
     }
     let current: Buffer | null = null;

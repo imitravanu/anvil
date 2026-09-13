@@ -1,13 +1,32 @@
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import * as path from "node:path";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
+import {
+  MAX_STREAM_BYTES,
+  RUN_COMMAND_TIMEOUT_MS,
+  MIN_COMMAND_TIMEOUT_MS,
+  MAX_COMMAND_TIMEOUT_MS,
+} from "../config/constants.js";
 
-const MAX_STREAM_BYTES = 20 * 1024; // per stream
-export const RUN_COMMAND_TIMEOUT_MS = 120_000;
-// Sanity bounds for the env override — a hostile or typo'd value must neither
-// busy-freeze the turn (`0`) nor park it for an hour (huge values).
-const MIN_COMMAND_TIMEOUT_MS = 1_000;
-const MAX_COMMAND_TIMEOUT_MS = 600_000;
+/**
+ * Check if the current system environment supports running bash commands.
+ * On Windows, checks if bash is available in PATH or inside Git Bash / WSL.
+ */
+export function checkWindowsShellSupport(): { supported: boolean; error?: string } {
+  if (process.platform !== "win32") {
+    return { supported: true };
+  }
+  try {
+    execSync("where bash.exe", { stdio: "ignore" });
+    return { supported: true };
+  } catch {
+    return {
+      supported: false,
+      error:
+        "Anvil requires a bash-compatible shell on Windows. Please run inside Git Bash or WSL (Windows Subsystem for Linux).",
+    };
+  }
+}
 
 /**
  * Command timeout in ms, overridable via ANVIL_RUN_COMMAND_TIMEOUT_MS and
@@ -101,10 +120,10 @@ function isRootWipe(rawSegment: string): boolean {
     longFlags.some((f) => f.startsWith("recursive"));
   const force = shortFlags.includes("f") || longFlags.some((f) => f.startsWith("force"));
   if (!(recursive && force)) return false;
-  // Bare root, /*, or ANY home-relative target (~ / $HOME in whatever
-  // grouping). Over-broad on purpose: a false refusal costs the model one
-  // reworded call; a missed wipe costs the user their home directory.
-  return /(^|\s)(\/(\s|$|\*)|~|\$HOME|\$\{HOME\})/.test(rest);
+  // Block: bare root (/), root glob (/*), home (~, $HOME), AND any top-level
+  // system directory. A project-local `rm -rf ./build` stays allowed.
+  const SYSTEM_PATHS = /(?:^|\s)(?:\/(?:\s|$|\*)|~|\$HOME|\$\{HOME\}|\/(?:usr|etc|var|dev|boot|lib|lib64|bin|sbin|opt|proc|sys|run|srv|tmp|root|mnt|media)(?:\s|\/|$))/;
+  return SYSTEM_PATHS.test(rest);
 }
 
 const WHOLE_COMMAND_CHECKS: { test: (cmd: string) => boolean; reason: string }[] = [
@@ -147,14 +166,25 @@ const READ_ONLY_BINARIES = new Set([
 // so their path arguments must resolve inside the project root.
 const FILE_READER_BINARIES = new Set(["ls", "cat", "head", "tail", "wc", "file", "stat", "du", "tree"]);
 
+function stripShellQuotes(s: string): string {
+  // Remove matching outer quotes (single or double)
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    return s.slice(1, -1);
+  }
+  return s;
+}
+
 /** True iff every positional argument resolves inside projectRoot. */
 function pathsInsideRoot(args: readonly string[], projectRoot: string): boolean {
   const root = path.resolve(projectRoot);
-  for (const arg of args) {
-    if (arg.startsWith("-")) continue; // flags and their attached values
+  for (const rawArg of args) {
+    if (rawArg.startsWith("-")) continue; // flags and their attached values
+    const arg = stripShellQuotes(rawArg);
     // bash expands these before the binary sees them — `~/.ssh/id_rsa` and
     // `$HOME/...` resolve OUTSIDE the project no matter what path.resolve says.
     if (arg.startsWith("~") || arg.startsWith("$")) return false;
+    // Also reject any remaining unmatched quotes — sign of shell trickery
+    if (/['"]/.test(arg)) return false;
     const resolved = path.isAbsolute(arg) ? path.resolve(arg) : path.resolve(root, arg);
     const rel = path.relative(root, resolved);
     if (rel !== "" && (rel === ".." || rel.startsWith(`..${path.sep}`))) return false;
@@ -204,6 +234,14 @@ export function isReadOnlyCommand(command: string, projectRoot?: string): boolea
 
 export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   const { command } = input as { command: string };
+  const winCheck = checkWindowsShellSupport();
+  if (!winCheck.supported) {
+    return {
+      output: { command, error: winCheck.error },
+      isError: true,
+      summary: winCheck.error!,
+    };
+  }
   const blocked = isBlockedCommand(command);
   if (blocked) {
     return {
@@ -237,10 +275,20 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
     const killTree = () => {
       // Kill the whole tree — bash -c wrappers mean the interesting process is
       // often a grandchild; killing bash alone can leave it running.
-      try {
-        if (child.pid != null) process.kill(-child.pid, "SIGKILL");
-      } catch {
-        child.kill("SIGKILL");
+      if (child.pid == null) return;
+      if (process.platform === "win32") {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          // child already exited
+        }
+      } else {
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          // ESRCH — child already exited; expected race
+          child.kill("SIGKILL");
+        }
       }
     };
     let timedOut = false;

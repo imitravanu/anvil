@@ -76,7 +76,12 @@ export function detectTestCommand(projectRoot: string): string | null {
  * element (no shell, no interpolation) — a pattern like "x; touch /tmp/p"
  * is a literal test filter that fails to match, not a second command.
  */
-function argvWithPattern(baseCommand: string, pattern: string): string[] | null {
+export function argvWithPattern(baseCommand: string, pattern: string): string[] | null {
+  // Reject patterns that look like flags (would be interpreted by the runner)
+  if (pattern.startsWith("-")) return null;
+  // Reject null bytes
+  if (pattern.includes("\0")) return null;
+
   const words = baseCommand.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return null;
   const [bin, ...rest] = words;
@@ -196,10 +201,19 @@ export async function runTestVerification(
     child.stderr?.on("data", onData);
 
     const killTree = () => {
-      try {
-        if (child.pid != null) process.kill(-child.pid, "SIGKILL");
-      } catch {
-        child.kill("SIGKILL");
+      if (child.pid == null) return;
+      if (process.platform === "win32") {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          // ignore
+        }
+      } else {
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          child.kill("SIGKILL");
+        }
       }
     };
 

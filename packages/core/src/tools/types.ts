@@ -25,3 +25,24 @@ export type ToolExecutor = (
   input: unknown,
   ctx: ToolContext
 ) => Promise<ToolExecutionResult>;
+
+export interface ToolSessionContext {
+  setPlan?: (plan: string) => void;
+  recordLedger: (entry: unknown) => void;
+  allowDelegation?: boolean;
+  tryConsumeDelegation: (max: number) => boolean;
+  provider: unknown;
+  model: string;
+  projectRoot: string;
+  permissionBroker: unknown;
+  tools: readonly ToolDefinition[];
+  signal: AbortSignal;
+  mergeSubCheckpoints?: (checkpoints: unknown[]) => Promise<void>;
+  recordMutation?: () => void;
+}
+
+export type SessionToolExecutor = (
+  input: unknown,
+  ctx: ToolSessionContext,
+  inputKey: string
+) => AsyncGenerator<any, ToolExecutionResult>;

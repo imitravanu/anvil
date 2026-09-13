@@ -3,6 +3,7 @@ import path from "node:path";
 import { ProviderCredentials, ProviderId, MODEL_REGISTRY } from "../providers/index.js";
 import { atomicWriteJson, anvilHome } from "../atomicWrite.js";
 import { AnvilSettings } from "./types.js";
+import { log } from "../logger.js";
 
 export type { AnvilSettings } from "./types.js";
 export * from "./mcp.js";
@@ -26,11 +27,24 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  * Non-object JSON is also treated as empty (never half-trusted).
  */
 export function loadCredentials(): ProviderCredentials {
+  const credPath = CREDENTIALS_PATH();
   try {
-    const raw = JSON.parse(fs.readFileSync(CREDENTIALS_PATH(), "utf-8"));
+    const raw = JSON.parse(fs.readFileSync(credPath, "utf-8"));
+    if (process.platform !== "win32") {
+      try {
+        const stat = fs.statSync(credPath);
+        const mode = stat.mode & 0o777;
+        if (mode !== 0o600) {
+          log.warn(`${credPath} has permissions ${mode.toString(8)} (expected 600)`);
+        }
+      } catch {
+        // ignore stat failures
+      }
+    }
     if (!isRecord(raw)) return {};
     return raw as ProviderCredentials;
   } catch {
+    // credentials missing on first run — expected
     return {};
   }
 }
@@ -41,6 +55,7 @@ export function loadSettings(): AnvilSettings {
     if (!isRecord(raw)) return {};
     return raw as AnvilSettings;
   } catch {
+    // settings missing — use defaults
     return {};
   }
 }
@@ -124,11 +139,14 @@ export class UnknownProviderError extends ProviderSelectionError {
  * PROVIDER_ORDER with its first MODEL_REGISTRY model. Returns null when no
  * provider is configured at all (first-run setup should handle that).
  */
+const KEYLESS_PROVIDERS = new Set<ProviderId>(["ollama"]);
+
 export function resolveProviderSelection(input: SelectionInput): ProviderSelection | null {
   const configured = PROVIDER_ORDER.filter(
     (id) =>
-      typeof input.creds[`${id}ApiKey` as keyof ProviderCredentials] === "string" &&
-      (input.creds[`${id}ApiKey` as keyof ProviderCredentials] as string).length > 0
+      KEYLESS_PROVIDERS.has(id) ||
+      (typeof input.creds[`${id}ApiKey` as keyof ProviderCredentials] === "string" &&
+        (input.creds[`${id}ApiKey` as keyof ProviderCredentials] as string).length > 0)
   );
 
   const providerRaw =
@@ -149,7 +167,12 @@ export function resolveProviderSelection(input: SelectionInput): ProviderSelecti
     }
     providerId = providerRaw as ProviderId;
   } else {
-    providerId = configured[0]; // hardcoded fallback: first configured provider
+    const keyConfigured = PROVIDER_ORDER.filter(
+      (id) =>
+        typeof input.creds[`${id}ApiKey` as keyof ProviderCredentials] === "string" &&
+        (input.creds[`${id}ApiKey` as keyof ProviderCredentials] as string).length > 0
+    );
+    providerId = keyConfigured[0];
   }
   if (!providerId) return null;
 

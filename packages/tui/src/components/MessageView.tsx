@@ -1,3 +1,4 @@
+import React from "react";
 import { Box, Text } from "ink";
 import type { DisplayMessage } from "../hooks/useAgentController.js";
 import { MarkdownView, parseMarkdownText } from "../markdown/MarkdownView.js";
@@ -8,7 +9,7 @@ import { ToolCallView } from "./ToolCallView.js";
 import { SubAgentView } from "./SubAgentView.js";
 import { VerificationCard } from "./VerificationCard.js";
 
-export function MessageView({ message, expandTools }: { message: DisplayMessage; expandTools?: boolean }) {
+export const MessageView = React.memo(function MessageView({ message, expandTools }: { message: DisplayMessage; expandTools?: boolean }) {
   const theme = useTheme();
   // Streaming caret: a single braille-spinner implementation.
   const spinner = useSpinnerFrame(message.streaming);
@@ -79,4 +80,4 @@ export function MessageView({ message, expandTools }: { message: DisplayMessage;
       ))}
     </Box>
   );
-}
+});

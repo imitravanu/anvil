@@ -5,8 +5,8 @@ export interface CompactionResult {
   summary?: string;
 }
 
-export const COMPACTION_THRESHOLD = 0.75; // fraction of context window that triggers compaction
-export const KEEP_RECENT_MESSAGES = 6; // most recent messages kept verbatim, never summarized
+import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES } from "../config/constants.js";
+export { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES };
 
 /**
  * Fold a compacted history ([summary(user), ...recent]) to preserve role
@@ -80,9 +80,14 @@ export function findCleanCompactionCut(
     }
   }
 
-  const isSplit = (cut: number): boolean => {
-    return intervals.some((inv) => inv.start < cut && cut <= inv.end);
-  };
+  const splitCuts = new Set<number>();
+  for (const inv of intervals) {
+    for (let c = inv.start + 1; c <= inv.end; c++) {
+      splitCuts.add(c);
+    }
+  }
+
+  const isSplit = (cut: number): boolean => splitCuts.has(cut);
 
   if (!isSplit(targetCut)) return targetCut;
 
@@ -105,7 +110,8 @@ export async function compactIfNeeded(
   latestInputTokens: number,
   provider: ModelProvider,
   model: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: { summarizerModel?: string }
 ): Promise<{ history: ConversationMessage[]; result: CompactionResult }> {
   if (latestInputTokens < contextWindow * COMPACTION_THRESHOLD) {
     return { history, result: { compacted: false } };
@@ -126,7 +132,8 @@ export async function compactIfNeeded(
   const toSummarize = history.slice(0, cut);
   const recent = history.slice(cut);
 
-  const summaryText = await summarizeMessages(toSummarize, provider, model, signal);
+  const modelToUse = options?.summarizerModel || model;
+  const summaryText = await summarizeMessages(toSummarize, provider, modelToUse, signal);
   if (!summaryText.trim()) {
     // An empty summary is worse than no compaction: it would replace real
     // history with a placeholder. Report no-op and let the turn proceed.
@@ -160,19 +167,28 @@ async function summarizeMessages(
   // preserving anything a later turn would need: decisions made, files touched, open questions.
   // No tools, no system prompt beyond the summarization instruction itself.
   let text = "";
-  const stream = provider.streamCompletion({
-    model,
-    systemPrompt:
-      "Summarize the following coding-session conversation concisely. Preserve: decisions " +
-      "made, files created or modified and why, and any unresolved questions. Omit pleasantries " +
-      "and restating tool output verbatim.",
-    messages,
-    tools: [],
-    maxTokens: 1024,
-    signal,
-  });
-  for await (const event of stream) {
-    if (event.type === "text_delta") text += event.text;
+  try {
+    const stream = provider.streamCompletion({
+      model,
+      systemPrompt:
+        "Summarize the following coding-session conversation concisely. Preserve: decisions " +
+        "made, files created or modified and why, and any unresolved questions. Omit pleasantries " +
+        "and restating tool output verbatim.",
+      messages,
+      tools: [],
+      maxTokens: 1024,
+      signal,
+    });
+    for await (const event of stream) {
+      if (event.type === "text_delta") text += event.text;
+      if (event.type === "error") {
+        // Rate limits or provider errors during compaction summarization gracefully skip
+        return "";
+      }
+    }
+  } catch {
+    // If stream initialization fails or throws, gracefully return empty string
+    return "";
   }
   return text;
 }

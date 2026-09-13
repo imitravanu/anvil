@@ -10,5 +10,6 @@ export function createMistralProvider(apiKey: string | undefined): ModelProvider
     apiKey,
     baseURL: MISTRAL_BASE_URL,
     maxTokensParam: "max_tokens",
+    supportsVision: false,
   });
 }

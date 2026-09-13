@@ -10,5 +10,6 @@ export function createCerebrasProvider(apiKey: string | undefined): ModelProvide
     apiKey,
     baseURL: CEREBRAS_BASE_URL,
     maxTokensParam: "max_tokens",
+    supportsVision: false,
   });
 }

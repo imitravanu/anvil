@@ -18,6 +18,7 @@
     "certify": "npx tsx scripts/certify-provider.ts",
     "certify:all": "bash scripts/certify-all.sh",
     "gate": "node scripts/verify-gate.mjs",
+    "hooks:install": "git config core.hooksPath .githooks && chmod +x .githooks/pre-commit",
     "prepublishOnly": "npm run build"
   },
 

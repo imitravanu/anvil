@@ -40,7 +40,7 @@ export function diffWords(delLine: string, addLine: string): { del: WordSeg[]; a
   const bContent = b.filter((t) => !isSpace(t));
   // Bail-out: LCS is O(n*m) — a minified 10k-token line in the permission
   // overlay would hang the UI. Fully-changed is the honest fallback.
-  if (aContent.length * bContent.length > 50_000) {
+  if (aContent.length * bContent.length > 10_000) {
     return {
       del: a.map((text) => ({ text, changed: !isSpace(text) })),
       add: b.map((text) => ({ text, changed: !isSpace(text) })),

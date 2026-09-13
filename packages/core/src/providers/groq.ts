@@ -10,5 +10,6 @@ export function createGroqProvider(apiKey: string | undefined): ModelProvider {
     apiKey,
     baseURL: GROQ_BASE_URL,
     maxTokensParam: "max_tokens",
+    supportsVision: false,
   });
 }

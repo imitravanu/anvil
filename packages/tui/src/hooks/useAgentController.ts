@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@anvil/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { randomUUID } from "node:crypto";
 import {
@@ -8,97 +9,33 @@ import {
   type GoalMilestone,
   type GoalTurnOutcome,
 } from "@anvil/core";
-import { retainReport, type SubAgentRecord } from "../util/subagent.js";
-import { friendlyError } from "../util/errors.js";
 import { HISTORY_RECALL_CAP, TRANSCRIPT_STATE_CAP, MESSAGE_QUEUE_CAP } from "../util/displayLimits.js";
+import { friendlyError } from "../util/errors.js";
+import {
+  type DisplaySubAgent,
+  type DisplayToolCall,
+  type DisplayVerification,
+  type DisplayGoalMilestone,
+  type DisplayGoal,
+  type DisplayMessage,
+  type UsageTotals,
+  OUTPUT_RETAIN_MAX,
+  retainOutput,
+  appendSystemMessage,
+  applyEvent,
+} from "./eventReducer.js";
 
-export type DisplaySubAgent = SubAgentRecord;
-
-export interface DisplayToolCall {
-  id: string;
-  name: string;
-  input: unknown;
-  status: "running" | "done" | "error" | "cancelled";
-  summary?: string;
-  /** Full tool result output, retained capped (see OUTPUT_RETAIN_MAX) for /expand. */
-  output?: unknown;
-}
-
-/** Cap retained output so long sessions can't bloat React state. */
-export const OUTPUT_RETAIN_MAX = 6000;
-
-/** Per-string cap inside retained output (the total cap alone still spikes). */
-const RETAIN_STRING_MAX = 2000;
-
-export function retainOutput(output: unknown): unknown {
-  if (output === undefined) return undefined;
-  let text: string;
-  try {
-    // Cap long strings DURING serialization: stringifying a multi-megabyte
-    // tool result in full just to slice it would spike memory first.
-    text =
-      JSON.stringify(output, (_key, value) =>
-        typeof value === "string" && value.length > RETAIN_STRING_MAX
-          ? value.slice(0, RETAIN_STRING_MAX) + "…[truncated]"
-          : value
-      ) ?? String(output);
-  } catch {
-    return { note: "[output not serializable for display]" };
-  }
-  // Return the capped parse (never the original reference): retained display
-  // state stays bounded no matter how large the tool result was.
-  if (text.length <= OUTPUT_RETAIN_MAX) {
-    try {
-      return JSON.parse(text);
-    } catch {
-      return { truncated: text, note: "[output truncated for display]" };
-    }
-  }
-  return { truncated: text.slice(0, OUTPUT_RETAIN_MAX), note: "[output truncated for display]" };
-}
-
-export interface DisplayVerification {
-  id: string;
-  command: string;
-  status: "running" | "passed" | "failed";
-  summary?: string;
-  repairsUsed: number;
-}
-
-export interface DisplayGoalMilestone {
-  id: string;
-  title: string;
-  criteria: string;
-  status: "pending" | "in_progress" | "completed" | "failed";
-  summary?: string;
-  detail?: string;
-}
-
-export interface DisplayGoal {
-  title: string;
-  milestones: DisplayGoalMilestone[];
-  currentTurn: number;
-  maxTurns: number;
-}
-
-export interface DisplayMessage {
-  id: string;
-  role: "user" | "assistant" | "system";
-  text: string; // accumulated so far; may still be mid-stream
-  streaming: boolean;
-  toolCalls: DisplayToolCall[];
-  subAgents: DisplaySubAgent[]; // delegation cards live on the assistant turn
-  verifications?: DisplayVerification[]; // closed-loop TDD verification & repair cards
-  /** Attached image paths (/image) shown under the user turn. */
-  images?: { path: string }[];
-  /** Friendly, compact turn-failure line (raw provider walls are remapped). */
-  errorText?: string;
-}
-
-export interface UsageTotals {
-  inputTokens: number;
-  outputTokens: number;
-}
+export {
+  type DisplaySubAgent,
+  type DisplayToolCall,
+  type DisplayVerification,
+  type DisplayGoalMilestone,
+  type DisplayGoal,
+  type DisplayMessage,
+  type UsageTotals,
+  OUTPUT_RETAIN_MAX,
+  retainOutput,
+};
 
 /**
  * Bridges AgentSession's async generator into React state. Every event handler
@@ -140,6 +77,17 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     setQueued([]);
     pendingImagesRef.current = [];
   }, [session]);
+
+  // Stream delta backpressure buffer timer ref (cleaned up on unmount)
+  const flushTimerRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    return () => {
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const recordSentMessage = useCallback((text: string) => {
     setSentHistory((prev) => (prev[prev.length - 1] === text ? prev : [...prev, text].slice(-HISTORY_RECALL_CAP)));
@@ -185,24 +133,54 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
       // ("Let me look around first.All checks pass…"); a blank line between
       // them reads as the paragraphs the model actually produced.
       let textNeedsBreak = false;
+      let textBuffer = "";
+      const flushTextBuffer = () => {
+        if (flushTimerRef.current) {
+          clearTimeout(flushTimerRef.current);
+          flushTimerRef.current = null;
+        }
+        if (!textBuffer) return;
+        const chunk = textBuffer;
+        textBuffer = "";
+        updateAssistant((m) => ({ ...m, text: m.text + chunk }));
+      };
+
       try {
         for await (const event of session.send(text, attached)) {
-          if (event.type === "text_delta" && textNeedsBreak) {
-            updateAssistant((m) => ({ ...m, text: m.text + "\n\n" }));
-            textNeedsBreak = false;
+          if (event.type === "text_delta") {
+            if (textNeedsBreak) {
+              textBuffer += "\n\n";
+              textNeedsBreak = false;
+            }
+            textBuffer += event.text;
+            if (!flushTimerRef.current) {
+              flushTimerRef.current = setTimeout(() => {
+                flushTimerRef.current = null;
+                if (textBuffer) {
+                  const chunk = textBuffer;
+                  textBuffer = "";
+                  updateAssistant((m) => ({ ...m, text: m.text + chunk }));
+                }
+              }, 16); // 60 FPS throttle window (~16ms)
+            }
+          } else {
+            // Any non-text event (tool call, turn end) immediately flushes pending text
+            flushTextBuffer();
+            if (event.type === "tool_finished" || event.type === "tool_permission_denied") {
+              textNeedsBreak = true;
+            }
+            applyEvent(event, updateAssistant, setUsage, setMessages, setPlan, setTestStatus);
           }
-          if (event.type === "tool_finished" || event.type === "tool_permission_denied") {
-            textNeedsBreak = true;
-          }
-          applyEvent(event, updateAssistant, setUsage, setMessages, setPlan, setTestStatus);
         }
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
+        flushTextBuffer();
+        const msg = getErrorMessage(err);
         updateAssistant((m) => ({
           ...m,
           errorText: friendlyError(msg),
         }));
       } finally {
+        flushTextBuffer();
         // Mark streaming done either way — completion, cancellation, or error.
         updateAssistant((m) => ({ ...m, streaming: false }));
         setIsBusy(false);
@@ -311,33 +289,61 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         cancelled: false,
       };
       let textNeedsBreak = false;
+      let textBuffer = "";
+      const flushTextBuffer = () => {
+        if (flushTimerRef.current) {
+          clearTimeout(flushTimerRef.current);
+          flushTimerRef.current = null;
+        }
+        if (!textBuffer) return;
+        const chunk = textBuffer;
+        textBuffer = "";
+        updateAssistant((m) => ({ ...m, text: m.text + chunk }));
+      };
+
       try {
         for await (const event of session.send(prompt)) {
           if (event.type === "text_delta") {
             if (textNeedsBreak) {
-              updateAssistant((m) => ({ ...m, text: m.text + "\n\n" }));
+              textBuffer += "\n\n";
               textNeedsBreak = false;
             }
+            textBuffer += event.text;
             outcome.text += event.text;
+            if (!flushTimerRef.current) {
+              flushTimerRef.current = setTimeout(() => {
+                flushTimerRef.current = null;
+                if (textBuffer) {
+                  const chunk = textBuffer;
+                  textBuffer = "";
+                  updateAssistant((m) => ({ ...m, text: m.text + chunk }));
+                }
+              }, 16); // 60 FPS throttle window (~16ms)
+            }
+          } else {
+            // Any non-text event (tool call, turn end) immediately flushes pending text
+            flushTextBuffer();
+            if (event.type === "tool_finished" || event.type === "tool_permission_denied") {
+              textNeedsBreak = true;
+            }
+            if (event.type === "verification_result" && !event.passed) outcome.verificationFailed = true;
+            if (event.type === "tool_permission_denied") outcome.permissionDenied = true;
+            if (event.type === "error") outcome.errored = true;
+            if (event.type === "cancelled") outcome.cancelled = true;
+            applyEvent(event, updateAssistant, setUsage, setMessages, setPlan, setTestStatus);
           }
-          if (event.type === "tool_finished" || event.type === "tool_permission_denied") {
-            textNeedsBreak = true;
-          }
-          if (event.type === "verification_result" && !event.passed) outcome.verificationFailed = true;
-          if (event.type === "tool_permission_denied") outcome.permissionDenied = true;
-          if (event.type === "error") outcome.errored = true;
-          if (event.type === "cancelled") outcome.cancelled = true;
-          applyEvent(event, updateAssistant, setUsage, setMessages, setPlan, setTestStatus);
           onEvent?.(event);
         }
       } catch (err: unknown) {
+        flushTextBuffer();
         outcome.errored = true;
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = getErrorMessage(err);
         updateAssistant((m) => ({
           ...m,
           errorText: friendlyError(msg),
         }));
       } finally {
+        flushTextBuffer();
         updateAssistant((m) => ({ ...m, streaming: false }));
         onTurnSettledRef.current?.();
       }
@@ -487,7 +493,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
           }
         }
       } catch (err: unknown) {
-        printSystemMessage(`Mission error: ${err instanceof Error ? err.message : String(err)}`);
+        printSystemMessage(`Mission error: ${getErrorMessage(err)}`);
       } finally {
         setIsBusy(false);
         // Messages typed between mission turns queued — deliver them now,
@@ -519,262 +525,4 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     sentHistory,
     recordSentMessage,
   };
-}
-
-function systemMessage(text: string): DisplayMessage {
-  return { id: randomUUID(), role: "system", text, streaming: false, toolCalls: [], subAgents: [] };
-}
-
-/**
- * Append a system notice with the same transcript bound as user/assistant
- * turns. System notices used to bypass TRANSCRIPT_STATE_CAP, so long sessions
- * (rate-limit storms, verifications, checkpoints) grew `messages` without
- * bound — memory growth plus per-keystroke windowing cost.
- */
-function appendSystemMessage(
-  setMessages: React.Dispatch<React.SetStateAction<DisplayMessage[]>>,
-  text: string
-): void {
-  setMessages((prev) => {
-    const next = [...prev, systemMessage(text)];
-    return next.length > TRANSCRIPT_STATE_CAP ? next.slice(-TRANSCRIPT_STATE_CAP) : next;
-  });
-}
-
-function applyEvent(
-  event: AgentEvent,
-  update: (fn: (m: DisplayMessage) => DisplayMessage) => void,
-  setUsage: React.Dispatch<React.SetStateAction<UsageTotals>>,
-  setMessages: React.Dispatch<React.SetStateAction<DisplayMessage[]>>,
-  setPlan: React.Dispatch<React.SetStateAction<string | null>>,
-  setTestStatus?: React.Dispatch<React.SetStateAction<"green" | "failed" | "running" | null>>
-): void {
-  switch (event.type) {
-    case "text_delta":
-      update((m) => ({ ...m, text: m.text + event.text }));
-      break;
-    case "tool_started":
-      update((m) => ({
-        ...m,
-        toolCalls: [
-          ...m.toolCalls,
-          { id: event.id, name: event.name, input: event.input, status: "running" },
-        ],
-      }));
-      break;
-    case "tool_finished":
-      update((m) => ({
-        ...m,
-        toolCalls: m.toolCalls.map((t) =>
-          t.id === event.id
-            ? {
-                ...t,
-                status: (event.result.isError ? "error" : "done") as DisplayToolCall["status"],
-                summary: event.result.summary,
-                output: retainOutput(event.result.output),
-              }
-            : t
-        ),
-      }));
-      break;
-    case "tool_permission_denied":
-      update((m) => ({
-        ...m,
-        toolCalls: m.toolCalls.map((t) =>
-          t.id === event.id ? { ...t, status: "error", summary: "Denied" } : t
-        ),
-      }));
-      break;
-    case "usage":
-      // Session-wide running total for the StatusBar
-      setUsage((prev) => ({
-        inputTokens: prev.inputTokens + event.inputTokens,
-        outputTokens: prev.outputTokens + event.outputTokens,
-      }));
-      break;
-    case "error":
-      // If an automatic rate-limit retry already ran this turn, its "waiting…
-      // retrying" notice is now stale — rewrite it so the transcript never
-      // implies a retry is still pending after the final error landed.
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.role === "system" && m.text.startsWith("Rate limited — waiting")
-            ? { ...m, text: "Rate limited — the automatic retry also hit the limit (error above)." }
-            : m
-        )
-      );
-      // Compact + actionable in the transcript (raw provider error walls are
-      // multi-line dumps); the error is rendered as its own styled block.
-      update((m) => ({
-        ...m,
-        errorText: friendlyError(event.message),
-        toolCalls: m.toolCalls.map((t) =>
-          t.status === "running" ? { ...t, status: "error" as const, summary: "Turn failed" } : t
-        ),
-      }));
-      break;
-    case "compacted":
-      appendSystemMessage(
-        setMessages,
-        `Conversation compacted to stay within context limits.\n\n${event.summary}`
-      );
-      break;
-    // truthful-engine events — surfaced, never silently dropped.
-    case "rate_limit_wait":
-      appendSystemMessage(
-        setMessages,
-        `Rate limited — waiting ${event.seconds}s, retrying automatically…`
-      );
-      break;
-    case "budget_exhausted":
-      appendSystemMessage(
-        setMessages,
-        'Turn stopped after reaching its step limit. Type "continue" to keep going, or revise the task.'
-      );
-      break;
-    case "loop_detected":
-      appendSystemMessage(
-        setMessages,
-        `Loop guard: ${event.tool} was repeated 3× without progress. Further identical calls are blocked.`
-      );
-      break;
-    case "plan_updated":
-      // drive the persistent plan line, not just the transcript.
-      setPlan(event.plan || null);
-      appendSystemMessage(setMessages, `Plan updated: ${event.plan}`);
-      break;
-    case "verification_started":
-      setTestStatus?.("running");
-      update((m) => {
-        const list = m.verifications ?? [];
-        if (list.length > 0 && list[list.length - 1].status === "failed") {
-          const last = list[list.length - 1];
-          const updated = [
-            ...list.slice(0, -1),
-            { ...last, status: "running" as const, repairsUsed: last.repairsUsed + 1 },
-          ];
-          return { ...m, verifications: updated };
-        }
-        return {
-          ...m,
-          verifications: [
-            ...list,
-            {
-              id: randomUUID(),
-              command: event.command,
-              status: "running",
-              repairsUsed: 0,
-            },
-          ],
-        };
-      });
-      break;
-    case "verification_result":
-      setTestStatus?.(event.passed ? "green" : "failed");
-      update((m) => {
-        const list = m.verifications ?? [];
-        if (list.length === 0) return m;
-        const lastIdx = list.length - 1;
-        const updated = list.map((v, i) =>
-          i === lastIdx
-            ? {
-                ...v,
-                status: (event.passed ? "passed" : "failed") as DisplayVerification["status"],
-                summary: event.summary,
-              }
-            : v
-        );
-        return { ...m, verifications: updated };
-      });
-      break;
-    case "verification_gave_up":
-      // Repair budget exhausted — say so instead of letting a green status bar
-      // claim verified. The card that last failed stays failed with the reason.
-      setTestStatus?.("failed");
-      appendSystemMessage(
-        setMessages,
-        `⚠ Auto-verification gave up after its repair budget — tests may still be failing (${event.command}).`
-      );
-      update((m) => {
-        const list = m.verifications ?? [];
-        if (list.length === 0) return m;
-        const lastIdx = list.length - 1;
-        const verifications = list.map((v, i) =>
-          i === lastIdx
-            ? {
-                ...v,
-                status: "failed" as const,
-                summary: v.summary ?? "Repair attempts exhausted — tests may still be failing.",
-              }
-            : v
-        );
-        return { ...m, verifications };
-      });
-      break;
-    case "checkpoint":
-      appendSystemMessage(
-        setMessages,
-        `Checkpoint #${event.id}: ${event.files} file${event.files === 1 ? "" : "s"} snapshotted — /rewind ${event.id} to undo.`
-      );
-      break;
-    // Delegation renders as cards on the assistant turn —
-    // the started card is the live progress, the finished card carries the
-    // report (expandable via /expand). Replaces the old system notices.
-    case "subagent_started":
-      update((m) => ({
-        ...m,
-        subAgents: [
-          ...m.subAgents,
-          { task: event.task, status: "running", toolCalls: 0, inputTokens: 0, outputTokens: 0, report: "" },
-        ],
-      }));
-      break;
-    case "subagent_progress":
-      update((m) => {
-        const idx = m.subAgents.findIndex((s) => s.status === "running");
-        if (idx === -1) return m;
-        const subAgents = m.subAgents.map((s, i) =>
-          i === idx ? { ...s, toolCalls: s.toolCalls + 1, lastTool: event.tool } : s
-        );
-        return { ...m, subAgents };
-      });
-      break;
-    case "subagent_finished": {
-      setUsage((prev) => ({
-        inputTokens: prev.inputTokens + event.inputTokens,
-        outputTokens: prev.outputTokens + event.outputTokens,
-      }));
-      const done: DisplaySubAgent = {
-        task: "",
-        status: "done",
-        toolCalls: event.toolCalls,
-        inputTokens: event.inputTokens,
-        outputTokens: event.outputTokens,
-        report: retainReport(event.report),
-        lastTool: undefined,
-      };
-      update((m) => {
-        const idx = m.subAgents.findIndex((s) => s.status === "running");
-        if (idx === -1) return { ...m, subAgents: [...m.subAgents, done] };
-        const subAgents = m.subAgents.map((s, i) =>
-          i === idx ? { ...s, ...done, task: s.task } : s
-        );
-        return { ...m, subAgents };
-      });
-      break;
-    }
-    case "cancelled":
-      // A cancelled turn can strand running cards — mark them honestly.
-      // (The for-await loop ending still flips streaming/isBusy as before.)
-      update((m) => ({
-        ...m,
-        toolCalls: m.toolCalls.map((t) =>
-          t.status === "running" ? { ...t, status: "cancelled" as const, summary: "Cancelled" } : t
-        ),
-        subAgents: m.subAgents.map((s) => (s.status === "running" ? { ...s, status: "cancelled" } : s)),
-      }));
-      break;
-    // "turn_complete" — no per-message change; the for-await loop ending
-    // triggers the finally block that flips streaming/isBusy.
-  }
 }

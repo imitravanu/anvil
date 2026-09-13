@@ -1,4 +1,5 @@
-import { ToolContext, ToolDefinition, ToolExecutor, ToolExecutionResult } from "./types.js";
+import { getErrorMessage } from "../errors.js";
+import { ToolContext, ToolDefinition, ToolExecutor, ToolExecutionResult, SessionToolExecutor } from "./types.js";
 import * as readFile from "./readFile.js";
 import * as writeFile from "./writeFile.js";
 import * as editFile from "./editFile.js";
@@ -20,6 +21,7 @@ interface RegisteredTool {
    * minimum export shape — optional, falls back to a generic description.
    */
   describe?: (input: unknown, ctx: ToolContext) => Promise<string>;
+  executeSession?: SessionToolExecutor;
 }
 
 const REGISTRY: RegisteredTool[] = [
@@ -31,17 +33,16 @@ const REGISTRY: RegisteredTool[] = [
   { definition: bash.definition, execute: bash.execute, describe: bash.describe },
   { definition: outline.definition, execute: outline.execute },
   { definition: verifyTests.definition, execute: verifyTests.execute },
-  // Session intercepts this tool before the generic executor (sets session.plan
-  // and emits plan_updated); the executor here is just a safe no-op.
-  { definition: updatePlan.definition, execute: updatePlan.execute },
-  // Session intercepts delegate_task and runs a sub-agent.
-  { definition: delegateTask.definition, execute: delegateTask.execute },
-  // Project memory persistence (.anvil/memory.md)
+  { definition: updatePlan.definition, execute: updatePlan.execute, executeSession: updatePlan.executeSession },
+  { definition: delegateTask.definition, execute: delegateTask.execute, executeSession: delegateTask.executeSession },
   { definition: updateMemory.definition, execute: updateMemory.execute },
 ];
 
-
 export const TOOL_DEFINITIONS: ToolDefinition[] = REGISTRY.map((t) => t.definition);
+
+export function getSessionToolHandler(name: string): SessionToolExecutor | undefined {
+  return REGISTRY.find((t) => t.definition.name === name)?.executeSession;
+}
 
 // external tool executors (MCP). The built-in registry stays
 // closed; unknown names fall through to registered prefixes in order.
@@ -76,6 +77,14 @@ export async function executeTool(
   input: unknown,
   ctx: ToolContext
 ): Promise<ToolExecutionResult> {
+  if (input && typeof input === "object" && "__parseError" in (input as Record<string, unknown>)) {
+    const rawInput = (input as { rawInput?: string }).rawInput ?? "";
+    return {
+      output: { error: `Malformed JSON in tool call input. Raw: ${rawInput}` },
+      isError: true,
+      summary: `${name}: malformed JSON input`,
+    };
+  }
   const tool = REGISTRY.find((t) => t.definition.name === name);
   if (!tool) {
     for (const ext of externalExecutors) {
@@ -83,9 +92,9 @@ export async function executeTool(
       try {
         const r = await ext.exec(name, input, ctx);
         if (r.claimed && r.result) return r.result;
-      } catch (err: any) {
+      } catch (err: unknown) {
         return {
-          output: { error: err.message ?? String(err) },
+          output: { error: getErrorMessage(err) },
           isError: true,
           summary: `${name} failed`,
         };
@@ -99,9 +108,9 @@ export async function executeTool(
   }
   try {
     return await tool.execute(input, ctx);
-  } catch (err: any) {
+  } catch (err: unknown) {
     return {
-      output: { error: err.message ?? String(err) },
+      output: { error: getErrorMessage(err) },
       isError: true,
       summary: `${name} failed`,
     };

@@ -1,11 +1,8 @@
-import { ToolDefinition, ToolExecutionResult } from "./types.js";
+import { ToolDefinition, ToolExecutionResult, ToolSessionContext } from "./types.js";
 
 /**
- * : the plan scratchpad tool. Defined here so models see it in
- * TOOL_DEFINITIONS and so it NEVER enters the permission path (non-mutating).
- * The AgentSession intercepts update_plan before the generic executor so it can
- * set session.plan and emit the plan_updated event; this executor is a safe
- * no-op fallback for direct executeTool calls.
+ * Plan scratchpad tool. Validates plan format and provides both standalone
+ * execution and session-connected execution.
  */
 export const definition: ToolDefinition = {
   name: "update_plan",
@@ -20,6 +17,46 @@ export const definition: ToolDefinition = {
   mutating: false,
 };
 
-export async function execute(): Promise<ToolExecutionResult> {
-  return { output: { ok: true }, isError: false, summary: "Plan recorded." };
+export async function execute(input: unknown): Promise<ToolExecutionResult> {
+  const plan = (input as { plan?: unknown } | undefined)?.plan;
+  if (typeof plan !== "string" || !plan.trim()) {
+    return {
+      output: { error: "update_plan requires a string `plan`." },
+      isError: true,
+      summary: "update_plan: plan must be a string.",
+    };
+  }
+  return { output: { ok: true, plan }, isError: false, summary: "Plan recorded." };
+}
+
+export async function* executeSession(
+  input: unknown,
+  ctx: ToolSessionContext,
+  inputKey: string
+): AsyncGenerator<any, ToolExecutionResult> {
+  const plan = (input as { plan?: unknown } | undefined)?.plan;
+  if (typeof plan !== "string" || !plan.trim()) {
+    ctx.recordLedger({
+      eventType: "tool_finished",
+      tool: "update_plan",
+      inputHash: inputKey,
+      outcome: "error",
+      elapsedMs: 0,
+    });
+    return {
+      output: { error: "update_plan requires a string `plan`." },
+      isError: true,
+      summary: "update_plan: plan must be a string.",
+    };
+  }
+  ctx.setPlan?.(plan);
+  ctx.recordLedger({
+    eventType: "plan_updated",
+    tool: "update_plan",
+    inputHash: inputKey,
+    outcome: "ok",
+    elapsedMs: 0,
+  });
+  yield { type: "plan_updated", plan };
+  return { output: { ok: true }, isError: false, summary: "Plan updated." };
 }

@@ -90,14 +90,17 @@ describe("PermissionPrompt", () => {
     expect(mcpServerOf("mcp___tool")).toBeNull();
   });
 
-  it("names the MCP server and warns about external visibility", async () => {
-    const { request } = makeRequest("mcp_docs__fetch", "MCP call input: {...}");
+  it("names the MCP server with badge, parameter list, and warns about external visibility", async () => {
+    const { request } = makeRequest("mcp_docs__fetch", "Parameters:\n  • query: \"anvil\"\n  • limit: 5");
     const app = renderThemed(<PermissionPrompt request={request} broker={brokerStub()} />);
     await tick();
     const out = frameText(app.lastFrame);
-    expect(out).toContain("MCP fetch (server: docs)");
+    expect(out).toContain("[mcp:docs] fetch");
     expect(out).toContain("wants to run external tool fetch");
     expect(out).toContain("visible to that server");
+    expect(out).toContain("Parameters:");
+    expect(out).toContain("• query: \"anvil\"");
+    expect(out).toContain("• limit: 5");
     app.unmount();
   });
 

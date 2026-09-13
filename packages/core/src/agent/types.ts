@@ -74,7 +74,9 @@ export interface AgentOptions {
    * When enabled, mutations trigger automated test verification with self-repair before turn completion.
    */
   autoVerify?: boolean | string;
+  /** Optional designated summarizer model for compaction. */
+  compactionModel?: string;
 }
 
 /** Default inner iteration budget applied when maxInnerIterations is not set. */
-export const DEFAULT_MAX_INNER_ITERATIONS = 20;
+export { DEFAULT_MAX_INNER_ITERATIONS } from "../config/constants.js";

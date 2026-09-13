@@ -221,6 +221,13 @@ describe("provider factories", () => {
         maxTokens: 10,
       })
     );
-    expect(events).toEqual([{ type: "error", message: "OpenAI API key not configured." }]);
+    expect(events).toEqual([
+      {
+        type: "error",
+        message: "OpenAI API key not configured.",
+        code: "AUTH_FAILED",
+        isRetryable: false,
+      },
+    ]);
   });
 });

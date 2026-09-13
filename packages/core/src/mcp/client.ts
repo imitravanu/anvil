@@ -1,8 +1,10 @@
+import { getErrorMessage } from "../errors.js";
 import type { McpTransport } from "./transport.js";
 import { createStdioTransport } from "./transport.js";
 import { loadMcpConfig } from "../config/mcp.js";
 import type { ValidatedMcpServer } from "../config/mcp.js";
 import { CORE_VERSION } from "../version.js";
+import { DEFAULT_MCP_REQUEST_TIMEOUT_MS } from "../config/constants.js";
 
 // ---------------------------------------------------------------------------
 // MCP client: minimal JSON-RPC 2.0 over an McpTransport.
@@ -34,6 +36,8 @@ export interface McpServerConnection {
   client?: McpClient;
   /** Per-call timeout default, from the server's config. */
   timeoutMs: number;
+  /** Retained server config for health checks and auto-reconnection. */
+  serverConfig?: ValidatedMcpServer;
 }
 
 export interface McpCallResult {
@@ -52,7 +56,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = DEFAULT_MCP_REQUEST_TIMEOUT_MS;
 
 /**
  * One client per connection: multiplexes concurrent requests by JSON-RPC id
@@ -199,7 +203,7 @@ export async function connectServer(
     } catch {
       // ignore cleanup failures
     }
-    return { id, status: "error", error, tools: [], timeoutMs: cfg.timeoutMs };
+    return { id, status: "error", error, tools: [], timeoutMs: cfg.timeoutMs, serverConfig: cfg };
   };
   try {
     const client = new McpClient(transport);
@@ -246,9 +250,9 @@ export async function connectServer(
       if (next !== undefined) seenCursors.add(next);
       cursor = next;
     } while (cursor !== undefined);
-    return { id, status: "ready", tools, serverVersion, transport, client, timeoutMs };
-  } catch (err: any) {
-    return fail(err?.message ?? String(err));
+    return { id, status: "ready", tools, serverVersion, transport, client, timeoutMs, serverConfig: cfg };
+  } catch (err: unknown) {
+    return fail(getErrorMessage(err));
   }
 }
 
@@ -271,8 +275,8 @@ export async function connectAllMcpServers(
       let transport: McpTransport;
       try {
         transport = createStdioTransport(srv.command, srv.args, srv.env);
-      } catch (err: any) {
-        conns.set(srv.id, { id: srv.id, status: "error", error: err?.message ?? String(err), tools: [], timeoutMs: srv.timeoutMs });
+      } catch (err: unknown) {
+        conns.set(srv.id, { id: srv.id, status: "error", error: getErrorMessage(err), tools: [], timeoutMs: srv.timeoutMs, serverConfig: srv });
         return;
       }
       const old = conns.get(srv.id);
@@ -319,8 +323,51 @@ export async function connectAllMcpServers(
 }
 
 /**
+ * Attempt to reconnect a dead or errored server connection in place.
+ * Returns true if the connection was successfully re-established.
+ */
+export async function reconnectServerConnection(
+  conn: McpServerConnection,
+  opts?: { timeoutMs?: number }
+): Promise<boolean> {
+  if (!conn.serverConfig) return false;
+  try {
+    conn.transport?.close();
+  } catch {
+    // ignore cleanup failures
+  }
+  try {
+    const transport = createStdioTransport(
+      conn.serverConfig.command,
+      conn.serverConfig.args,
+      conn.serverConfig.env
+    );
+    const fresh = await connectServer(conn.id, conn.serverConfig, transport, opts);
+    if (fresh.status === "ready" && fresh.client) {
+      conn.status = "ready";
+      conn.error = undefined;
+      conn.tools = fresh.tools;
+      conn.serverVersion = fresh.serverVersion;
+      conn.transport = fresh.transport;
+      conn.client = fresh.client;
+      conn.timeoutMs = fresh.timeoutMs;
+      return true;
+    } else {
+      conn.status = fresh.status;
+      conn.error = fresh.error;
+      return false;
+    }
+  } catch (err: unknown) {
+    conn.status = "error";
+    conn.error = getErrorMessage(err);
+    return false;
+  }
+}
+
+/**
  * Call a server tool. Transport stays open on every outcome (timeouts and
- * errors resolve as results) — a failed call never poisons later calls .
+ * errors resolve as results) — a failed call never poisons later calls.
+ * If transport is closed or dead, automatically attempts reconnection once.
  */
 export async function callTool(
   conn: McpServerConnection,
@@ -329,10 +376,20 @@ export async function callTool(
   opts?: { signal?: AbortSignal; timeoutMs?: number }
 ): Promise<McpCallResult> {
   if (conn.status !== "ready" || !conn.client) {
-    return {
-      output: { error: `MCP server "${conn.id}" is not ready${conn.error ? `: ${conn.error}` : ""}.` },
-      isError: true,
-    };
+    if (conn.serverConfig) {
+      const reconnected = await reconnectServerConnection(conn, { timeoutMs: opts?.timeoutMs ?? conn.timeoutMs });
+      if (!reconnected || !conn.client) {
+        return {
+          output: { error: `MCP server "${conn.id}" is not ready${conn.error ? `: ${conn.error}` : ""}.` },
+          isError: true,
+        };
+      }
+    } else {
+      return {
+        output: { error: `MCP server "${conn.id}" is not ready${conn.error ? `: ${conn.error}` : ""}.` },
+        isError: true,
+      };
+    }
   }
   if (!conn.tools.some((t) => t.name === toolName)) {
     return { output: { error: `Unknown MCP tool "${toolName}" on server "${conn.id}".` }, isError: true };
@@ -345,7 +402,24 @@ export async function callTool(
       { signal: opts?.signal, timeoutMs: opts?.timeoutMs ?? conn.timeoutMs }
     );
     return { output: result, isError: (result as { isError?: unknown }).isError === true };
-  } catch (err: any) {
-    return { output: { error: err?.message ?? String(err) }, isError: true };
+  } catch (err: unknown) {
+    const msg = getErrorMessage(err).toLowerCase();
+    const isTransportDead = msg.includes("transport closed") || msg.includes("econnreset") || msg.includes("epipe");
+    if (isTransportDead && conn.serverConfig) {
+      const reconnected = await reconnectServerConnection(conn, { timeoutMs: opts?.timeoutMs ?? conn.timeoutMs });
+      if (reconnected && conn.client) {
+        try {
+          const retryResult = await conn.client.request(
+            "tools/call",
+            { name: toolName, arguments: isRecord(args) ? args : {} },
+            { signal: opts?.signal, timeoutMs: opts?.timeoutMs ?? conn.timeoutMs }
+          );
+          return { output: retryResult, isError: (retryResult as { isError?: unknown }).isError === true };
+        } catch (retryErr: unknown) {
+          return { output: { error: getErrorMessage(retryErr) }, isError: true };
+        }
+      }
+    }
+    return { output: { error: getErrorMessage(err) }, isError: true };
   }
 }

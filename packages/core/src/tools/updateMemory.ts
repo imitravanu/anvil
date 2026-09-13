@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../errors.js";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 import { appendToMemory, MEMORY_RELATIVE_PATH } from "../config/memory.js";
 
@@ -41,9 +42,9 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
     };
   } catch (err) {
     return {
-      output: { error: err instanceof Error ? err.message : String(err) },
+      output: { error: getErrorMessage(err) },
       isError: true,
-      summary: `update_memory failed: ${err instanceof Error ? err.message : String(err)}`,
+      summary: `update_memory failed: ${getErrorMessage(err)}`,
     };
   }
 };

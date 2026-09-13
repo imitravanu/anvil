@@ -3,16 +3,37 @@
  * Enforces Constitution Rule: NO Hardcoded Magic Constants.
  */
 
+function getEnvNumber(key: string, defaultVal: number): number {
+  const val = Number(process.env[key]);
+  return Number.isFinite(val) && val > 0 ? val : defaultVal;
+}
+
 // Tool Execution Limits
-export const MAX_READ_FILE_BYTES = 512 * 1024; // 512 KB
-export const RUN_COMMAND_TIMEOUT_MS = 120_000; // 2 minutes default command timeout
+export const MAX_READ_FILE_BYTES = getEnvNumber("ANVIL_MAX_READ_BYTES", 512 * 1024); // 512 KB
+export const RUN_COMMAND_TIMEOUT_MS = getEnvNumber("ANVIL_RUN_COMMAND_TIMEOUT_MS", 120_000); // 2 minutes default command timeout
 export const MIN_COMMAND_TIMEOUT_MS = 1_000; // 1 second lower bound
 export const MAX_COMMAND_TIMEOUT_MS = 600_000; // 10 minutes upper bound
-export const MAX_STREAM_BYTES = 20 * 1024; // 20 KB captured output per stream
+export const MAX_STREAM_BYTES = getEnvNumber("ANVIL_MAX_STREAM_BYTES", 20 * 1024); // 20 KB captured output per stream
 
 // Context Window & Compaction Thresholds
+export const FALLBACK_CONTEXT_WINDOW = getEnvNumber("ANVIL_FALLBACK_CONTEXT_WINDOW", 32_000);
 export const COMPACTION_TOKEN_THRESHOLD = 80_000;
+export const COMPACTION_THRESHOLD = Number(process.env.ANVIL_COMPACTION_THRESHOLD) || 0.75;
+export const KEEP_RECENT_MESSAGES = getEnvNumber("ANVIL_KEEP_RECENT_MESSAGES", 6);
 export const DEFAULT_MAX_TOKENS = 4096;
+
+// Agent Iteration & Verification Budgets
+export const DEFAULT_MAX_INNER_ITERATIONS = getEnvNumber("ANVIL_MAX_INNER_ITERATIONS", 20);
+export const MAX_VERIFY_REPAIRS = getEnvNumber("ANVIL_MAX_VERIFY_REPAIRS", 2);
+
+// Checkpoint & History Retention Limits
+export const CHECKPOINT_KEEP = getEnvNumber("ANVIL_CHECKPOINT_KEEP", 5);
+
+// MCP Limits
+export const DEFAULT_MCP_REQUEST_TIMEOUT_MS = getEnvNumber("ANVIL_MCP_TIMEOUT_MS", 30_000);
+
+// Subagent Limits
+export const SUB_AGENT_REPORT_MAX_CHARS = getEnvNumber("ANVIL_MAX_SUBAGENT_REPORT_CHARS", 8000);
 
 // Rate Limiting & Retry Policy
 export const RATE_LIMIT_MAX_RETRIES = 3;
@@ -23,9 +44,7 @@ export const RATE_LIMIT_MAX_DELAY_MS = 30_000;
 export const MAX_SUBAGENT_DEPTH = 3;
 export const MAX_CONCURRENT_SUBAGENTS = 5;
 
-// Session Review Baseline Bounds (caps the ring-independent /diff baseline
-// so a long session touching many files cannot grow memory without bound;
-// eviction drops the oldest-seen path first and /diff degrades gracefully)
+// Session Review Baseline Bounds
 export const BASELINE_MAX_PATHS = 200;
 export const BASELINE_MAX_BYTES = 8 * 1024 * 1024; // 8 MB total snapshot bytes
 

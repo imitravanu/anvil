@@ -90,6 +90,30 @@ describe("compactIfNeeded", () => {
     expect(out).toHaveLength(10);
   });
 
+  it("rate limits or errors during compaction summarization gracefully bail out without throwing", async () => {
+    const provider = new FakeProvider([
+      [{ type: "error", message: "429 Rate limit exceeded" }],
+    ]);
+    const history = makeHistory(10);
+    const { history: out, result } = await compactIfNeeded(history, 1000, 990, provider, model);
+    expect(result.compacted).toBe(false);
+    expect(out).toEqual(history);
+  });
+
+  it("uses custom summarizerModel when provided in options", async () => {
+    const provider = new FakeProvider([
+      [
+        { type: "text_delta", text: "Summary text" },
+        { type: "turn_end", stopReason: "end_turn" },
+      ],
+    ]);
+    const history = makeHistory(10);
+    await compactIfNeeded(history, 1000, 990, provider, model, undefined, {
+      summarizerModel: "custom-summarizer-model",
+    });
+    expect(provider.calls[0].model).toBe("custom-summarizer-model");
+  });
+
   it("findCleanCompactionCut shifts cut point to keep tool_call and tool_result together", () => {
     const history: ConversationMessage[] = [
       textMsg("user", "start"),

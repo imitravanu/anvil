@@ -10,7 +10,7 @@ import path from "node:path";
 export function createEvalMockProvider(task: EvalTask): ModelProvider {
   let turnCount = 0;
   return {
-    id: "eval-mock" as any,
+    id: "openai",
     displayName: "Anvil Eval Mock Provider",
     isConfigured: () => true,
     async *streamCompletion(request: CompletionRequest): AsyncGenerator<StreamEvent> {

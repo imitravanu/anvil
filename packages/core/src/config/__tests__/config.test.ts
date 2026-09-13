@@ -1,4 +1,4 @@
-import { describe, expect, it, afterEach } from "vitest";
+import { describe, expect, it, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -115,5 +115,20 @@ describe("anvilHome relocation", () => {
     saveCredential("geminiApiKey", "k");
     const mode = fs.statSync(path.join(tmp, "credentials.json")).mode & 0o777;
     expect(mode).toBe(0o600);
+  });
+
+  it("warns if credentials.json has permissions other than 0600", () => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-home-"));
+    process.env.ANVIL_HOME = tmp;
+    const credPath = path.join(tmp, "credentials.json");
+    fs.writeFileSync(credPath, JSON.stringify({ geminiApiKey: "k" }), "utf-8");
+    fs.chmodSync(credPath, 0o644);
+
+    const warnSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    loadCredentials();
+    if (process.platform !== "win32") {
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/expected 600/));
+    }
+    warnSpy.mockRestore();
   });
 });
