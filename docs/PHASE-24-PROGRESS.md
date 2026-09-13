@@ -110,3 +110,23 @@ All 17 sub-tasks have been completed, passing all 62 test files in `@anvil/core`
 | Fast Mock Evals | `npm run eval -- --fast --mock` | PASS (15/15 tasks, 100%) |
 | Provider Certification Matrix | `npm run certify -- --mock --all` | PASS (10/10 providers live) |
 | Guardian Gate Full Run | `node scripts/verify-gate.mjs --ack-protected-change` | PASS (All 8 steps clean, exit code 0) |
+
+---
+
+## 4. Post-24 Gate Hardening Follow-up (protected change, human review required)
+
+Protected files touched: `scripts/verify-gate.mjs`, `.githooks/pre-commit`,
+`packages/cli/src/__tests__/gate.sentinel.test.ts`, `scripts/gate-manifest.json`
+(regenerated). Non-protected: `packages/core/src/providers/freeModels.ts`
+(comment reword avoids `as never` false positive + `intentional:` prefix),
+this doc section (declaration per AGENTS.md §4).
+
+Gate fixes: (a) Step 1 Rule 5 broadened — any `instanceof Error ?` ternary flags
+(JSON.stringify variant closed) + `?.message ?? String(` added; (b) Step 1.5
+residual adds `as any|never`, `TODO|FIXME|XXX`, core `tui|cli` breach families;
+(c) Step 1 multiline second pass (as/catch/instanceof split across lines);
+(d) CI push base uses merge-base with origin/master|main (HEAD~1 fallback);
+(e) PATHSPEC + walker cover `.js/.mjs/.cjs` and `packages/*/scripts`;
+walker skips node_modules/dist; (f) Step 0 sensor 4→8 fixtures, threshold 4→7;
+(g) pre-commit hook adds TODO + tui/cli heuristic, broadened instanceof;
+(h) sentinel asserts new residual + hook strings.

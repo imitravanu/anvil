@@ -142,6 +142,13 @@ Slash commands inside the app: /help /clear /connect /diff /expand /goal /image 
 // --- Startup crash guard: never leave the terminal in a broken raw-mode state. ---
 let appInstance: { unmount: () => void } | null = null;
 
+function crashDetail(err: unknown): string {
+  if (err instanceof Error) {
+    return err.stack ?? err.message;
+  }
+  return getErrorMessage(err);
+}
+
 function crash(err: unknown): never {
   try {
     appInstance?.unmount();
@@ -155,9 +162,7 @@ function crash(err: unknown): never {
     // not a TTY — nothing to restore
   }
   process.stderr.write(
-    "Anvil hit an unexpected error:\n" +
-      (err instanceof Error ? (err.stack ?? err.message) : String(err)) +
-      "\n"
+    "Anvil hit an unexpected error:\n" + crashDetail(err) + "\n"
   );
   process.exit(1);
 }
@@ -166,9 +171,7 @@ process.on("uncaughtException", crash);
 // that diagnostic, but do not forcibly tear down Ink (and leave raw mode broken).
 process.on("unhandledRejection", (reason) => {
   process.stderr.write(
-    "Anvil observed an unhandled promise rejection:\n" +
-      (reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)) +
-      "\n"
+    "Anvil observed an unhandled promise rejection:\n" + crashDetail(reason) + "\n"
   );
   process.exitCode = 1;
 });

@@ -47,7 +47,7 @@ function makeProvider() {
           { type: "turn_end", stopReason: "end_turn" },
         ],
       ];
-  return { provider: new FakeProvider(script) as never, model: "fake-model", live: false } as const;
+  return { provider: new FakeProvider(script), model: "fake-model", live: false } as const;
 }
 
 // ------------------------------------------------------------------- main

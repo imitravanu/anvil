@@ -440,7 +440,7 @@ function seedFreshness(key: string): { at: number; report: SyncReport | null } |
       }
     }
   } catch {
-    // ignore — unseeded behaves as never-synced
+    // intentional: cache read failure means unseeded, treat as unsynced
   }
   return null;
 }

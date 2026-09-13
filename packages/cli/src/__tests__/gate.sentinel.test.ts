@@ -38,6 +38,7 @@ describe("gate integrity sentinel", () => {
     expect(gate).toContain("as\\s+(any|never)"); // rule: no `as any` / `as never`
     expect(gate).toContain("catch\\s*"); // rule: no silent catch blocks
     expect(gate).toContain("@anvil/tui"); // rule: core must not import tui
+    expect(gate).toContain("tui|cli"); // rule: residual arch covers cli too
     expect(gate).toContain("instanceof\\s+Error"); // rule: use getErrorMessage
     expect(gate).toContain("TODO|FIXME|XXX"); // rule: no placeholders
     expect(gate).toContain("borderColor|backgroundColor"); // rule: no hardcoded colors
@@ -112,6 +113,9 @@ describe("gate integrity sentinel", () => {
     expect(gate).toContain("RESIDUAL_RULES");
     expect(gate).toContain("walkSourceFiles");
     expect(gate).toContain(".message\\s*\\?\\?\\s*String\\(");
+    expect(gate).toContain("type escape (as any/never)");
+    expect(gate).toContain("placeholder marker (TODO/FIXME/XXX)");
+    expect(gate).toContain("core boundary breach");
     expect(gate).toContain("Full-tree residual scan clean");
     // Residual debt must not be suppressible via the allowlist.
     expect(gate.indexOf("STEP 1.5")).toBeLessThan(gate.indexOf("Full-tree residual scan clean"));
@@ -128,6 +132,8 @@ describe("gate integrity sentinel", () => {
     expect(hook).toContain("PROTECTED ARTIFACT CHANGE DETECTED");
     expect(hook).toContain("exit 1");
     expect(hook).toContain("any|never"); // slop scan layer present
+    expect(hook).toContain("TODO|FIXME|XXX"); // placeholder layer present
+    expect(hook).toContain("@anvil/(tui|cli)"); // arch heuristic present
     // The hook must never smuggle the human-ack flag: a protected change must
     // always require the explicit flag (or --no-verify, which is loud).
     expect(hook).not.toContain("--ack-protected-change");

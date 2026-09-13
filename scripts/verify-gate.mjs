@@ -69,7 +69,12 @@ export function scanLinesForViolations(diffLines) {
       }
 
       // Rule 5: No sequential raw error formatting (must use getErrorMessage)
-      if (/instanceof\s+Error\s*\?\s*[^:]+\s*:\s*String\(/.test(addedText)) {
+      // 5a: ternary with String() fallback. 5b: ternary with ANY fallback
+      // (e.g. JSON.stringify) — still slop, use getErrorMessage. 5c: optional-
+      // chaining fallback form (also covered by residual drain 1.5).
+      if (/instanceof\s+Error\s*\?/.test(addedText)) {
+        violations.push(`${currentFile}: Raw error formatting "${addedText}" (Rule 2.1: Import and use getErrorMessage(err) from @anvil/core)`);
+      } else if (/\.\s*message\s*\?\?\s*String\s*\(/.test(addedText)) {
         violations.push(`${currentFile}: Raw error formatting "${addedText}" (Rule 2.1: Import and use getErrorMessage(err) from @anvil/core)`);
       }
 
@@ -90,13 +95,17 @@ logStep(0, "Verifying Gate Sensor detection integrity...");
 const sensorTestFixtures = [
   "+++ b/packages/core/src/sensorFixture.ts",
   "+ const x = data as any;",
+  "+ const y = data as never;",
   "+ try { doSomething(); } catch {}",
   "+ const msg = err instanceof Error ? err.message : String(err);",
+  "+ const msg2 = err instanceof Error ? err.message : JSON.stringify(err);",
+  "+ const msg3 = e.message ?? String(e);",
   "+ import { TuiComponent } from '@anvil/tui';",
+  "+ // TODO: finish later",
 ];
 const sensorResults = scanLinesForViolations(sensorTestFixtures);
-if (sensorResults.length < 4) {
-  fail("STEP 0", `Gate sensor failed to detect intentional test slop (caught ${sensorResults.length}/4). Sensor integrity compromised.`);
+if (sensorResults.length < 7) {
+  fail("STEP 0", `Gate sensor failed to detect intentional test slop (caught ${sensorResults.length}/7). Sensor integrity compromised.`);
 } else {
   pass("STEP 0", "Gate sensor successfully verified against all intentional violation fixtures.");
 }
@@ -157,7 +166,7 @@ const args = process.argv.slice(2);
 const stagedOnly = args.includes("--staged");
 
 try {
-  const PATHSPEC = "'packages/*/src/**/*.ts' 'packages/*/src/**/*.tsx'";
+  const PATHSPEC = "'packages/*/src/**/*.ts' 'packages/*/src/**/*.tsx' 'packages/*/src/**/*.js' 'packages/*/src/**/*.mjs' 'packages/*/src/**/*.cjs' 'packages/*/scripts/**/*.ts'";
   const ciMode = process.env.CI === "true";
   const ackProtected = args.includes("--ack-protected-change");
 
@@ -166,7 +175,23 @@ try {
   // against the previous commit.
   let base = "HEAD";
   if (ciMode) {
-    base = process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}...HEAD` : "HEAD~1";
+    if (process.env.GITHUB_BASE_REF) {
+      base = `origin/${process.env.GITHUB_BASE_REF}...HEAD`;
+    } else {
+      // Push path: HEAD~1 blinds multi-commit pushes for Step-1-only families
+      // (as-any, TODO, arch have no other checkpoint until residual covers them;
+      // now residual does, but keep the diff wide anyway). Prefer merge-base.
+      let mb = "";
+      for (const ref of ["origin/master", "origin/main"]) {
+        try {
+          mb = execSync(`git merge-base ${ref} HEAD`, { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"], timeout: 15_000 }).trim();
+          if (mb) { base = `${mb}...HEAD`; break; }
+        } catch {
+          // intentional: ref may not exist in this clone, try next
+        }
+      }
+      if (!mb) base = "HEAD~1";
+    }
   }
 
   let diff = "";
@@ -205,6 +230,33 @@ try {
 
   const lines = diff.split("\n");
   const rawViolations = scanLinesForViolations(lines);
+
+  // Multiline second pass: per-line scanning misses tokens split across lines
+  // (e.g. `data as` +\n + `any;`, `catch (e)` +\n + `{}`, `instanceof` +\n +
+  // `Error ?`). Reconstruct per-file added text and test joined patterns.
+  {
+    const perFile = new Map();
+    let cur = "";
+    for (const line of lines) {
+      if (line.startsWith("+++ b/")) { cur = line.slice(6); continue; }
+      if (line.startsWith("+") && !line.startsWith("+++")) {
+        perFile.set(cur, (perFile.get(cur) ?? "") + line.slice(1) + "\n");
+      }
+    }
+    const multi = [
+      { re: /\bas\s*\n\s*(any|never)\b/, label: `Forbidden type escape split across lines (Rule 2.2: No 'as any' / 'as never')` },
+      { re: /catch\s*(?:\([^)]*\))?\s*\n\s*\{\s*\}/, label: `Silent catch block split across lines (Rule 2.3: No silent catch {})` },
+      { re: /instanceof\s*\n\s*Error\s*\?|instanceof\s+Error\s*\n\s*\?/, label: `Raw error formatting split across lines (Rule 2.1: use getErrorMessage(err))` },
+    ];
+    for (const [file, text] of perFile) {
+      if (file.includes("__tests__") || file.includes(".test.")) continue;
+      for (const { re, label } of multi) {
+        if (re.test(text) && !rawViolations.some((v) => v.startsWith(file + ":"))) {
+          rawViolations.push(`${file}: ${label}`);
+        }
+      }
+    }
+  }
 
   // Filter against .fresh-allowlist.json if present. The allowlist is data the
   // gate trusts — validate its shape BEFORE applying it. A broad entry such as
@@ -308,9 +360,12 @@ try {
 logStep("1.5", "Scanning FULL source files for legacy slop the diff scanner cannot see...");
 
 const RESIDUAL_RULES = [
-  { name: "raw error formatting (instanceof/ternary)", re: /instanceof\s+Error\s*\?\s*[A-Za-z_$][\w$]*\.message\s*:\s*String\(/ },
+  { name: "raw error formatting (instanceof ternary, any fallback)", re: /instanceof\s+Error\s*\?/ },
   { name: "raw error formatting (?.message ?? String)", re: /\.message\s*\?\?\s*String\(/ },
   { name: "core self-import (@anvil/core inside packages/core)", re: /from\s+["']@anvil\/core["']/, onlyCore: true },
+  { name: "core boundary breach (imports tui/cli)", re: /@anvil\/(tui|cli)/, onlyCore: true },
+  { name: "type escape (as any/never)", re: /\bas\s+(any|never)\b/ },
+  { name: "placeholder marker (TODO/FIXME/XXX)", re: /\b(TODO|FIXME|XXX)\b/ },
   { name: "empty catch block", re: /catch\s*(?:\([^)]*\))?\s*\{\s*\}/ },
   { name: "hardcoded color in TUI components", re: /\b(?:color|borderColor|backgroundColor)\s*=\s*["'](?:cyan|green|red|yellow|blue|magenta|white|black|gray)["']/, onlyTuiComponents: true },
 ];
@@ -319,8 +374,9 @@ function walkSourceFiles(dir, out) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
+      if (entry.name === "node_modules" || entry.name === "dist") continue;
       walkSourceFiles(full, out);
-    } else if (entry.isFile() && /\.tsx?$/.test(entry.name)) {
+    } else if (entry.isFile() && /\.[cm]?[jt]sx?$/.test(entry.name)) {
       out.push(full);
     }
   }
@@ -335,11 +391,15 @@ function walkSourceFiles(dir, out) {
     if (rel.includes("__tests__") || rel.includes("/dist/")) continue;
     const isCore = rel.startsWith("packages/core/");
     const isTuiComponent = rel.startsWith("packages/tui/src/components/");
+    const isTestFile = rel.includes(".test.");
     const lines = fs.readFileSync(file, "utf-8").split("\n");
     for (let i = 0; i < lines.length; i++) {
       for (const rule of RESIDUAL_RULES) {
         if (rule.onlyCore && !isCore) continue;
         if (rule.onlyTuiComponents && !isTuiComponent) continue;
+        // Mirror Step 1 exemption: type escapes are allowed in test fixtures
+        // (mock providers, ink harnesses matched by __tests__/ or .test.).
+        if (isTestFile && rule.name.startsWith("type escape")) continue;
         if (rule.re.test(lines[i])) {
           hits.push(`${rel}:${i + 1} ${rule.name}`);
         }

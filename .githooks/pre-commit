@@ -32,13 +32,13 @@ if [ -n "$blocked" ]; then
 fi
 
 # --- Layer B: staged slop scan (context-free patterns; full scan = the gate) -
-added=$(git diff --cached -- 'packages/*/src/**/*.ts' 'packages/*/src/**/*.tsx' \
+added=$(git diff --cached -- 'packages/*/src/**/*.ts' 'packages/*/src/**/*.tsx' 'packages/*/src/**/*.js' 'packages/*/src/**/*.mjs' 'packages/*/scripts/**/*.ts' \
         | grep -E '^\+' | grep -vE '^\+\+\+' || true)
 if [ -n "$added" ]; then
   hits=""
-  h=$(printf '%s\n' "$added" | grep -nE 'instanceof[[:space:]]+Error[[:space:]]*\?[[:space:]]*[A-Za-z_$][A-Za-z0-9_$]*\.message[[:space:]]*:[[:space:]]*String\(' || true)
+  h=$(printf '%s\n' "$added" | grep -nE 'instanceof[[:space:]]+Error[[:space:]]*\?' || true)
   [ -n "$h" ] && hits="$hits
-(hook) raw error ternary: $h"
+(hook) raw error ternary/instanceof: $h"
   h=$(printf '%s\n' "$added" | grep -nE '\.message[[:space:]]*\?\?[[:space:]]*String\(' || true)
   [ -n "$h" ] && hits="$hits
 (hook) ?.message ?? String: $h"
@@ -48,6 +48,12 @@ if [ -n "$added" ]; then
   h=$(printf '%s\n' "$added" | grep -nE 'catch[[:space:]]*(\([^)]*\))?[[:space:]]*\{[[:space:]]*\}' || true)
   [ -n "$h" ] && hits="$hits
 (hook) empty catch: $h"
+  h=$(printf '%s\n' "$added" | grep -nE '\b(TODO|FIXME|XXX)\b' || true)
+  [ -n "$h" ] && hits="$hits
+(hook) placeholder marker: $h"
+  h=$(printf '%s\n' "$added" | grep -nE '@anvil/(tui|cli)' || true)
+  [ -n "$h" ] && hits="$hits
+(hook) core->tui/cli import (check path is packages/core): $h"
   if [ -n "$hits" ]; then
     echo "🧟 SLOP PATTERNS DETECTED IN STAGED DIFF (context-free hook rules):" >&2
     printf '%s\n' "$hits" >&2
