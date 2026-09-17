@@ -72,17 +72,11 @@ export function FirstRunSetup({
           value={apiKey}
           onChange={(next) => {
             // Same batched-keystroke hazard as InputBar: a return embedded in
-            // the chunk must never reach the saved credential or the frame.
+            // the frame. A newline is not a valid API-key character; preserve
+            // the buffer for editing rather than silently trimming corrupt input.
             const idx = next.search(/[\r\n]/);
             if (idx !== -1) {
-              const before = next.slice(0, idx);
-              if (before.trim()) {
-                const trimmed = before.trim() || (provider.id === "ollama" ? "ollama" : "");
-                if (trimmed) {
-                  saveCredential(provider.field, trimmed);
-                  setStep("done");
-                }
-              }
+              setApiKey(next.slice(0, idx));
               return;
             }
             setApiKey(next);

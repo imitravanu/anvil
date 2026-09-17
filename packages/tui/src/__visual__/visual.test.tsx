@@ -157,7 +157,7 @@ const CHECKPOINTS: CheckpointMeta[] = Array.from({ length: 5 }, (_, i) => ({
 
 // Locale/TZ-independent: the rewind modal renders toLocaleTimeString, which
 // varies by environment — normalize it so the baseline is portable.
-const normalizeTimes = (frame: string): string => frame.replace(/\d{1,2}:\d{2}:\d{2}/g, "HH:MM:SS");
+const normalizeTimes = (frame: string): string => frame.replace(/\d{1,2}:\d{2}:\d{2}\s*(?:[APap][Mm])?/g, "HH:MM:SS PM");
 
 // --- Scenarios ---
 
