@@ -8,7 +8,7 @@
     "docs/PHASE-21-25-AUDIT.md": "9b3004933cfc1feef504b7bc94958e10d50d447ab9b0de064b0e2e32167cdfc2",
     "packages/cli/src/__tests__/gate.sentinel.test.ts": "7313f52ec2a7f1ffe92d6c6872cee8d68183cf53ad6c016d29218741c8ddfa73",
     ".github/workflows/ci.yml": "5aec334782bda2ef6939a3a1be689b8f5af66a62977cd776198b3456c3d20650",
-    ".github/workflows/live-eval.yml": "209eeee63e0ce48a78d85bebe18d4849b50b54fd31173f7d9961511dc72859a5",
+    ".github/workflows/live-eval.yml": "f7609c2da06de634611558c0efab3df0324068a6ed55231ea1595534c10dedc4",
     ".github/workflows/release.yml": "6a1fd17e62a7d73d2b44b3842079b92211890dd32238f3f751414835ae56296d",
     ".github/workflows/visual-regression.yml": "19bcbfab770086b30e84ff0aff6f20f692396975b9b780de1743f3a9e04595df",
     ".githooks/pre-commit": "69caa42ad7094e09524c5bbbda8449b8daf42bc4e6f614d070e7899fb5471cb4"

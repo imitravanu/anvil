@@ -213,10 +213,17 @@ function renderInkFrame(element, cols, rows, theme) {
   stdout.write = (chunk) => {
     last = chunk;
   };
-  const app = render(
-    React.createElement(ThemeContext.Provider, { value: theme }, element),
-    { stdout, debug: true, exitOnCtrlC: false, patchConsole: false }
-  );
+  const origTime = Date.prototype.toLocaleTimeString;
+  Date.prototype.toLocaleTimeString = () => "12:34:56 PM";
+  let app;
+  try {
+    app = render(
+      React.createElement(ThemeContext.Provider, { value: theme }, element),
+      { stdout, debug: true, exitOnCtrlC: false, patchConsole: false }
+    );
+  } finally {
+    Date.prototype.toLocaleTimeString = origTime;
+  }
   const raw = last || "";
   app.unmount();
   app.cleanup?.();

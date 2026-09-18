@@ -267,9 +267,15 @@ describe("visual regression — TUI frames", () => {
 
   it("rewind modal — 5 checkpoints (times normalized)", () => {
     const stub = { getCheckpoints: () => CHECKPOINTS } as unknown as AgentSession;
-    expectVisual(
-      normalizeTimes(renderFrame(<RewindModal session={stub} onSelect={() => undefined} onClose={() => undefined} />, DEFAULT_COLUMNS, DEFAULT_ROWS)),
-      "rewind-modal"
-    );
+    const orig = Date.prototype.toLocaleTimeString;
+    Date.prototype.toLocaleTimeString = () => "12:34:56 PM";
+    try {
+      expectVisual(
+        normalizeTimes(renderFrame(<RewindModal session={stub} onSelect={() => undefined} onClose={() => undefined} />, DEFAULT_COLUMNS, DEFAULT_ROWS)),
+        "rewind-modal"
+      );
+    } finally {
+      Date.prototype.toLocaleTimeString = orig;
+    }
   });
 });

@@ -25,10 +25,27 @@ on:
         default: ""
 
 jobs:
+  check-opt-in:
+    name: Check live eval enablement
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        env:
+          OPT_IN: ${{ secrets.ANVIL_EVAL_LIVE_ENABLED }}
+        run: |
+          if [ "$OPT_IN" = "true" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
   live-eval:
     name: Full eval + live certification matrix
+    needs: check-opt-in
+    if: needs.check-opt-in.outputs.enabled == 'true'
     runs-on: ubuntu-latest
-    if: ${{ secrets.ANVIL_EVAL_LIVE_ENABLED == 'true' }}
     env:
       ANVIL_PROVIDER: ${{ secrets.ANVIL_PROVIDER }}
       ANVIL_MODEL: ${{ secrets.ANVIL_MODEL }}
