@@ -2,6 +2,163 @@
 
 All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
+## [Unreleased]
+
+### Verified Repair Recovery & Malformed-Input Provenance (2026-09-18, S1.x + 22.2)
+
+- **A repaired verification failure no longer fails its milestone**: `GoalEngine`
+  accumulated `verificationFailed` as a sticky flag — once any probe failed, the
+  milestone was marked failed even after a successful repair. Since S1.2 always
+  probes the final state, every repaired turn emits `verification_result(false)`
+  followed by `verification_result(true)`, so a repair could never rescue a
+  milestone. The outcome now reports the **last** verdict; `verification_gave_up`
+  remains terminal (it is only emitted when the final state still fails). Covered
+  by two new `goalEngine` tests (repaired turn completes; unrecovered turn still
+  fails).
+- **Malformed tool-call JSON keeps its provenance (roadmap 22.2)**: the shared
+  `ToolCallAssembler` collapsed an unparseable `tool_call` argument buffer to `{}`,
+  so tools whose inputs are all-optional executed on invented defaults and the
+  model was never told its JSON was malformed. The assembler now emits the
+  existing `{ __parseError, rawInput }` sentinel that `executeTool` and the
+  orchestrator already convert into a model-visible error — the OpenAI-shaped
+  stream path previously made that handling unreachable. Covered in
+  `streaming.test.ts` (malformed → sentinel; genuinely empty args → `{}`).
+
+
+
+### Partial-Stream Retry Semantics (2026-09-18, S2.2)
+
+- **Deltas are never replayed**: a mid-stream provider error (e.g. HTTP 503 after text deltas
+  were already surfaced) used to trigger a full stream restart on the retry attempt, re-delivering
+  deltas the consumer had already seen. `BaseProvider.streamCompletion` now tracks whether any
+  event was surfaced in the current attempt and only retries a thrown/retryable error while
+  nothing has been delivered.
+- **Abandoned iterators are closed**: a first-event retryable error used to leave the underlying
+  stream open (leaked connection, potential stale events). The retry path now explicitly closes
+  the abandoned iterator before backing off.
+- **Retry backoff is abortable**: backoff sleeps now honor `request.signal` via the shared
+  `sleepAbortable` helper (hoisted from `session.ts` into `core/errors.ts`, also used by the
+  session rate-limit retry); aborting mid-backoff surfaces a cancellation error event instead of
+  waking up to hammer a struggling endpoint.
+
+### Verification Completes the Loop & Checkpoints Match Reality (2026-09-18, S1.2 + S1.3)
+
+- **The final repair is now verified (S1.2)**: reaching the repair budget used to skip the last
+  verification entirely, so a turn could complete with an untested mutation and no verdict.
+  `verifyTurnMutations` now splits "may request another repair" from "may run verification" —
+  the final state is always probed; a passing final repair reports `passed`, a still-failing
+  one reports `verification_gave_up` (with the real failure probe on the ledger instead of a
+  zero-effort marker). Bounded: no extra repair prompts, one extra probe.
+- **Cancellation no longer loses undo entries (S1.3)**: cancelling mid-batch used to drop the
+  pending checkpoint — mutations that completed before the abort existed on disk with no rewind
+  coverage. The cancel path now commits the pending snapshot for succeeded calls before emitting
+  `cancelled`.
+- **Checkpoints only cover paths that actually changed**: `commitRewindSnapshot` previously
+  committed the whole pre-batch snapshot (all write/edit targets) if ANY call succeeded, so a
+  denied/failed call's file falsely claimed undo coverage. It now filters entries to write/edit
+  targets whose calls succeeded.
+
+### Execution Truthfulness & Team Budget Enforcement (2026-09-18)
+
+- **Guardian refusals now match execution (S1.1)**: tool calls blocked by the native guardian
+  interceptor are recorded in a `guardianBlocked` set and skipped by the dispatch loop, so a
+  refusal can no longer be reported while the mutation executes anyway. The refusal check for
+  loop-guard refusals (`p.refused`) now runs **before** session-tool handling — a loop-refused
+  `delegate_task`/`update_plan` never reaches its executor. Covered by a rewritten
+  `guardianDispatch.test.ts` (blocked-write never touches the filesystem, mixed-batch isolation,
+  auto-fix happy path, refused session-tool ordering).
+- **Team iteration budget is enforced**: `delegate_task`'s team runner computed per-member
+  iteration budgets (`splitBudget`) but handed them to sub-agents as an ignored `_budget`
+  parameter — members ran unbounded. Sub-agent sessions now receive their real budget (per-member
+  `maxInnerIterations` overrides clamp to `[1, total]`). A 2-member × 1-iteration team now makes
+  4 provider calls instead of 10.
+- **Anthropic usage events fixed**: `message_delta` billing usage is flat on the event
+  (SDK `RawMessageDeltaEvent.usage: MessageDeltaUsage`, cumulative), not nested under `delta` —
+  the adapter now reads the real shape (legacy `delta.usage` still tolerated) so token accounting
+  and compaction triggers work on live Anthropic streams; the stream cast is now single-step.
+- **Dead code removed**: unused `BaseProvider.streamWithRetry` (no adapter ever called it).
+
+### Phase 25 Wired into Product Paths
+- **Plugins (25.4)**: load once at boot in `resolveBootContext` — executors
+  registered, plugin prompts merged with MCP tools into `sessionTools`
+  (built-ins + plugin defs + MCP); problems surface as boot diagnostics.
+  `headless.ts` and `goalRunner.ts` consume the same `sessionTools` plumbing.
+  Goal mode gets plugin tools but not plugin prompts (prompt assembly is
+  GoalEngine-internal — noted in the audit doc).
+- **Guardian interceptor (25.6)**: new `guardian_blocked` event
+  (`{count, fixed, firstRule}`) rendered to stderr (cli) and as a system
+  message (tui). The agent session gates pending file mutations before
+  execution — literal content for `write_file`/`edit_file`, `describeToolInput`
+  previews for command-based mutations — auto-fixes raw-error formatting in
+  place, refuses surviving violations with repair prompts, and records
+  `loop_refused` ledger entries. The unused `GUARDIAN_BLOCKED_TOOL_PREFIX`
+  constant was removed (refused calls never execute, so they never register
+  verifier baselines).
+- **Selective compaction (25.5)**: `compactIfNeeded` keeps high-relevance older
+  messages verbatim via context scoring (`selectiveKeep`, task-seeded; empty
+  task falls back to recency) instead of blanket-rolling everything into the
+  summary.
+- **Team runner (25.2)**: `delegate_task` accepts an optional `team` spec
+  (`strategy`: parallel | pipeline | review, `members` with `{id, task}`) and
+  routes through the real `runTeam` orchestrator; members run as live
+  sub-agents sharing the permission broker, signal, and checkpoint merging.
+  Per-member start/finish events stream to the parent turn; `AgentSession`
+  records the last run (`session.teamRun`) and `/team status` reports real
+  strategy, per-member status (ok/failed/aborted), tool calls, token totals,
+  and report sizes instead of a static placeholder.
+- **Gate coverage + type hygiene**: root `scripts/` now joins the gate's
+  full-tree residual scan (Step 1.5) — one-off tooling can no longer hide
+  legacy slop outside every workspace tsconfig; the gate script self-exempts
+  (it IS the rule book). A dedicated `tsconfig.scripts.json` (wired into
+  `npm run typecheck`) type-checks root + per-package `scripts/` — it
+  immediately caught two latent fake-tool-definition bugs in
+  `verify-openrouter.ts`/`verify-orcarouter.ts` (missing required `mutating`
+  flag), now fixed.
+
+### Design System Foundations (DW-1)
+- 11 legacy theme colors (stable file format) + 15 derived semantic tokens
+  (`brand`, `success/warning/error/info`, `text*`, `borderFocus`, …) with
+  defaulted typography/spacing/borders/responsive sections — old
+  `~/.anvil/themes.json` files auto-migrate.
+- New built-in themes `midnight` and `hacker`; `useTerminalSize()` responsive
+  breakpoints; `CHROME` unicode library with `meter()`/`rule()` helpers.
+
+### Component Redesign (DW-2)
+- Framed cockpit Header (status dot) and StatusBar (block-bar gauge, compact
+  two-line stack); card-style message headers; boxed permission buttons;
+  picker context-window badges; input history-recall indicator. Keyboard
+  contracts unchanged.
+
+### Interaction Polish (DW-3)
+- Context-matched spinners (dots/pulse/arrows/blocks), blinking streaming
+  cursor, command palette (prefix+fuzzy+MRU, icons), focus-bright palette
+  border.
+
+### Terminal Platform (DW-4)
+- Adaptive `ContextGauge`, token-growth sparklines, alt-screen boot, long-turn
+  notifications (bell + OSC 777/9), OSC 52 `/copy` + DiffModal `c`, terminal
+  background detection for the default theme.
+- Side-by-side diff view (auto at 120+ columns, `s` toggles) in DiffModal.
+- Card timestamps (`HH:MM` right edge, `/expand` toggles; resumed history stays bare).
+
+## [1.0.0] — 2026-09-14
+
+### Next-Gen Evolution (Phase 25)
+
+- **Phase 25.1 SSE/HTTP MCP Transport (verified)**:
+  - Remote MCP servers over SSE with Bearer auth, reconnect, TLS enforcement (`packages/core/src/mcp/transport.ts`, `packages/core/src/config/mcp.ts`). Existing stdio tests still pass.
+- **Phase 25.2 Multi-Agent Collaboration (Agent Teams)**:
+  - `AgentTeam` orchestrator in `packages/core/src/agent/team/` — parallel, pipeline (serial handoff), and review strategies with budget splitting, failure isolation, and merged reports.
+- **Phase 25.3 LSP Integration for Code Intelligence**:
+  - LSP client in `packages/core/src/lsp/` (stdio JSON-RPC, auto-detect for TypeScript/Python/Rust/Go) plus four new tools: `goto_definition`, `find_references`, `get_hover`, `get_diagnostics`. `get_outline` remains the fast regex path; LSP upgrades precision when a server is installed, otherwise tools report an honest `fallback` source.
+- **Phase 25.4 Plugin System**:
+  - Manifest loading from `~/.anvil/plugins/<name>/plugin.json` (`packages/core/src/plugins/`), tool registration through the MCP-grade permission model (`plugin_<name>__<tool>`), `/plugin list` in the TUI.
+- **Phase 25.5 Intelligent Context Management**:
+  - Relevance scoring (keyword + recency + file-aware) in `packages/core/src/agent/context/`, selective compaction keeps, token-budget breakdown, and `/context` command with predictive compaction warnings.
+- **Phase 25.6 Native Guardian Engine**:
+  - In-process slop scanner + pre-turn interceptor (`packages/core/src/guardian/`) with safe auto-fix for raw error formatting; first-class `anvil gate [--full]` and `anvil init --guarded [--lang]` CLI commands.
+- **New slash commands**: `/team`, `/plugin`, `/context` (plus `/plugin lsp` server inventory).
+
 ## [0.11.0] — 2026-09-14
 
 ### Refinement & Tech Debt

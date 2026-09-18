@@ -14,11 +14,13 @@ permission prompt with a real unified diff.
 - **Free & local models**: keep API spend at $0 with Groq's free tier, GitHub Models, Cerebras,
   Mistral's experimentation tier, or Ollama (fully offline). Every model is tagged `[FREE]` or
   `[PAID]` in the picker and header, so pricing is always visible.
-- **Agent loop with 11 tools**: `read_file`, `write_file`, `edit_file` (unified diffs),
+- **Agent loop with 15 tools**: `read_file`, `write_file`, `edit_file` (unified diffs),
   `list_files` (glob or plain-name search), `grep`, `run_command`, `get_outline`
   (token-efficient structure outline), `verify_tests` (run the project's detected test runner),
-  `update_plan`, `delegate_task` (sub-agent), and `update_memory` (project notes) — with cancellation and path containment
-  to the project root
+  `update_plan` (plan scratchpad), `delegate_task` (sub-agent), `update_memory` (project notes),
+  plus four LSP-backed code-intelligence tools — `goto_definition`, `find_references`,
+  `get_hover`, `get_diagnostics` (LSP where a server is installed, honest fallback otherwise) —
+  with cancellation and path containment to the project root
 - **Interactive permissions**: every mutating tool call shows the diff or command before it runs
   (Allow once / Always allow this session / Deny — or just press **Esc** to deny). Known
   read-only commands (`ls`, `cat`, `git status`, `node --version`, …) run without prompting;
@@ -34,7 +36,7 @@ permission prompt with a real unified diff.
 - **Context compaction**: when usage nears the model's context window, older history is
   summarized automatically — proactively on resume (estimated) and reactively between turns —
   so long sessions keep working
-- **Theming**: `/theme dark | light | highContrast` (or your own names from `~/.anvil/themes.json`), persisted in settings
+- **Theming**: `/theme dark | light | highContrast | midnight | hacker` (or your own names from `~/.anvil/themes.json`), persisted in settings
 
 ## What it looks like
 
@@ -113,6 +115,8 @@ model picker and header.
 ```
 anvil                  # start chatting
 anvil config           # add or update a provider API key
+anvil gate [--full]    # native guardian scan of the working-tree diff (--full runs the full npm gate)
+anvil init --guarded [--lang <typescript|python|rust|go>]   # provision AGENTS.md + .fresh-allowlist.json gates into a repo
 anvil --version        # print version
 anvil --help           # full help
 
@@ -176,6 +180,10 @@ fill. Or type the command directly:
 | `/diff` | review every file the session touched as unified diffs |
 | `/mcp` | MCP server status (tools, health) |
 | `/mcp reconnect` | reconnect + refresh all MCP servers (new tools are hot-loaded into the running session) |
+| `/team` | Multi-agent team status (parallel / pipeline / review) |
+| `/plugin` | Plugin registry (`/plugin list`; `/plugin lsp` shows language servers) |
+| `/context` | Token budget breakdown + compaction forecast |
+| `/copy` | Copy the newest code block to the clipboard (OSC 52, SSH-safe) |
 
 Keys: **Esc** or **Ctrl+C** cancels a streaming turn; **Ctrl+C** while idle exits; **Up/Down** in
 an empty input recalls messages you sent this session; typing **/** opens the command menu.
@@ -275,7 +283,7 @@ Define your own themes in `~/.anvil/themes.json` (or `$ANVIL_HOME/themes.json`):
 
 ```json
 {
-  "midnight": {
+  "ember": {
     "colors": {
       "primary": "magenta",
       "userText": "white",
@@ -287,17 +295,23 @@ Define your own themes in `~/.anvil/themes.json` (or `$ANVIL_HOME/themes.json`):
       "dim": "gray",
       "border": "magenta",
       "accent": "#ff00ff",
-      "surface": "gray"
+      "surface": "gray",
+      "brand": "#ff6ec7"
     },
-    "spacing": { "panelPaddingX": 1, "panelPaddingY": 0 }
+    "spacing": { "panelPaddingX": 1, "panelPaddingY": 0 },
+    "borders": { "panel": "double" }
   }
 }
 ```
 
-All 12 color keys are required (named chalk colors or hex); `spacing` is
-optional. Names must be `[a-z0-9-_]` and must not shadow built-ins. Invalid
-entries are reported (never half-loaded) — run `/theme` with no args to see
-available names plus any problems. Select with `/theme midnight`.
+All 11 legacy color keys are required (named chalk colors or hex). The 15
+semantic colors (`brand`, `success`, `error`, `borderFocus`, …) plus the
+`typography`, `spacing`, `borders`, and `responsive` sections are optional —
+omitted values derive from your legacy keys with built-in defaults, so old
+theme files keep loading unchanged. Names must be `[a-z0-9-_]` and must not
+shadow built-ins (`dark`, `light`, `highContrast`, `midnight`, `hacker`).
+Invalid entries are reported (never half-loaded) — run `/theme` with no args
+to see available names plus any problems. Select with `/theme ember`.
 
 ## Development
 
