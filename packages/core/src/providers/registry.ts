@@ -139,8 +139,12 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
-    certified: "live",
-    certifiedAt: "2026-09-10T18:00:00.000Z",
+    // Live-probed 2026-09-18: the API answers "This model models/gemini-2.0-flash
+    // is no longer available. Please update your code to use models/gemini-3.6-flash".
+    // Certification rots — the 2026-09-10 "live" result stopped being true when
+    // Google retired the id. Prefer gemini-3.6-flash.
+    certified: "broken",
+    certifiedAt: "2026-09-18T00:00:00.000Z",
   },
   {
     id: "gemini-1.5-pro",

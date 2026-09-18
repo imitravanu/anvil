@@ -136,7 +136,7 @@ Every model provider adapter undergoes strict verification across 5 criteria: st
 |---|---|---|---|---|---|---|
 | **Anthropic** | `ANTHROPIC_API_KEY` | Paid | `claude-sonnet-5`, `claude-3-7-sonnet-20250219`, `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022` | Yes | Yes | ✅ live* |
 | **OpenAI** | `OPENAI_API_KEY` | Paid | `gpt-4o`, `gpt-4o-mini`, `o3-mini` | Yes | Yes | ✅ live* |
-| **Google Gemini** | `GEMINI_API_KEY` | Free & Paid | `gemini-3.6-flash`, `gemini-2.0-flash`, `gemini-1.5-pro`, `gemini-1.5-flash` | Yes | Yes | ✅ live |
+| **Google Gemini** | `GEMINI_API_KEY` | Free & Paid | `gemini-3.6-flash` (verified 2026-09-18), `gemini-2.0-flash`  retired by Google, `gemini-1.5-pro`, `gemini-1.5-flash` (unverified) | Yes | Yes | ✅ live (see note) |
 | **OpenRouter** | `OPENROUTER_API_KEY` | Free & Paid | `openrouter/free`, `google/gemma-4-31b-it:free` | Yes | Yes | ✅ live |
 | **Orcarouter** | `ORCAROUTER_API_KEY` | Free & Paid | `orcarouter/free`, `z-ai/glm-5.3-flash-free`, `deepseek/deepseek-v4-flash-free` | Yes | Yes | ✅ live |
 | **Groq** | `GROQ_API_KEY` | Free Tier | `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, `qwen-2.5-coder-32b` | Yes | No | ✅ live |

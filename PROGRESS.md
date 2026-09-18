@@ -121,3 +121,29 @@ commit does not bundle their work (AGENTS.md §1.2 collision guard).
 - Phase 25.7's last box (live eval ≥80% on a real provider) still open — keys exist for
   gemini/anthropic/openai/openrouter/orcarouter.
 
+---
+
+## 2026-09-18 — Agent C pass 3 (live eval attempt + certification rot)
+
+**Attempted Phase 25.7's last checkbox (`npm run eval` on a real provider), at $0 via Gemini
+free tier. Result: the box stays OPEN, but two durable things came out of it.**
+
+- **The live lane works.** `npx tsx evals/run.ts --provider gemini --model gemini-3.6-flash`
+  produced real agent turns: task `01-bugfix-calc-divzero` PASSED with **6 tool calls in
+  24.7s**. So the harness's live path is functional, not just the mock path the gate uses.
+- **A retired model was falsely certified `live`.** Probing the provider directly showed
+  `gemini-2.0-flash` returns *"This model models/gemini-2.0-flash is no longer available.
+  Please update your code to use models/gemini-3.6-flash."* — yet the registry carried
+  `isFree: true` + `certified: "live"` (2026-09-10) and the README's certified table listed it.
+  Fixed: `certified: "broken"` with the probe evidence inline; README updated; the remaining
+  Gemini ids downgraded to "unverified" rather than assumed working. The model picker renders
+  `[❌ broken]` from this field, so the badge was actively lying.
+  Files: `packages/core/src/providers/registry.ts`, `README.md`.
+- **The 1/15 score is INVALID as a quality signal — do not read it as one.** 3 tasks hit the
+  harness's 30000ms per-task limit with **zero tool calls**, and 5 more failed in ~0.03s; the
+  model was never reached (free-tier quota exhausted mid-run). Only task 01 had a genuine
+  evaluation. Re-run on a key with real quota before drawing conclusions.
+- Diagnostic note: a provider probe must live inside the repo (root `type: module`); a script
+  under `/tmp` is treated as CJS and fails on top-level `await`. Probe removed after use —
+  tree left clean.
+

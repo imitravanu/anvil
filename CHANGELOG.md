@@ -4,6 +4,26 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Live Eval Lane Validated & Stale Certification Corrected (2026-09-18)
+
+- **The live eval lane runs end-to-end**: `npx tsx evals/run.ts --provider gemini
+  --model gemini-3.6-flash` ran real agent turns against the live API (task 01 passed
+  with 6 tool calls in 24.7s), so the harness's live path is proven — not just the mock
+  path that CI gates on.
+- **A retired model was falsely advertised as certified live**: `gemini-2.0-flash` sat in
+  the model registry with `isFree: true` and `certified: "live"` (2026-09-10) and was named
+  in the README certified-model table, but the API answers *"This model
+  models/gemini-2.0-flash is no longer available. Please update your code to use
+  models/gemini-3.6-flash."* It is now `certified: "broken"`, so the picker shows
+  `[❌ broken]` rather than a false `[✅ live]`, with the probe evidence recorded inline.
+- **Certification rots — a "live" result is a timestamp, not a property.** The remaining
+  Gemini ids (`gemini-1.5-pro`, `gemini-1.5-flash`) are now marked unverified in the README
+  rather than assumed working.
+- **Phase 25.7's live-eval box stays OPEN.** The full live run scored 1/15, but that result
+  is invalid as a quality signal: 3 tasks hit the harness's 30s per-task limit with zero tool
+  calls and 5 more failed in ~0.03s, i.e. the model was never reached — free-tier quota, not
+  agent capability. It must be re-run on a key with sufficient quota.
+
 ### Honest Headless Exit Status (2026-09-18, S1.4)
 
 - **An unverified failed turn no longer exits 0**: `anvil -p` and goal runs returned
