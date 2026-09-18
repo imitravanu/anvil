@@ -117,7 +117,14 @@ commit does not bundle their work (AGENTS.md §1.2 collision guard).
   for 'https://github.com'" — no credentials in this environment. Network is fine
   (openrouter reaches 200). All commits + tags are LOCAL ONLY. Needs a token/credential
   helper or a manual push.
-- `v0.9.0`–`v0.10.0` tag mapping needs a human decision (squashed history).
+- ~~`v0.9.0`–`v0.10.0` tag mapping needs a human decision (squashed history).~~ **RESOLVED
+  2026-09-19 (agent, delegated decision):** archaeology showed the 0.9.0/0.9.1/0.10.0/0.11.0
+  CHANGELOG headings all entered in the single squash commit `da15273` — so `v0.9.0`,
+  `v0.9.1`, `v0.10.0` were tagged there (the same three-release tree; `v0.11.0` already
+  pointed at it). `v1.0.0` was tagged at `c2f342e`, not the Phase-25 code commit
+  (`d049b9c`): the 1.0.0 heading only entered in `c2f342e`, and a release tree should be
+  self-consistent — `package.json` 1.0.0 + a CHANGELOG that actually contains 1.0.0. All
+  lightweight, matching the recent repo convention.
 - Phase 25.7's last box (live eval ≥80% on a real provider) still open — keys exist for
   gemini/anthropic/openai/openrouter/orcarouter.
 
