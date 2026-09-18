@@ -1,5 +1,9 @@
 # Anvil
 
+[![CI — Typecheck & Tests](https://github.com/imitravanu/anvil/actions/workflows/ci.yml/badge.svg)](https://github.com/imitravanu/anvil/actions/workflows/ci.yml)
+[![Visual Regression Gate](https://github.com/imitravanu/anvil/actions/workflows/visual-regression.yml/badge.svg)](https://github.com/imitravanu/anvil/actions/workflows/visual-regression.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A professional-grade, terminal-based AI coding agent — comparable to OpenCode, Codex CLI, and
 Cline — with a polished Ink (React) terminal UI. Talk to a model, let it read, write, edit, and
 search your project, run shell commands, and watch every mutation through an interactive
