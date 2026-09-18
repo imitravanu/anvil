@@ -26,6 +26,11 @@ const ROOT_TUI = path.resolve(__dirname, "..");
 const DEFAULT_OUT = path.join(ROOT_TUI, "__visual-current__");
 const BASELINE_OUT = path.join(ROOT_TUI, "__visual-baselines__");
 
+const FONT_FILE = path.join(__dirname, "LiberationMono-Regular.ttf");
+const SYSTEM_FONT = "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf";
+const resolvedFont = fs.existsSync(FONT_FILE) ? FONT_FILE : (fs.existsSync(SYSTEM_FONT) ? SYSTEM_FONT : null);
+const FONT_BASE64 = resolvedFont ? fs.readFileSync(resolvedFont).toString("base64") : "";
+
 const outDir = process.argv.includes("--approve")
   ? BASELINE_OUT
   : (process.env.VISUAL_OUT || DEFAULT_OUT);
@@ -293,13 +298,17 @@ async function main() {
 <head>
 <meta charset="utf-8" />
 <style>
+  ${FONT_BASE64 ? `@font-face {
+    font-family: 'AnvilMono';
+    src: url(data:font/truetype;charset=utf-8;base64,${FONT_BASE64}) format('truetype');
+  }` : ""}
   * { box-sizing: border-box; }
   body {
     margin: 0;
     padding: 16px;
     background: ${th.bg};
     color: ${th.fg};
-    font-family: 'DejaVu Sans Mono', 'Liberation Mono', monospace;
+    font-family: ${FONT_BASE64 ? "'AnvilMono', " : ""}'Liberation Mono', monospace;
     font-size: 13px;
     line-height: 18px;
     letter-spacing: 0px;
