@@ -22,6 +22,24 @@
   (config), `terminalRenderer.ts` event switch (TUI surface), `evals/run.ts` +
   `ANVIL_EVAL_TIMEOUT_MS` (proof harness), repo split-literal + named-constant conventions.
 
+## 26.0 — Internal Wiring Hardening (audit findings, P0 — before any product surface)
+
+**Goal:** the 2026-09-19 internal wiring audit found one defect and two dead-letter seams
+in the shipped guardian. Fix the defect now; the seams gate the phase work that needs them.
+
+- ✅ **FIXED (2026-09-19):** same-path auto-fix cross-contamination.
+  `InterceptResult.fixed` was path-keyed; a turn with two pending edits to one file fed
+  the first repair to both inputs (stale content). Now positional: `fixed[]` carries
+  `index` into the pending list; `guardianFixedText()` is the single diff-stripping seam;
+  consumer-level RED→GREEN test at `guardianDispatch.test.ts` (two same-path edits,
+  different raw-error patterns, byte-verified independence).
+- **project-rules → scanner bridge (26.4 prerequisite):** `loadProjectRules` currently
+  feeds prompts only (`buildSystemPrompt`); `scanDiffForSlop` never reads `AGENTS.md`.
+  User rules are advice, not enforcement. Bridge must reuse the split-literal fixture
+  convention and load once per session, not per call.
+- **allowlist reader (26.5 prerequisite):** `guardedInit` writes `.fresh-allowlist.json`;
+  nothing reads it back. Legacy-drain telemetry has no data source until this exists.
+
 ## 26.1 — Guardian Turn Report (the missing last mile)
 
 **Goal:** after every turn with guardian activity, render one compact, plain-language block:
@@ -71,6 +89,11 @@ Guardian becomes infrastructure, not just in-app behavior.
 
 - Verify/extend `guardian/init.ts` provisioning for TS/Python/Rust/Go tails
   (AGENTS.md + allowlist + pre-commit hook calling the same `scanDiffForSlop` rules).
+- **Audit note (2026-09-19):** confirmed `guardedInit` today writes only AGENTS.md +
+  allowlist — no hook exists yet. This subsection CREATES it; its acceptance is a real
+  blocked commit in a throwaway repo, not a unit test alone.
+- Audit note (2026-09-19): confirmed `loadProjectRules` feeds prompts only. The
+  rules→scanner bridge (26.0) ships here if not landed earlier.
 - The provisioned hook degrades gracefully without Anvil installed (clear error, non-zero
   exit — never silently pass).
 - Acceptance: provisioning works in a throwaway non-Anvil repo; the hook blocks a planted
@@ -84,6 +107,9 @@ score, allowlist drain rate — tracked across sessions, surfaced via `anvil hea
 
 - Metrics computed from existing allowlist inventory + scan results (no ad-hoc
   heuristics; extend scanner outputs where needed, named constants only).
+- **Audit note (2026-09-19):** `.fresh-allowlist.json` is currently write-only
+  (`guardedInit` writes it; no reader exists). 26.5 must add the reader as part of the
+  telemetry contract — a drain rate needs a drain source.
 - Storage under `ANVIL_HOME/health/<project-hash>.json`; latest-only render in CLI.
 
 ## Release Criteria (all must be green)

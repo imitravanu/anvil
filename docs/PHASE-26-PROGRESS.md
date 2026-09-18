@@ -5,7 +5,19 @@
 > probed outside the repo, scanner/interceptor/init tests green). No protected artifacts
 > touched.
 
-## Status: NOT STARTED (spec written 2026-09-19)
+## Status: IN PROGRESS — 26.0 fix landed (spec written 2026-09-19)
+
+### 26.0 — Internal Wiring Hardening (audit 2026-09-19)
+- [x] Same-path auto-fix cross-contamination FIXED (positional `fixed[].index` +
+      `guardianFixedText()` seam) — RED proven (`[undefined, undefined]` vs `[0, 1]`,
+      `applyGuardianFixes is not a function`), GREEN 17/17 across
+      `guardian.test.ts` + `guardianDispatch.test.ts`; core + scripts typechecks 0
+- [x] Consumer-level regression test: two edits, same path, one batch, different
+      raw-error patterns, byte-verified independence (`guardianDispatch.test.ts`)
+- [ ] project-rules → scanner bridge (26.4 prerequisite; `loadProjectRules` is
+      prompt-only today — audit-verified)
+- [ ] `.fresh-allowlist.json` reader (26.5 prerequisite; file is write-only today —
+      audit-verified)
 
 ### 26.1 — Guardian Turn Report
 - [ ] `InterceptResult.violations[]` structured (core)

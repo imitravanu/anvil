@@ -13,7 +13,7 @@ import { AgentEvent, AgentOptions, DEFAULT_MAX_INNER_ITERATIONS } from "./types.
 import { RunLedgerEntry, capLedger, maxSeq, LEDGER_CAP } from "./ledger.js";
 import { clearRateLimitRecord, getConsecutiveRateLimitCount, isCircuitOpen, isRateLimitMessage, noteRateLimited, rateLimitRetrySeconds, recordFailure, recordSuccess } from "../providers/freeModels.js";
 import { MAX_DELEGATIONS_PER_TURN, runSubAgentLive } from "./subagent.js";
-  import { interceptTurn } from "../guardian/interceptor.js";
+  import { interceptTurn, guardianFixedText } from "../guardian/interceptor.js";
 import { TurnState } from "./turnState.js";
 import { LoopGuard, type AccumulatedToolCall, type PreparedCall } from "./loopGuard.js";
 import type { TeamRunResult } from "./team/types.js";
@@ -579,14 +579,15 @@ export class AgentSession {
         if (pending.length > 0) {
           const intercept = interceptTurn(pending.map((p) => ({ path: p.path, diff: p.diff })));
           if (intercept.fixed.length > 0) {
-            // Auto-fix: raw-error ternary → getErrorMessage, applied back to the
-            // pending content string so the call runs with the repaired text.
-            const fixedByPath = new Map(intercept.fixed.map((f) => [f.path, f.diff]));
-            for (const { call, path } of pending) {
-              const repaired = fixedByPath.get(path);
-              if (!repaired) continue;
-              const fixedText = repaired.split("\n").map((l) => l.slice(1)).join("\n");
-              const input = (call.call.input ?? {}) as { content?: string; new_str?: string };
+            // Auto-fix: raw-error ternary → getErrorMessage, applied back to
+            // each call's OWN input BY POSITION (fix.index). A path-keyed map
+            // is wrong when one turn carries two pending edits to the same
+            // file: the second edit would reuse the first's repaired text.
+            for (const fix of intercept.fixed) {
+              const p = pending[fix.index];
+              if (!p) continue;
+              const fixedText = guardianFixedText(fix.diff);
+              const input = (p.call.call.input ?? {}) as { content?: string; new_str?: string };
               if (typeof input.content === "string") input.content = fixedText;
               else if (typeof input.new_str === "string") input.new_str = fixedText;
             }

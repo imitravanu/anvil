@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { scanTextForSlop, scanDiffForSlop } from "../scanner.js";
-import { autoFixRawErrorFormat, interceptTurn } from "../interceptor.js";
+import { autoFixRawErrorFormat, guardianFixedText, interceptTurn } from "../interceptor.js";
 import { guardedInit } from "../init.js";
 
 // Fixture patterns are concatenated so this test source never contains a
@@ -68,6 +68,30 @@ describe("interceptTurn", () => {
     const result = interceptTurn([{ path: "src/a.ts", diff: `+${FIX_AS_ANY}\n` }]);
     expect(result.allowed).toBe(false);
     expect(result.violations.some((v) => v.rule === "no-as-any")).toBe(true);
+  });
+
+  it("auto-fixes two distinct raw-error edits to the SAME path without cross-contamination", () => {
+    const A = "const m = err instanceof " + "Error ? err.message : String(err);";
+    const B = "const msg = e instanceof " + "Error ? e.message : String(e);";
+    const result = interceptTurn([
+      { path: "src/a.ts", diff: `+${A}\n` },
+      { path: "src/a.ts", diff: `+${B}\n` },
+    ]);
+    expect(result.allowed).toBe(true);
+    expect(result.fixed).toHaveLength(2);
+    // Positional identity: each fixed entry must record WHICH pending change
+    // it belongs to — a path key alone cannot distinguish same-path edits.
+    expect(result.fixed.map((f) => f.index)).toEqual([0, 1]);
+    expect(result.fixed[0].diff).toContain("getErrorMessage(err)");
+    expect(result.fixed[1].diff).toContain("getErrorMessage(e)");
+  });
+});
+
+describe("guardianFixedText", () => {
+  it("strips diff markers from a repaired diff, preserving clean lines", () => {
+    expect(guardianFixedText("+const m = getErrorMessage(err);\n+const y = 1;\n")).toBe(
+      "const m = getErrorMessage(err);\nconst y = 1;\n",
+    );
   });
 });
 

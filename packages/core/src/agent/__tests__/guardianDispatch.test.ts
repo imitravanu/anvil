@@ -20,6 +20,10 @@ afterEach(async () => {
 // contains the literal forbidden patterns — the gate Step 1 scans added lines
 // of untracked test files too (the same trick scanner.ts itself uses).
 const RAW_TERNARY = "err instanceof " + "Error ? err.message : String(" + "err)";
+// Two DIFFERENT raw-error patterns (distinct error identifiers) so a repair
+// cross-contamination between same-path calls is observable in written bytes.
+const RAW_ERR_A = "err instanceof " + "Error ? err.message : String(err)";
+const RAW_ERR_E2 = "e2 instanceof " + "Error ? e2.message : String(e2)";
 const AS_ANY = "const x = input as an" + "y;";
 
 function blockedWriteTurn(): StreamEvent[] {
@@ -135,5 +139,51 @@ describe("Guardian dispatch", () => {
     const events = await collect(session.send("plan repeatedly"));
 
     expect(events.filter((e) => e.type === "plan_updated")).toHaveLength(3);
+  });
+
+  it("auto-fixes two edits to the SAME path independently in one batch", async () => {
+    const target = path.join(root, "src/fixed.ts");
+    await fs.mkdir(path.join(root, "src"), { recursive: true });
+    await fs.writeFile(target, "const a = 1;\nconst b = 2;\nconst c = 3;\n");
+    // Two edits, same file, one batch, different lines — each with a DIFFERENT
+    // raw-error pattern, so a path-keyed repair mix-up is observable in bytes.
+    const session = makeSession([
+      [
+        { type: "tool_call_start", id: "e0", name: "edit_file" },
+        {
+          type: "tool_call_end",
+          id: "e0",
+          name: "edit_file",
+          input: { path: "src/fixed.ts", old_str: "const a = 1;", new_str: `const one = ${RAW_ERR_A};` },
+        },
+        { type: "tool_call_start", id: "e1", name: "edit_file" },
+        {
+          type: "tool_call_end",
+          id: "e1",
+          name: "edit_file",
+          input: { path: "src/fixed.ts", old_str: "const c = 3;", new_str: `const two = ${RAW_ERR_E2};` },
+        },
+        { type: "turn_end", stopReason: "tool_use" },
+      ],
+      textTurn(),
+    ]);
+
+    const events = await collect(session.send("edit the same file twice"));
+
+    // Both edits auto-fixed and executed — no block.
+    expect(events.some((e) => e.type === "guardian_blocked")).toBe(false);
+    const started = events.filter((e) => e.type === "tool_started");
+    expect(started.map((e) => ("name" in e ? e.name : ""))).toEqual(["edit_file", "edit_file"]);
+
+    const written = await fs.readFile(target, "utf8");
+    // The first edit carried ITS OWN repaired text…
+    expect(written).toContain("const one = getErrorMessage(err);");
+    // …NOT the second edit's repaired text (the old path-keyed bug fed B's
+    // repair to A's input because both shared the path).
+    expect(written).not.toContain("const one = getErrorMessage(e2)");
+    // The second edit carried ITS OWN repaired text.
+    expect(written).toContain("const two = getErrorMessage(e2);");
+    // Untouched line survived both edits.
+    expect(written).toContain("const b = 2;");
   });
 });

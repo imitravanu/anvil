@@ -8,12 +8,28 @@ export interface TurnFileChange {
   diff: string;
 }
 
+/** An auto-fixed diff, identified by its POSITION in the input change list. */
+export interface GuardianFixedFix {
+  /** Index into the `changes` array interceptTurn received — same-path edits are distinct changes. */
+  index: number;
+  path: string;
+  diff: string;
+}
+
 export interface InterceptResult {
   violations: GuardianViolation[];
-  /** Auto-fixed diffs by path (empty when nothing was safely fixable). */
-  fixed: { path: string; diff: string }[];
+  /** Auto-fixed diffs by positional index (empty when nothing was safely fixable). */
+  fixed: GuardianFixedFix[];
   /** True when the turn may proceed (no violations or all auto-fixed). */
   allowed: boolean;
+}
+
+/** Strip unified-diff markers from a repaired diff, returning the plain text. */
+export function guardianFixedText(diff: string): string {
+  return diff
+    .split("\n")
+    .map((line) => (line.startsWith("+") || line.startsWith("-") ? line.slice(1) : line))
+    .join("\n");
 }
 
 /**
@@ -24,10 +40,10 @@ export interface InterceptResult {
  */
 export function interceptTurn(changes: TurnFileChange[]): InterceptResult {
   const violations: GuardianViolation[] = [];
-  const fixed: { path: string; diff: string }[] = [];
+  const fixed: GuardianFixedFix[] = [];
   let fixesUsed = 0;
 
-  for (const change of changes) {
+  for (const [idx, change] of changes.entries()) {
     let diff = change.diff;
     try {
       const found = scanDiffForSlop(change.path, diff);
@@ -46,7 +62,7 @@ export function interceptTurn(changes: TurnFileChange[]): InterceptResult {
       // Re-scan after fixes: only report what survives.
       const rescan = scanDiffForSlop(change.path, diff).filter((v) => v.rule !== "no-raw-error-format" || fixesUsed >= GUARDIAN_MAX_AUTO_FIXES);
       violations.push(...rescan);
-      if (diff !== change.diff) fixed.push({ path: change.path, diff });
+      if (diff !== change.diff) fixed.push({ index: idx, path: change.path, diff });
       void remaining;
     } catch (err: unknown) {
       violations.push({
