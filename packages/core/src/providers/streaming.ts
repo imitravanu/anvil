@@ -73,7 +73,11 @@ export class ToolCallAssembler {
       try {
         parsed = entry.args.trim() ? JSON.parse(entry.args) : {};
       } catch {
-        parsed = {}; // tool executor reports validation errors back to the model
+        // Preserve provenance with the shared sentinel the orchestrator and
+        // executeTool already turn into a model-visible error. Collapsing to {}
+        // let all-optional tools run on invented defaults while the model was
+        // never told its JSON was malformed.
+        parsed = { __parseError: true, rawInput: entry.args.slice(0, 200) };
       }
       yield { type: "tool_call_end", id, name: entry.name, input: parsed };
     }

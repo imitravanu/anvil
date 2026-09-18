@@ -420,7 +420,10 @@ export class GoalEngine {
       if (event.type === "text_delta") {
         outcome.text += event.text;
       } else if (event.type === "verification_result") {
-        if (!event.passed) outcome.verificationFailed = true;
+        // Last verdict wins. A single turn can verify-fail, repair, and then
+        // verify-pass (S1.2 always probes the final state), so a sticky failure
+        // marked a successfully repaired milestone as failed.
+        outcome.verificationFailed = !event.passed;
         if (milestone) {
           yield {
             type: "milestone_progress",

@@ -63,11 +63,30 @@ describe("ToolCallAssembler", () => {
     expect([...asm.drain()].map((e) => (e as { id: string }).id)).toEqual(["first", "second"]);
   });
 
-  it("falls back to call_N ids and {} input, then clears", () => {
+  it("falls back to a call_N id and {} input for a genuinely empty arg set", () => {
+    const asm = new ToolCallAssembler();
+    // Name only, no arguments at all: a legitimately empty call, not malformed.
+    asm.push(3, { name: "f" });
+    expect([...asm.drain()]).toEqual([
+      { type: "tool_call_end", id: "call_3", name: "f", input: {} },
+    ]);
+    expect([...asm.drain()]).toEqual([]);
+  });
+
+  it("preserves malformed-JSON provenance instead of fabricating {}", () => {
+    // Swallowing a parse failure to {} made all-optional tools run with invented
+    // defaults and never told the model its JSON was bad. The executor and
+    // orchestrator already turn this sentinel into a model-visible error — the
+    // assembler was the one hole that made that path unreachable.
     const asm = new ToolCallAssembler();
     asm.push(3, { name: "f", argsFragment: "not json{" });
     expect([...asm.drain()]).toEqual([
-      { type: "tool_call_end", id: "call_3", name: "f", input: {} },
+      {
+        type: "tool_call_end",
+        id: "call_3",
+        name: "f",
+        input: { __parseError: true, rawInput: "not json{" },
+      },
     ]);
     expect([...asm.drain()]).toEqual([]);
   });

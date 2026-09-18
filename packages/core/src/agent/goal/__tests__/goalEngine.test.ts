@@ -412,5 +412,126 @@ Let's begin.`;
       );
       expect(skipped).toBeDefined();
     });
+it("does not fail a milestone whose verification failed then passed after repair", async () => {
+      // The turn verifies FAIL (fixed.txt absent) → repair → verifies PASS.
+      // The outcome must report the LAST verdict. Treating "failed once" as
+      // sticky marked a successfully repaired milestone as failed, so with the
+      // S1.2 always-probe-final change a repair could never rescue a milestone.
+      fs.writeFileSync(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ name: "goal-verify-recovery", scripts: { test: "node check.js" } })
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, "check.js"),
+        "process.exit(require('fs').existsSync('fixed.txt') ? 0 : 1);"
+      );
+
+      const planResponse: StreamEvent[] = [
+        {
+          type: "text_delta",
+          text: JSON.stringify([
+            { id: "1", title: "Repair the failing test", criteria: "fixed.txt exists" },
+          ]),
+        },
+        { type: "turn_end", stopReason: "end_turn" },
+      ];
+
+      const writeUnrelated: StreamEvent[] = [
+        { type: "tool_call_end", id: "t1", name: "write_file", input: { path: "a.txt", content: "hello" } },
+        { type: "turn_end", stopReason: "tool_use" },
+      ];
+      const endTurnStillFailing: StreamEvent[] = [
+        { type: "text_delta", text: "Wrote a.txt but the test still fails." },
+        { type: "turn_end", stopReason: "end_turn" },
+      ];
+      const writeFix: StreamEvent[] = [
+        { type: "tool_call_end", id: "t2", name: "write_file", input: { path: "fixed.txt", content: "fixed" } },
+        { type: "turn_end", stopReason: "tool_use" },
+      ];
+      const endTurnFixed: StreamEvent[] = [
+        { type: "text_delta", text: "fixed.txt now exists." },
+        { type: "turn_end", stopReason: "end_turn" },
+      ];
+
+      const provider = new FakeProvider([
+        planResponse,
+        writeUnrelated,
+        endTurnStillFailing,
+        writeFix,
+        endTurnFixed,
+        textTurn("YES — fixed.txt now exists."),
+        textTurn("Critic: LGTM"),
+      ]);
+
+      const engine = new GoalEngine({
+        provider,
+        model: "fake-model",
+        projectRoot: tmpDir,
+        permissionBroker: { async requestPermission() { return true; } },
+        autoVerify: "node check.js",
+        autoCommit: false,
+      });
+
+      const { events, result } = await collect(engine, "Repair the failing test");
+
+      expect(events.some((e: any) => e.type === "milestone_failed")).toBe(false);
+      expect(result.success).toBe(true);
+      expect(result.milestones[0].status).toBe("completed");
+    });
+
+    it("still fails a milestone whose verification never recovers", async () => {
+      // Budget exhausts with the final probe still failing → gave_up is
+      // terminal and must keep the milestone failed (the guard against
+      // over-correcting the fix above).
+      fs.writeFileSync(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ name: "goal-verify-norecovery", scripts: { test: "node check.js" } })
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, "check.js"),
+        "process.exit(require('fs').existsSync('fixed.txt') ? 0 : 1);"
+      );
+
+      const planResponse: StreamEvent[] = [
+        {
+          type: "text_delta",
+          text: JSON.stringify([{ id: "1", title: "Never fixed", criteria: "fixed.txt exists" }]),
+        },
+        { type: "turn_end", stopReason: "end_turn" },
+      ];
+      const writeUnrelated: StreamEvent[] = [
+        { type: "tool_call_end", id: "t1", name: "write_file", input: { path: "a.txt", content: "hello" } },
+        { type: "turn_end", stopReason: "tool_use" },
+      ];
+      const endTurnStillFailing: StreamEvent[] = [
+        { type: "text_delta", text: "Still failing." },
+        { type: "turn_end", stopReason: "end_turn" },
+      ];
+
+      // Verification fails on every probe: three end-of-turn probes exhaust the
+      // two-repair budget, then the final probe still fails → gave_up.
+      const provider = new FakeProvider([
+        planResponse,
+        writeUnrelated,
+        endTurnStillFailing,
+        endTurnStillFailing,
+        endTurnStillFailing,
+      ]);
+
+      const engine = new GoalEngine({
+        provider,
+        model: "fake-model",
+        projectRoot: tmpDir,
+        permissionBroker: { async requestPermission() { return true; } },
+        autoVerify: "node check.js",
+        autoCommit: false,
+      });
+
+      const { events, result } = await collect(engine, "Never fixed");
+
+      expect(events.some((e: any) => e.type === "milestone_failed")).toBe(true);
+      expect(result.success).toBe(false);
+      expect(result.milestones[0].status).toBe("failed");
+    });
   });
 });
