@@ -71,7 +71,15 @@
 - [x] Docs current (CHANGELOG 1.0.0 entry, this record, README slash table below)
 - [x] All 10 providers certified `live` — `npm run certify -- --mock --all` 10/10 (2026-09-14)
 - [x] Zero known vulns — `npm audit --omit=dev`: 0 vulnerabilities (2026-09-14)
-- [ ] Eval ≥ 80% on a real provider — operator-run with keys (`live-eval.yml` weekly lane)
+- [x] Eval ≥ 80% on a real provider — **93.3% (14/15) on 2026-09-18**, `openrouter` /
+  `deepseek/deepseek-v4-flash-0731:free`, free tier ($0). Operator-run locally (the
+  `live-eval.yml` weekly lane needs a push-access runner + secret, still unprovisioned).
+  Required unblocking the harness first: every task.json hardcoded a 30000ms budget tuned
+  for the instant mock provider, which beat any operator override in the runner — task 01
+  once passed at 29.27s, 0.73s under the cap. Fixed via `EVAL_TASK_TIMEOUT_MS`
+  (env `ANVIL_EVAL_TIMEOUT_MS`) + operator precedence in `run.ts`; mock lane unchanged at
+  15/15. One genuine failure (`11-multifile-extract-interface`, 13 tool calls in 180s) —
+  real capability gap, no longer hidden by the clock.
 
 ## Files added (new, untracked → scanned by gate Step 1)
 - agent/team/{types,runner,index}.ts + __tests__/team.test.ts

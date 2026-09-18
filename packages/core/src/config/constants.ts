@@ -26,6 +26,12 @@ export const DEFAULT_MAX_TOKENS = 4096;
 export const DEFAULT_MAX_INNER_ITERATIONS = getEnvNumber("ANVIL_MAX_INNER_ITERATIONS", 20);
 export const MAX_VERIFY_REPAIRS = getEnvNumber("ANVIL_MAX_VERIFY_REPAIRS", 2);
 
+// Eval harness per-task wall-clock budget. Multi-tool coding tasks on a queued
+// or free-tier provider routinely exceed the old hardcoded 30s, which reported
+// quota/queue latency as task failure. Env-overridable so the live-eval lane can
+// raise it without a code change.
+export const EVAL_TASK_TIMEOUT_MS = getEnvNumber("ANVIL_EVAL_TIMEOUT_MS", 30_000);
+
 // Checkpoint & History Retention Limits
 export const CHECKPOINT_KEEP = getEnvNumber("ANVIL_CHECKPOINT_KEEP", 5);
 

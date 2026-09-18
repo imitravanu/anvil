@@ -4,6 +4,23 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Phase 25.7 Closed — Live Eval 93.3% (14/15) at $0 (2026-09-18)
+
+- **The ≥80% real-provider box is closed**: 14/15 tasks passed on
+  `openrouter` / `deepseek/deepseek-v4-flash-0731:free` (free tier, $0), 100% tool
+  engagement, task times 11.8s–50.2s. Model chosen by probing the live OpenRouter catalog
+  (21 free tool-capable models) and validating candidates with a real tool round-trip
+  before the full run.
+- **Harness unblocked, not relaxed by default**: every task.json hardcoded a 30000ms
+  budget tuned for the instant mock provider, and per-task config beat any operator
+  override — a passing task once landed at 29.27s, 0.73s under the cap. Replaced both
+  runner literals with `EVAL_TASK_TIMEOUT_MS` (env `ANVIL_EVAL_TIMEOUT_MS`, default
+  unchanged at 30s) and gave an env-set timeout precedence over per-task config in
+  `run.ts`. Mock lane re-verified: still 15/15.
+- **The single failure is honest**: `11-multifile-extract-interface` timed out at 180s
+  after 13 tool calls — a real capability gap for that task size, now measurable instead
+  of hidden by the clock.
+
 ### Live Eval Lane Validated & Stale Certification Corrected (2026-09-18)
 
 - **The live eval lane runs end-to-end**: `npx tsx evals/run.ts --provider gemini

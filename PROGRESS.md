@@ -147,3 +147,35 @@ free tier. Result: the box stays OPEN, but two durable things came out of it.**
   under `/tmp` is treated as CJS and fails on top-level `await`. Probe removed after use —
   tree left clean.
 
+---
+
+## 2026-09-18 — Phase 25.7 CLOSED: live eval passes at 93.3% (14/15) on OpenRouter free tier
+
+**The ≥80% live-eval box is CLOSED.** Same tasks, same harness, real provider — at $0.
+
+- **Model:** `deepseek/deepseek-v4-flash-0731:free` via the `openrouter` adapter. Chosen from
+  the live OpenRouter catalog: 445 models, 25 free, **21 free AND tool-capable**. Probed 3
+  candidates with a real tool round-trip before committing to a full run; 2 returned valid
+  tool calls, 1 was upstream-rate-limited (429). Key validated first via `/api/v1/key`
+  (free tier, usage 0) — never echoing the key itself.
+- **Result: 14/15 PASS (93.3%), 7m47s wall, 100% tool engagement.** Task times 11.8s–50.2s
+  (median ~28s), 2–13 tool calls each. Every task used tools, so no silent no-op passes.
+- **The blocker was ours, not the provider's.** First attempt failed only because the
+  harness capped each task at 30s — a magic number that per-task `task.json` config
+  *reiterated*, and per-task config wins in the runner. Task 01 once passed at **29.27s**,
+  0.73s under the cap; the model was simply working when the clock killed it. Evidence the
+  cap, not capability, was the constraint.
+- **Harness fixes (this commit):** (1) both `30_000` literals in `runner.ts` replaced by
+  `EVAL_TASK_TIMEOUT_MS` (env `ANVIL_EVAL_TIMEOUT_MS`, default 30s — no magic numbers, per
+  repo convention); (2) `run.ts` passes that value as the runner's operator override, so an
+  env-set timeout beats per-task config. Default CI behavior is unchanged — verified by
+  re-running the mock lane: **still 15/15**.
+- **Diagnostic:** my *polling* of the eval, not the eval itself, kept dying — `sleep 29`
+  sat at the 30s shell-timeout edge. Operational footgun; poll with `sleep 25`.
+- **Not a credit to dodge:** the one failure was `11-multifile-extract-interface` — a
+  genuine 180s timeout after 13 tool calls, not an infra artifact. That task does more
+  work than the model can finish in 3 minutes; it's a real capability gap, now measurable
+  instead of hidden.
+- **Files:** `packages/core/src/eval/runner.ts`, `packages/core/src/config/constants.ts`,
+  `evals/run.ts`, `PROGRESS.md`, `CHANGELOG.md`, roadmap §25.7.
+

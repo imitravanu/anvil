@@ -12,6 +12,7 @@ import { createProviders } from "../providers/index.js";
 import { loadCredentials } from "../config/index.js";
 import { getErrorMessage } from "../errors.js";
 import { scanTextForSlop } from "../guardian/scanner.js";
+import { EVAL_TASK_TIMEOUT_MS } from "../config/constants.js";
 
 /**
  * Discovers and parses all valid eval tasks under tasksDir.
@@ -39,7 +40,7 @@ export function loadEvalTasks(tasksDir: string): EvalTask[] {
           name: config.name || entry.name,
           category: config.category || "feature",
           prompt: config.prompt || "",
-          timeoutMs: config.timeoutMs || 30_000,
+          timeoutMs: config.timeoutMs || EVAL_TASK_TIMEOUT_MS,
           maxTokens: config.maxTokens,
           fast: config.fast ?? true,
           taskDir,
@@ -115,7 +116,7 @@ export async function runEvalTask(
       autoVerify: false,
     });
 
-    const timeoutLimit = options.timeoutMs || task.timeoutMs || 30_000;
+    const timeoutLimit = options.timeoutMs || task.timeoutMs || EVAL_TASK_TIMEOUT_MS;
     const abortController = new AbortController();
     // The old code aborted this controller but never wired it into the turn:
     // session.send() owns its own controller, so a hung provider stalled the

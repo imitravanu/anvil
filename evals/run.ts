@@ -62,6 +62,16 @@ async function main() {
   if (taskFilter) console.log(` Filter: matching "${taskFilter}"`);
   console.log("===============================================================================");
 
+  // Operator override for the live-eval lane. Each task.json hardcodes a 30s
+  // budget tuned for the instant mock provider, and that per-task value wins in
+  // the runner — so live runs died at 30s mid-work (a passing task once landed at
+  // 29.27s). When this env var is set it is passed as an explicit operator
+  // override, which the runner prefers over task config. Unset in CI, so mock
+  // per-task budgets are untouched.
+  const envTimeout = Number(process.env.ANVIL_EVAL_TIMEOUT_MS);
+  const timeoutOverride =
+    Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : undefined;
+
   const report = await runAllEvalTasks({
     tasksDir: TASKS_DIR,
     fastOnly,
@@ -69,6 +79,7 @@ async function main() {
     useMock,
     providerId,
     modelId,
+    timeoutMs: timeoutOverride,
     onTaskStart: (task, index, total) => {
       process.stdout.write(`[${index}/${total}] ${task.id} (${task.name})... `);
     },
