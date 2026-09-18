@@ -138,7 +138,7 @@ export async function restoreCheckpoint(
         await fs.writeFile(resolved, f.content);
         restored.push(f.path);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       errors.push(`${f.path}: ${getErrorMessage(err)}`);
     }
   }

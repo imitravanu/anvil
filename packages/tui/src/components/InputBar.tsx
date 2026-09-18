@@ -2,20 +2,25 @@ import { useEffect, useRef, useState } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import TextInput from "ink-text-input";
 import { useTheme } from "../theme/theme.js";
+import { filterCommands } from "../commands/palette.js";
 import { COMMANDS } from "../commands/registry.js";
+import { CommandPalette } from "./CommandPalette.js";
 
 interface InputBarProps {
   isBusy: boolean;
   onSubmit: (text: string) => void;
   onCancel: () => void;
   sentHistory?: string[]; // this session's sent messages, for Up/Down recall
+  mruCommands?: readonly string[]; // most-recently-used slash commands first
 }
 
-export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: InputBarProps) {
+export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [], mruCommands = [] }: InputBarProps) {
   const theme = useTheme();
   const { exit } = useApp();
   const [value, setValue] = useState("");
   const historyIndex = useRef(-1); // -1 = not recalling
+  // DW-2.6 recall indicator: mirrors historyIndex in state (refs don't render).
+  const [recalling, setRecalling] = useState(false);
   const [commandIndex, setCommandIndex] = useState(0);
 
   // Slash-command menu: shown automatically as soon as the input starts with
@@ -24,9 +29,9 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: Input
   const startsSlash = value.startsWith("/");
   const slashText = startsSlash ? value.slice(1) : "";
   const showCommandMenu = startsSlash && !slashText.includes(" ");
-  const matchingCommands = showCommandMenu
-    ? COMMANDS.filter((c) => c.name.startsWith(slashText))
-    : [];
+  // DW-3.2 palette matching: prefix first, then fuzzy, MRU-boosted. The
+  // palette renders this same list, so highlight indices always align.
+  const matchingCommands = showCommandMenu ? filterCommands(COMMANDS, slashText, mruCommands) : [];
 
   // Keep the highlight on a valid row as the filter changes.
   useEffect(() => {
@@ -91,13 +96,16 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: Input
             ? sentHistory.length - 1
             : Math.max(0, historyIndex.current - 1);
         setValue(sentHistory[historyIndex.current]);
+        setRecalling(true);
       } else if (key.downArrow && historyIndex.current !== -1) {
         historyIndex.current += 1;
         if (historyIndex.current >= sentHistory.length) {
           historyIndex.current = -1;
           setValue("");
+          setRecalling(false);
         } else {
           setValue(sentHistory[historyIndex.current]);
+          setRecalling(true);
         }
       }
     }
@@ -123,6 +131,7 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: Input
         const sanitized = raw.replace(/[\r\n]+/g, " ");
         setValue(sanitized);
         historyIndex.current = -1;
+        setRecalling(false);
         return;
       }
       if (before.trim()) {
@@ -130,47 +139,38 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: Input
       }
       setValue(after);
       historyIndex.current = -1;
+      setRecalling(false);
       return;
     }
     // Typing after recall starts a new draft; Up/Down then starts again
     // from the newest sent message instead of overwriting the draft.
-    if (raw !== value) historyIndex.current = -1;
+    if (raw !== value) {
+      historyIndex.current = -1;
+      setRecalling(false);
+    }
     setValue(raw);
   };
 
   return (
     <Box flexDirection="column" flexShrink={0}>
-      {/* Slash-command autocomplete menu — appears on "/" */}
+      {/* DW-3.2 command palette — framed overlay above the input. */}
       {showCommandMenu && (
-        <Box flexDirection="column" paddingX={1}>
-          {matchingCommands.length === 0 ? (
-            <Text color={theme.colors.dim}>No matching commands.</Text>
-          ) : (
-            matchingCommands.map((command, i) => (
-              <Text key={command.name}>
-                <Text color={i === commandIndex ? theme.colors.primary : theme.colors.dim}>
-                  {i === commandIndex ? "❯ " : "  "}
-                </Text>
-                <Text color={theme.colors.toolName}>/{command.name}</Text>
-                <Text color={i === commandIndex ? theme.colors.userText : theme.colors.dim}>
-                  {" — "}{command.description}
-                </Text>
-                {i === commandIndex ? (
-                  <Text color={theme.colors.accent}>   (Tab fill · Enter run)</Text>
-                ) : null}
-              </Text>
-            ))
-          )}
+        <CommandPalette query={slashText} highlight={commandIndex} mru={mruCommands} />
+      )}
+      {/* DW-2.6 history recall indicator — only while browsing past input. */}
+      {recalling && !showCommandMenu && (
+        <Box paddingX={1} flexShrink={0}>
+          <Text color={theme.colors.textMuted}>↑↓ browsing history — type to start a new draft</Text>
         </Box>
       )}
       <Box
-        borderStyle="round"
+        borderStyle={theme.borders.panel}
         // Bright (accent) while ready for input, dimmed while a turn streams
         // (the box is non-interactive then) — state you can see without text.
         borderColor={isBusy ? theme.colors.dim : theme.colors.accent}
         paddingX={theme.spacing.panelPaddingX}
       >
-        <Text color={theme.colors.primary}>{"> "}</Text>
+        <Text color={theme.colors.brand}>{"❯ "}</Text>
         <Box flexGrow={1}>
           <Text color={theme.colors.userText}>
             <TextInput
@@ -192,6 +192,7 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [] }: Input
                 onSubmit(trimmed);
                 setValue("");
                 historyIndex.current = -1;
+                setRecalling(false);
               }}
             />
           </Text>

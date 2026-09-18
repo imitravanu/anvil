@@ -85,8 +85,8 @@ export function PermissionPrompt({
     <Box
       flexDirection="column"
       flexShrink={0}
-      borderStyle="round"
-      borderColor={theme.colors.toolRunning}
+      borderStyle={theme.borders.modal}
+      borderColor={theme.colors.warning}
       paddingX={1}
     >
       <Text color={theme.colors.toolName}>
@@ -109,11 +109,20 @@ export function PermissionPrompt({
           <Text color={theme.colors.assistantText}>{curtail(request.summary, maxText * 3)}</Text>
         )}
       </Box>
+      {/* DW-2.3 action buttons: full-width boxes, selected raised in brand. */}
       {options.map((option, i) => (
-        <Text key={option} color={i === selected ? theme.colors.primary : undefined}>
-          {i === selected ? "❯ " : "  "}
-          {option}
-        </Text>
+        <Box
+          key={option}
+          flexShrink={0}
+          borderStyle="round"
+          borderColor={i === selected ? theme.colors.brand : theme.colors.separator}
+          paddingX={1}
+        >
+          <Text color={i === selected ? theme.colors.brand : theme.colors.textSecondary} bold={i === selected}>
+            {i === selected ? "▸ " : "  "}
+            {option}
+          </Text>
+        </Box>
       ))}
       <Text dimColor> ↑/↓ to move · Enter to confirm · Esc to deny</Text>
     </Box>

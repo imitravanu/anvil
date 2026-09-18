@@ -24,14 +24,16 @@ export function ToolCallView({ call, expanded }: { call: DisplayToolCall; expand
   const spinner = useSpinnerFrame(call.status === "running");
   const symbol =
     call.status === "running" ? spinner : call.status === "done" ? "✓" : call.status === "cancelled" ? "○" : "✗";
+  // DW-2.2 status pills on semantic tokens (values match the legacy tool
+  // colors on dark, diverge purposefully on midnight/hacker).
   const color =
     call.status === "running"
-      ? theme.colors.toolRunning
+      ? theme.colors.warning
       : call.status === "done"
-        ? theme.colors.toolDone
+        ? theme.colors.success
         : call.status === "cancelled"
-          ? theme.colors.dim
-          : theme.colors.toolError;
+          ? theme.colors.textMuted
+          : theme.colors.error;
   // The composed one-liner must fit one terminal row — it is a card title, and
   // wrapping it adds transcript rows the scrollback estimator never counts.
   const line = `${symbol} ${call.name} ${describeCall(call)}`;

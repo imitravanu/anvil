@@ -288,3 +288,122 @@ describe("review baseline bounds", () => {
     }
   });
 });
+
+describe("S1.3: checkpoints reflect reality", () => {
+  let tmp: string;
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-s13-"));
+  });
+  afterEach(() => {
+    try {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  function makeSession(script: StreamEvent[][], broker?: AgentOptions["permissionBroker"]) {
+    const provider = new FakeProvider(script);
+    const session = new AgentSession(provider, {
+      ...BASE_OPTIONS,
+      projectRoot: tmp,
+      permissionBroker: broker ?? AUTO_APPROVE_BROKER,
+    });
+    return { session, provider };
+  }
+
+  async function runOneTurn(session: AgentSession, text = "Do it."): Promise<AgentEvent[]> {
+    const events: AgentEvent[] = [];
+    for await (const event of session.send(text)) events.push(event);
+    return events;
+  }
+
+  it("cancel mid-batch still commits a checkpoint for the mutation that completed", async () => {
+    const fileA = path.join(tmp, "a.txt");
+    const fileB = path.join(tmp, "b.txt");
+    fs.writeFileSync(fileA, "original");
+    // Deterministic abort point: the SECOND mutating prompt never resolves —
+    // the orchestrator races it against the cancel signal, so cancelling
+    // lands exactly while prompt #2 is open, after write #1 fully finished.
+    let prompts = 0;
+    const { session } = makeSession(
+      [
+        [
+          { type: "tool_call_end", id: "w0", name: "write_file", input: { path: fileA, content: "mutated" } },
+          { type: "tool_call_end", id: "w1", name: "write_file", input: { path: fileB, content: "never" } },
+          { type: "turn_end", stopReason: "tool_use" },
+        ],
+        [{ type: "text_delta", text: "recovered" }, { type: "turn_end", stopReason: "end_turn" }],
+      ],
+      {
+        requestPermission: async () => {
+          prompts += 1;
+          if (prompts === 1) return true;
+          await new Promise<void>(() => {}); // held open until abort
+          return false;
+        },
+      }
+    );
+
+    const runPromise = runOneTurn(session);
+    // Wait until write #1 actually hit the disk, then cancel.
+    for (let i = 0; i < 200; i++) {
+      if (fs.readFileSync(fileA, "utf-8") === "mutated") break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    session.cancel();
+    const first = await runPromise;
+
+    // The batch was cut off, but write #1's effect exists on disk.
+    expect(first.some((e) => e.type === "cancelled")).toBe(true);
+    expect(fs.readFileSync(fileA, "utf-8")).toBe("mutated");
+    expect(fs.existsSync(fileB)).toBe(false);
+
+    // The completed write must have an undo entry — pre-S1.3 the pending
+    // snapshot was dropped on the cancellation path.
+    const cps = session.getCheckpoints();
+    expect(cps).toHaveLength(1);
+
+    await runOneTurn(session, "continue"); // settle the follow-up turn
+    const result = await session.rewind(cps[0].id);
+    expect(result.ok).toBe(true);
+    expect(result.restored).toEqual([fileA]);
+    expect(fs.readFileSync(fileA, "utf-8")).toBe("original");
+  });
+
+  it("a checkpoint only covers paths whose calls actually succeeded", async () => {
+    const good = path.join(tmp, "good.txt");
+    const bad = path.join(tmp, "bad.txt");
+    fs.writeFileSync(good, "good-orig");
+    fs.writeFileSync(bad, "bad-orig");
+    let prompts = 0;
+    const { session } = makeSession(
+      [
+        [
+          { type: "tool_call_end", id: "w1", name: "write_file", input: { path: good, content: "good-new" } },
+          { type: "tool_call_end", id: "w2", name: "write_file", input: { path: bad, content: "bad-new" } },
+          { type: "turn_end", stopReason: "tool_use" },
+        ],
+        [{ type: "text_delta", text: "done" }, { type: "turn_end", stopReason: "end_turn" }],
+      ],
+      {
+        // First mutating prompt approved, second denied.
+        requestPermission: async () => ++prompts <= 1,
+      }
+    );
+
+    await runOneTurn(session);
+    expect(fs.readFileSync(good, "utf-8")).toBe("good-new");
+    expect(fs.readFileSync(bad, "utf-8")).toBe("bad-orig"); // denied → never ran
+
+    const cps = session.getCheckpoints();
+    expect(cps).toHaveLength(1);
+    expect(cps[0].files).toBe(1); // only good.txt is covered
+
+    const result = await session.rewind(cps[0].id);
+    expect(result.ok).toBe(true);
+    expect(result.restored).toEqual([good]);
+    expect(fs.readFileSync(good, "utf-8")).toBe("good-orig");
+    expect(fs.readFileSync(bad, "utf-8")).toBe("bad-orig");
+  });
+});

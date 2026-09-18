@@ -20,6 +20,7 @@ import {
   createProviders,
   createMockCertificationProvider,
   certifyProvider,
+  getErrorMessage,
   PROVIDER_CERT_MODELS,
   resolveCertificationCredentials,
   type ProviderId,
@@ -211,7 +212,7 @@ async function main() {
       fs.writeFileSync(out, JSON.stringify(stamped, null, 2));
       if (!json) console.log(`Matrix written to ${out}`);
     } catch (err) {
-      console.error(`Failed to write matrix to ${out}: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`Failed to write matrix to ${out}: ${getErrorMessage(err)}`);
       process.exit(1);
     }
   }

@@ -10,6 +10,8 @@ import { AUTO_APPROVE_BROKER } from "../agent/types.js";
 import { ModelProvider } from "../providers/types.js";
 import { createProviders } from "../providers/index.js";
 import { loadCredentials } from "../config/index.js";
+import { getErrorMessage } from "../errors.js";
+import { scanTextForSlop } from "../guardian/scanner.js";
 
 /**
  * Discovers and parses all valid eval tasks under tasksDir.
@@ -142,6 +144,28 @@ export async function runEvalTask(
       clearTimeout(timeoutHandle);
     }
 
+    // 3.5. Advisory slop scan of generated source files
+    const slopViolations: Array<{ file: string; line: number; rule: string; detail: string }> = [];
+    function walkForSlop(dir: string) {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === "node_modules") continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walkForSlop(full);
+        } else if (/\.(ts|tsx|js)$/.test(entry.name)) {
+          const content = fs.readFileSync(full, "utf8");
+          slopViolations.push(...scanTextForSlop(full, content));
+        }
+      }
+    }
+    walkForSlop(tempDir);
+    if (slopViolations.length > 0) {
+      console.warn(`[eval:${task.id}] Slop violations detected (${slopViolations.length}):`);
+      for (const v of slopViolations) {
+        console.warn(`  ${v.file}:${v.line} [${v.rule}] ${v.detail}`);
+      }
+    }
+
     // 4. Run assertion script
     // Ensure check.sh is executable
     try {
@@ -154,7 +178,16 @@ export async function runEvalTask(
     const checkResult = spawnSync("bash", [task.assertionScript], {
       cwd: tempDir,
       timeout: 10_000,
-      env: { ...process.env, PROJECT_ROOT: tempDir },
+      env: {
+        PATH: process.env.PATH ?? "",
+        HOME: process.env.HOME ?? "",
+        LANG: process.env.LANG ?? "",
+        USER: process.env.USER ?? "",
+        LOGNAME: process.env.LOGNAME ?? "",
+        TMPDIR: process.env.TMPDIR ?? "",
+        SHELL: process.env.SHELL ?? "",
+        PROJECT_ROOT: tempDir,
+      },
       stdio: ["ignore", "pipe", "pipe"],
     });
 
@@ -166,9 +199,9 @@ export async function runEvalTask(
       const stdout = checkResult.stdout?.toString("utf8").trim();
       errorMsg = stderr || stdout || `check.sh failed with exit code ${checkResult.status}`;
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     passed = false;
-    errorMsg = err?.message || String(err);
+    errorMsg = getErrorMessage(err);
   } finally {
     // Cleanup workspace
     try {

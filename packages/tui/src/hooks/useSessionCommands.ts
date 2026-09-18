@@ -10,6 +10,7 @@ import {
 } from "@anvil/core";
 import type { TuiPermissionBroker } from "../permission/TuiPermissionBroker.js";
 import type { DisplayMessage, DisplayGoal } from "./useAgentController.js";
+import { useState } from "react";
 import { COMMANDS, makeHandlers, parseCommand } from "../commands/registry.js";
 import type { CommandContext } from "../commands/types.js";
 import type { McpAppState } from "../components/App.js";
@@ -52,6 +53,8 @@ export interface UseSessionCommandsResult {
   resumeFromStored: (stored: StoredSession) => void;
   ctx: CommandContext;
   handleSubmit: (text: string) => Promise<void>;
+  /** Most-recently-used slash commands (max 5) for palette ranking. */
+  mruCommands: string[];
 }
 
 /** Build display messages from a stored history (text parts only). */
@@ -182,6 +185,9 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     addPendingImage,
   });
 
+  // DW-3.2 MRU: successful slash runs float to the palette top.
+  const [mruCommands, setMruCommands] = useState<string[]>([]);
+
   const handleSubmit = async (text: string) => {
     deps.recordSentMessage?.(text);
     const parsed = parseCommand(text);
@@ -190,6 +196,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
       if (command) {
         try {
           await command.run(parsed.args, ctx);
+          setMruCommands((prev) => [parsed.name, ...prev.filter((n) => n !== parsed.name)].slice(0, 5));
         } catch (err: unknown) {
           const msg = getErrorMessage(err);
           printSystemMessage(`Command /${parsed.name} failed: ${msg}`);
@@ -205,5 +212,5 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     persist();
   };
 
-  return { persist, resumeFromStored, ctx, handleSubmit };
+  return { persist, resumeFromStored, ctx, handleSubmit, mruCommands };
 }

@@ -81,6 +81,7 @@ export function App({
     messages,
     isBusy,
     usage,
+    tokenHistory,
     plan,
     goal,
     setGoal,
@@ -160,7 +161,7 @@ export function App({
     if (!isThemePickerOpen) themeBeforePicker.current = themeName;
   }, [isThemePickerOpen, themeName]);
 
-  const { handleSubmit, resumeFromStored, persist } = useSessionCommands({
+  const { handleSubmit, resumeFromStored, persist, mruCommands } = useSessionCommands({
     session,
     providers,
     activeProviderId,
@@ -359,6 +360,7 @@ export function App({
             onSubmit={handleSubmit}
             onCancel={cancel}
             sentHistory={sentHistory}
+            mruCommands={mruCommands}
           />
         )}
         <StatusBar
@@ -367,6 +369,7 @@ export function App({
           usage={usage}
           checkpointCount={session.getCheckpoints().length}
           testStatus={testStatus}
+          tokenHistory={tokenHistory}
         />
       </Box>
     </ThemeContext.Provider>

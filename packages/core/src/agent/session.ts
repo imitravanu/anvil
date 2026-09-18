@@ -1,8 +1,8 @@
-import { getErrorMessage } from "../errors.js";
+import { getErrorMessage, sleepAbortable } from "../errors.js";
 import { randomUUID } from "node:crypto";
 import { type ModelProvider, type ConversationMessage } from "../providers/types.js";
 import { getModel } from "../providers/registry.js";
-import { TOOL_DEFINITIONS, getSessionToolHandler } from "../tools/index.js";
+import { TOOL_DEFINITIONS, describeToolInput, getSessionToolHandler } from "../tools/index.js";
 import type { ToolExecutionResult, ToolDefinition } from "../tools/types.js";
 import { verifyTurnMutations } from "./turnVerifier.js";
 import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded, estimateTokens } from "./compaction.js";
@@ -13,8 +13,10 @@ import { AgentEvent, AgentOptions, DEFAULT_MAX_INNER_ITERATIONS } from "./types.
 import { RunLedgerEntry, capLedger, maxSeq, LEDGER_CAP } from "./ledger.js";
 import { clearRateLimitRecord, getConsecutiveRateLimitCount, isCircuitOpen, isRateLimitMessage, noteRateLimited, rateLimitRetrySeconds, recordFailure, recordSuccess } from "../providers/freeModels.js";
 import { MAX_DELEGATIONS_PER_TURN, runSubAgentLive } from "./subagent.js";
+  import { interceptTurn } from "../guardian/interceptor.js";
 import { TurnState } from "./turnState.js";
 import { LoopGuard, type AccumulatedToolCall, type PreparedCall } from "./loopGuard.js";
+import type { TeamRunResult } from "./team/types.js";
 import { ToolOrchestrator, type RunnableCall } from "./orchestrator.js";
 import { HistoryStore } from "./historyStore.js";
 import {
@@ -29,29 +31,6 @@ import {
 } from "./checkpoints.js";
 import { loadCheckpoints, saveCheckpointsAsync } from "./checkpointStore.js";
 import { BASELINE_MAX_BYTES, BASELINE_MAX_PATHS } from "../config/constants.js";
-
-/**
- * Abortable wait for the automatic rate-limit retry. Rejects on abort so the
- * turn resolves as cancelled instead of waking up and hammering a rate-limited
- * endpoint after the user asked to stop.
- */
-function sleepAbortable(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal.aborted) {
-      reject(new Error("aborted"));
-      return;
-    }
-    const timer = setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-    const onAbort = () => {
-      clearTimeout(timer);
-      reject(new Error("aborted"));
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
-}
 
 export interface RestoreData {
   metadata: SessionMetadata;
@@ -87,6 +66,8 @@ export class AgentSession {
   // the ring; the baseline is review-only.
   private baselineByPath = new Map<string, Buffer | null>();
   private baselineBytes = 0;
+  /** Last completed delegate_task team run (Phase 25.2 introspection for /team status). */
+  private lastTeamRun: TeamRunResult | null = null;
   private checkpointSeq = 0;
   readonly id: string;
   title: string | null; // null until the first user message sets a default
@@ -130,6 +111,12 @@ export class AgentSession {
   /** Project root the session operates on (for /diff review). */
   get projectRoot(): string {
     return this.options.projectRoot;
+  }
+
+  /** The active model's context window (bytes budget for /context display). */
+  get contextWindow(): number {
+    const modelInfo = getModel(this.options.model, this.provider.id);
+    return modelInfo?.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
   }
 
   /**
@@ -329,6 +316,11 @@ export class AgentSession {
     await saveCheckpointsAsync(this.id, this.checkpoints);
   }
 
+  /** Last completed team run, or null before any team delegation this session. */
+  get teamRun(): TeamRunResult | null {
+    return this.lastTeamRun;
+  }
+
   /**
    * First-seen-per-path merge into the review baseline. A file previously
    * snapped (by a direct write or a merged sub-agent) keeps its ORIGINAL
@@ -407,7 +399,8 @@ export class AgentSession {
     // per-turn loop state starts clean on every send().
     // A fresh TurnState per call — budget and loop-guard state must never
     // leak across turns (a reused instance would instantly budget_exhaust).
-    const turn = new TurnState(this.maxInnerIterations);
+        const turn = new TurnState(this.maxInnerIterations);
+    turn.task = userText;
 
     try {
       while (true) {
@@ -446,14 +439,14 @@ export class AgentSession {
         ) {
           turn.markCompactionAttempted();
           try {
-            const { history: compacted, result } = await compactIfNeeded(
+                        const { history: compacted, result } = await compactIfNeeded(
               this.history.snapshot(),
               contextWindow,
               this.lastInputTokens,
               this.provider,
               this.options.model,
               controller.signal,
-              { summarizerModel: this.options.compactionModel }
+              { summarizerModel: this.options.compactionModel, task: turn.task }
             );
             if (result.compacted) {
               // Preserve role alternation on merge (several providers reject
@@ -538,10 +531,108 @@ export class AgentSession {
 
         turn.markIteration();
 
-        const turnNotes: string[] = [];
+                const turnNotes: string[] = [];
         const prepared: PreparedCall[] = LoopGuard.classify(toolCalls, this.toolDefs, turn);
-
         const handled = new Map<string, ToolExecutionResult>();
+
+        // ── Phase 25.6 → product: native guardian gate ─────────────────────
+        // Intercept pending file mutations BEFORE they reach the orchestrator.
+        // Safe auto-fixes rewrite the pending write content in place; surviving
+        // violations refuse the offending calls only (same ToolExecutionResult
+        // shape LoopGuard uses), the rest of the batch still runs, and a repair
+        // prompt goes to the model — mirroring verifyTurnMutations.
+        const fileWriteTools = new Set(["write_file", "edit_file"]);
+        const pending: { call: PreparedCall; path: string; diff: string }[] = [];
+        // Calls the guardian refused. They carry an error result in `handled`
+        // and MUST be skipped by the dispatch loop below — putting them in
+        // `toRun` anyway would execute the mutation the refusal promised not
+        // to run (reported-vs-executed divergence, S1.1).
+        const guardianBlocked = new Set<string>();
+        for (const p of prepared) {
+          if (!p.def?.mutating) continue;
+          const input = (p.call.input ?? {}) as { path?: unknown; content?: unknown; new_str?: unknown };
+          const relPath = typeof input.path === "string" ? input.path : undefined;
+          if (!relPath) continue;
+          let diff: string;
+          if (fileWriteTools.has(p.def.name)) {
+            const body =
+              typeof input.content === "string"
+                ? input.content
+                : typeof input.new_str === "string"
+                  ? input.new_str
+                  : "";
+            if (body.length === 0) continue;
+            // describe-file tools: scan the literal new content (added lines).
+            diff = body.split("\n").map((l) => `+${l}`).join("\n");
+          } else {
+            // Command-based mutations (bash, plugin tools): describeToolInput
+            // is the sanctioned preview surface and returns a real unified
+            // diff for file-touching commands. Empty = nothing to scan.
+            diff = await describeToolInput(p.def.name, p.call.input, {
+              projectRoot: this.options.projectRoot,
+              signal: controller.signal,
+            });
+          }
+          if (diff.length > 0) pending.push({ call: p, path: relPath, diff });
+        }
+
+        if (pending.length > 0) {
+          const intercept = interceptTurn(pending.map((p) => ({ path: p.path, diff: p.diff })));
+          if (intercept.fixed.length > 0) {
+            // Auto-fix: raw-error ternary → getErrorMessage, applied back to the
+            // pending content string so the call runs with the repaired text.
+            const fixedByPath = new Map(intercept.fixed.map((f) => [f.path, f.diff]));
+            for (const { call, path } of pending) {
+              const repaired = fixedByPath.get(path);
+              if (!repaired) continue;
+              const fixedText = repaired.split("\n").map((l) => l.slice(1)).join("\n");
+              const input = (call.call.input ?? {}) as { content?: string; new_str?: string };
+              if (typeof input.content === "string") input.content = fixedText;
+              else if (typeof input.new_str === "string") input.new_str = fixedText;
+            }
+          }
+          if (!intercept.allowed) {
+            const blockedByPath = new Set(intercept.violations.map((v) => v.file));
+            for (const { call, path } of pending) {
+              if (!blockedByPath.has(path)) continue;
+              const callViolations = intercept.violations.filter((v) => v.file === path);
+              guardianBlocked.add(call.call.id);
+              handled.set(call.call.id, {
+                output: {
+                  error:
+                    `Guardian blocked this call — pending changes to ${path} violate the project's hygiene rules: ` +
+                    callViolations
+                      .map((v) => `${v.rule} (line ${v.line}): ${v.detail}`)
+                      .join("; ") +
+                    ". Fix the violations and retry — do NOT re-emit the call unchanged.",
+                },
+                isError: true,
+                summary: `Guardian blocked ${call.def?.name ?? "tool"} on ${path}`,
+              });
+              this.recordLedger({
+                eventType: "loop_refused",
+                tool: call.def?.name ?? "tool",
+                inputHash: call.key,
+                outcome: "error",
+                elapsedMs: 0,
+              });
+            }
+            yield {
+              type: "guardian_blocked",
+              count: blockedByPath.size,
+              fixed: intercept.fixed.length,
+              firstRule: intercept.violations[0]?.rule ?? "unknown",
+            };
+            this.history.pushUserText(
+              `[Guardian] Your pending file mutation${intercept.violations.length === 1 ? " was" : "s were"} blocked before execution. ` +
+                `Violations:\n` +
+                intercept.violations.map((v) => `- ${v.file}: line ${v.line} — ${v.rule}: ${v.detail}`).join("\n") +
+                `\nFix these issues (use getErrorMessage(err) for error formatting; never catch-and-ignore) and retry.`
+            );
+          }
+        }
+        // ───────────────────────────────────────────────────────────────────
+
         const toRun: RunnableCall[] = [];
         for (const p of prepared) {
           if (p.loopWarn) {
@@ -553,6 +644,16 @@ export class AgentSession {
             this.recordLedger({ eventType: "loop_detected", tool: p.call.name, inputHash: p.key, outcome: "error", elapsedMs: 0 });
             yield { type: "loop_detected", tool: p.call.name };
             turnNotes.push(LoopGuard.warnText(p.call.name, "non-consecutive"));
+          }
+          if (p.refused) {
+            // Refusal is decided BEFORE session-tool handling: a loop-refused
+            // delegate_task/update_plan must never reach its executor.
+            this.recordLedger({ eventType: "loop_refused", tool: p.call.name, inputHash: p.key, outcome: "error", elapsedMs: 0 });
+            handled.set(p.call.id, LoopGuard.refusedResult());
+            continue;
+          }
+          if (guardianBlocked.has(p.call.id)) {
+            continue; // result already in `handled` (guardian refusal)
           }
           const sessionTool = getSessionToolHandler(p.call.name);
           if (sessionTool) {
@@ -579,6 +680,9 @@ export class AgentSession {
                 recordMutation: () => {
                   turn.mutationsOccurred = true;
                 },
+                onTeamRunResult: (result) => {
+                  this.lastTeamRun = result;
+                },
               },
               p.key
             );
@@ -598,11 +702,6 @@ export class AgentSession {
             handled.set(p.call.id, item.value);
             continue;
           }
-          if (p.refused) {
-            this.recordLedger({ eventType: "loop_refused", tool: p.call.name, inputHash: p.key, outcome: "error", elapsedMs: 0 });
-            handled.set(p.call.id, LoopGuard.refusedResult());
-            continue;
-          }
           toRun.push({ p, startedAt: Date.now() });
         }
 
@@ -616,6 +715,15 @@ export class AgentSession {
         });
         const runResults = yield* orchestrator.run(toRun);
         if (controller.signal.aborted) {
+          // S1.3: mutations that completed before the abort still exist on
+          // disk — commit their undo entries before reporting cancellation.
+          // Dropping the pending snapshot here used to make completed writes
+          // unrecoverable via /rewind.
+          if (pendingCp) {
+            const partialOutcomes = new Map<string, ToolExecutionResult>([...runResults, ...handled]);
+            const cpEvent = await this.commitRewindSnapshot(pendingCp, prepared, partialOutcomes);
+            if (cpEvent) yield cpEvent;
+          }
           this.pushCancelledToolResults(prepared, handled, runResults, turnNotes);
           yield { type: "cancelled" };
           return;
@@ -771,20 +879,25 @@ export class AgentSession {
     prepared: PreparedCall[],
     outcomes: Map<string, ToolExecutionResult>
   ): Promise<AgentEvent | null> {
-    let coveredMutated = false;
+    // S1.3: keep only the snapshots for write/edit targets whose calls
+    // actually succeeded — a denied, refused, or failed call did not change
+    // its file, so its pre-state must not claim undo coverage.
+    const succeededPaths = new Set<string>();
     for (const p of prepared) {
       if (p.call.name !== "write_file" && p.call.name !== "edit_file") continue;
       const outcome = outcomes.get(p.call.id);
-      if (outcome && !outcome.isError) {
-        coveredMutated = true;
-        break;
-      }
+      if (!outcome || outcome.isError) continue;
+      const target = (p.call.input as { path?: unknown } | undefined)?.path;
+      if (typeof target === "string") succeededPaths.add(target);
     }
-    if (!coveredMutated) return null;
+    if (succeededPaths.size === 0) return null;
+    const committedFiles = pendingCp.files.filter((f) => succeededPaths.has(f.path));
+    if (committedFiles.length === 0) return null;
+    const committed: Checkpoint = { ...pendingCp, files: committedFiles };
     this.checkpointSeq = pendingCp.id;
-    this.checkpoints = capCheckpoints([...this.checkpoints, pendingCp]);
+    this.checkpoints = capCheckpoints([...this.checkpoints, committed]);
     await this.persistCheckpoints();
     this.recordLedger({ eventType: "checkpoint_created", outcome: "ok", elapsedMs: 0 });
-    return { type: "checkpoint", id: pendingCp.id, files: pendingCp.files.length };
+    return { type: "checkpoint", id: committed.id, files: committed.files.length };
   }
 }

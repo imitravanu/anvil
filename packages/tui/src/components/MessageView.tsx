@@ -1,22 +1,44 @@
 import React from "react";
-import { Box, Text } from "ink";
+import { Box, Text, useStdout } from "ink";
 import type { DisplayMessage } from "../hooks/useAgentController.js";
 import { MarkdownView, parseMarkdownText } from "../markdown/MarkdownView.js";
 import { useTheme } from "../theme/theme.js";
+import { rule } from "../util/chrome.js";
+import { displayWidth, formatTime } from "../util/format.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
-import { useSpinnerFrame } from "../util/useSpinner.js";
+import { useBlink, useSpinnerFrame } from "../util/useSpinner.js";
 import { ToolCallView } from "./ToolCallView.js";
 import { SubAgentView } from "./SubAgentView.js";
 import { VerificationCard } from "./VerificationCard.js";
 
 export const MessageView = React.memo(function MessageView({ message, expandTools }: { message: DisplayMessage; expandTools?: boolean }) {
   const theme = useTheme();
-  // Streaming caret: a single braille-spinner implementation.
-  const spinner = useSpinnerFrame(message.streaming);
+  const { stdout } = useStdout();
+  // Card headers: role label + rule; with /expand, a dim timestamp rides the
+  // right edge (DW-2 deferred timestamps). Absent ts (resumed history) → bare.
+  const showTime = expandTools === true && message.ts !== undefined;
+  const timeText = showTime ? formatTime(message.ts as number) : "";
+  const ruleRoom = (label: string): number => {
+    const width = Math.max(20, (stdout?.columns ?? 80) - 4);
+    const reserve = timeText ? displayWidth(timeText) + 2 : 0;
+    return Math.max(4, width - displayWidth(label) - 1 - reserve);
+  };
+  const cardHeader = (label: string, color: string | undefined, bold?: boolean) => (
+    <Box justifyContent="space-between" flexShrink={0} flexGrow={1}>
+      <Text color={color} bold={bold}>
+        {label} {rule(ruleRoom(label))}
+      </Text>
+      {timeText && <Text dimColor>{timeText}</Text>}
+    </Box>
+  );
+  // DW-3.1 pulse = streaming wakefulness; DW-3.4 block cursor on live text.
+  // (Hooks stay above the role early-returns — role never changes per instance.)
+  const pulse = useSpinnerFrame(message.streaming, "pulse");
+  const cursorOn = useBlink(message.streaming);
   if (message.role === "user") {
     return (
       <Box flexDirection="column">
-        <Text color={theme.colors.dim}>❯ you</Text>
+        {cardHeader(theme.typography.userPrefix, theme.colors.textSecondary)}
         {message.images?.map((img) => (
           <Text key={img.path} color={theme.colors.dim}>
             {"  🖼 "}
@@ -52,9 +74,13 @@ export const MessageView = React.memo(function MessageView({ message, expandTool
   const textBlock = message.streaming ? (
     <Text color={theme.colors.assistantText}>
       {safeText ? `${safeText} ` : ""}
-      <Text color={theme.colors.accent}>{spinner}</Text>
-      {!safeText && message.toolCalls.length === 0 && (
-        <Text dimColor> thinking…</Text>
+      {safeText ? (
+        <Text color={theme.colors.accent}>{cursorOn ? "█" : " "}</Text>
+      ) : (
+        <>
+          <Text color={theme.colors.accent}>{pulse}</Text>
+          {message.toolCalls.length === 0 && <Text dimColor> thinking…</Text>}
+        </>
       )}
     </Text>
   ) : (
@@ -62,12 +88,10 @@ export const MessageView = React.memo(function MessageView({ message, expandTool
   );
   return (
     <Box flexDirection="column">
-      <Text bold color={theme.colors.primary}>
-        anvil
-      </Text>
+      {cardHeader(theme.typography.assistantPrefix, theme.colors.brand, true)}
       {(safeText || message.streaming) && textBlock}
       {message.errorText && (
-        <Text color={theme.colors.toolError}>✗ {sanitizeTerminalText(message.errorText)}</Text>
+        <Text color={theme.colors.error}>✗ {sanitizeTerminalText(message.errorText)}</Text>
       )}
       {message.toolCalls.map((call) => (
         <ToolCallView key={call.id} call={call} expanded={expandTools} />

@@ -14,6 +14,8 @@ import { handleMcp } from "./handlers/mcp.js";
 import { handleRewind } from "./handlers/rewind.js";
 import { handleAttachImage } from "./handlers/media.js";
 import { handleLaunchGoal } from "./handlers/goal.js";
+import { handleContext, handlePlugin, handleTeam } from "./handlers/phase25.js";
+import { handleCopy } from "./handlers/clipboard.js";
 
 export const COMMANDS: Command[] = [
   {
@@ -158,6 +160,26 @@ export const COMMANDS: Command[] = [
       ctx.launchGoal(objective);
     },
   },
+  {
+    name: "team",
+    description: "Multi-agent teams: /team status",
+    run: (args, ctx) => ctx.team(args),
+  },
+  {
+    name: "plugin",
+    description: "Plugins: /plugin list",
+    run: (args, ctx) => ctx.plugin(args),
+  },
+  {
+    name: "context",
+    description: "Show token budget breakdown and compaction forecast",
+    run: (_args, ctx) => ctx.showContext(),
+  },
+  {
+    name: "copy",
+    description: "Copy the newest code block to the clipboard (OSC 52)",
+    run: (_args, ctx) => ctx.copyLast(),
+  },
 ];
 
 export function parseCommand(input: string): { name: string; args: string[] } | null {
@@ -214,5 +236,9 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
     createPr: () => handleCreatePr(deps),
     mcp: (sub?: string) => handleMcp(deps, sub),
     launchGoal: (objective: string) => handleLaunchGoal(deps, objective),
+    team: (args: string[]) => handleTeam(deps, args),
+    plugin: (args: string[]) => handlePlugin(deps, args),
+    showContext: () => handleContext(deps),
+    copyLast: () => handleCopy(deps),
   };
 }

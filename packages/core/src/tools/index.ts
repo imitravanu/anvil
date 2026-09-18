@@ -11,6 +11,16 @@ import * as verifyTests from "./verifyTests.js";
 import * as updatePlan from "./updatePlan.js"; // plan scratchpad
 import * as delegateTask from "./delegateTask.js"; // sub-agent delegation tool
 import * as updateMemory from "./updateMemory.js"; // project memory tool
+import {
+  gotoDefinitionDef,
+  gotoDefinitionExec,
+  findReferencesDef,
+  findReferencesExec,
+  getHoverDef,
+  getHoverExec,
+  getDiagnosticsDef,
+  getDiagnosticsExec,
+} from "../lsp/tools.js";
 
 interface RegisteredTool {
   definition: ToolDefinition;
@@ -36,6 +46,10 @@ const REGISTRY: RegisteredTool[] = [
   { definition: updatePlan.definition, execute: updatePlan.execute, executeSession: updatePlan.executeSession },
   { definition: delegateTask.definition, execute: delegateTask.execute, executeSession: delegateTask.executeSession },
   { definition: updateMemory.definition, execute: updateMemory.execute },
+  { definition: gotoDefinitionDef, execute: gotoDefinitionExec },
+  { definition: findReferencesDef, execute: findReferencesExec },
+  { definition: getHoverDef, execute: getHoverExec },
+  { definition: getDiagnosticsDef, execute: getDiagnosticsExec },
 ];
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = REGISTRY.map((t) => t.definition);

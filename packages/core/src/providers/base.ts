@@ -1,4 +1,5 @@
-import { getErrorMessage } from "../errors.js";
+import { getErrorMessage, sleepAbortable } from "../errors.js";
+import { PROVIDER_STREAM_MAX_RETRIES } from "../config/constants.js";
 import {
   CompletionRequest,
   ModelProvider,
@@ -32,12 +33,16 @@ export abstract class BaseProvider implements ModelProvider {
       return;
     }
 
-    const maxRetries = 2;
+    const maxRetries = PROVIDER_STREAM_MAX_RETRIES;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       if (request.signal?.aborted) {
         yield { type: "error", message: "Request was cancelled." };
         return;
       }
+      // Whether any event of the CURRENT attempt has been surfaced to the
+      // consumer. Retry is only safe while nothing has been delivered —
+      // restarting after delivered deltas would replay them.
+      let surfaced = false;
       try {
         const stream = await this.doStream(request);
         const iterator = ensureTurnEnd(stream)[Symbol.asyncIterator]();
@@ -45,21 +50,34 @@ export abstract class BaseProvider implements ModelProvider {
         if (!first.done && first.value.type === "error") {
           const info = classifyProviderError(first.value.message);
           if (info.isRetryable && attempt < maxRetries && !request.signal?.aborted) {
+            // The underlying stream is still open after a mid-flight error
+            // event — close the abandoned iterator before retrying.
+            await iterator.return(undefined);
             const delay = Math.min(50 * Math.pow(2, attempt), 2000);
-            await new Promise((r) => setTimeout(r, delay));
+            await sleepAbortable(delay, request.signal);
             continue;
           }
         }
         while (!first.done) {
+          surfaced = true;
           yield first.value;
           first = await iterator.next();
         }
         return;
       } catch (err: unknown) {
+        if (request.signal?.aborted || getErrorMessage(err) === "aborted") {
+          yield { type: "error", message: "Request was cancelled." };
+          return;
+        }
         const info = classifyProviderError(err);
-        if (info.isRetryable && attempt < maxRetries && !request.signal?.aborted) {
+        if (
+          info.isRetryable &&
+          attempt < maxRetries &&
+          !request.signal?.aborted &&
+          !surfaced
+        ) {
           const delay = Math.min(50 * Math.pow(2, attempt), 2000);
-          await new Promise((r) => setTimeout(r, delay));
+          await sleepAbortable(delay, request.signal);
           continue;
         }
         yield {
@@ -72,34 +90,6 @@ export abstract class BaseProvider implements ModelProvider {
         return;
       }
     }
-  }
-
-  /**
-   * Automatic retry with exponential backoff for transient failures (503/502/429/timeout).
-   * Permanent errors (400, 401, 404, context overflow) fail immediately.
-   */
-  protected async streamWithRetry(
-    request: CompletionRequest,
-    maxRetries = 2
-  ): Promise<AsyncGenerator<StreamEvent>> {
-    let lastError: unknown;
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      if (request.signal?.aborted) {
-        throw new Error("Request was cancelled.");
-      }
-      try {
-        return await this.doStream(request);
-      } catch (err: unknown) {
-        lastError = err;
-        const info = classifyProviderError(err);
-        if (!info.isRetryable || attempt === maxRetries || request.signal?.aborted) {
-          throw err;
-        }
-        const delay = Math.min(1000 * Math.pow(2, attempt), 10_000);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-    }
-    throw lastError;
   }
 
   /** Subclass implements the actual streaming logic. */

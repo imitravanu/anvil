@@ -34,6 +34,9 @@ describe("mapStopReason", () => {
 
 describe("translateAnthropicStream", () => {
   it("emits text deltas, usage, and turn_end for a plain text turn", async () => {
+    // usage fields are FLAT on message_delta (SDK RawMessageDeltaEvent.usage:
+    // MessageDeltaUsage with cumulative input_tokens/output_tokens) — not
+    // nested under delta, which only carries stop_reason/container/stop_details.
     const events = await collect(
       translateAnthropicStream(
         of([
@@ -42,7 +45,7 @@ describe("translateAnthropicStream", () => {
           { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Hello" } },
           { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: " world" } },
           { type: "content_block_stop", index: 0 },
-          { type: "message_delta", delta: { stop_reason: "end_turn", usage: { output_tokens: 7 } } },
+          { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { input_tokens: 12, output_tokens: 7 } },
           { type: "message_stop" },
         ])
       )
@@ -83,7 +86,7 @@ describe("translateAnthropicStream", () => {
             delta: { type: "input_json_delta", partial_json: ' "src/app.ts"}' },
           },
           { type: "content_block_stop", index: 1 },
-          { type: "message_delta", delta: { stop_reason: "tool_use", usage: { output_tokens: 20 } } },
+          { type: "message_delta", delta: { stop_reason: "tool_use" }, usage: { input_tokens: 10, output_tokens: 20 } },
         ])
       )
     );
@@ -163,6 +166,49 @@ describe("translateAnthropicStream", () => {
     // itself must surface as exactly one terminal error event, not a throw.
     expect(events.filter((e) => e.type === "error")).toEqual([{ type: "error", message: "boom" }]);
     expect(events[events.length - 1].type).toBe("error");
+  });
+
+  it("prefers cumulative message_delta usage over the message_start snapshot (real SDK shape)", async () => {
+    // RawMessageDeltaEvent.usage is cumulative: input_tokens arrives here too,
+    // not only on message_start. A tool-use stream that has not yet seen its
+    // message_start still reports a real input count.
+    const events = await collect(
+      translateAnthropicStream(
+        of([
+          {
+            type: "content_block_start",
+            index: 0,
+            content_block: { type: "tool_use", id: "toolu_c", name: "read_file" },
+          },
+          {
+            type: "content_block_delta",
+            index: 0,
+            delta: { type: "input_json_delta", partial_json: '{"path":"x"}' },
+          },
+          { type: "content_block_stop", index: 0 },
+          { type: "message_delta", delta: { stop_reason: "tool_use" }, usage: { input_tokens: 33, output_tokens: 21 } },
+        ])
+      )
+    );
+    expect(events.filter((e) => e.type === "usage")).toEqual([
+      { type: "usage", inputTokens: 33, outputTokens: 21 },
+    ]);
+  });
+
+  it("still emits usage from delta.usage for legacy/fixed-snapshot payloads (tolerant decode)", async () => {
+    const events = await collect(
+      translateAnthropicStream(
+        of([
+          { type: "message_start", message: { usage: { input_tokens: 12 } } },
+          { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "hi" } },
+          { type: "message_delta", delta: { stop_reason: "end_turn", usage: { output_tokens: 3 } } },
+          { type: "message_stop" },
+        ])
+      )
+    );
+    expect(events.filter((e) => e.type === "usage")).toEqual([
+      { type: "usage", inputTokens: 12, outputTokens: 3 },
+    ]);
   });
 });
 

@@ -60,9 +60,13 @@ export async function autoCommitMilestone(
       hash,
       message: commitMsg,
     };
-  } catch (err: any) {
-    const stderr = (err?.stderr || "").toString();
-    const stdout = (err?.stdout || "").toString();
+  } catch (err: unknown) {
+    const stderr = err && typeof err === "object" && "stderr" in err
+      ? String((err as { stderr: unknown }).stderr || "")
+      : "";
+    const stdout = err && typeof err === "object" && "stdout" in err
+      ? String((err as { stdout: unknown }).stdout || "")
+      : "";
     const combined = `${stdout} ${stderr}`.toLowerCase();
 
     if (combined.includes("nothing to commit") || combined.includes("working tree clean")) {
@@ -91,7 +95,7 @@ export async function getBranchDiff(projectRoot: string, branch: string): Promis
       maxBuffer: 2 * 1024 * 1024,
     });
     return stdout;
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Try two-dot diff or direct branch diff if triple-dot fails
     try {
       const { stdout } = await execFileAsync("git", ["diff", branch, "--"], {
@@ -123,7 +127,7 @@ export async function createPullRequest(projectRoot: string): Promise<PrResult> 
       url: urlMatch ? urlMatch[0] : out,
       output: out,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     const msg = getErrorMessage(err);
     if (msg.includes("ENOENT") || msg.includes("not found")) {
       return {
@@ -131,9 +135,12 @@ export async function createPullRequest(projectRoot: string): Promise<PrResult> 
         error: "GitHub CLI (`gh`) is not installed or not found in PATH.",
       };
     }
+    const stderr = err && typeof err === "object" && "stderr" in err
+      ? String((err as { stderr: unknown }).stderr || "")
+      : "";
     return {
       success: false,
-      error: `gh pr create failed: ${err?.stderr?.toString() || msg}`,
+      error: `gh pr create failed: ${stderr || msg}`,
     };
   }
 }

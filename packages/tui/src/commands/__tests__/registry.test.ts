@@ -144,6 +144,22 @@ describe("TUI Command Registry & /goal", () => {
     expect(printSystemMessage).toHaveBeenCalledWith('Session renamed to "New Title".');
   });
 
+  it("parses and runs /team /plugin /context commands", () => {
+    expect(COMMANDS.find((c) => c.name === "team")).toBeDefined();
+    expect(COMMANDS.find((c) => c.name === "plugin")).toBeDefined();
+    expect(COMMANDS.find((c) => c.name === "context")).toBeDefined();
+
+    const teamCmd = COMMANDS.find((c) => c.name === "team");
+    const teamFn = vi.fn();
+    teamCmd?.run(["status"], { team: teamFn } as unknown as CommandContext);
+    expect(teamFn).toHaveBeenCalledWith(["status"]);
+
+    const contextCmd = COMMANDS.find((c) => c.name === "context");
+    const showContext = vi.fn();
+    contextCmd?.run([], { showContext } as unknown as CommandContext);
+    expect(showContext).toHaveBeenCalledTimes(1);
+  });
+
   it("sessionRename rejects when session is busy", () => {
     const printSystemMessage = vi.fn();
     const mockSession = {

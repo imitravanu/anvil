@@ -48,7 +48,13 @@ export type AgentEvent =
   // Verification skipped because the per-turn repair budget is exhausted —
   // tests may STILL be failing. Honest signaling: consumers must not claim
   // pass/fail, they report "verification stopped repairing".
-  | { type: "verification_gave_up"; command: string };
+  | { type: "verification_gave_up"; command: string }
+  // Phase 25.6 → product: the native guardian intercepted pending file
+  // mutations before execution. `count` = violating calls blocked (their
+  // results are refusals and a repair prompt went to the model); `fixed` =
+  // calls whose raw-error formatting was auto-repaired in place and allowed
+  // to proceed. firstRule is the first surviving rule (display only).
+  | { type: "guardian_blocked"; count: number; fixed: number; firstRule: string };
 
 export interface AgentOptions {
   systemPrompt: string;

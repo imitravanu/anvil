@@ -20,6 +20,9 @@ import {
   collectModelsFromCache,
   registerExternalExecutor,
   registerModels,
+  loadPlugins,
+  registerPluginExecutors,
+  pluginSystemPrompts,
   syncFreeModels,
   createOpenRouterFreeSource,
   createOrcarouterFreeSource,
@@ -34,18 +37,27 @@ import {
   type ToolDefinition,
 } from "@anvil/core";
 
-import { App, FirstRunSetup, TuiPermissionBroker, isThemeName, loadCustomThemes } from "@anvil/tui";
+import { App, FirstRunSetup, TuiPermissionBroker, detectTerminalTheme, isThemeName, loadCustomThemes } from "@anvil/tui";
 import { runHeadless, readStdin } from "./headless.js";
 import { runGoalHeadless } from "./goalRunner.js";
+import { runNativeGate } from "./gate.js";
+import { runGuardedInit } from "./initGuarded.js";
+import { enterAltScreen, exitAltScreen } from "./altScreen.js";
 
 // Detached MCP server children would outlive Anvil — SIGKILL them on exit.
 // `exit` alone misses real signals (kill, terminal close), so hook those too.
 // NOTE: process-group kill is Unix-only; on Windows each child is killed
 // individually as a best effort (see transport fallbacks).
-process.on("exit", killAllMcpServers);
+// DW-4.7: the alt screen is restored on every exit path so the terminal is
+// never stranded (exitAltScreen is idempotent and sync-safe).
+process.on("exit", () => {
+  exitAltScreen();
+  killAllMcpServers();
+});
 for (const [sig, code] of [["SIGTERM", 143], ["SIGHUP", 129]] as const) {
   process.on(sig, () => {
     try {
+      exitAltScreen();
       killAllMcpServers();
     } finally {
       process.exit(code);
@@ -58,6 +70,7 @@ for (const [sig, code] of [["SIGTERM", 143], ["SIGHUP", 129]] as const) {
 process.on("SIGINT", () => {
   if (process.listenerCount("SIGINT") <= 1) {
     try {
+      exitAltScreen();
       killAllMcpServers();
     } finally {
       process.exit(130);
@@ -119,6 +132,8 @@ Usage:
   anvil -p, --prompt <text> Run headless non-interactive turn (streams to stdout)
   anvil -g, --goal <text>   Run autonomous multi-step engineering mission
   anvil config              (Re)configure a provider API key
+  anvil gate [--full]       Guardian scan of working-tree diff (native fast scan)
+  anvil init --guarded      Provision AGENTS.md + .fresh-allowlist.json here
   anvil --version           Print the version and exit
   anvil --help              Show this help
 
@@ -133,6 +148,7 @@ Options:
 
 Environment:
   ANVIL_PROVIDER, ANVIL_MODEL — same as the flags, lower precedence
+  ANVIL_NO_ALT_SCREEN=1 — stay in the main screen buffer (no alt-screen)
 
 Config lives in ~/.anvil (credentials.json, settings.json, sessions/).
 Set ANVIL_HOME to relocate the data dir (credentials, settings, sessions, cache).
@@ -155,6 +171,9 @@ function crash(err: unknown): never {
   } catch {
     // unmount is best-effort during a fatal crash
   }
+  // Restore the main screen first so the crash detail is visible, not lost
+  // in a discarded alt buffer.
+  exitAltScreen();
   try {
     // Ink owns raw mode while mounted; make sure a fatal crash can't strand it.
     (process.stdin as NodeJS.ReadStream).setRawMode?.(false);
@@ -191,7 +210,19 @@ interface BootContext {
   mcpConns: Map<string, McpServerConnection>;
   mcpNotices: string[];
   mcpDefs: ToolDefinition[];
-  mcpTools?: ToolDefinition[];
+  /**
+   * Full wired session tool list: built-ins + plugin tools (Phase 25.4) +
+   * MCP. Undefined only when plugins AND MCP are both empty, so the session
+   * falls back to its built-in defaults (legacy behavior preserved).
+   */
+  sessionTools?: ToolDefinition[];
+  /**
+   * Phase 25.4 wired into the product: enabled plugin tools (executors
+   * registered) + their system-prompt additions, loaded ONCE per boot here so
+   * chat / headless / goal cannot drift. Empty arrays = no usable plugins.
+   */
+  pluginDefs: ToolDefinition[];
+  pluginPrompts: string[];
 }
 
 function restoreCachedModels(): void {
@@ -311,13 +342,33 @@ async function resolveBootContext(
     mcpConns,
     mcpNotices,
     mcpDefs,
-    mcpTools: mcpDefs.length > 0 ? [...TOOL_DEFINITIONS, ...mcpDefs] : undefined,
+    // Phase 25.4 → product: load plugins once per boot, register their
+    // executors (before any session exists), surface problems as boot
+    // diagnostics. A broken plugin never blocks the run.
+    ...(() => {
+      const { plugins, problems } = loadPlugins();
+      for (const p of problems) diagnostic(`⚠ plugin problem (${p.name}): ${p.error}`);
+      // registerPluginExecutors registers the executors AND returns the batch
+      // tool definitions (pluginToolDefinitions is the per-plugin variant).
+      const pluginDefs = registerPluginExecutors(plugins);
+      return {
+        pluginDefs,
+        pluginPrompts: pluginSystemPrompts(plugins),
+        sessionTools:
+          pluginDefs.length > 0 || mcpDefs.length > 0
+            ? [...TOOL_DEFINITIONS, ...pluginDefs, ...mcpDefs]
+            : undefined,
+      };
+    })(),
   };
 }
 
 async function bootChat(flags: Record<string, string>): Promise<void> {
+  // DW-4.7: enter the alt screen before the first Ink paint (no-op when
+  // piped, dumb, or opted out via ANVIL_NO_ALT_SCREEN=1).
+  enterAltScreen();
   const ctx = await resolveBootContext(flags, { mode: "chat" });
-  const { providers, provider, providerId, model, mcpConns, mcpNotices, mcpDefs, mcpTools } = ctx;
+  const { providers, provider, providerId, model, mcpConns, mcpNotices } = ctx;
 
   // one owner for free-model syncing — the coordinator. Single-flight
   // + TTL mean boot, picker, and /sync can never double-fetch or silently diverge.
@@ -334,7 +385,12 @@ async function bootChat(flags: Record<string, string>): Promise<void> {
   const broker = new TuiPermissionBroker();
   const projectRoot = process.cwd();
   const baseSystemPrompt = "You are Anvil, a terminal coding agent. Be concise.";
-  const systemPrompt = buildSystemPrompt(baseSystemPrompt, projectRoot);
+  // Plugin prompts ride the shared boot context (loaded once in
+  // resolveBootContext); sessionTools already carries built-ins + plugins + MCP.
+  const systemPrompt =
+    ctx.pluginPrompts.length > 0
+      ? buildSystemPrompt(`${baseSystemPrompt}\n\n${ctx.pluginPrompts.join("\n\n")}`, projectRoot)
+      : buildSystemPrompt(baseSystemPrompt, projectRoot);
 
   const session = new AgentSession(provider, {
     systemPrompt,
@@ -345,15 +401,18 @@ async function bootChat(flags: Record<string, string>): Promise<void> {
     // Closed-loop verification is a core product behavior, not a goal-mode
     // extra: after mutations, the detected test runner gates the turn.
     autoVerify: true,
-    ...(mcpTools !== undefined ? { tools: mcpTools } : {}),
+    ...(ctx.sessionTools !== undefined ? { tools: ctx.sessionTools } : {}),
   });
 
   const rawTheme = ctx.settings.theme;
   const customThemeNames = loadCustomThemes().themes;
+  // DW-4.4: with no configured theme, match the terminal background instead
+  // of assuming dark. Detection is env-only (null → previous behavior).
+  const detected = rawTheme === undefined ? detectTerminalTheme() : null;
   const initialTheme =
     (rawTheme !== undefined && (isThemeName(rawTheme) || rawTheme in customThemeNames))
       ? rawTheme
-      : undefined;
+      : (detected ?? undefined);
 
   appInstance = render(
     <App
@@ -368,7 +427,7 @@ async function bootChat(flags: Record<string, string>): Promise<void> {
         maxTokens: 8192,
         projectRoot,
         autoVerify: true,
-        ...(mcpDefs.length > 0 ? { tools: [...TOOL_DEFINITIONS, ...mcpDefs] } : {}),
+        ...(ctx.sessionTools !== undefined ? { tools: ctx.sessionTools } : {}),
       }}
       mcp={{
         list: () => [...mcpConns.values()],
@@ -389,7 +448,8 @@ async function bootHeadless(prompt: string, flags: Record<string, string>): Prom
     projectRoot: process.cwd(),
     autoApprove: flags.yes === "1",
     raw: flags.raw === "1",
-    mcpTools: ctx.mcpTools,
+    sessionTools: ctx.sessionTools,
+    pluginPrompts: ctx.pluginPrompts,
   });
   process.exit(exitCode);
 }
@@ -403,7 +463,7 @@ async function bootGoal(goal: string, flags: Record<string, string>): Promise<vo
     projectRoot: process.cwd(),
     autoApprove: flags.yes === "1",
     raw: flags.raw === "1",
-    mcpTools: ctx.mcpTools,
+    sessionTools: ctx.sessionTools,
   });
   process.exit(exitCode);
 }
@@ -414,6 +474,7 @@ function runSetup(thenChat: boolean): void {
     console.error("Anvil needs an interactive terminal (stdin is not a TTY).");
     process.exit(1);
   }
+  enterAltScreen();
   let instance: ReturnType<typeof render> | null = null;
   instance = render(
     <FirstRunSetup
@@ -421,6 +482,7 @@ function runSetup(thenChat: boolean): void {
         instance?.unmount();
         appInstance = null;
         if (thenChat) void bootChat(parseFlags(process.argv.slice(2)));
+        else exitAltScreen();
       }}
     />,
     { exitOnCtrlC: false }
@@ -451,6 +513,18 @@ if (argv.includes("--help") || argv.includes("-h")) {
 if (first === "config") {
   // Manual (re)configuration — works any time, not just first run.
   runSetup(false);
+} else if (first === "gate") {
+  // Phase 25.6 — native guardian gate (fast scan; --full runs npm run gate).
+  process.exit(runNativeGate({ full: argv.includes("--full") }));
+} else if (first === "init") {
+  // Phase 25.6 — `anvil init --guarded [--lang <id>]` provisions repo gates.
+  const langFlag = argv.indexOf("--lang");
+  const lang = langFlag >= 0 ? argv[langFlag + 1] : undefined;
+  if (!argv.includes("--guarded")) {
+    console.error("Usage: anvil init --guarded [--lang <typescript|python|rust|go>]");
+    process.exit(1);
+  }
+  process.exit(runGuardedInit({ lang }));
 } else if (!hasAnyConfiguredProvider(loadCredentials())) {
   // First run: no API keys at all — onboard instead of hard-failing.
   runSetup(true);

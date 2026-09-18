@@ -130,3 +130,13 @@ export function contextGauge(
   const fraction = Math.max(0, Math.min(1, inputTokens / contextWindow));
   return { text: `ctx ${Math.round(fraction * 100)}%`, fraction };
 }
+
+/**
+ * Message timestamp for card headers ("14:02"). Manual fields — locale
+ * APIs vary across machines and would make baselines flaky.
+ */
+export function formatTime(epochMs: number): string {
+  const d = new Date(epochMs);
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}

@@ -151,6 +151,21 @@ describe("MessageView", () => {
     unmount();
   });
 
+  it("shows card timestamps only with /expand and a known ts", () => {
+    const ts = new Date(2026, 8, 14, 9, 5).getTime();
+    const expanded = renderThemed(
+      <MessageView message={assistant({ text: "hi", ts })} expandTools />
+    );
+    expect(frameText(expanded.lastFrame)).toContain("09:05");
+    expanded.unmount();
+    const collapsed = renderThemed(<MessageView message={assistant({ text: "hi", ts })} />);
+    expect(frameText(collapsed.lastFrame)).not.toContain("09:05");
+    collapsed.unmount();
+    const resumed = renderThemed(<MessageView message={assistant({ text: "hi" })} expandTools />);
+    expect(frameText(resumed.lastFrame)).not.toContain("09:05");
+    resumed.unmount();
+  });
+
   it("renders user and system roles distinctly", () => {
     const user = renderThemed(
       <MessageView message={{ id: "u", role: "user", text: "hi", streaming: false, toolCalls: [], subAgents: [] }} />

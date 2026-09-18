@@ -14,7 +14,8 @@ export function MissionDeck({ goal, plan, isBusy = false }: MissionDeckProps) {
   const theme = useTheme();
   const { stdout } = useStdout();
   const width = Math.max(20, (stdout?.columns ?? 80) - 2);
-  const spinner = useSpinnerFrame(isBusy);
+  // DW-3.1 blocks = goal milestone progress (filling up).
+  const spinner = useSpinnerFrame(isBusy, "blocks");
 
   // If full autonomous mission goal is active, render the rich Mission Deck
   if (goal && goal.milestones.length > 0) {

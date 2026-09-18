@@ -44,11 +44,21 @@ export function renderCliEvent(event: AgentEvent, opts?: RenderCliOptions): Rend
         process.stderr.write(`${event.passed ? "✓" : "✗"} [verify] ${event.summary}\n`);
       }
       return undefined;
-    case "verification_gave_up":
+        case "verification_gave_up":
       if (!raw) {
         process.stderr.write(
           `⚠ [verify] repair budget exhausted — tests may still be failing: ${event.command}\n`
         );
+      }
+      return undefined;
+    case "guardian_blocked":
+      if (!raw) {
+        process.stderr.write(
+          `⚠ [guardian] ${event.count} pending call(s) blocked before execution ` +
+            `(${event.fixed} auto-fixed); fix and retry — do not re-emit unchanged.\n`
+        );
+      } else {
+        process.stderr.write(`guardian_blocked count=${event.count} fixed=${event.fixed}\n`);
       }
       return undefined;
     case "subagent_started":

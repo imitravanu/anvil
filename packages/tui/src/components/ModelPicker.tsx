@@ -172,11 +172,21 @@ export function ModelPicker({
       .map((entry, i) => ({ ...entry, pos: scrollOffset + i }));
   }, [ordered, scrollOffset]);
 
+  // DW-2.5 context window badge: 128000 → "128K", 2000000 → "2M".
+  const formatWindow = (tokens: number | undefined): string => {
+    if (tokens === undefined || tokens <= 0) return "";
+    if (tokens >= 1_000_000) return `${Math.round(tokens / 1_000_000)}M`;
+    if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}K`;
+    return `${tokens}`;
+  };
+
   const renderRow = (entry: (typeof visible)[number]) => {
     const { row, pos } = entry;
     const isSelected = pos === selected;
     const isCurrent = row.model.id === currentModelId;
     const marker = isSelected ? "❯ " : "  ";
+    const windowTag = formatWindow(row.model.contextWindow);
+    const windowSuffix = windowTag ? ` ${windowTag}` : "";
     const kind = pricingKind(row.model.isFree);
     // The live sync names include "(Free)" — the [FREE] tag would duplicate it.
     const nameAlreadySaysFree = /\(free\)/i.test(row.model.displayName);
@@ -190,6 +200,7 @@ export function ModelPicker({
         <Text key={row.model.id} color={theme.colors.dim}>
           {marker}
           {row.model.displayName}
+          {windowSuffix}
           {pricingTag}
           {certBadge === "live" ? " [✅ live]" : certBadge === "broken" ? " [❌ broken]" : certBadge === "untested" ? " [⚠ untested]" : ""}
           {limited ? " [rate-limited]" : ""} (no API key)
@@ -200,6 +211,7 @@ export function ModelPicker({
       <Text key={row.model.id} color={isSelected ? theme.colors.primary : theme.colors.userText}>
         {marker}
         {row.model.displayName}
+        {windowSuffix && <Text color={theme.colors.textSecondary}>{windowSuffix}</Text>}
         {kind === "free" ? (
           <Text color={theme.colors.toolDone} bold> [FREE]</Text>
         ) : kind === "paid" ? (
@@ -237,7 +249,7 @@ export function ModelPicker({
   }
 
   return (
-    <Box flexDirection="column" flexShrink={0} borderStyle="round" borderColor={theme.colors.primary} paddingX={1}>
+    <Box flexDirection="column" flexShrink={0} borderStyle={theme.borders.panel} borderColor={theme.colors.primary} paddingX={1}>
       <Text color={theme.colors.primary}>
         {ordered.length > 0
           ? `Select a model (${selected + 1}/${ordered.length}) — type to filter, Enter to switch, Esc to cancel`
@@ -261,6 +273,8 @@ export function ModelPicker({
       {hasBelow && (
         <Text dimColor>  ▼ {ordered.length - (scrollOffset + MAX_VISIBLE)} more below...</Text>
       )}
+      {/* DW-2.5 footer hints — the keyboard contract, always visible. */}
+      <Text dimColor> ↑/↓ navigate · Enter select · Esc cancel · type to filter</Text>
     </Box>
   );
 }

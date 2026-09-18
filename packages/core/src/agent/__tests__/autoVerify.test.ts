@@ -187,8 +187,11 @@ describe("Closed-Loop TDD Auto-Verification in AgentSession", () => {
     const vResults = events.filter(
       (e): e is Extract<AgentEvent, { type: "verification_result" }> => e.type === "verification_result"
     );
-    // Exactly 2 verification failure attempts allowed per turn
-    expect(vResults.length).toBe(2);
+    // S1.2: two failing probes request repairs (the repair cap), then the
+    // FINAL state is still verified once more and reported gave_up — the turn
+    // never ends with an untested mutation. Still bounded: no infinite loop.
+    expect(vResults.length).toBe(3);
+    expect(events.map((e) => e.type)).toContain("verification_gave_up");
     expect(events.map((e) => e.type)).toContain("turn_complete");
   });
 });

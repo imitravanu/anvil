@@ -14,7 +14,10 @@ export interface HeadlessOptions {
   projectRoot: string;
   autoApprove: boolean;
   raw: boolean;
-  mcpTools?: ToolDefinition[];
+  /** Full wired tool list (built-ins + plugins + MCP); undefined = built-in defaults. */
+  sessionTools?: ToolDefinition[];
+  /** System-prompt additions from enabled plugins (folded in before buildSystemPrompt). */
+  pluginPrompts?: string[];
 }
 
 export class HeadlessPermissionBroker implements PermissionBroker {
@@ -110,7 +113,14 @@ export async function readStdin(
 export async function runHeadless(opts: HeadlessOptions): Promise<number> {
   const broker = new HeadlessPermissionBroker(opts.autoApprove, opts.raw);
   const basePrompt = "You are Anvil, a terminal coding agent. Be concise.";
-  const systemPrompt = buildSystemPrompt(basePrompt, opts.projectRoot);
+  // Plugin prompts arrive pre-joined from the shared boot context; a broken
+  // plugin never blocks the run (problems were reported there).
+  const systemPrompt = buildSystemPrompt(
+    opts.pluginPrompts && opts.pluginPrompts.length > 0
+      ? `${basePrompt}\n\n${opts.pluginPrompts.join("\n\n")}`
+      : basePrompt,
+    opts.projectRoot
+  );
 
   const session = new AgentSession(opts.provider, {
     systemPrompt,
@@ -121,7 +131,7 @@ export async function runHeadless(opts: HeadlessOptions): Promise<number> {
     // Closed-loop verification is a core product behavior, not a goal-mode
     // extra: after mutations, the detected test runner gates the turn.
     autoVerify: true,
-    ...(opts.mcpTools !== undefined ? { tools: opts.mcpTools } : {}),
+    ...(opts.sessionTools !== undefined ? { tools: opts.sessionTools } : {}),
   });
 
   let abortCount = 0;

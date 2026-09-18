@@ -41,13 +41,12 @@ export function MessageList({ messages, model, expandTools }: { messages: Displa
   // Row budget for the "N earlier messages" honesty indicator, estimated from
   // the terminal size minus chrome reserve. The container itself is flex-sized
   // (no explicit height) so Yoga — not stale rows arithmetic — owns layout.
-  // Measured chrome at 30 rows: frame borders (2) + header (1) + the two
-  // dividers flanking the transcript (2) + input box incl. borders (3) +
-  // status bar (1) = 9, plus 1 line of slack — 10 total. The plan/queued HUD
-  // renders BELOW the transcript divider (outside this region); Yoga then
-  // gives the list exactly what the chrome leaves. This reserve matches the
-  // measured 30-row layout (transcript = rows - 10 = 20).
-  const rowBudget = Math.max(3, termRows - 10);
+  // DW-2 framed chrome at 30 rows: frame borders (2) + header frame (3) + the
+  // two dividers flanking the transcript (2) + input box incl. borders (3) +
+  // status bar frame (3) = 13, plus 1 line of slack — 14 total. The
+  // plan/queued HUD renders BELOW the transcript divider (outside this
+  // region); Yoga then gives the list exactly what the chrome leaves.
+  const rowBudget = Math.max(3, termRows - 14);
   const width = stdout?.columns ?? 80;
   // Memoized: this walks every message on every render, and spinners tick at
   // 80 ms during a busy turn.

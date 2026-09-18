@@ -3,13 +3,32 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadCustomThemes } from "../custom.js";
-import { REQUIRED_COLOR_KEYS, THEMES } from "../themes.js";
+import {
+  REQUIRED_COLOR_KEYS,
+  SEMANTIC_COLOR_KEYS,
+  SEMANTIC_DERIVATION,
+  THEMES,
+} from "../themes.js";
 
 describe("theme registry consistency", () => {
-  it("REQUIRED_COLOR_KEYS covers every built-in color key exactly", () => {
+  it("built-ins carry every legacy key plus every derived semantic key", () => {
     for (const theme of Object.values(THEMES)) {
-      expect([...REQUIRED_COLOR_KEYS].sort()).toEqual(Object.keys(theme.colors).sort());
+      for (const k of REQUIRED_COLOR_KEYS) expect(theme.colors[k]).toBeTruthy();
+      for (const k of SEMANTIC_COLOR_KEYS) expect(theme.colors[k]).toBeTruthy();
     }
+  });
+
+  it("semantic derivation map covers every semantic key with a legacy source", () => {
+    expect(Object.keys(SEMANTIC_DERIVATION).sort()).toEqual([...SEMANTIC_COLOR_KEYS].sort());
+    for (const source of Object.values(SEMANTIC_DERIVATION)) {
+      expect(REQUIRED_COLOR_KEYS).toContain(source);
+    }
+  });
+
+  it("all five built-in themes exist", () => {
+    expect(Object.keys(THEMES).sort()).toEqual(
+      ["dark", "hacker", "highContrast", "light", "midnight"].sort()
+    );
   });
 });
 
@@ -50,12 +69,65 @@ describe("custom themes", () => {
     expect(loadCustomThemes()).toEqual({ themes: {}, problems: [] });
   });
 
-  it("loads a valid theme (hex colors allowed, spacing defaulted)", () => {
+  it("loads a valid theme (hex colors allowed, DW-1 sections defaulted + derived)", () => {
     writeThemes(JSON.stringify({ solar: { colors: COLORS } }));
     const { themes, problems } = loadCustomThemes();
     expect(problems).toEqual([]);
     expect(themes.solar.colors.accent).toBe("#ff00ff");
-    expect(themes.solar.spacing).toEqual({ panelPaddingX: 1, panelPaddingY: 0 });
+    // Old 11-key files auto-migrate: semantics derive, sections default.
+    expect(themes.solar.colors.brand).toBe("cyan");
+    expect(themes.solar.colors.success).toBe("green");
+    expect(themes.solar.colors.separator).toBe("gray");
+    expect(themes.solar.spacing).toEqual({
+      panelPaddingX: 1,
+      panelPaddingY: 0,
+      cardPaddingX: 2,
+      cardGap: 1,
+      sectionGap: 1,
+    });
+    expect(themes.solar.typography.brandIcon).toBe("▲");
+    expect(themes.solar.borders.panel).toBe("round");
+    expect(themes.solar.responsive.normalWidth).toBe(120);
+  });
+
+  it("honors semantic color overrides and custom sections", () => {
+    writeThemes(
+      JSON.stringify({
+        neon: {
+          colors: { ...COLORS, brand: "#00ff00", error: "#ff0000" },
+          spacing: { cardPaddingX: 4 },
+          typography: { brandIcon: "◆" },
+          borders: { panel: "double" },
+          responsive: { compactWidth: 70 },
+        },
+      })
+    );
+    const { themes, problems } = loadCustomThemes();
+    expect(problems).toEqual([]);
+    expect(themes.neon.colors.brand).toBe("#00ff00");
+    expect(themes.neon.colors.error).toBe("#ff0000");
+    expect(themes.neon.colors.success).toBe("green");
+    expect(themes.neon.spacing.cardPaddingX).toBe(4);
+    expect(themes.neon.spacing.panelPaddingX).toBe(1);
+    expect(themes.neon.typography.brandIcon).toBe("◆");
+    expect(themes.neon.typography.brandName).toBe("ANVIL");
+    expect(themes.neon.borders.panel).toBe("double");
+    expect(themes.neon.responsive.compactWidth).toBe(70);
+    expect(themes.neon.responsive.normalWidth).toBe(120);
+  });
+
+  it("rejects bad semantic overrides and bad sections", () => {
+    writeThemes(
+      JSON.stringify({
+        badcolor: { colors: { ...COLORS, brand: "" } },
+        badtyp: { colors: COLORS, typography: { brandIcon: "" } },
+        badbord: { colors: COLORS, borders: { panel: "groovy" } },
+        badresp: { colors: COLORS, responsive: { compactWidth: 0 } },
+      })
+    );
+    const { themes, problems } = loadCustomThemes();
+    expect(themes).toEqual({});
+    expect(problems).toHaveLength(4);
   });
 
   it("reports every invalid entry and loads the valid ones", () => {
@@ -71,7 +143,13 @@ describe("custom themes", () => {
     );
     const { themes, problems } = loadCustomThemes();
     expect(Object.keys(themes)).toEqual(["ok"]);
-    expect(themes.ok.spacing).toEqual({ panelPaddingX: 2, panelPaddingY: 1 });
+    expect(themes.ok.spacing).toEqual({
+      panelPaddingX: 2,
+      panelPaddingY: 1,
+      cardPaddingX: 2,
+      cardGap: 1,
+      sectionGap: 1,
+    });
     expect(problems.map((p) => p.name).sort()).toEqual(
       ["Bad Name!", "badspace", "dark", "nocols", "partial"].sort()
     );

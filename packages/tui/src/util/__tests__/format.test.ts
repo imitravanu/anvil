@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collapsePlan, curtail, displayModelLabel, formatCertificationBadge, providerLabel, providerOfModel } from "../format.js";
+import { collapsePlan, curtail, displayModelLabel, formatCertificationBadge, formatTime, providerLabel, providerOfModel } from "../format.js";
 
 describe("format helpers", () => {
   it("displayModelLabel resolves a known registry model and falls back to the id", () => {
@@ -72,5 +72,10 @@ describe("format helpers", () => {
     expect(formatCertificationBadge("broken")).toBe(" [❌ broken]");
     expect(formatCertificationBadge("untested")).toBe(" [⚠ untested]");
     expect(formatCertificationBadge(undefined)).toBe("");
+  });
+
+  it("formatTime renders zero-padded local HH:MM", () => {
+    expect(formatTime(new Date(2026, 8, 14, 9, 5).getTime())).toBe("09:05");
+    expect(formatTime(new Date(2026, 8, 14, 23, 59).getTime())).toBe("23:59");
   });
 });

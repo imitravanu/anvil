@@ -1,4 +1,5 @@
 import { ConversationMessage, ModelProvider } from "../providers/types.js";
+import { selectiveKeep } from "./context/scoring.js";
 
 export interface CompactionResult {
   compacted: boolean;
@@ -111,7 +112,7 @@ export async function compactIfNeeded(
   provider: ModelProvider,
   model: string,
   signal?: AbortSignal,
-  options?: { summarizerModel?: string }
+  options?: { summarizerModel?: string; task?: string }
 ): Promise<{ history: ConversationMessage[]; result: CompactionResult }> {
   if (latestInputTokens < contextWindow * COMPACTION_THRESHOLD) {
     return { history, result: { compacted: false } };
@@ -132,8 +133,34 @@ export async function compactIfNeeded(
   const toSummarize = history.slice(0, cut);
   const recent = history.slice(cut);
 
-  const modelToUse = options?.summarizerModel || model;
-  const summaryText = await summarizeMessages(toSummarize, provider, modelToUse, signal);
+  // Phase 25.5 → product: intelligent compaction. Instead of summarizing the
+  // entire pre-cut history wholesale, keep high-relevance older messages
+  // verbatim (keyword overlap with the task + recency + file-aware weight)
+  // within the token budget and summarize only the remainder. When no task is
+  // known (e.g. resumed sessions without the last prompt) the scorer falls
+  // back to recency-only, so behavior degrades gracefully to pre-selective.
+  let summariesToKeep: ConversationMessage[] = [];
+  let summarizeThese: ConversationMessage[] = toSummarize;
+  if (options?.task) {
+    const keepTokens = Math.max(
+      0,
+      contextWindow - (latestInputTokens + KEEP_RECENT_MESSAGES * 4)
+    );
+    // Keep only the recent tail within the budget; everything older than the
+    // oldest kept message is what the summarizer condenses.
+    const keptIndices = selectiveKeep(toSummarize, options.task, keepTokens);
+    if (keptIndices.length > 0 && keptIndices.length < toSummarize.length) {
+            summariesToKeep = keptIndices.map((i) => toSummarize[i]);
+      summarizeThese = toSummarize.filter((_, i) => !keptIndices.includes(i));
+    }
+  }
+
+  if (summarizeThese.length === 0) {
+    return { history, result: { compacted: false } };
+  }
+
+    const modelToUse = options?.summarizerModel || model;
+  const summaryText = await summarizeMessages(summarizeThese, provider, modelToUse, signal);
   if (!summaryText.trim()) {
     // An empty summary is worse than no compaction: it would replace real
     // history with a placeholder. Report no-op and let the turn proceed.
@@ -150,8 +177,11 @@ export async function compactIfNeeded(
     ],
   };
 
+  // Kept verbatim come first (oldest kept → newest), then the summary of what
+  // was older, then the live recent tail. Role alternation is repaired by
+  // mergeSummaryIntoHistory on the caller side.
   return {
-    history: [summaryMessage, ...recent],
+    history: [...summariesToKeep, summaryMessage, ...recent],
     result: { compacted: true, summary: summaryText },
   };
 }

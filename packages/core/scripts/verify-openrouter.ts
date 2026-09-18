@@ -92,6 +92,7 @@ for await (const ev of provider.streamCompletion({
         properties: { city: { type: "string", description: "City name" } },
         required: ["city"],
       },
+      mutating: false,
     },
   ],
   maxTokens: 2000,

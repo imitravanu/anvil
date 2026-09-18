@@ -9,7 +9,7 @@ import { AgentSession } from "@anvil/core";
 import { App } from "../src/components/App.js";
 import { TuiPermissionBroker } from "../src/permission/TuiPermissionBroker.js";
 import { FakeProvider } from "../../core/src/agent/__tests__/fakeProvider.js";
-import type { StreamEvent } from "@anvil/core";
+import type { StreamEvent, ProviderId, ModelProvider } from "@anvil/core";
 
 const MODEL = "gemini-3.6-flash";
 
@@ -83,17 +83,19 @@ const { lastFrame, stdin, unmount } = render(
   <App
     session={session}
     broker={broker}
-    providers={{ anthropic: provider } as never}
-    providerId={"anthropic" as never}
+    providers={{ anthropic: provider } as unknown as Record<ProviderId, ModelProvider>}
+    providerId="anthropic"
     model={MODEL}
     sessionOptions={{
       systemPrompt: "You are Anvil, a terminal coding agent. Be concise.",
       maxTokens: 8192,
       projectRoot: process.cwd(),
     }}
-  />,
-  { exitOnCtrlC: false, columns: 96 }
+  />
 );
+// ink-testing-library's render takes only the tree — the old two-arg call's
+// { exitOnCtrlC: false, columns: 96 } were silently ignored by the library.
+// The harness controls exit via unmount() below and captures frames as-is.
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

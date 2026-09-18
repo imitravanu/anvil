@@ -1,5 +1,5 @@
  … 1 earlier message above — full history in the session file
- anvil
+ anvil ──────────────────────────────────────────────────────────────────────────────────────────
  Here's what I found in src/index.ts:
 
      Summary
@@ -23,10 +23,10 @@
 
  Next I'll check the tests.
 
- ❯ you
+ ❯ you ──────────────────────────────────────────────────────────────────────────────────────────
  check the files
 
- anvil
+ anvil ──────────────────────────────────────────────────────────────────────────────────────────
  Let me look around first.
     ✓ list_files Listed 10 files under .
     ✓ grep grep "boot": 12 matches

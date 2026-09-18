@@ -48,44 +48,49 @@ export async function* verifyTurnMutations(
     return { status: "skipped" };
   }
 
-  if (ctx.verifyRepairsUsed < ctx.maxVerifyRepairs) {
-    yield { type: "verification_started", command: testCmd };
-    ctx.recordLedger({ eventType: "verification_started", tool: testCmd, outcome: "ok", elapsedMs: 0 });
+  // S1.2: verification and repair-requesting are separate decisions. The
+  // final state is ALWAYS verified — budget exhaustion only stops pushing
+  // further repair prompts, never testing what the last repair actually did.
+  const mayRequestRepair = ctx.verifyRepairsUsed < ctx.maxVerifyRepairs;
 
-    const verifyStart = Date.now();
-    const verifyResult = await runTestVerification(
-      ctx.projectRoot,
-      testCmd,
-      undefined,
-      ctx.signal
-    );
-    const elapsed = Date.now() - verifyStart;
+  yield { type: "verification_started", command: testCmd };
+  ctx.recordLedger({ eventType: "verification_started", tool: testCmd, outcome: "ok", elapsedMs: 0 });
 
-    if (ctx.signal.aborted) {
-      yield { type: "cancelled" };
-      return { status: "cancelled" };
-    }
+  const verifyStart = Date.now();
+  const verifyResult = await runTestVerification(
+    ctx.projectRoot,
+    testCmd,
+    undefined,
+    ctx.signal
+  );
+  const elapsed = Date.now() - verifyStart;
 
-    if (verifyResult.passed) {
-      yield { type: "verification_result", passed: true, summary: verifyResult.summary };
-      ctx.recordLedger({ eventType: "verification_finished", tool: testCmd, outcome: "ok", elapsedMs: elapsed });
-      return { status: "passed" };
-    } else {
-      yield { type: "verification_result", passed: false, summary: verifyResult.summary };
-      ctx.recordLedger({ eventType: "verification_finished", tool: testCmd, outcome: "error", elapsedMs: elapsed });
-
-      const repairMsg =
-        `[Automated Test Verification Failed]\n` +
-        `The test command \`${testCmd}\` failed (exit ${verifyResult.exitCode}):\n` +
-        `${verifyResult.failureTrace ?? verifyResult.output}\n\n` +
-        `Analyze the test failure, use edit_file or write_file to repair the issue, and ensure the tests pass.`;
-      ctx.pushRepairPrompt(repairMsg);
-      return { status: "needs_repair" };
-    }
-  } else {
-    // Repair budget exhausted.
-    yield { type: "verification_gave_up", command: testCmd };
-    ctx.recordLedger({ eventType: "verification_gave_up", tool: testCmd, outcome: "error", elapsedMs: 0 });
-    return { status: "gave_up" };
+  if (ctx.signal.aborted) {
+    yield { type: "cancelled" };
+    return { status: "cancelled" };
   }
+
+  if (verifyResult.passed) {
+    yield { type: "verification_result", passed: true, summary: verifyResult.summary };
+    ctx.recordLedger({ eventType: "verification_finished", tool: testCmd, outcome: "ok", elapsedMs: elapsed });
+    return { status: "passed" };
+  }
+
+  yield { type: "verification_result", passed: false, summary: verifyResult.summary };
+  ctx.recordLedger({ eventType: "verification_finished", tool: testCmd, outcome: "error", elapsedMs: elapsed });
+
+  if (mayRequestRepair) {
+    const repairMsg =
+      `[Automated Test Verification Failed]\n` +
+      `The test command \`${testCmd}\` failed (exit ${verifyResult.exitCode}):\n` +
+      `${verifyResult.failureTrace ?? verifyResult.output}\n\n` +
+      `Analyze the test failure, use edit_file or write_file to repair the issue, and ensure the tests pass.`;
+    ctx.pushRepairPrompt(repairMsg);
+    return { status: "needs_repair" };
+  }
+
+  // Budget exhausted AND the final state still fails: say so explicitly.
+  yield { type: "verification_gave_up", command: testCmd };
+  ctx.recordLedger({ eventType: "verification_gave_up", tool: testCmd, outcome: "error", elapsedMs: 0 });
+  return { status: "gave_up" };
 }

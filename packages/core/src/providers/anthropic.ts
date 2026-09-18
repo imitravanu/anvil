@@ -24,6 +24,11 @@ export interface RawAnthropicStreamEvent {
     stop_reason?: string | null;
     usage?: { output_tokens?: number };
   };
+  // SDK RawMessageDeltaEvent carries usage FLAT on the event (MessageDeltaUsage
+  // with cumulative input_tokens/output_tokens) — delta only carries
+  // stop_reason/container/stop_details. Optional so the fixture shape with
+  // delta.usage stays decodable too.
+  usage?: { input_tokens?: number | null; output_tokens?: number | null };
 }
 
 export async function* translateAnthropicStream(
@@ -73,11 +78,15 @@ export async function* translateAnthropicStream(
           yield { type: "tool_call_end", id: toolId, name: toolNames.get(toolId) ?? "", input: parsed };
         }
       } else if (event.type === "message_delta") {
-        if (event.delta?.usage) {
+        // Billing usage is flat on the event per the SDK type (MessageDeltaUsage,
+        // cumulative); tolerate the legacy delta.usage shape for robustness.
+        const flatUsage = event.usage;
+        const nestedUsage = event.delta?.usage;
+        if (flatUsage || nestedUsage) {
           yield {
             type: "usage",
-            inputTokens: usageIn,
-            outputTokens: event.delta.usage.output_tokens ?? 0,
+            inputTokens: flatUsage?.input_tokens ?? usageIn,
+            outputTokens: flatUsage?.output_tokens ?? nestedUsage?.output_tokens ?? 0,
           };
         }
         if (event.delta?.stop_reason) {
@@ -180,9 +189,7 @@ export class AnthropicProvider extends BaseProvider {
       { signal: request.signal }
     );
 
-    return translateAnthropicStream(
-      stream as unknown as AsyncIterable<RawAnthropicStreamEvent>
-    );
+    return translateAnthropicStream(stream as AsyncIterable<RawAnthropicStreamEvent>);
   }
 }
 

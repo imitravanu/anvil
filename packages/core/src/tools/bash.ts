@@ -97,7 +97,10 @@ export const definition: ToolDefinition = {
 // must not be able to reach a target in another (`rm -rf ./build && rm -rf /`
 // is still blocked because the second segment matches on its own).
 function segments(command: string): string[] {
-  return command.split(/[|;&]+/);
+  // Newline is a bash command separator too (`echo hi\nrm -rf /` runs both),
+  // so it belongs in the same split class as `|`, `;`, and `&`. Without it a
+  // multi-line command could smuggle `rm -rf ~` past isRootWipe.
+  return command.split(/[|;&\n]+/);
 }
 
 // rm with recursive+force flags whose target is the filesystem root, a

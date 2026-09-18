@@ -43,6 +43,14 @@ export interface CommandContext {
   mcp: (sub?: string) => void;
   // /goal: launch an autonomous multi-step engineering mission
   launchGoal: (objective: string) => void;
+  // /team: multi-agent collaboration status
+  team: (args: string[]) => void;
+  // /plugin: plugin registry (list)
+  plugin: (args: string[]) => void;
+  // /context: token budget breakdown
+  showContext: () => void;
+  // /copy: newest fenced code block to the clipboard
+  copyLast: () => void;
 }
 
 export interface Command {

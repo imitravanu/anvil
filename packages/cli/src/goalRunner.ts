@@ -10,7 +10,8 @@ export interface GoalHeadlessOptions {
   projectRoot: string;
   autoApprove: boolean;
   raw: boolean;
-  mcpTools?: ToolDefinition[];
+  /** Full wired tool list (built-ins + plugins + MCP); undefined = built-in defaults. */
+  sessionTools?: ToolDefinition[];
   maxTurns?: number;
 }
 
@@ -21,7 +22,7 @@ export async function runGoalHeadless(opts: GoalHeadlessOptions): Promise<number
     model: opts.model,
     projectRoot: opts.projectRoot,
     permissionBroker: broker,
-    tools: opts.mcpTools,
+    tools: opts.sessionTools,
     maxTurns: opts.maxTurns,
   });
 

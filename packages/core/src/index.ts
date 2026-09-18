@@ -12,4 +12,7 @@ export * from "./cert/index.js";
 export * from "./git/index.js";
 export { getErrorMessage } from "./errors.js";
 export { log } from "./logger.js";
+export * from "./lsp/index.js";
+export * from "./plugins/index.js";
+export * from "./guardian/index.js";
 

@@ -1,4 +1,4 @@
-import { getErrorMessage } from "@anvil/core";
+import { getErrorMessage, loadSettings, TOKEN_HISTORY_CAP } from "@anvil/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { randomUUID } from "node:crypto";
 import {
@@ -11,6 +11,7 @@ import {
 } from "@anvil/core";
 import { HISTORY_RECALL_CAP, TRANSCRIPT_STATE_CAP, MESSAGE_QUEUE_CAP } from "../util/displayLimits.js";
 import { friendlyError } from "../util/errors.js";
+import { notifyTurnComplete } from "../util/notify.js";
 import {
   type DisplaySubAgent,
   type DisplayToolCall,
@@ -41,6 +42,16 @@ export {
  * Bridges AgentSession's async generator into React state. Every event handler
  * does a full setMessages map (never in-place mutation) so React re-renders.
  */
+
+/** DW-4.9 notification prefs from settings (absent/unreadable → all on). */
+function readNotifyPrefs(): { desktop?: boolean; sound?: boolean } {
+  try {
+    return loadSettings().notifications ?? {};
+  } catch {
+    // Settings are best-effort here; a broken file must not mute or crash turns.
+    return {};
+  }
+}
 export interface UseAgentControllerOptions {
   /** Called after every settled turn (completion, cancel, or error) — used to persist. */
   onTurnSettled?: () => void;
@@ -50,6 +61,10 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [isBusy, setIsBusy] = useState(false);
   const [usage, setUsage] = useState<UsageTotals>({ inputTokens: 0, outputTokens: 0 });
+  // DW-4.3 per-turn input-token samples for the growth sparkline.
+  const [tokenHistory, setTokenHistory] = useState<number[]>([]);
+  const cumulativeRef = useRef(0);
+  const lastCumulativeRef = useRef(0);
   // Messages typed while a turn runs queue here and drain automatically
   // when the turn settles — typing ahead used to bounce off with a notice.
   const queueRef = useRef<string[]>([]);
@@ -72,6 +87,9 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     // Usage totals belong to the session too — a fresh/cleared transcript
     // must not show the previous session's spend in the StatusBar.
     setUsage({ inputTokens: 0, outputTokens: 0 });
+    setTokenHistory([]);
+    cumulativeRef.current = 0;
+    lastCumulativeRef.current = 0;
     // Queued messages belong to the conversation they were typed in.
     queueRef.current = [];
     setQueued([]);
@@ -93,6 +111,21 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     setSentHistory((prev) => (prev[prev.length - 1] === text ? prev : [...prev, text].slice(-HISTORY_RECALL_CAP)));
   }, []);
 
+  // Mirror cumulative input tokens for the DW-4.3 sparkline (shared by chat
+  // turns and goal turns). The assignment is idempotent, so StrictMode's dev
+  // double-invoke is harmless.
+  const trackUsage = useCallback((...args: Parameters<typeof setUsage>): void => {
+    const [updater] = args;
+    setUsage((prev) => {
+      const next =
+        typeof updater === "function"
+          ? (updater as (p: UsageTotals) => UsageTotals)(prev)
+          : updater;
+      cumulativeRef.current = next.inputTokens;
+      return next;
+    });
+  }, []);
+
   const runTurn = useCallback(
     async (text: string) => {
       // busyRef belongs to the caller (send's claim covers the whole drain —
@@ -102,6 +135,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
       // Bounded state: recall needs dozens, not thousands; the transcript window
       // renders a handful while history truth lives in the session file.
       recordSentMessage(text);
+      const now = Date.now();
       const userMsg: DisplayMessage = {
         id: randomUUID(),
         role: "user",
@@ -110,6 +144,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         toolCalls: [],
         subAgents: [],
         verifications: [],
+        ts: now,
         ...(attached.length > 0 ? { images: attached.map((a) => ({ path: a.path })) } : {}),
       };
       const assistantId = randomUUID();
@@ -117,11 +152,12 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         const next: DisplayMessage[] = [
           ...prev,
           userMsg,
-          { id: assistantId, role: "assistant", text: "", streaming: true, toolCalls: [], subAgents: [], verifications: [] },
+          { id: assistantId, role: "assistant", text: "", streaming: true, toolCalls: [], subAgents: [], verifications: [], ts: now },
         ];
         return next.length > TRANSCRIPT_STATE_CAP ? next.slice(-TRANSCRIPT_STATE_CAP) : next;
       });
       setIsBusy(true);
+      const turnStartMs = Date.now();
 
       const updateAssistant = (fn: (m: DisplayMessage) => DisplayMessage) => {
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? fn(m) : m)));
@@ -169,7 +205,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
             if (event.type === "tool_finished" || event.type === "tool_permission_denied") {
               textNeedsBreak = true;
             }
-            applyEvent(event, updateAssistant, setUsage, setMessages, setPlan, setTestStatus);
+            applyEvent(event, updateAssistant, trackUsage, setMessages, setPlan, setTestStatus);
           }
         }
       } catch (err: unknown) {
@@ -181,6 +217,11 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         }));
       } finally {
         flushTextBuffer();
+        // DW-4.3 sparkline sample + DW-4.9 long-turn attention signal.
+        const delta = Math.max(0, cumulativeRef.current - lastCumulativeRef.current);
+        lastCumulativeRef.current = cumulativeRef.current;
+        setTokenHistory((prev) => [...prev, delta].slice(-TOKEN_HISTORY_CAP));
+        notifyTurnComplete(Date.now() - turnStartMs, "Anvil turn finished", process.stderr, readNotifyPrefs());
         // Mark streaming done either way — completion, cancellation, or error.
         updateAssistant((m) => ({ ...m, streaming: false }));
         setIsBusy(false);
@@ -272,7 +313,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
       setMessages((prev) => {
         const next: DisplayMessage[] = [
           ...prev,
-          { id: assistantId, role: "assistant", text: "", streaming: true, toolCalls: [], subAgents: [], verifications: [] },
+          { id: assistantId, role: "assistant", text: "", streaming: true, toolCalls: [], subAgents: [], verifications: [], ts: Date.now() },
         ];
         return next.length > TRANSCRIPT_STATE_CAP ? next.slice(-TRANSCRIPT_STATE_CAP) : next;
       });
@@ -330,7 +371,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
             if (event.type === "tool_permission_denied") outcome.permissionDenied = true;
             if (event.type === "error") outcome.errored = true;
             if (event.type === "cancelled") outcome.cancelled = true;
-            applyEvent(event, updateAssistant, setUsage, setMessages, setPlan, setTestStatus);
+            applyEvent(event, updateAssistant, trackUsage, setMessages, setPlan, setTestStatus);
           }
           onEvent?.(event);
         }
@@ -509,6 +550,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     messages,
     isBusy,
     usage,
+    tokenHistory,
     plan,
     goal,
     setGoal,

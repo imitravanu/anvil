@@ -20,7 +20,13 @@ export class TurnState {
   /** Closed-loop verification self-repair attempts consumed this turn. */
   verifyRepairsUsed = 0;
 
-  constructor(readonly maxInnerIterations: number) {}
+    constructor(readonly maxInnerIterations: number) {}
+  /**
+   * The user prompt for this turn — used by the intelligent compaction path
+   * (Phase 25.5) to keep high-relevance older messages verbatim before
+   * summarizing the rest. Set once, on send().
+   */
+  task: string = "";
 
   /** Budget predicate for the loop-top check. */
   checkBudget(): boolean {

@@ -1,3 +1,5 @@
+import type { TeamRunResult } from "../agent/team/types.js";
+
 export interface ToolContext {
   projectRoot: string;
   signal: AbortSignal;
@@ -39,6 +41,8 @@ export interface ToolSessionContext {
   signal: AbortSignal;
   mergeSubCheckpoints?: (checkpoints: unknown[]) => Promise<void>;
   recordMutation?: () => void;
+  /** Called once when a `delegate_task` team run completes (Phase 25.2 introspection). */
+  onTeamRunResult?: (result: TeamRunResult) => void;
 }
 
 export type SessionToolExecutor = (

@@ -237,5 +237,14 @@ describe("run_command read-only safe-list", () => {
       expect(res.supported).toBe(true);
     }
   });
+
+  it("treats newline as a command separator, blocking multi-line wipes (A4)", () => {
+    expect(isBlockedCommand("echo hi\nrm -rf /")).not.toBeNull();
+    expect(isBlockedCommand("echo hi\nrm -rf ~")).not.toBeNull();
+    expect(isBlockedCommand("printf 'x'\nrm -rf \"$HOME\"")).not.toBeNull();
+    // A harmless multi-line sequence stays unblocked.
+    expect(isBlockedCommand("echo one\necho two")).toBeNull();
+    expect(isBlockedCommand("echo hi\nrm -rf ./build")).toBeNull();
+  });
 });
 

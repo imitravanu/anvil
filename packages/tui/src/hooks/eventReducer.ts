@@ -80,6 +80,8 @@ export interface DisplayMessage {
   verifications?: DisplayVerification[];
   images?: { path: string }[];
   errorText?: string;
+  /** Creation time (epoch ms); absent for resumed history — no time renders. */
+  ts?: number;
 }
 
 export interface UsageTotals {
@@ -88,7 +90,7 @@ export interface UsageTotals {
 }
 
 export function systemMessage(text: string): DisplayMessage {
-  return { id: randomUUID(), role: "system", text, streaming: false, toolCalls: [], subAgents: [] };
+  return { id: randomUUID(), role: "system", text, streaming: false, toolCalls: [], subAgents: [], ts: Date.now() };
 }
 
 export function appendSystemMessage(
@@ -185,10 +187,17 @@ export function applyEvent(
         'Turn stopped after reaching its step limit. Type "continue" to keep going, or revise the task.'
       );
       break;
-    case "loop_detected":
+        case "loop_detected":
       appendSystemMessage(
         setMessages,
         `Loop guard: ${event.tool} was repeated 3× without progress. Further identical calls are blocked.`
+      );
+      break;
+    case "guardian_blocked":
+      appendSystemMessage(
+        setMessages,
+        `Guardian: ${event.count} pending mutation${event.count === 1 ? " was" : "s were"} blocked before execution (${event.fixed} auto-fixed). ` +
+          "Fix the violations (see errors above) and retry — do not re-emit unchanged calls."
       );
       break;
     case "plan_updated":

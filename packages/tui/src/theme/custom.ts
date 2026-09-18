@@ -1,15 +1,32 @@
 import fs from "node:fs";
 import path from "node:path";
 import { anvilHome } from "@anvil/core";
-import { REQUIRED_COLOR_KEYS, type Theme } from "./themes.js";
+import {
+  DEFAULT_BORDERS,
+  DEFAULT_RESPONSIVE,
+  DEFAULT_SPACING,
+  DEFAULT_TYPOGRAPHY,
+  REQUIRED_COLOR_KEYS,
+  SEMANTIC_COLOR_KEYS,
+  resolveThemeColors,
+  type CardBorderStyle,
+  type LegacyColorKey,
+  type ModalBorderStyle,
+  type PanelBorderStyle,
+  type SemanticColorKey,
+  type Theme,
+} from "./themes.js";
 
 // ---------------------------------------------------------------------------
 // custom user themes (~/.anvil/themes.json, ANVIL_HOME-honoring).
-// { "<name>": { "colors": {<every REQUIRED_COLOR_KEYS entry>}, "spacing"? } }
+// { "<name>": { "colors": {<every REQUIRED_COLOR_KEYS entry>}, ... } }
+// DW-1: old 11-key files keep loading — semantic colors derive from legacy
+// keys; typography / spacing / borders / responsive sections are optional
+// with defaults. New keys may override any derivation.
 // ---------------------------------------------------------------------------
 
 export const CUSTOM_THEME_NAME_RE = /^[a-z0-9-_]{1,24}$/;
-const BUILTINS = new Set(["dark", "light", "highContrast"]);
+const BUILTINS = new Set(["dark", "light", "highContrast", "midnight", "hacker"]);
 
 export interface CustomThemeProblem {
   name: string;
@@ -24,11 +41,28 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+const PANEL_BORDERS: readonly string[] = ["round", "single", "double", "bold"];
+const CARD_BORDERS: readonly string[] = ["round", "single", "none"];
+const MODAL_BORDERS: readonly string[] = ["round", "double"];
+
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === "string" && v.length > 0;
+}
+
+function isNonNegativeInt(v: unknown): v is number {
+  return typeof v === "number" && Number.isInteger(v) && v >= 0;
+}
+
+function isPositiveInt(v: unknown): v is number {
+  return typeof v === "number" && Number.isInteger(v) && v > 0;
+}
+
 /**
  * Load + validate custom themes. Missing file → empty, never throws.
  * Invalid entries are reported (never half-loaded): colors must carry every
- * required key as a non-empty string (any chalk/ink color: named or hex);
- * spacing entries must be non-negative integers, defaulting to {1, 0}.
+ * required legacy key as a non-empty string (any chalk/ink color: named or
+ * hex); semantic colors, typography, spacing, borders, and responsive
+ * sections are optional and defaulted (old files auto-migrate).
  */
 export function loadCustomThemes(): { themes: Record<string, Theme>; problems: CustomThemeProblem[] } {
   let text: string;
@@ -70,19 +104,88 @@ export function loadCustomThemes(): { themes: Record<string, Theme>; problems: C
       problem(`missing or empty colors: ${missing.join(", ")}`);
       continue;
     }
-    const spacing = isRecord(entry.spacing) ? entry.spacing : {};
-    const panelPaddingX = spacing.panelPaddingX ?? 1;
-    const panelPaddingY = spacing.panelPaddingY ?? 0;
+    const colorsRaw = entry.colors as Record<string, unknown>;
+    const legacy = {} as Record<LegacyColorKey, string>;
+    for (const k of REQUIRED_COLOR_KEYS) legacy[k] = colorsRaw[k] as string;
+    // Optional semantic overrides (validated, else derivation wins).
+    const overrides: Partial<Record<SemanticColorKey, string>> = {};
+    for (const k of SEMANTIC_COLOR_KEYS) {
+      const v = colorsRaw[k];
+      if (v === undefined) continue;
+      if (!isNonEmptyString(v)) {
+        problem(`semantic color "${k}" must be a non-empty string`);
+        continue;
+      }
+      overrides[k] = v;
+    }
+    if (problems.length > 0 && problems[problems.length - 1].name === name) continue;
+    const colors = resolveThemeColors(legacy, overrides);
+
+    const spacing = isRecord(entry.spacing) ? (entry.spacing as Record<string, unknown>) : {};
+    const panelPaddingX = spacing.panelPaddingX ?? DEFAULT_SPACING.panelPaddingX;
+    const panelPaddingY = spacing.panelPaddingY ?? DEFAULT_SPACING.panelPaddingY;
+    const cardPaddingX = spacing.cardPaddingX ?? DEFAULT_SPACING.cardPaddingX;
+    const cardGap = spacing.cardGap ?? DEFAULT_SPACING.cardGap;
+    const sectionGap = spacing.sectionGap ?? DEFAULT_SPACING.sectionGap;
     if (
-      typeof panelPaddingX !== "number" || !Number.isInteger(panelPaddingX) || panelPaddingX < 0 ||
-      typeof panelPaddingY !== "number" || !Number.isInteger(panelPaddingY) || panelPaddingY < 0
+      !isNonNegativeInt(panelPaddingX) || !isNonNegativeInt(panelPaddingY) ||
+      !isNonNegativeInt(cardPaddingX) || !isNonNegativeInt(cardGap) || !isNonNegativeInt(sectionGap)
     ) {
       problem("spacing values must be non-negative integers");
       continue;
     }
-    const colors = {} as Theme["colors"];
-    for (const k of REQUIRED_COLOR_KEYS) colors[k] = (entry.colors as Record<string, string>)[k];
-    themes[name] = { colors, spacing: { panelPaddingX, panelPaddingY } };
+
+    const typography = isRecord(entry.typography) ? (entry.typography as Record<string, unknown>) : {};
+    const typographyDefaults: Record<string, string> = { ...DEFAULT_TYPOGRAPHY };
+    const pickText = (key: string, fallback: string): string | null => {
+      const v = typography[key] ?? typographyDefaults[key] ?? fallback;
+      if (!isNonEmptyString(v)) {
+        problem(`typography "${key}" must be a non-empty string`);
+        return null;
+      }
+      return v;
+    };
+    const brandIcon = pickText("brandIcon", DEFAULT_TYPOGRAPHY.brandIcon);
+    const brandName = pickText("brandName", DEFAULT_TYPOGRAPHY.brandName);
+    const userPrefix = pickText("userPrefix", DEFAULT_TYPOGRAPHY.userPrefix);
+    const assistantPrefix = pickText("assistantPrefix", DEFAULT_TYPOGRAPHY.assistantPrefix);
+    const sectionDivider = pickText("sectionDivider", DEFAULT_TYPOGRAPHY.sectionDivider);
+    if (
+      brandIcon === null || brandName === null || userPrefix === null ||
+      assistantPrefix === null || sectionDivider === null
+    ) {
+      continue;
+    }
+
+    const borders = isRecord(entry.borders) ? (entry.borders as Record<string, unknown>) : {};
+    const panel = (borders.panel ?? DEFAULT_BORDERS.panel) as string;
+    const card = (borders.card ?? DEFAULT_BORDERS.card) as string;
+    const modal = (borders.modal ?? DEFAULT_BORDERS.modal) as string;
+    if (!PANEL_BORDERS.includes(panel) || !CARD_BORDERS.includes(card) || !MODAL_BORDERS.includes(modal)) {
+      problem("borders must be panel: round|single|double|bold, card: round|single|none, modal: round|double");
+      continue;
+    }
+
+    const responsive = isRecord(entry.responsive) ? (entry.responsive as Record<string, unknown>) : {};
+    const compactWidth = responsive.compactWidth ?? DEFAULT_RESPONSIVE.compactWidth;
+    const normalWidth = responsive.normalWidth ?? DEFAULT_RESPONSIVE.normalWidth;
+    const wideWidth = responsive.wideWidth ?? DEFAULT_RESPONSIVE.wideWidth;
+    if (!isPositiveInt(compactWidth) || !isPositiveInt(normalWidth) || !isPositiveInt(wideWidth)) {
+      problem("responsive widths must be positive integers");
+      continue;
+    }
+
+    themes[name] = {
+      colors,
+      typography: { brandIcon, brandName, userPrefix, assistantPrefix, sectionDivider },
+      spacing: { panelPaddingX, panelPaddingY, cardPaddingX, cardGap, sectionGap },
+      borders: {
+        panel: panel as PanelBorderStyle,
+        card: card as CardBorderStyle,
+        modal: modal as ModalBorderStyle,
+      },
+      responsive: { compactWidth, normalWidth, wideWidth },
+    };
   }
   return { themes, problems };
 }

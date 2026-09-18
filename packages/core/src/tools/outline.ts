@@ -278,11 +278,12 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   let abs: string;
   try {
     abs = resolveWithinRoot(ctx.projectRoot, relPath);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const msg = getErrorMessage(err) || "Path escapes project root";
     return {
-      output: { error: err.message ?? "Path escapes project root" },
+      output: { error: msg },
       isError: true,
-      summary: `get_outline failed: ${err.message ?? "Path escapes project root"}`,
+      summary: `get_outline failed: ${msg}`,
     };
   }
 
@@ -327,7 +328,7 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
       isError: false,
       summary: `Outlined ${outlines.length} files (${totalSymbols} symbols)`,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     return {
       output: { error: getErrorMessage(err) },
       isError: true,

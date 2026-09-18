@@ -5,6 +5,9 @@ import type { AgentSession, SessionFileChange } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 import { ColorizedDiff } from "../diff/colorizeDiff.js";
 import { curtail } from "../util/format.js";
+import { copyToClipboard } from "../util/clipboard.js";
+import { SideBySideDiff } from "../diff/SideBySideDiff.js";
+import { useSpinnerFrame } from "../util/useSpinner.js";
 
 export interface BranchDiffInfo {
   branch: string;
@@ -34,8 +37,12 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
 
   const [changes, setChanges] = useState<SessionFileChange[]>([]);
   const [activeIdx, setActiveIdx] = useState<number>(0);
+  // DW-4.5 side-by-side defaults on at 120+ columns; `s` toggles per session.
+  const [sideBySide, setSideBySide] = useState<boolean | null>(null);
   const [loading, setLoading] = useState<boolean>(!branchDiff);
   const [error, setError] = useState<string | null>(null);
+  // DW-4.11 copy feedback (cleared on navigation).
+  const [copiedNote, setCopiedNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (branchDiff !== undefined && branchDiff !== null) {
@@ -69,15 +76,33 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
       return;
     }
 
+    // DW-4.5: `s` toggles unified/side-by-side for the whole modal visit.
+    if (input === "s") {
+      setSideBySide((prev) => !(prev ?? termWidth >= 120));
+      return;
+    }
+
+    // DW-4.11: `c` copies the visible diff (branch or active file) via OSC 52.
+    if (input === "c") {
+      const text = branchDiff ? branchDiff.diff : (changes[activeIdx]?.diff ?? changes[activeIdx]?.path ?? "");
+      const result = copyToClipboard(text);
+      setCopiedNote(result.ok ? `Copied ${result.bytes} bytes to the clipboard.` : `Copy failed (${result.reason}).`);
+      return;
+    }
+
     if (!branchDiff && changes.length > 0) {
       if (key.tab || key.rightArrow || input === "l") {
+        setCopiedNote(null);
         setActiveIdx((prev: number) => (prev + 1) % changes.length);
       } else if (key.leftArrow || input === "h") {
+        setCopiedNote(null);
         setActiveIdx((prev: number) => (prev - 1 + changes.length) % changes.length);
       }
     }
   });
 
+  // DW-3.1 arrows = waiting on async work.
+  const waiting = useSpinnerFrame(loading, "arrows");
   if (loading) {
     return (
       <Box
@@ -87,7 +112,7 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
         paddingX={2}
         paddingY={1}
       >
-        <Text color={theme.colors.accent}>Analyzing session diff...</Text>
+        <Text color={theme.colors.accent}>{waiting} Analyzing session diff...</Text>
       </Box>
     );
   }
@@ -127,15 +152,19 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
           <Text bold color={theme.colors.primary}>
             Branch Diff ({branchDiff.branch}...HEAD)
           </Text>
-          <Text dimColor>Esc / q: close</Text>
+          <Text dimColor>S: side-by-side · C: copy · Esc / q: close</Text>
         </Box>
         <Box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} marginY={1} overflow="hidden">
           {hasContent ? (
-            <ColorizedDiff
-              diff={branchDiff.diff}
-              maxRows={Math.max(3, height - 6)}
-              maxText={Math.max(20, termWidth - 10)}
-            />
+            (sideBySide ?? termWidth >= 120) ? (
+              <SideBySideDiff diff={branchDiff.diff} maxRows={Math.max(3, height - 7)} />
+            ) : (
+              <ColorizedDiff
+                diff={branchDiff.diff}
+                maxRows={Math.max(3, height - 6)}
+                maxText={Math.max(20, termWidth - 10)}
+              />
+            )
           ) : (
             <Text dimColor italic>
               No differences between branch &quot;{branchDiff.branch}&quot; and HEAD.
@@ -190,8 +219,13 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
         <Text bold color={theme.colors.primary}>
           Diff Inspector ({activeIdx + 1}/{changes.length} files)
         </Text>
-        <Text dimColor>Tab / Left / Right: switch file · Esc: close</Text>
+        <Text dimColor>Tab / Left / Right: switch file · S: side-by-side · C: copy · Esc: close</Text>
       </Box>
+      {copiedNote && (
+        <Box flexShrink={0} paddingX={1}>
+          <Text color={theme.colors.success}>{copiedNote}</Text>
+        </Box>
+      )}
 
       {/* File Tabs */}
       <Box flexShrink={0} marginY={1} gap={1} width={tabsWidth} overflow="hidden">
@@ -225,7 +259,11 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
           the modal. The row budget matches what this modal actually has left. */}
       <Box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} marginY={1} overflow="hidden">
         {activeFile.diff ? (
-          <ColorizedDiff diff={activeFile.diff} maxRows={Math.max(3, height - 9)} maxText={Math.max(20, termWidth - 10)} />
+          (sideBySide ?? termWidth >= 120) ? (
+            <SideBySideDiff diff={activeFile.diff} maxRows={Math.max(3, height - 10)} />
+          ) : (
+            <ColorizedDiff diff={activeFile.diff} maxRows={Math.max(3, height - 9)} maxText={Math.max(20, termWidth - 10)} />
+          )
         ) : (
           <Text dimColor italic>
             (Empty or deleted file)

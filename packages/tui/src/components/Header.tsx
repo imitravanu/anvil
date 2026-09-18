@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Box, Text, useStdout } from "ink";
 import { MODEL_REGISTRY, type SituationalContext } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
@@ -38,13 +39,29 @@ export function Header({ model, isBusy, context }: HeaderProps) {
     return curtail(compactTag, budget);
   };
 
+  // DW-2.1 cockpit frame: rounded border shared by both header modes.
+  // Column direction is load-bearing: the default row direction would
+  // shrink-wrap the inner space-between row to its content and the model
+  // tag would ride against the segments instead of the right edge.
+  const frame = (children: ReactNode) => (
+    <Box
+      flexDirection="column"
+      flexShrink={0}
+      borderStyle={theme.borders.panel}
+      borderColor={theme.colors.border}
+      paddingX={theme.spacing.panelPaddingX}
+    >
+      {children}
+    </Box>
+  );
+
   // Compact header: brand left, model tag right (no situational context yet or
   // a narrow terminal).
   if (width < 80 || !context) {
-    return (
-      <Box justifyContent="space-between" flexShrink={0} paddingX={theme.spacing.panelPaddingX}>
-        <Text bold color={theme.colors.primary}>▲ ANVIL</Text>
-        <Text dimColor>{fitTag(Math.max(12, width - 20))}</Text>
+    return frame(
+      <Box justifyContent="space-between" flexShrink={0} flexGrow={1}>
+        <Text bold color={theme.colors.brand}>▲ ANVIL</Text>
+        <Text dimColor>{fitTag(Math.max(12, width - 24))}</Text>
       </Box>
     );
   }
@@ -82,7 +99,7 @@ export function Header({ model, isBusy, context }: HeaderProps) {
       w += 1 /* gap */ + displayWidth(txt);
     };
     segment("│");
-    segment(`repo: ${nameV} (${branchV})`);
+    segment(`repo: ${nameV} (● ${branchV})`);
     if (showEnv) {
       segment("│");
       segment(`env: ${ecoV}`);
@@ -97,19 +114,22 @@ export function Header({ model, isBusy, context }: HeaderProps) {
     }
     return w;
   };
-  // Frame border (2) + right padding (1) + breathing room (1).
+  // Frame border (2) + inner padding (2): the frame itself airs the edge, so
+  // no extra breathing room — every cell counts at 100 columns.
   const rightReserve = 4;
 
-  return (
-    <Box justifyContent="space-between" flexShrink={0} paddingX={theme.spacing.panelPaddingX}>
+  return frame(
+    <Box justifyContent="space-between" flexShrink={0} flexGrow={1}>
       <Box gap={1}>
-        <Text bold color={theme.colors.primary}>▲ ANVIL</Text>
-        <Text dimColor>│</Text>
+        <Text bold color={theme.colors.brand}>▲ ANVIL</Text>
+        <Text color={theme.colors.separator}>│</Text>
         <Text>
           <Text dimColor>repo: </Text>
           <Text bold>{nameV}</Text>
           <Text dimColor> (</Text>
-          <Text color={gitClean ? theme.colors.toolDone : theme.colors.toolRunning}>
+          {/* DW-2.1 status dot: ● green = clean, yellow = dirty. */}
+          <Text color={gitClean ? theme.colors.success : theme.colors.warning}>● </Text>
+          <Text color={gitClean ? theme.colors.success : theme.colors.warning}>
             {branchV}
           </Text>
           <Text dimColor>)</Text>

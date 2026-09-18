@@ -7,7 +7,7 @@
   "scripts": {
     "build": "npm run build -w @anvil/core && npm run build -w @anvil/tui && npm run build -w @anvil/cli",
     "dev": "npm run dev --workspace=packages/cli",
-    "typecheck": "npm run typecheck -w @anvil/core && npm run typecheck -w @anvil/tui && npm run typecheck -w @anvil/cli",
+    "typecheck": "npm run typecheck -w @anvil/core && npm run typecheck -w @anvil/tui && npm run typecheck -w @anvil/cli && tsc -p tsconfig.scripts.json",
     "test": "npm run test --workspaces --if-present",
     "visual": "npm run visual -w @anvil/tui",
     "visual:capture": "npm run visual:capture -w @anvil/tui",
