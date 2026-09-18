@@ -320,6 +320,7 @@ async function main() {
 </html>`;
 
           await page.setContent(html);
+          await page.evaluateHandle("document.fonts.ready");
           const buf = await page.screenshot({
             type: "png",
             clip: { x: 0, y: 0, width: viewportWidth, height: viewportHeight },

@@ -106,6 +106,9 @@ async function main() {
         const targetDiffSub = path.join(DIFF_DIR, dir);
         fs.mkdirSync(targetDiffSub, { recursive: true });
         fs.writeFileSync(path.join(targetDiffSub, `${scenario}-diff.png`), PNG.sync.write(diffPng));
+        if (process.env.GITHUB_ACTIONS) {
+          console.log(`::error file=packages/tui/__visual-baselines__/${dir}/${file}::Visual regression in ${dir}/${scenario}: diff ${diffPercent}% (${diffPixels} pixels, max ${DIFF_THRESHOLD_PERCENT}%)`);
+        }
       }
 
       const statusStr = passed ? "\x1b[32mPASS\x1b[0m" : "\x1b[31mFAIL\x1b[0m";
@@ -136,6 +139,19 @@ async function main() {
   };
 
   fs.writeFileSync(path.join(DIFF_DIR, "report.json"), JSON.stringify(report, null, 2), "utf-8");
+
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    try {
+      let md = `### Visual Regression Results\n\n- **Total**: ${results.length}\n- **Passed**: ${results.filter((r) => r.passed).length}\n- **Failed**: ${failures}\n\n`;
+      if (failures > 0) {
+        md += `| Config | Scenario | Diff % | Diff Pixels |\n|---|---|---|---|\n`;
+        for (const r of results.filter((r) => !r.passed).slice(0, 30)) {
+          md += `| ${r.config} | ${r.scenario} | ${r.diffPercent}% | ${r.diffPixels} |\n`;
+        }
+      }
+      fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
+    } catch {}
+  }
 
   if (failures > 0) {
     console.error(`\x1b[31m[visual:diff] FAILED: ${failures} of ${results.length} scenarios exceeded threshold.\x1b[0m`);
