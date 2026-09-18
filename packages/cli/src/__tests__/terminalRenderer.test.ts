@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { renderCliEvent } from "../terminalRenderer.js";
+import { renderCliEvent, EXIT_OK, EXIT_ERROR, EXIT_BUDGET_EXHAUSTED, EXIT_CANCELLED, EXIT_UNVERIFIED } from "../terminalRenderer.js";
 import type { AgentEvent } from "@anvil/core";
 
 describe("renderCliEvent (Phase 24.13)", () => {
@@ -41,11 +41,74 @@ describe("renderCliEvent (Phase 24.13)", () => {
     const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
     const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
 
-    expect(renderCliEvent({ type: "turn_complete" })).toEqual({ exitCode: 0 });
-    expect(renderCliEvent({ type: "error", message: "fail" })).toEqual({ exitCode: 1 });
-    expect(renderCliEvent({ type: "budget_exhausted" })).toEqual({ exitCode: 2 });
-    expect(renderCliEvent({ type: "cancelled" })).toEqual({ exitCode: 130 });
+    expect(renderCliEvent({ type: "turn_complete" })).toEqual({ exitCode: EXIT_OK });
+    expect(renderCliEvent({ type: "error", message: "fail" })).toEqual({ exitCode: EXIT_ERROR });
+    expect(renderCliEvent({ type: "budget_exhausted" })).toEqual({ exitCode: EXIT_BUDGET_EXHAUSTED });
+    expect(renderCliEvent({ type: "cancelled" })).toEqual({ exitCode: EXIT_CANCELLED });
 
+    stderrSpy.mockRestore();
+    stdoutSpy.mockRestore();
+  });
+
+  it("a give-up after mutations is not reported as success (S1.4)", () => {
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    expect(EXIT_UNVERIFIED).not.toBe(0);
+    const res = renderCliEvent({ type: "verification_gave_up", command: "npm test" }, { raw: true });
+    expect(res).toEqual({ exitCode: EXIT_UNVERIFIED });
+    stderrSpy.mockRestore();
+  });
+
+  it("headless event order for an unrepaired failure exits nonzero, not 0 (S1.4)", () => {
+    // The engine emits verification_gave_up *before* turn_complete. headless.ts
+    // returns on the FIRST event carrying an exit code, so if gave_up carried
+    // none, the following turn_complete won the race and a turn that mutated
+    // files and left tests failing exited 0 — a silent success in the CI path.
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+
+    const events: AgentEvent[] = [
+      { type: "verification_started", command: "npm test" },
+      { type: "verification_result", passed: false, summary: "1 test failed" },
+      { type: "verification_gave_up", command: "npm test" },
+      { type: "turn_complete" },
+    ];
+
+    let code = 0;
+    for (const event of events) {
+      const rendered = renderCliEvent(event);
+      if (rendered?.exitCode !== undefined) {
+        code = rendered.exitCode; // same precedence rule as headless.ts
+        break;
+      }
+    }
+
+    expect(code).toBe(EXIT_UNVERIFIED);
+    stderrSpy.mockRestore();
+    stdoutSpy.mockRestore();
+  });
+
+  it("a failure that is later repaired still exits 0", () => {
+    // Only the terminal verdict counts: verify-fail -> repair -> verify-pass
+    // must not poison the exit code.
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+
+    const events: AgentEvent[] = [
+      { type: "verification_result", passed: false, summary: "1 test failed" },
+      { type: "verification_result", passed: true, summary: "all passed" },
+      { type: "turn_complete" },
+    ];
+
+    let code = 0;
+    for (const event of events) {
+      const rendered = renderCliEvent(event);
+      if (rendered?.exitCode !== undefined) {
+        code = rendered.exitCode;
+        break;
+      }
+    }
+
+    expect(code).toBe(EXIT_OK);
     stderrSpy.mockRestore();
     stdoutSpy.mockRestore();
   });

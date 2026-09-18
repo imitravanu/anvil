@@ -1,8 +1,8 @@
 # Anvil Stabilization Roadmap — 2026-09 (post-audit)
 
-> **Status:** PARTIALLY COMPLETE — S0, S1.1–S1.3, S2.1, and S2.2 are **done** (2026-09-18,
+> **Status:** PARTIALLY COMPLETE — S0, S1.1–S1.4, S2.1, and S2.2 are **done** (2026-09-18,
 > each landed test-first with the full `npm run gate` green; checkboxes annotated in place).
-> Still open: S1.3 rewind external-edit warning, S1.4, S2.3, S3–S6.
+> Still open: S1.3 rewind external-edit warning, S2.3, S3–S6.
 > **Principle:** No new features until the chain **approved → executed → changed → verified → reported**
 > is provably consistent. Every finding below cites the inspected source location; none has
 > yet been reproduced with a regression test — Step 0 of each phase is to write that test first.
@@ -101,9 +101,30 @@ the last repair is never tested and the turn completes as if fine.
 
 ### S1.4 — Honest completion statuses (F4 fallout)
 
-- [ ] `verification_gave_up` must be a distinct surfaced outcome, not a silent skip.
-- [ ] Headless exit codes: nonzero for failed and unverified-after-mutation turns
+- [x] `verification_gave_up` must be a distinct surfaced outcome, not a silent skip.
+      *Done 2026-09-18: `terminalRenderer.ts` returns `EXIT_UNVERIFIED` (3) for
+      `verification_gave_up`, and every exit code is now a named constant rather than an
+      inline literal. The event precedes `turn_complete`, and `headless.ts` returns on the
+      first exit code it sees — so the previous `undefined` let `turn_complete`'s 0 win and
+      a turn that mutated files and left tests failing exited **0**. Covered by three new
+      `terminalRenderer.test.ts` cases (give-up is nonzero; the real headless event order
+      exits 3, not 0; a repaired failure still exits 0).*
+- [x] Headless exit codes: nonzero for failed and unverified-after-mutation turns
       (verify `terminalRenderer.ts` / `headless.ts` mapping; write the table down here).
+      *Done 2026-09-18 — mapping verified against source and tabulated below.*
+
+| Exit | Meaning | Emitted by |
+|---|---|---|
+| 0 | Turn completed / goal succeeded | `turn_complete`, `goal_completed` (success) |
+| 1 | Terminal error / goal failed | `error`, `goal_failed`, `goal_completed` (failure) |
+| 2 | Step budget exhausted — task may be incomplete | `budget_exhausted` |
+| 3 | Mutated files and verification gave up with tests failing | `verification_gave_up` |
+| 130 | Cancelled (SIGINT) | `cancelled` |
+
+**Known limitation (stated, not hidden):** when no test runner is detected,
+`resolveTestCommand` returns null and verification is `skipped`, so a mutation in a project
+with no tests still exits 0 — there is genuinely nothing to verify. Not treated as a bug;
+documented so it is not mistaken for verification coverage.
 
 **Exit criteria:** new integration tests S1.1–S1.3 green; `npm run eval -- --fast --mock` green;
 no regression in the 722 existing tests.

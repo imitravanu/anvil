@@ -9,6 +9,18 @@ export interface RenderResult {
 }
 
 /**
+ * Exit codes for headless (`anvil -p`) and goal (`anvil goal`) runs. CI and
+ * scripts key off these, so they are a contract — named here to stop them
+ * drifting into scattered literals.
+ */
+export const EXIT_OK = 0;
+export const EXIT_ERROR = 1;
+export const EXIT_BUDGET_EXHAUSTED = 2;
+/** Turn mutated files and automated verification gave up with tests failing. */
+export const EXIT_UNVERIFIED = 3;
+export const EXIT_CANCELLED = 130;
+
+/**
  * Unified CLI terminal event renderer for headless and goal execution modes.
  * Formats events to stdout and stderr, suppressing non-essential diagnostics when raw mode is active.
  */
@@ -44,13 +56,17 @@ export function renderCliEvent(event: AgentEvent, opts?: RenderCliOptions): Rend
         process.stderr.write(`${event.passed ? "✓" : "✗"} [verify] ${event.summary}\n`);
       }
       return undefined;
-        case "verification_gave_up":
+    case "verification_gave_up":
       if (!raw) {
         process.stderr.write(
           `⚠ [verify] repair budget exhausted — tests may still be failing: ${event.command}\n`
         );
       }
-      return undefined;
+      // Terminal and unverified: the engine emits this only when the FINAL
+      // state still fails, and it precedes turn_complete. headless.ts returns
+      // on the first exit code it sees, so returning none here let
+      // turn_complete's 0 win — a silent success for a broken mutation (S1.4).
+      return { exitCode: EXIT_UNVERIFIED };
     case "guardian_blocked":
       if (!raw) {
         process.stderr.write(
@@ -78,20 +94,20 @@ export function renderCliEvent(event: AgentEvent, opts?: RenderCliOptions): Rend
       return undefined;
     case "error":
       process.stderr.write(`\nError: ${event.message}\n`);
-      return { exitCode: 1 };
+      return { exitCode: EXIT_ERROR };
     case "budget_exhausted":
       if (!raw) {
         process.stderr.write("\nTurn stopped: step budget exhausted. Task may be incomplete.\n");
       } else {
         process.stderr.write("budget_exhausted\n");
       }
-      return { exitCode: 2 };
+      return { exitCode: EXIT_BUDGET_EXHAUSTED };
     case "turn_complete":
       process.stdout.write("\n");
-      return { exitCode: 0 };
+      return { exitCode: EXIT_OK };
     case "cancelled":
       process.stderr.write("\nCancelled.\n");
-      return { exitCode: 130 };
+      return { exitCode: EXIT_CANCELLED };
     default:
       return undefined;
   }
@@ -155,12 +171,12 @@ export function renderGoalEvent(event: GoalEvent, opts?: RenderCliOptions): Rend
           process.stdout.write(`  - ${f}\n`);
         }
       }
-      return { exitCode: event.result.success ? 0 : 1 };
+      return { exitCode: event.result.success ? EXIT_OK : EXIT_ERROR };
     case "goal_failed":
       if (!raw) {
         process.stderr.write(`\n✗ Goal failed: ${event.error}\n`);
       }
-      return { exitCode: 1 };
+      return { exitCode: EXIT_ERROR };
     default:
       return undefined;
   }

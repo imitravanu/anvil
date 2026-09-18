@@ -4,6 +4,20 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Honest Headless Exit Status (2026-09-18, S1.4)
+
+- **An unverified failed turn no longer exits 0**: `anvil -p` and goal runs returned
+  exit code 0 for a turn that mutated files and left the test suite failing.
+  `verification_gave_up` carried no exit code, and since it is emitted *before*
+  `turn_complete` while `headless.ts` returns on the first exit code it sees, the
+  terminal `turn_complete`'s 0 won the race. It now returns a distinct
+  `EXIT_UNVERIFIED` (3). A failure that is later repaired still exits 0 — only the
+  terminal verdict counts, so verify-fail → repair → verify-pass is not poisoned.
+- **Named exit codes**: `EXIT_OK` (0), `EXIT_ERROR` (1), `EXIT_BUDGET_EXHAUSTED` (2),
+  `EXIT_UNVERIFIED` (3) and `EXIT_CANCELLED` (130) replace the inline literals in
+  `terminalRenderer.ts`, so CI-facing codes cannot drift. The full mapping table is
+  recorded in `docs/STABILIZATION-ROADMAP-2026-09.md` §S1.4.
+
 ### Verified Repair Recovery & Malformed-Input Provenance (2026-09-18, S1.x + 22.2)
 
 - **A repaired verification failure no longer fails its milestone**: `GoalEngine`
