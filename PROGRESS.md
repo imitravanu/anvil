@@ -2,6 +2,20 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 
+## 2026-09-19
+
+**Agent A (this session)** — owns & completed:
+- Phase 26 declared: `docs/PHASE-26-SPEC.md` (Guardian Everywhere — productize the immune
+  system: turn report UX, `anvil gate --watch`, model-agnostic proof matrix, guarded init
+  for foreign agents, health telemetry) + initialized `docs/PHASE-26-PROGRESS.md`
+  (NOT STARTED). Motivation: coding-agent CLIs are undifferentiated; Anvil's built-in
+  anti-slop immune system is the unique claim — verified live in this session
+  (interceptor wired in the turn loop, `anvil gate` working outside the repo, live eval
+  93.3% proving model-agnostic harness). Phase 26 makes that claim visible and measurable.
+- Tag mapping resolved (v0.9.0/v0.9.1/v0.10.0 → `da15273`; v1.0.0 → `c2f342e`).
+
+
+
 ## 2026-09-18
 
 **Agent A (Buffy / this session)** — owns & completed:
