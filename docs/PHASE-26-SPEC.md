@@ -35,10 +35,23 @@ in the shipped guardian. Fix the defect now; the seams gate the phase work that 
   different raw-error patterns, byte-verified independence).
 - **project-rules → scanner bridge (26.4 prerequisite):** `loadProjectRules` currently
   feeds prompts only (`buildSystemPrompt`); `scanDiffForSlop` never reads `AGENTS.md`.
-  User rules are advice, not enforcement. Bridge must reuse the split-literal fixture
-  convention and load once per session, not per call.
+  User rules are advice, not enforcement.
+  - **Syntax in `AGENTS.md` / `.anvil/rules`:** Machine-enforceable rules are declared in a structured block:
+    ```markdown
+    <!-- guardian:rules
+    no-moment: /from ["']moment["']/ : "Use date-fns or native Date instead"
+    no-lodash: /from ["']lodash["']/ : "Use native array/object methods instead"
+    -->
+    ```
+    Parsed into `CustomGuardianRule[]` (`{ rule: string; pattern: RegExp; detail: string }`).
+  - **API Contract:** Update scanner to accept optional custom rules:
+    `scanDiffForSlop(file: string, diff: string, customRules?: CustomGuardianRule[]): GuardianViolation[]`
+    `interceptTurn(changes: TurnFileChange[], customRules?: CustomGuardianRule[]): InterceptResult`
+  - **Lifecycle:** `AgentSession` loads project rules once at session initialization and passes them to `interceptTurn`, avoiding per-turn disk I/O.
 - **allowlist reader (26.5 prerequisite):** `guardedInit` writes `.fresh-allowlist.json`;
-  nothing reads it back. Legacy-drain telemetry has no data source until this exists.
+  nothing reads it back. Implement `loadFreshAllowlist(projectRoot: string): FreshAllowlist` in
+  `packages/core/src/guardian/allowlist.ts`. Validates JSON shape against the schema and returns
+  active entries; legacy-drain telemetry has its data source.
 
 ## 26.1 — Guardian Turn Report (the missing last mile)
 
@@ -46,16 +59,36 @@ in the shipped guardian. Fix the defect now; the seams gate the phase work that 
 what was blocked, which rule family, whether auto-fixed or needs human eyes, and the
 one-line lesson. Turn guardian from invisible plumbing into the product's visible identity.
 
-- Core: extend `InterceptResult` with structured `violations[]`
-  (`{ rule, family, path, line, message, autofixed }`) instead of only counts —
-  renderer shouldn't re-parse reasons from strings.
-- CLI renderer: `guardian_blocked` (and turn-end) case renders the report block;
-  keep non-TTY stderr line for scripts (`guardian_blocked count=N fixed=M` stays valid).
-- Copy discipline (constitution): say what was blocked and why in user language
-  ("hardcoded color in `Button.tsx:12` — use the theme token instead"), never generic
-  filler; no slop in the slop-fighter.
-- Tests first (RED→GREEN): report renders for blocked/autofixed/mixed turns; zero-guardian
-  turns render nothing; non-TTY format stable (snapshot).
+- **Core Data Contract:**
+  - Extend `GuardianViolation` in `packages/core/src/guardian/scanner.ts` with structured metadata:
+    ```typescript
+    export type GuardianRuleFamily = "placeholder" | "raw-error" | "style" | "secret" | "architecture" | "type-escape" | "rule";
+    export interface GuardianViolation {
+      file: string;
+      line: number;
+      rule: string;
+      family: GuardianRuleFamily;
+      detail: string;
+      autofixed?: boolean;
+    }
+    ```
+  - Extend `guardian_blocked` agent event payload in `packages/core/src/agent/session.ts`:
+    ```typescript
+    yield {
+      type: "guardian_blocked",
+      count: blockedByPath.size,
+      fixed: intercept.fixed.length,
+      firstRule: intercept.violations[0]?.rule ?? "unknown",
+      violations: intercept.violations,
+      fixes: intercept.fixed,
+    };
+    ```
+- **TUI & CLI Renderer:**
+  - `packages/tui/src/components/`: render a `GuardianReportCard` block on `guardian_blocked` turns and auto-fix events.
+  - Headless/non-TTY: keep stable stderr line (`guardian_blocked count=N fixed=M`) for scripts and CI.
+- **Copy Discipline (Constitution):** say what was blocked and why in user language
+  ("hardcoded color in `Button.tsx:12` — use the theme token instead"), never generic filler; no slop in the slop-fighter.
+- **Tests (RED→GREEN):** report renders for blocked/autofixed/mixed turns; zero-guardian turns render nothing; non-TTY format stable.
 
 ## 26.2 — `anvil gate --watch` (continuous natural guarding)
 
@@ -63,6 +96,14 @@ one-line lesson. Turn guardian from invisible plumbing into the product's visibl
 guarding" feel. Watch mode re-scans the diff on file-change debounce and surfaces
 violations as they appear, so slop never gets a chance to accumulate unnoticed.
 
+- **Implementation in `packages/cli/src/gate.ts`:**
+  - Add `--watch` flag to `runNativeGate()`.
+  - Reuse `scanDiffForSlop` on a debounce (no new scanner); budget-bounded via `GUARDIAN_WATCH_*`
+    env constants (interval default 500ms, max 60 scans/min — named constants, no magic numbers).
+  - Only diff dirty files against `HEAD` via `git diff HEAD -- . ':!node_modules' ':!dist'`; never walk full trees on keystrokes.
+- **Honesty Rule:** watch mode reports what *it* can see (diff vs HEAD); state so in its banner,
+  never claim full-tree coverage it doesn't do (the repo gate's step 1.5 does that).
+- **Tests:** debounce coalescing, violation surfacing, clean-tree silence, banner copy.
 
 ## 26.3 — Model-Agnostic Proof (the headline number)
 
@@ -70,16 +111,18 @@ violations as they appear, so slop never gets a chance to accumulate unnoticed.
 like a careful one.* Run the 15-task benchmark with guardian on vs. off across at least one
 free model and one frontier model; publish the pass-rate delta table.
 
-- Harness: `evals/run.ts` gains `--guardian=on|off` (env `ANVIL_EVAL_GUARDIAN`, default on
-  to match product behavior); runner seeds sessions accordingly. Named constants only.
-- Matrix: ≥1 free OpenRouter model (e.g. `deepseek-v4-flash:free`) + ≥1 frontier; reuse
+- **Harness:** `evals/run.ts` gains `--guardian=on|off` (env `ANVIL_EVAL_GUARDIAN`, default on
+  to match product behavior); runner seeds sessions accordingly.
+- **Rate-Limit Throttling:** free-tier models have strict RPM caps (15-20 req/min). Introduce
+  `ANVIL_EVAL_RATE_LIMIT_DELAY_MS` (default 2000ms delay between tasks on free/rate-limited providers)
+  to ensure runs complete without hitting HTTP 429 errors.
+- **Matrix:** ≥1 free OpenRouter model (e.g. `deepseek-v4-flash:free` or `qwen-2.5-coder`) + ≥1 frontier; reuse
   `ANVIL_EVAL_TIMEOUT_MS` override for live lanes (Phase 25.7 precedent).
-- Report: extend eval report with a guardian delta section (same tasks, same seed, only
+- **Report:** extend eval report with a guardian delta section (same tasks, same seed, only
   guardian toggled); write both runs' reports under `ANVIL_HOME/evals/`.
-- Acceptance: publish the delta table in the progress record; a README claim only if the
-  delta is real. If the delta is ~0, that is also a result — record it honestly
-  (constitution: no manufactured wins).
-- Tests: flag parsing, both-paths seeding, report section presence.
+- **Acceptance:** publish the delta table in the progress record; a README claim only if the
+  delta is real. If the delta is ~0, that is also a result — record it honestly (no manufactured wins).
+- **Tests:** flag parsing, both-paths seeding, report section presence, rate-limit delay application.
 
 ## 26.4 — Guarded Init for Foreign Agents (guard the *other* agents' work too)
 
@@ -88,29 +131,34 @@ repo — including ones edited by other tools/agents — enforce Anvil's rules a
 Guardian becomes infrastructure, not just in-app behavior.
 
 - Verify/extend `guardian/init.ts` provisioning for TS/Python/Rust/Go tails
-  (AGENTS.md + allowlist + pre-commit hook calling the same `scanDiffForSlop` rules).
+  (AGENTS.md + allowlist + `.githooks/pre-commit` hook calling `scanDiffForSlop` rules).
 - **Audit note (2026-09-19):** confirmed `guardedInit` today writes only AGENTS.md +
   allowlist — no hook exists yet. This subsection CREATES it; its acceptance is a real
   blocked commit in a throwaway repo, not a unit test alone.
-- Audit note (2026-09-19): confirmed `loadProjectRules` feeds prompts only. The
-  rules→scanner bridge (26.0) ships here if not landed earlier.
-- The provisioned hook degrades gracefully without Anvil installed (clear error, non-zero
-  exit — never silently pass).
-- Acceptance: provisioning works in a throwaway non-Anvil repo; the hook blocks a planted
+- **Graceful Degradation Contract:** if Anvil is not globally installed in PATH when the pre-commit hook runs:
+  ```bash
+  echo "[anvil-guardian] Error: @anvil/cli is not installed or not in PATH."
+  echo "Install via 'npm i -g @anvil/cli' to enforce codebase hygiene, or bypass with 'git commit --no-verify'."
+  exit 1
+  ```
+  Fails clearly with non-zero exit and explicit recovery guidance; never silently ignores.
+- **Acceptance:** provisioning works in a throwaway non-Anvil repo; the hook blocks a planted
   slop commit; drain-rate telemetry lands in the 26.5 report.
-- Tests: provisioning matrix per language, hook block/allow cases, no-Anvil degradation.
+- **Tests:** provisioning matrix per language, hook block/allow cases, no-Anvil degradation.
 
 ## 26.5 — Codebase Health Telemetry (close 25.6 deliverable 4)
 
 **Goal:** ship the adaptive-ratchet story 25.6 promised: freshness metrics, duplication
 score, allowlist drain rate — tracked across sessions, surfaced via `anvil health`.
 
-- Metrics computed from existing allowlist inventory + scan results (no ad-hoc
-  heuristics; extend scanner outputs where needed, named constants only).
-- **Audit note (2026-09-19):** `.fresh-allowlist.json` is currently write-only
-  (`guardedInit` writes it; no reader exists). 26.5 must add the reader as part of the
-  telemetry contract — a drain rate needs a drain source.
-- Storage under `ANVIL_HOME/health/<project-hash>.json`; latest-only render in CLI.
+- **Metrics:** computed from existing allowlist inventory + scan results (no ad-hoc heuristics;
+  extend scanner outputs where needed, named constants only).
+- **Storage:** persist under `ANVIL_HOME/health/<project-hash>.json`, where `<project-hash>` is
+  the canonical 12-char SHA-256 hex digest of `path.resolve(projectRoot)`. Latest-only render in CLI.
+- **CLI Command:** `anvil health` displays:
+  * Cleanliness score (percentage of scanned lines free of slop / exemptions).
+  * Allowlist drain rate (active exceptions remaining vs historical high).
+  * Top blocked slop rule families.
 
 ## Release Criteria (all must be green)
 
@@ -129,12 +177,5 @@ score, allowlist drain rate — tracked across sessions, surfaced via `anvil hea
 
 ## Sequencing
 
-26.1 → 26.2 → 26.3 (proof needs the report UX to be visible) → 26.4 → 26.5. Gate stays
-green at every landing; each subsection lands as its own commit with RED→GREEN evidence.
-
-- Reuse `scanDiffForSlop` on a debounce (no new scanner); budget-bounded via
-  `GUARDIAN_WATCH_*` env constants (interval, max events/min — named, no magic numbers).
-- `guardian_blocked`-style events feed the same 26.1 report path — one UX, two triggers.
-- Honesty rule: watch mode reports what *it* can see (diff vs HEAD); say so in its banner,
-  never claim full-tree coverage it doesn't do (the repo gate's step 1.5 does that).
-- Tests: debounce coalescing, violation surfacing, clean-tree silence, banner copy.
+26.0 (finish bridge + allowlist reader) → 26.1 (turn report) → 26.2 (`--watch`) → 26.3 (proof matrix) → 26.4 (foreign init) → 26.5 (telemetry).
+Gate stays green at every landing; each subsection lands as its own commit with RED→GREEN evidence.
