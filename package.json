@@ -32,7 +32,7 @@
   "description": "Anvil \u2014 a terminal-based AI coding agent (monorepo: core, tui, cli)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mitravanu/anvil.git"
+    "url": "git+https://github.com/imitravanu/anvil.git"
   },
   "keywords": [
     "ai",

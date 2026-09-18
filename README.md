@@ -86,7 +86,7 @@ npx @anvil/cli
 
 ### Build from source
 ```bash
-git clone https://github.com/mitravanu/anvil.git
+git clone https://github.com/imitravanu/anvil.git
 cd anvil
 npm ci
 npm run build

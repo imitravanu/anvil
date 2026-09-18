@@ -48,7 +48,7 @@ export function createOpenRouterProvider(apiKey: string | undefined): ModelProvi
     // OpenRouter's gateway expects the classic `max_tokens` parameter.
     maxTokensParam: "max_tokens",
     defaultHeaders: {
-      "HTTP-Referer": "https://github.com/mitravanu/anvil",
+      "HTTP-Referer": "https://github.com/imitravanu/anvil",
       "X-Title": "Anvil",
     },
   });

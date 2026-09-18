@@ -11,7 +11,7 @@ import { loadModelsCacheV2, saveModelsCacheV2, ModelsCacheV2 } from "./cache.js"
 
 export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 export const DEFAULT_SYNC_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const REFERER = "https://github.com/mitravanu/anvil";
+const REFERER = "https://github.com/imitravanu/anvil";
 const TITLE = "Anvil";
 
 export interface FreeModelSource {
