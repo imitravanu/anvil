@@ -1,17 +1,22 @@
 # Anvil Stabilization Roadmap — 2026-09 (post-audit)
 
-> **Status:** PARTIALLY COMPLETE — S0, S1.1–S1.4, S2.1, and S2.2 are **done** (2026-09-18,
-> each landed test-first with the full `npm run gate` green; checkboxes annotated in place).
-> Still open: S1.3 rewind external-edit warning, S2.3, S3–S6.
+> **Status:** PARTIALLY COMPLETE — S0, S1.1–S1.4, S2.1, S2.2, S3.1–S3.2, S4.1, and S4.2 are
+> **done** (each landed test-first with the full `npm run gate` green; checkboxes annotated
+> in place — S3 in 2026-09-20, S4.1 in 2026-09-20, S4.2 in 2026-09-20).
+> Still open: S1.3 rewind external-edit warning, S2.3, S5, S6, S7.
 > **Principle:** No new features until the chain **approved → executed → changed → verified → reported**
 > is provably consistent. Every finding below cites the inspected source location; none has
 > yet been reproduced with a regression test — Step 0 of each phase is to write that test first.
 >
 > **Relation to existing docs (per AGENTS.md entry protocol):** `docs/PHASE-21-25-ROADMAP.md`
-> and `docs/PHASE-21-25-AUDIT.md` already cover security/bug/perf items (quote bypass 21.1,
+> and `docs/PHASE-21-25-AUDIT.md` cover security/bug/perf items (quote bypass 21.1,
 > root-wipe gaps 21.2, verify_tests flag injection 21.3, pendingCancel 22.1, malformed-JSON
 > `{}` 22.2, ledger/compaction O(n²) 23.2/23.3, provider type-escape casts 24.4, and more).
-> This roadmap **does not duplicate those** — execute them from their own docs first.
+> This roadmap **does not duplicate those**.
+>
+> **⚠️ Those Phase 21–25 items are all now resolved** (re-audited 2026-09-20): every matrix
+> entry verified fixed in live code, with one exception — **22.13 is by-design and must NOT
+> be "fixed"**. Do not open work from the Phase 21–25 docs; the live tracker is *this* file.
 > Items here are findings from the 2026-09 audit that those docs do not track.
 
 ---
@@ -276,14 +281,22 @@ subcommand alone.
 
 ## Phase S4 — Tool-level fixes
 
-### S4.2 — edit_file output cap (F12)
+### S4.2 — edit_file output cap (F12) — ✅ DONE (2026-09-20)
 
-`editFile.ts` caps the *source* file (`:50`) but never the replacement size before
+`editFile.ts` capped the *source* file but never the replacement size before
 diff + write.
 
-- [ ] Test: 10 KB file, `new_str` of 1 MB → clean validation error, no write.
-- [ ] Check `MAX_WRITE_BYTES` against `Buffer.byteLength(updated)` before
+- [x] Test: 10 KB file, `new_str` of 1 MB → clean validation error, no write.
+- [x] Check `MAX_WRITE_BYTES` against `Buffer.byteLength(updated)` before
       `createTwoFilesPatch`; return an `EditValidationError`.
+
+**Evidence (2026-09-20):** red first — with the pre-fix source the same call returned
+`isError: false` and wrote the ~1 MB result to disk. The cap now runs on the RESULT
+(`editFile.ts`, immediately after `current.replace`, before `createTwoFilesPatch`
+allocates both copies) and throws `EditValidationError`, so the executor returns the
+clean `{error, summary}` shape and never reaches `atomicWriteText`. Green: `editFile.test.ts`
+8/8 (was 7). Note the source-file stat check bounds only the INPUT — a 10 KB file with a
+1 MB replacement was the gap.
 
 ---
 

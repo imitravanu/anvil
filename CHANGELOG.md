@@ -4,6 +4,19 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### `edit_file` Result Size Capped (2026-09-20)
+
+- **A small, legal file plus a huge `new_str` bypassed the write cap.** `edit_file` bounded
+  the *source* file but never the *result*, so a 10 KB file and a 1 MB replacement were
+  patched and written unchecked — `write_file` has capped content since day one; the edit
+  path had a hole on the write side. The cap now runs on the result, immediately after the
+  substitution and **before** `createTwoFilesPatch` allocates its two copies, and raises
+  `EditValidationError` so the executor returns the clean `{error, summary}` shape and never
+  reaches `atomicWriteText`.
+- Reproduced red first: against the previous source the same call returned `isError: false`
+  and the ~1 MB file landed on disk. Green: `editFile.test.ts` 8/8. Closes the
+  `STABILIZATION-ROADMAP-2026-09.md` S4.2 (F12) items.
+
 ### Pre-Execution Audit Re-classified Against the Live Tree (2026-09-20)
 
 - **The audit doc was misdirecting every agent that followed the entry protocol.**

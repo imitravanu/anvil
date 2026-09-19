@@ -64,6 +64,16 @@ async function computeEdit(
     );
   }
   const updated = current.replace(input.old_str, () => input.new_str);
+  // new_str is model-supplied and unbounded: a legal source file plus a huge
+  // replacement still writes far past the cap. The stat check above bounds only
+  // the INPUT, so bound the RESULT here — before the diff allocates two copies.
+  const updatedBytes = Buffer.byteLength(updated, "utf8");
+  if (updatedBytes > MAX_WRITE_BYTES) {
+    throw new EditValidationError(
+      `Result would exceed the ${MAX_WRITE_BYTES}-byte edit limit (${updatedBytes} bytes)`,
+      `edit_file failed: result exceeds ${MAX_WRITE_BYTES} bytes in ${input.path}`
+    );
+  }
   const diff = createTwoFilesPatch(
     `a/${input.path}`,
     `b/${input.path}`,

@@ -112,4 +112,20 @@ describe("edit_file", () => {
     // untouched
     await expect(fs.readFile(path.join(root, "big.txt"), "utf8")).resolves.toBe(big);
   });
+
+  it("refuses a 1 MB replacement into a 10 KB file (result cap), leaving it untouched", async () => {
+    // The source file is well under the cap, so the pre-existing size check does
+    // not fire — only the RESULT is oversized. Pre-fix this wrote ~1 MB.
+    const body = `${"a".repeat(10 * 1024 - 7)}MARKER\n`;
+    await fs.writeFile(path.join(root, "tenk.txt"), body);
+    const huge = "x".repeat(1024 * 1024);
+    const result = await executeTool(
+      "edit_file",
+      { path: "tenk.txt", old_str: "MARKER", new_str: huge },
+      ctx
+    );
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.output)).toContain("exceed the");
+    await expect(fs.readFile(path.join(root, "tenk.txt"), "utf8")).resolves.toBe(body);
+  });
 });

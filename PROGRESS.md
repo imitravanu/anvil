@@ -415,3 +415,27 @@ human review of the protected-path diff — is pending the user's review; the ga
 subscribes in `useEffect`; 22.17 `App.tsx` mount effect prints `mcp.notices`; 24.4 and 24.10
 both at 0 production hits across core/tui/cli). Full `npm run gate` green (0–5).
 
+---
+
+## 2026-09-20 — STABILIZATION §S4.2: `edit_file` result cap (F12)
+
+**Agent (this session)** — owns & changed:
+- `packages/core/src/tools/editFile.ts` — the source-file stat check bounds only the INPUT;
+  `new_str` is model-supplied and unbounded, so a 10 KB file plus a 1 MB replacement was
+  diffed and written unchecked. The cap now runs on the RESULT (`Buffer.byteLength(updated)`)
+  immediately after `current.replace` and **before** `createTwoFilesPatch`, throwing
+  `EditValidationError` — the executor returns its clean `{error, summary}` shape and never
+  reaches `atomicWriteText`.
+- `packages/core/src/tools/__tests__/editFile.test.ts` — 1 new regression test (`10 KB file +
+  1 MB new_str → validation error, file byte-identical`). Now 8 tests.
+- `docs/STABILIZATION-ROADMAP-2026-09.md` — §S4.2 both boxes ticked with dated evidence;
+  status header refreshed (S3.1–S3.2, S4.1, S4.2 now done; still open: S1.3 rewind
+  external-edit warning, S2.3, S5, S6, S7).
+
+**Evidence (red → green):** against the PRE-FIX source the new test failed with
+`expected false to be true` (`isError` was `false` — the ~1 MB write went through). After the
+fix: `editFile.test.ts` 8/8, plus `writeFile.test.ts` 7/7 for the shared cap constant.
+
+**Not a protected artifact** — no `AGENTS.md`/gate/manifest/allowlist/sentinel/CI path
+involved, so no manifest work is required.
+
