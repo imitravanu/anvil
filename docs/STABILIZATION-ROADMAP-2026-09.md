@@ -2,8 +2,9 @@
 
 > **Status:** PARTIALLY COMPLETE — S0, S1.1–S1.4, S2.1, S2.2, S3.1–S3.2, S4.1, S4.2, and S5.1/S5.2
 > are **done** (each landed test-first with the full `npm run gate` green; checkboxes annotated
-> in place — S3 in 2026-09-20, S4.1 in 2026-09-20, S4.2 in 2026-09-20, S5.1/S5.2 in 2026-09-20).
-> Still open: S1.3 rewind external-edit warning, S2.3, S5.3 syntax-aware import rules, S6, S7.
+> in place — S3 in 2026-09-20, S4.1 in 2026-09-20, S4.2 in 2026-09-20, S5.1/S5.2 in 2026-09-20,
+> S1.3 in 2026-09-20).
+> Still open: S2.3, S5.3 syntax-aware import rules, S6, S7.
 > **Principle:** No new features until the chain **approved → executed → changed → verified → reported**
 > is provably consistent. Every finding below cites the inspected source location; none has
 > yet been reproduced with a regression test — Step 0 of each phase is to write that test first.
@@ -100,9 +101,26 @@ the last repair is never tested and the turn completes as if fine.
       (`session.ts:865-899` commits the whole pre-batch snapshot if *any* call mutated).
       *Done: `commitRewindSnapshot` keeps only succeeded write/edit targets and mints no
       checkpoint when nothing succeeded.*
-- [ ] On `/rewind`, warn when a target file's current mtime/hash differs from the
+- [x] On `/rewind`, warn when a target file's current mtime/hash differs from the
       post-checkpoint state (external edit detected) — restore, but say so.
-      *Still open: `restoreCheckpoint` restores unconditionally today.*
+      *Done 2026-09-20: the comparison basis had to be created first — `Checkpoint.files[].content`
+      is the PRE-mutation snapshot and nothing recorded what the session wrote, so "differs from the
+      post-checkpoint state" was not computable at all. `FileSnapshot.postHash` now carries a
+      SHA-256 fingerprint of each target taken at commit time, immediately after the mutation
+      succeeded (only succeeded paths are committed, so what is on disk there IS the session's
+      output). It is persisted (`checkpointStore.ts`, additive field), so the check still works
+      after a restart. `restoreCheckpoint` runs the comparison BEFORE writing anything back — once
+      the originals land the evidence is gone — and returns `externallyModified: string[]`, which
+      the TUI renders as a warning line without turning success into failure.
+      **Deliberate deviation from the literal wording:** the comparison is against the SESSION's own
+      last recorded post-state (highest-id checkpoint carrying a fingerprint for that path), not
+      against the restored checkpoint's own post-state. Rewinding to #1 when the session wrote the
+      file again at #5 would otherwise report the session's own work as an "external edit" — a
+      wrong claim, and a noisy one. **Honest limit:** a checkpoint written before this field existed
+      carries no fingerprint, so nothing is reported for it; guessing there would be fabrication.
+      Tests: 5 in `rewind.test.ts` (outside edit, external deletion, session's own later edit
+      silent, untouched silent, no-fingerprint silent) + 1 restart case in
+      `persistentCheckpoints.test.ts` + 2 renderer cases in `packages/tui/src/util/__tests__/rewind.test.ts`.*
 
 ### S1.4 — Honest completion statuses (F4 fallout)
 
@@ -336,7 +354,12 @@ markers) to *any* scanned project, with only a test-path exception.
       architecture rule on a doc comment in `guardian/scope.ts` that merely *described* the
       boundary between the packages — no import existed. Also note the asymmetry: the native
       scanner's rule requires a quoted import (`from "…"`), so it did catch the markdown case,
-      but this gate-side rule is a bare substring match.*
+      but this gate-side rule is a bare substring match. **Second instance, 2026-09-20 (S1.3):**
+      the pre-commit hook refused a commit over a doc phrase containing the two words
+      "was never": its context-free `as (any|never)` grep has no word boundary, so it matched
+      `as never` spanning the word "was" and the next one. The gate's own Step 1 does not share
+      that flaw (it uses the quoted-import form); the hook header already concedes that it is
+      context-free by design.*
 
 ### Extra fix landed with S5 (F2, second half) — docs are not code
 

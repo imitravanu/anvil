@@ -8,6 +8,7 @@ import { AUTO_APPROVE_BROKER } from "../types.js";
 import {
   AgentSession,
   capCheckpoints,
+  restoreCheckpoint,
   takeSnapshot,
   type AgentEvent,
   type AgentOptions,
@@ -405,5 +406,83 @@ describe("S1.3: checkpoints reflect reality", () => {
     expect(result.restored).toEqual([good]);
     expect(fs.readFileSync(good, "utf-8")).toBe("good-orig");
     expect(fs.readFileSync(bad, "utf-8")).toBe("bad-orig");
+  });
+
+  it("S1.3/F5: says so when a rewound target changed on disk outside the session", async () => {
+    const file = path.join(tmp, "a.txt");
+    fs.writeFileSync(file, "original");
+    const { session } = makeSession([writeTurn(file, "NEW", "w0"), textTurn()]);
+    await runOneTurn(session);
+
+    // Out-of-band change: something other than this session wrote the file.
+    fs.writeFileSync(file, "EXTERNAL");
+
+    const result = await session.rewind(1);
+
+    expect(result.ok).toBe(true);
+    // Restore still happens — the warning is a report, not a refusal.
+    expect(fs.readFileSync(file, "utf-8")).toBe("original");
+    expect(result.externallyModified).toEqual([file]);
+  });
+
+  it("S1.3/F6: reports an externally deleted target instead of silently recreating it", async () => {
+    const file = path.join(tmp, "a.txt");
+    fs.writeFileSync(file, "original");
+    const { session } = makeSession([writeTurn(file, "NEW", "w0"), textTurn()]);
+    await runOneTurn(session);
+    fs.rmSync(file);
+
+    const result = await session.rewind(1);
+
+    expect(result.ok).toBe(true);
+    expect(result.externallyModified).toEqual([file]);
+    expect(fs.readFileSync(file, "utf-8")).toBe("original");
+  });
+
+  it("S1.3: the session's own later edits are not reported as external", async () => {
+    const file = path.join(tmp, "a.txt");
+    fs.writeFileSync(file, "v0");
+    const { session } = makeSession([
+      writeTurn(file, "v1", "w1"),
+      textTurn(),
+      writeTurn(file, "v2", "w2"),
+      textTurn(),
+    ]);
+    await runOneTurn(session);
+    await runOneTurn(session);
+
+    // Rewinding to #1 discards this session's OWN later write — that is the
+    // feature working, not an out-of-band edit, so it must not be reported.
+    const result = await session.rewind(1);
+
+    expect(result.ok).toBe(true);
+    expect(result.externallyModified).toEqual([]);
+    expect(fs.readFileSync(file, "utf-8")).toBe("v0");
+  });
+
+  it("S1.3: an untouched target is not reported", async () => {
+    const file = path.join(tmp, "a.txt");
+    fs.writeFileSync(file, "original");
+    const { session } = makeSession([writeTurn(file, "NEW", "w0"), textTurn()]);
+    await runOneTurn(session);
+
+    const result = await session.rewind(1);
+
+    expect(result.externallyModified).toEqual([]);
+  });
+
+  it("S1.3: a snapshot with no recorded post-state reports nothing (never guesses)", async () => {
+    const file = path.join(tmp, "a.txt");
+    fs.writeFileSync(file, "original");
+    // Snapshotted directly, so no commit ever recorded a post-state for it:
+    // with nothing to compare against, claiming an external edit would be a
+    // fabrication, so the honest answer is silence.
+    const cp = await takeSnapshot(tmp, 1, [file]);
+    fs.writeFileSync(file, "CHANGED-BUT-UNKNOWABLE");
+
+    const result = await restoreCheckpoint(tmp, cp);
+
+    expect(result.externallyModified).toEqual([]);
+    expect(fs.readFileSync(file, "utf-8")).toBe("original");
   });
 });

@@ -21,7 +21,11 @@ interface SerializedCheckpoint {
   id: number;
   ts: string;
   skipped: number;
-  files: { path: string; content: string | null }[]; // content = base64, null = created by the agent
+  // content = base64, null = created by the agent. postHash = the fingerprint
+  // of the state the session left behind (null = nothing readable); OMITTED
+  // when unknown, so a checkpoint written before this field stays unknown
+  // rather than being misread as "the file was absent".
+  files: { path: string; content: string | null; postHash?: string | null }[];
 }
 
 function serializeCheckpoints(checkpoints: readonly Checkpoint[]): SerializedCheckpoint[] {
@@ -32,6 +36,7 @@ function serializeCheckpoints(checkpoints: readonly Checkpoint[]): SerializedChe
     files: cp.files.map((f) => ({
       path: f.path,
       content: f.content === null ? null : f.content.toString("base64"),
+      ...(f.postHash === undefined ? {} : { postHash: f.postHash }),
     })),
   }));
 }
@@ -95,10 +100,17 @@ export function loadCheckpoints(sessionId: string, dir: string = checkpointsDir(
               ((f as { content?: unknown }).content === null ||
                 typeof (f as { content?: unknown }).content === "string")
           )
-          .map((f) => ({
-            path: f.path,
-            content: f.content === null ? null : Buffer.from(f.content, "base64"),
-          })),
+          .map((f) => {
+            const recorded = (f as { postHash?: unknown }).postHash;
+            return {
+              path: f.path,
+              content: f.content === null ? null : Buffer.from(f.content, "base64"),
+              // Absent means unknown; only string/null are honoured as recorded.
+              ...(typeof recorded === "string" || recorded === null
+                ? { postHash: recorded as string | null }
+                : {}),
+            };
+          }),
       });
     }
     return out.slice(-CHECKPOINT_KEEP);

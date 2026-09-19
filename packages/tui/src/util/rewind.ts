@@ -24,8 +24,18 @@ export function formatRewindResult(result: {
   restored: string[];
   deleted: string[];
   errors: string[];
+  /** Targets that changed on disk outside the session (optional for callers). */
+  externallyModified?: string[];
   message: string;
 }): string {
   const head = result.ok ? "✓ Rewound. " : "✗ Rewind failed. ";
-  return head + result.message;
+  const changed = result.externallyModified ?? [];
+  // Said out loud, but never as a failure: the restore still happened, and
+  // whoever edited the file by hand deserves to hear that it was overwritten.
+  const warning =
+    changed.length > 0
+      ? `\n⚠ ${changed.length} file${changed.length === 1 ? "" : "s"} changed on disk since this checkpoint ` +
+        `(edited outside this session): ${changed.join(", ")}`
+      : "";
+  return head + result.message + warning;
 }

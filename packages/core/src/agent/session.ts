@@ -29,7 +29,9 @@ import {
   checkpointMeta,
   takeSnapshot,
   restoreCheckpoint,
+  fingerprintPath,
   type CheckpointMeta,
+  type FileSnapshot,
 } from "./checkpoints.js";
 import { loadCheckpoints, saveCheckpointsAsync } from "./checkpointStore.js";
 import { BASELINE_MAX_BYTES, BASELINE_MAX_PATHS } from "../config/constants.js";
@@ -299,6 +301,8 @@ export class AgentSession {
     restored: string[];
     deleted: string[];
     errors: string[];
+    /** Targets edited on disk outside this session — restored anyway, reported. */
+    externallyModified: string[];
     message: string;
   }> {
     const cp = this.checkpoints.find((c) => c.id === id);
@@ -309,11 +313,15 @@ export class AgentSession {
         restored: [],
         deleted: [],
         errors: [`No checkpoint #${id} in this session.`],
+        externallyModified: [],
         message: `No checkpoint #${id} in this session.`,
       };
     }
     const startedAt = Date.now();
-    const result = await restoreCheckpoint(this.options.projectRoot, cp);
+    // The whole ring, not just this checkpoint: a file the session wrote AFTER
+    // the checkpoint being restored has drifted by the session's own hand, and
+    // must not be reported as an outside edit.
+    const result = await restoreCheckpoint(this.options.projectRoot, cp, this.checkpoints);
     const ok = result.errors.length === 0;
     this.recordLedger({ eventType: "rewind", outcome: ok ? "ok" : "error", elapsedMs: Date.now() - startedAt });
     const parts: string[] = [];
@@ -984,7 +992,15 @@ export class AgentSession {
       if (typeof target === "string") succeededPaths.add(target);
     }
     if (succeededPaths.size === 0) return null;
-    const committedFiles = pendingCp.files.filter((f) => succeededPaths.has(f.path));
+    // Post-mutation fingerprints, taken now: the succeeded calls are the only
+    // writers of these paths in this batch, so what is on disk IS the state
+    // this session left behind. /rewind compares against it to tell an
+    // out-of-band edit from the session's own later work.
+    const committedFiles: FileSnapshot[] = await Promise.all(
+      pendingCp.files
+        .filter((f) => succeededPaths.has(f.path))
+        .map(async (f) => ({ ...f, postHash: await fingerprintPath(this.options.projectRoot, f.path) }))
+    );
     if (committedFiles.length === 0) return null;
     const committed: Checkpoint = { ...pendingCp, files: committedFiles };
     this.checkpointSeq = pendingCp.id;

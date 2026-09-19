@@ -2,6 +2,50 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 
+## 2026-09-20 — STABILIZATION §S1.3 (final box): /rewind reports outside edits
+
+**Agent (this session)** — owns & changed:
+- `packages/core/src/agent/checkpoints.ts` — `FileSnapshot.postHash` (fingerprint of the state the
+  session left behind; `undefined` = never recorded, `null` = nothing readable there), `hashBytes`,
+  `fingerprintPath`, `latestPostState` (the session's own last recorded state for a path), and
+  `restoreCheckpoint(root, cp, sessionState?)` which now detects out-of-band edits BEFORE writing
+  and returns `externallyModified: string[]`.
+- `packages/core/src/agent/checkpointStore.ts` — persists `postHash` additively; the key is
+  OMITTED when unknown so a legacy checkpoint is never misread as "the file was absent".
+- `packages/core/src/agent/session.ts` — `commitRewindSnapshot` fingerprints each succeeded target
+  at commit time (the only moment the post-mutation state exists); `rewind()` passes the whole ring
+  and returns `externallyModified`.
+- `packages/tui/src/util/rewind.ts` — **my ownership declared:** renders the warning line. This file
+  is NOT in the OpenCode session's ownership list. `App.tsx` (which they DO own) needed no edit, and
+  got none: the new result field is optional, so their `formatRewindResult(result)` call site is
+  untouched.
+- Tests: `packages/core/src/agent/__tests__/rewind.test.ts` (+5, in the existing
+  "S1.3: checkpoints reflect reality" describe),
+  `packages/core/src/agent/__tests__/persistentCheckpoints.test.ts` (+1 restart case),
+  `packages/tui/src/util/__tests__/rewind.test.ts` (+2).
+- Docs: `docs/STABILIZATION-ROADMAP-2026-09.md` (S1.3's last box ticked, with the deviation from
+  the literal wording recorded and the legacy-checkpoint limit stated), `CHANGELOG.md`.
+
+**Design note (why the shape is not the obvious one):** the roadmap asked to compare against "the
+post-checkpoint state", which did not exist anywhere — the checkpoint stores only pre-mutation
+bytes. Recording that state means a fingerprint at commit time. Comparing against the *restored
+checkpoint's* fingerprint would misreport the session's own later writes as external edits on the
+ordinary rewind-to-an-earlier-point flow, so the comparison is against the session's last recorded
+state for that path (highest-id checkpoint carrying one). No fingerprint ⇒ no warning, deliberately:
+a fabricated warning is worse than silence.
+
+**Evidence (red → green):** 5 new `rewind.test.ts` cases failed first (2 failed/6 passed → 18/18 in
+that file), 2 TUI renderer cases likewise (→ 5/5). Full suite 808 tests green (core 537 / tui 230 /
+cli 41), `npm run typecheck` exit 0 across core+tui+cli+scripts, full `npm run gate` green.
+
+**Not a protected artifact** — no `AGENTS.md`/gate/manifest/allowlist/sentinel/CI path involved.
+`docs/PHASE-21-25-AUDIT.md` deliberately untouched.
+
+**Not mine, left alone:** the OpenCode session's TUI transcript-scroll files
+(`packages/tui/src/{components/App,InputBar,MessageList}.tsx`, `util/transcriptWindow.ts`,
+`util/displayLimits.ts` and their tests) remain un-staged and uncommitted by this session.
+
+
 ## 2026-09-20 — STABILIZATION §S5: guardian scoping (F2)
 
 **Agent (this session)** — owns & changed:

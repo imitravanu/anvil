@@ -4,6 +4,26 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### `/rewind` Now Says When It Overwrites An Outside Edit (2026-09-20)
+
+- **Restoring a checkpoint silently clobbered hand edits.** `restoreCheckpoint` wrote the
+  pre-mutation bytes back unconditionally, so a file edited in another window (or by another
+  tool) was reverted with no indication that anything but the agent's own work was lost. There
+  was no way to warn: the checkpoint stores only the PRE-mutation snapshot, so nothing recorded
+  what the session had left on disk. Each snapshot target now carries a SHA-256 fingerprint taken
+  at commit time, right after the mutation succeeded — the only moment that state exists. The
+  check runs **before** anything is written back, since restoring destroys the evidence, and
+  `/rewind` reports the affected files while still completing the restore.
+- **The comparison is against the session's own last state, not the checkpoint's.** Comparing
+  against the restored checkpoint's post-state would label the agent's own later writes as
+  "external edits" — wrong, and noisy on the common rewind-to-an-earlier-point flow. A target
+  with no recorded fingerprint (a checkpoint written before this change) reports nothing, because
+  inventing a warning there would be a guess.
+- The fingerprint is persisted with the checkpoint, so the warning still fires after a restart;
+  the store keeps "unknown" (field absent) distinct from "nothing was readable there" (null).
+- Reproduced red first: 5 new `rewind.test.ts` cases failed against the previous source, plus 2
+  renderer cases. Green: 808 tests (core 537 / tui 230 / cli 41), full typecheck, full gate.
+
 ### Guardian Rules Scoped to Their Own Project (2026-09-20)
 
 - **Anvil's repo-specific rules were being enforced on every project it scanned.** The

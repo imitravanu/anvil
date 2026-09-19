@@ -30,4 +30,30 @@ describe("formatRewindResult", () => {
       formatRewindResult({ ok: false, restored: [], deleted: [], errors: ["x"], message: "No checkpoint #9 in this session." })
     ).toBe("✗ Rewind failed. No checkpoint #9 in this session.");
   });
+
+  it("says so when a target changed on disk, without turning success into failure", () => {
+    const out = formatRewindResult({
+      ok: true,
+      restored: ["a"],
+      deleted: [],
+      errors: [],
+      message: "restored 1: a",
+      externallyModified: ["a"],
+    });
+    expect(out.startsWith("✓ Rewound.")).toBe(true);
+    expect(out).toContain("changed on disk");
+    expect(out).toContain("a");
+  });
+
+  it("adds no warning line when every target matched", () => {
+    const out = formatRewindResult({
+      ok: true,
+      restored: ["a"],
+      deleted: [],
+      errors: [],
+      message: "restored 1: a",
+      externallyModified: [],
+    });
+    expect(out).toBe("✓ Rewound. restored 1: a");
+  });
 });

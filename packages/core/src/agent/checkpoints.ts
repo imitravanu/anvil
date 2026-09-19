@@ -1,4 +1,5 @@
 import { getErrorMessage } from "../errors.js";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createTwoFilesPatch } from "diff";
@@ -13,6 +14,13 @@ export interface FileSnapshot {
   path: string;
   /** Original bytes, or null when the file did not exist (rewind deletes it). */
   content: Buffer | null;
+  /**
+   * Fingerprint of the file's bytes immediately after this session's mutation
+   * completed, or null when nothing was readable there. `undefined` means the
+   * record is absent (a snapshot predating this field), so the current on-disk
+   * state cannot be judged — see `restoreCheckpoint`.
+   */
+  postHash?: string | null;
 }
 
 export interface Checkpoint {
@@ -107,20 +115,93 @@ export interface RestoreResult {
   restored: string[];
   deleted: string[];
   errors: string[];
+  /**
+   * Targets whose on-disk bytes differ from the last state this session left
+   * them in — i.e. edited outside the session. Advisory only: the restore
+   * still happens, the caller tells the user.
+   */
+  externallyModified: string[];
+}
+
+/** Fingerprint for the external-edit check. `null` = no readable bytes there. */
+export function hashBytes(buf: Buffer | null): string | null {
+  return buf === null ? null : createHash("sha256").update(buf).digest("hex");
+}
+
+/** Current fingerprint of a root-relative path; null when unreadable/missing. */
+export async function fingerprintPath(projectRoot: string, path: string): Promise<string | null> {
+  try {
+    return hashBytes(await fs.readFile(resolveWithinRoot(projectRoot, path)));
+  } catch {
+    // Missing is a state; a failed read is treated the same way rather than
+    // throwing out of checkpoint code, which rides inside the turn.
+    return null;
+  }
+}
+
+/**
+ * The session's last recorded post-mutation fingerprint for `path`: the
+ * highest-id checkpoint carrying one. Comparing against THIS — rather than the
+ * restored checkpoint's own post-state — is what keeps a rewind that discards
+ * the session's own later writes from being misreported as an outside edit.
+ */
+function latestPostState(
+  sessionState: readonly Checkpoint[],
+  path: string
+): { known: boolean; hash: string | null } {
+  let bestId = Number.NEGATIVE_INFINITY;
+  let found: string | null | undefined;
+  for (const cp of sessionState) {
+    for (const f of cp.files) {
+      if (f.path !== path || f.postHash === undefined) continue;
+      if (cp.id > bestId) {
+        bestId = cp.id;
+        found = f.postHash;
+      }
+    }
+  }
+  return found === undefined ? { known: false, hash: null } : { known: true, hash: found };
 }
 
 /**
  * Restore a checkpoint: write back originals (creating parent dirs), delete
  * files that did not exist. Every path is re-resolved — a checkpoint must
  * never become a path-escape vector itself.
+ *
+ * `sessionState` is the live checkpoint ring (defaults to just `cp`), used to
+ * report targets that changed on disk since the session last wrote them.
  */
 export async function restoreCheckpoint(
   projectRoot: string,
-  cp: Checkpoint
+  cp: Checkpoint,
+  sessionState: readonly Checkpoint[] = [cp]
 ): Promise<RestoreResult> {
   const restored: string[] = [];
   const deleted: string[] = [];
   const errors: string[] = [];
+  const externallyModified: string[] = [];
+
+  // Detect out-of-band edits BEFORE restoring: once the originals are written
+  // back the evidence is gone. A target with no recorded post-state is skipped
+  // deliberately — with nothing to compare against, reporting an external edit
+  // would be a guess, and a wrong warning is worse than a silent one.
+  for (const f of cp.files) {
+    const { known, hash } = latestPostState(sessionState, f.path);
+    if (!known) continue;
+    let checkPath: string;
+    try {
+      checkPath = resolveWithinRoot(projectRoot, f.path);
+    } catch {
+      continue; // the write loop below reports the escape
+    }
+    let current: string | null;
+    try {
+      current = hashBytes(await fs.readFile(checkPath));
+    } catch {
+      current = null; // gone now: that IS a change from any recorded bytes
+    }
+    if (current !== hash) externallyModified.push(f.path);
+  }
   for (const f of cp.files) {
     let resolved: string;
     try {
@@ -142,7 +223,7 @@ export async function restoreCheckpoint(
       errors.push(`${f.path}: ${getErrorMessage(err)}`);
     }
   }
-  return { restored, deleted, errors };
+  return { restored, deleted, errors, externallyModified };
 }
 
 // ---------------------------------------------------------------------------

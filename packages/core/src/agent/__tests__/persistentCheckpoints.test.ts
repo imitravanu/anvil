@@ -105,4 +105,63 @@ describe("persistent checkpoints", () => {
     expect(result.ok).toBe(true);
     expect(await fs.readFile(path.join(root, "story.txt"), "utf8")).toBe("original text");
   });
+
+  it("still detects an edit made while the app was closed", async () => {
+    await fs.writeFile(path.join(root, "novel.txt"), "original text");
+    const providerA = new FakeProvider([
+      [
+        { type: "tool_call_start", id: "w1", name: "write_file" },
+        {
+          type: "tool_call_end",
+          id: "w1",
+          name: "write_file",
+          input: { path: "novel.txt", content: "rewritten by the agent" },
+        },
+        { type: "turn_end", stopReason: "tool_use" },
+      ],
+      [{ type: "text_delta", text: "done" }, { type: "turn_end", stopReason: "end_turn" }],
+    ]);
+    const sessionA = new AgentSession(providerA, {
+      systemPrompt: "test",
+      model: "fake-model",
+      maxTokens: 1024,
+      projectRoot: root,
+      permissionBroker: broker(),
+    });
+    await collect(sessionA.send("rewrite novel.txt"));
+    const cpId = sessionA.getCheckpoints()[0].id;
+
+    // Hand-edited while Anvil was not running: the fingerprint that proves it
+    // has to be the one persisted with the checkpoint, not in-memory state.
+    await fs.writeFile(path.join(root, "novel.txt"), "edited in another window");
+
+    const restore: RestoreData = {
+      metadata: {
+        id: sessionA.id,
+        title: "restart",
+        providerId: "anthropic",
+        model: "fake-model",
+        createdAt: sessionA.createdAt,
+        updatedAt: sessionA.createdAt,
+      },
+      history: sessionA.getHistory() as [],
+    };
+    const sessionB = new AgentSession(
+      new FakeProvider([[{ type: "text_delta", text: "rewound" }, { type: "turn_end", stopReason: "end_turn" }]]),
+      {
+        systemPrompt: "test",
+        model: "fake-model",
+        maxTokens: 1024,
+        projectRoot: root,
+        permissionBroker: broker(),
+      },
+      restore
+    );
+
+    const result = await sessionB.rewind(cpId);
+
+    expect(result.ok).toBe(true);
+    expect(result.externallyModified).toEqual(["novel.txt"]);
+    expect(await fs.readFile(path.join(root, "novel.txt"), "utf8")).toBe("original text");
+  });
 });
