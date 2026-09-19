@@ -4,6 +4,16 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Phase 26.2 — `anvil gate --watch` (2026-09-19)
+
+- **Continuous guarding of the working tree**: `anvil gate --watch` re-scans the
+  dirty-file diff vs HEAD on a debounce, so slop surfaces as it appears instead of only
+  at turn ends. Debounce coalesces write bursts and a minimum gap bounds scan rate via
+  named `GUARDIAN_WATCH_*` constants (interval 500ms, 60 scans/min, env-overridable).
+- **Honest scope**: the banner states it covers the diff vs HEAD only, and points at
+  `npm run gate` (Step 1.5) for full-tree coverage. Clean trees stay silent; recovery from
+  a dirty state is reported.
+
 ### Phase 26.0 + 26.1 — Guardian Rules Bridge and Turn Report (2026-09-19)
 
 - **Project rules are now enforced, not just advised**: a repo can declare machine-

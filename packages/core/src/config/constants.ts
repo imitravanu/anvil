@@ -88,3 +88,7 @@ export const LSP_MAX_DIAGNOSTICS = getEnvNumber("ANVIL_LSP_MAX_DIAGNOSTICS", 100
 export const PLUGIN_MAX_TOOLS = getEnvNumber("ANVIL_PLUGIN_MAX_TOOLS", 20);
 export const CONTEXT_WARN_THRESHOLD = Number(process.env.ANVIL_CONTEXT_WARN_THRESHOLD) || 0.6;
 export const GUARDIAN_MAX_AUTO_FIXES = getEnvNumber("ANVIL_GUARDIAN_MAX_FIXES", 10);
+
+// Phase 26.2 — `anvil gate --watch` debounce + rate bound (no magic numbers).
+export const GUARDIAN_WATCH_INTERVAL_MS = getEnvNumber("ANVIL_GUARDIAN_WATCH_MS", 500);
+export const GUARDIAN_WATCH_MAX_SCANS_PER_MIN = getEnvNumber("ANVIL_GUARDIAN_WATCH_MAX_SCANS", 60);

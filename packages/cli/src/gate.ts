@@ -1,15 +1,121 @@
 import { execSync, spawnSync } from "node:child_process";
-import { getErrorMessage, scanDiffForSlop } from "@anvil/core";
+import fs from "node:fs";
+import {
+  getErrorMessage,
+  scanDiffForSlop,
+  GUARDIAN_WATCH_INTERVAL_MS,
+  GUARDIAN_WATCH_MAX_SCANS_PER_MIN,
+  type GuardianViolation,
+} from "@anvil/core";
 
 /**
  * Phase 25.6 — native `anvil gate` command.
- * Fast mode (default): in-process guardian scan over the working-tree diff.
- * Full mode (--full): delegates to the repo's `npm run gate` pipeline.
+ * Phase 26.2 — `--watch` continuously re-scans the dirty-file diff on a
+ * debounce, so slop is surfaced as it appears rather than at turn ends.
  */
-export function runNativeGate(opts: { full?: boolean; cwd?: string }): number {
+export interface NativeGateOptions {
+  full?: boolean;
+  watch?: boolean;
+  cwd?: string;
+}
+
+/** Dirty files only — never a full-tree walk on keystrokes. */
+const DIFF_PATHSPEC = "-- . ':!node_modules' ':!dist'";
+
+export interface WorkingTreeScan {
+  violations: GuardianViolation[];
+  error?: string;
+}
+
+/** Scan the working-tree diff vs HEAD (dirty files only). */
+export function scanWorkingTree(cwd: string): WorkingTreeScan {
+  let diff = "";
+  try {
+    diff = execSync(`git diff HEAD ${DIFF_PATHSPEC}`, {
+      cwd,
+      encoding: "utf8",
+      maxBuffer: 8 * 1024 * 1024,
+      timeout: 30_000,
+    });
+  } catch (err: unknown) {
+    return { violations: [], error: `cannot read git diff: ${getErrorMessage(err)}` };
+  }
+  return { violations: scanDiffForSlop("(working tree)", diff) };
+}
+
+/** Honest banner: watch sees the diff vs HEAD only, not the full tree. */
+export function formatWatchBanner(cwd: string): string {
+  return (
+    `anvil gate --watch — guarding ${cwd}\n` +
+    "Scope: working-tree diff vs HEAD (dirty files only; node_modules and dist excluded).\n" +
+    "This is NOT full-tree coverage — run `npm run gate` (Step 1.5) for the whole repo.\n" +
+    "Watching for changes… (Ctrl+C to stop)\n"
+  );
+}
+
+/**
+ * Message for one watch scan, or null to stay silent (a clean tree must not
+ * spam the terminal). A clean scan after a dirty one reports the recovery.
+ */
+export function watchTransitionMessage(previousCount: number, scan: WorkingTreeScan): string | null {
+  if (scan.error) return `anvil gate --watch: ${scan.error}\n`;
+  if (scan.violations.length === 0) {
+    return previousCount > 0 ? "✓ working-tree diff is clean again.\n" : null;
+  }
+  const lines = [`⚠ ${scan.violations.length} violation(s) in the working-tree diff:`];
+  for (const v of scan.violations.slice(0, 20)) {
+    lines.push(`  ${v.file}:${v.line} [${v.rule}] ${v.detail}`);
+  }
+  if (scan.violations.length > 20) lines.push(`  … ${scan.violations.length - 20} more`);
+  return lines.join("\n") + "\n";
+}
+
+export interface Debouncer {
+  schedule(): void;
+  cancel(): void;
+}
+
+/**
+ * Coalescing debouncer with a minimum gap between runs (rate bound). Repeated
+ * schedule() calls inside the delay window collapse into one run; the min gap
+ * keeps a storm of writes from scanning faster than the configured budget.
+ */
+export function createDebouncer(opts: { delayMs: number; minGapMs: number; onScan: () => void }): Debouncer {
+  let timer: NodeJS.Timeout | null = null;
+  let lastScan = 0;
+  const run = (): void => {
+    timer = null;
+    const wait = Math.max(0, opts.minGapMs - (Date.now() - lastScan));
+    if (wait > 0) {
+      timer = setTimeout(run, wait);
+      return;
+    }
+    lastScan = Date.now();
+    opts.onScan();
+  };
+  return {
+    schedule(): void {
+      if (timer) return; // coalesce bursts into the pending run
+      timer = setTimeout(run, opts.delayMs);
+    },
+    cancel(): void {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    },
+  };
+}
+
+/** Fast mode (default): in-process guardian scan over the working-tree diff. */
+export function runNativeGate(opts: NativeGateOptions): number {
   const cwd = opts.cwd ?? process.cwd();
   if (opts.full) {
-    const child = spawnSync("npm", ["run", "gate"], { cwd, stdio: "inherit", shell: process.platform === "win32" });
+    const child = spawnSync("npm", ["run", "gate"], {
+      cwd,
+      stdio: "inherit",
+      shell: process.platform === "win32",
+    });
     if (child.error) {
       process.stderr.write(`anvil gate --full failed to launch: ${getErrorMessage(child.error)}\n`);
       return 1;
@@ -17,26 +123,64 @@ export function runNativeGate(opts: { full?: boolean; cwd?: string }): number {
     return child.status ?? 1;
   }
 
-  let diff = "";
-  try {
-    diff = execSync("git diff HEAD -- . ':!node_modules' ':!dist'", { cwd, encoding: "utf8", maxBuffer: 8 * 1024 * 1024 });
-  } catch (err: unknown) {
-    process.stderr.write(`anvil gate: cannot read git diff: ${getErrorMessage(err)}\n`);
+  const scan = scanWorkingTree(cwd);
+  if (scan.error) {
+    process.stderr.write(`anvil gate: ${scan.error}\n`);
     return 1;
   }
-  if (!diff.trim()) {
+  if (scan.violations.length === 0) {
     process.stdout.write("anvil gate: clean tree — nothing to scan.\n");
     return 0;
   }
-  const violations = scanDiffForSlop("(working tree)", diff);
-  if (violations.length === 0) {
-    process.stdout.write("anvil gate: fast scan passed (no slop in working-tree diff).\n");
-    return 0;
-  }
-  process.stdout.write(`anvil gate: ${violations.length} violation(s):\n`);
-  for (const v of violations.slice(0, 50)) {
+  process.stdout.write(`anvil gate: ${scan.violations.length} violation(s):\n`);
+  for (const v of scan.violations.slice(0, 50)) {
     process.stdout.write(`  ${v.file}:${v.line} [${v.rule}] ${v.detail}\n`);
   }
   process.stdout.write("Run `npm run gate` for the full pipeline.\n");
   return 1;
+}
+
+/**
+ * Phase 26.2 — `anvil gate --watch`. Re-scans the dirty-file diff on a debounce
+ * until SIGINT/SIGTERM. The active fs watcher keeps the process alive; the
+ * returned promise resolves with the exit code when stopped.
+ */
+export function runNativeGateWatch(opts: NativeGateOptions): Promise<number> {
+  const cwd = opts.cwd ?? process.cwd();
+  process.stdout.write(formatWatchBanner(cwd));
+
+  let previousCount = 0;
+  const runScan = (): void => {
+    const scan = scanWorkingTree(cwd);
+    const message = watchTransitionMessage(previousCount, scan);
+    if (message) process.stdout.write(message);
+    previousCount = scan.violations.length;
+  };
+  runScan();
+
+  const minGapMs = Math.ceil(60_000 / Math.max(1, GUARDIAN_WATCH_MAX_SCANS_PER_MIN));
+  const debouncer = createDebouncer({ delayMs: GUARDIAN_WATCH_INTERVAL_MS, minGapMs, onScan: runScan });
+
+  let watcher: fs.FSWatcher;
+  try {
+    watcher = fs.watch(cwd, { recursive: true }, (_event, filename) => {
+      const name = filename ?? "";
+      if (name.includes("node_modules") || name.includes(".git") || name.startsWith("dist")) return;
+      debouncer.schedule();
+    });
+  } catch (err: unknown) {
+    process.stderr.write(`anvil gate --watch: cannot watch ${cwd}: ${getErrorMessage(err)}\n`);
+    return Promise.resolve(1);
+  }
+
+  return new Promise<number>((resolve) => {
+    const stop = (): void => {
+      debouncer.cancel();
+      watcher.close();
+      process.stdout.write("anvil gate --watch: stopped.\n");
+      resolve(0);
+    };
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+  });
 }

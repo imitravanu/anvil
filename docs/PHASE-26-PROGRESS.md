@@ -5,7 +5,7 @@
 > probed outside the repo, scanner/interceptor/init tests green). No protected artifacts
 > touched.
 
-## Status: IN PROGRESS — 26.0 complete + 26.1 landed (2026-09-19)
+## Status: IN PROGRESS — 26.0, 26.1, 26.2 landed (2026-09-19)
 
 ### 26.0 — Internal Wiring Hardening (audit 2026-09-19)
 - [x] Same-path auto-fix cross-contamination FIXED (positional `fixed[].index` +
@@ -42,10 +42,18 @@
       design, not by omission.
 
 ### 26.2 — `anvil gate --watch`
-- [ ] Debounced re-scan reusing `scanDiffForSlop`
-- [ ] `GUARDIAN_WATCH_*` named constants (interval, max events/min)
-- [ ] Same report path as 26.1; banner states diff-vs-HEAD scope honestly
-- [ ] Tests: debounce coalescing, surfacing, clean silence, banner copy
+- [x] Debounced re-scan reusing `scanDiffForSlop` — `runNativeGateWatch` in
+      `packages/cli/src/gate.ts`; `createDebouncer` coalesces bursts and enforces a
+      minimum gap; only dirty files are diffed (`git diff HEAD -- . ':!node_modules' ':!dist'`).
+- [x] `GUARDIAN_WATCH_*` named constants — `GUARDIAN_WATCH_INTERVAL_MS` (default 500),
+      `GUARDIAN_WATCH_MAX_SCANS_PER_MIN` (default 60), env-overridable in `config/constants.ts`.
+- [x] Same report path as 26.1; banner states diff-vs-HEAD scope honestly —
+      `formatWatchBanner` says "NOT full-tree coverage — run `npm run gate` (Step 1.5)";
+      violations reuse the guardian violation shape (`file:line [rule] detail`).
+- [x] Tests — `packages/cli/src/__tests__/gate.watch.test.ts` (8): banner copy, clean
+      silence, recovery, violation surfacing, error surfacing, debounce coalescing + min gap,
+      cancel, and the non-git-repo error path. Suite now 766 (cli 41 / core 501 / tui 224).
+- CLI: `anvil gate --watch` wired in `index.tsx` (watch process resolves on SIGINT/SIGTERM).
 
 ### 26.3 — Model-Agnostic Proof
 - [ ] `--guardian=on|off` (`ANVIL_EVAL_GUARDIAN`, default on) in `evals/run.ts`

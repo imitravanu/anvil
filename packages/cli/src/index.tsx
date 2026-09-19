@@ -40,7 +40,7 @@ import {
 import { App, FirstRunSetup, TuiPermissionBroker, detectTerminalTheme, isThemeName, loadCustomThemes } from "@anvil/tui";
 import { runHeadless, readStdin } from "./headless.js";
 import { runGoalHeadless } from "./goalRunner.js";
-import { runNativeGate } from "./gate.js";
+import { runNativeGate, runNativeGateWatch } from "./gate.js";
 import { runGuardedInit } from "./initGuarded.js";
 import { enterAltScreen, exitAltScreen } from "./altScreen.js";
 
@@ -132,7 +132,7 @@ Usage:
   anvil -p, --prompt <text> Run headless non-interactive turn (streams to stdout)
   anvil -g, --goal <text>   Run autonomous multi-step engineering mission
   anvil config              (Re)configure a provider API key
-  anvil gate [--full]       Guardian scan of working-tree diff (native fast scan)
+  anvil gate [--full|--watch]  Guardian scan of working-tree diff (--watch: continuous)
   anvil init --guarded      Provision AGENTS.md + .fresh-allowlist.json here
   anvil --version           Print the version and exit
   anvil --help              Show this help
@@ -145,6 +145,7 @@ Options:
   --provider <id>           Override the provider for this run
   --model <id>              Override the model for this run
   --no-mcp                  Skip MCP server startup (fast boot)
+  --watch                   (gate) continuously re-scan the working-tree diff
 
 Environment:
   ANVIL_PROVIDER, ANVIL_MODEL — same as the flags, lower precedence
@@ -515,7 +516,12 @@ if (first === "config") {
   runSetup(false);
 } else if (first === "gate") {
   // Phase 25.6 — native guardian gate (fast scan; --full runs npm run gate).
-  process.exit(runNativeGate({ full: argv.includes("--full") }));
+  // Phase 26.2 — --watch continuously re-scans the dirty-file diff.
+  if (argv.includes("--watch")) {
+    void runNativeGateWatch({ cwd: process.cwd() }).then((code) => process.exit(code));
+  } else {
+    process.exit(runNativeGate({ full: argv.includes("--full") }));
+  }
 } else if (first === "init") {
   // Phase 25.6 — `anvil init --guarded [--lang <id>]` provisions repo gates.
   const langFlag = argv.indexOf("--lang");
