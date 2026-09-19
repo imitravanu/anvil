@@ -46,24 +46,31 @@ export function interceptTurn(changes: TurnFileChange[]): InterceptResult {
   for (const [idx, change] of changes.entries()) {
     let diff = change.diff;
     try {
-      const found = scanDiffForSlop(change.path, diff);
-      const remaining: GuardianViolation[] = [];
-      for (const v of found) {
+      // Repair every safely-fixable raw-error violation, then report what
+      // survives. Re-scanning after each successful fix keeps the survivor
+      // set honest: a fixed occurrence vanishes from the new text, while an
+      // UNFIXABLE one (a different fallback shape, or the fix budget spent)
+      // remains and must still block the turn. The previous filter dropped
+      // surviving raw-error violations whenever the fix budget was unspent,
+      // silently allowing them through.
+      let found = scanDiffForSlop(change.path, diff);
+      let i = 0;
+      while (i < found.length) {
+        const v = found[i];
         if (v.rule === "no-raw-error-format" && fixesUsed < GUARDIAN_MAX_AUTO_FIXES) {
           const repaired = autoFixRawErrorFormat(diff);
           if (repaired !== diff) {
             diff = repaired;
             fixesUsed += 1;
+            found = scanDiffForSlop(change.path, diff);
+            i = 0;
             continue;
           }
         }
-        remaining.push(v);
+        i += 1;
       }
-      // Re-scan after fixes: only report what survives.
-      const rescan = scanDiffForSlop(change.path, diff).filter((v) => v.rule !== "no-raw-error-format" || fixesUsed >= GUARDIAN_MAX_AUTO_FIXES);
-      violations.push(...rescan);
+      violations.push(...found);
       if (diff !== change.diff) fixed.push({ index: idx, path: change.path, diff });
-      void remaining;
     } catch (err: unknown) {
       violations.push({
         file: change.path,

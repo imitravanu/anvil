@@ -44,7 +44,7 @@ const RULES: { rule: string; pattern: RegExp; detail: string }[] = [
     rule: "no-hardcoded-color",
     pattern:
       /\b(?:color|borderColor|backgroundColor)\s*=\s*["'](?:cyan|green|red|yellow|blue|magenta|white|black|gray)["']/,
-    detail: "Hardcoded color string (use useTheme() from @anvil/core)",
+    detail: `Hardcoded color string (use useTheme() from ${TUI_PACKAGE})`,
   },
   {
     rule: "no-placeholder-marker",

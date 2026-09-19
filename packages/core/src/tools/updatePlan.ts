@@ -1,3 +1,4 @@
+import type { AgentEvent } from "../agent/types.js";
 import { ToolDefinition, ToolExecutionResult, ToolSessionContext } from "./types.js";
 
 /**
@@ -33,7 +34,7 @@ export async function* executeSession(
   input: unknown,
   ctx: ToolSessionContext,
   inputKey: string
-): AsyncGenerator<any, ToolExecutionResult> {
+): AsyncGenerator<AgentEvent, ToolExecutionResult> {
   const plan = (input as { plan?: unknown } | undefined)?.plan;
   if (typeof plan !== "string" || !plan.trim()) {
     ctx.recordLedger({

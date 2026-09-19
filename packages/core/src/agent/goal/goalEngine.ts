@@ -70,12 +70,16 @@ export function parseMilestones(rawText: string, goal: string): GoalMilestone[] 
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((m: any, idx: number) => ({
-          id: String(m.id ?? idx + 1),
-          title: String(m.title ?? `Milestone ${idx + 1}`),
-          criteria: String(m.criteria ?? "Milestone completion criteria"),
-          status: "pending" as const,
-        }));
+        const list: unknown[] = parsed;
+        return list.map((m, idx) => {
+          const rec = (m !== null && typeof m === "object" ? m : {}) as Record<string, unknown>;
+          return {
+            id: String(rec.id ?? idx + 1),
+            title: String(rec.title ?? `Milestone ${idx + 1}`),
+            criteria: String(rec.criteria ?? "Milestone completion criteria"),
+            status: "pending" as const,
+          };
+        });
       }
     }
   } catch {

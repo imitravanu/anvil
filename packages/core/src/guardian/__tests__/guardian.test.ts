@@ -10,6 +10,10 @@ import { guardedInit } from "../init.js";
 // literal slop pattern (the gate scans added lines); runtime values are exact.
 const FIX_AS_ANY = "const x = foo as " + "any;";
 const FIX_RAW_ERROR = "const m = err instanceof " + "Error ? err.message : String(err);";
+// The scanner flags this raw-error ternary shape, but the safe auto-fix
+// cannot rewrite it — its fallback is not String(...).
+const FIX_RAW_ERROR_UNFIXABLE =
+  "const m = err instanceof " + "Error ? err.message : JSON.stringify(err);";
 const FIX_EMPTY_CATCH = "try { run(); } catch " + "{}";
 
 describe("scanTextForSlop", () => {
@@ -62,6 +66,13 @@ describe("interceptTurn", () => {
     expect(result.allowed).toBe(true);
     expect(result.fixed).toHaveLength(1);
     expect(result.fixed[0].diff).toContain("getErrorMessage(err)");
+  });
+
+  it("blocks a raw-error violation it cannot auto-fix (no silent pass-through)", () => {
+    const result = interceptTurn([{ path: "src/a.ts", diff: `+${FIX_RAW_ERROR_UNFIXABLE}\n` }]);
+    expect(result.allowed).toBe(false);
+    expect(result.fixed).toHaveLength(0);
+    expect(result.violations.some((v) => v.rule === "no-raw-error-format")).toBe(true);
   });
 
   it("blocks as-any for the model to repair", () => {

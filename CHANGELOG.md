@@ -4,6 +4,28 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Core Hygiene + Engine Modularization (2026-09-19)
+
+- **Guardian false-negative fixed**: the turn interceptor's post-fix re-scan dropped
+  raw-error violations that survived repair whenever the auto-fix budget was unspent,
+  silently allowing them through. Repairs now re-scan and only fixed occurrences drop
+  out; an unfixable survivor blocks the turn. Regression test added.
+- **Guardian repair text corrected**: the `no-hardcoded-color` guidance pointed the
+  model at `@anvil/core`; `useTheme()` lives in the TUI package.
+- **Anti-slop gate closed a blind spot**: `verify-gate.mjs` Steps 1/1.5 now also reject
+  bare `any` type annotations (`: any`, `<any>`, `any[]`), which the cast-only rule could
+  not see. Step 0 sensor fixture added; manifest and sentinel regenerated together.
+- **Session-tool seam typed**: `ToolSessionContext` no longer exposes `unknown`
+  provider/broker/ledger fields, and `SessionToolExecutor` yields `AgentEvent`. Six
+  casts removed at the seam.
+- **Bare `any` production sites eliminated**: a real `OrcarouterCatalogModel` interface
+  replaces the catalog cast; goal-plan parsing narrows `unknown`; the session-tool
+  generators return typed events.
+- **`AgentSession.send()` modularized**: reactive compaction, the native guardian gate,
+  and loop-guard/session-tool dispatch extracted into private methods. `send()` fell
+  from ~388 to 209 lines with no behavior change (event order, ledger, checkpoints, and
+  cancellation paths are unchanged).
+
 ### Phase 25.7 Closed — Live Eval 93.3% (14/15) at $0 (2026-09-18)
 
 - **The ≥80% real-provider box is closed**: 14/15 tasks passed on

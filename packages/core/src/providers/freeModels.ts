@@ -34,6 +34,16 @@ export interface SyncReport {
   errors: string[]; // every failure, never swallowed
 }
 
+/** Orcarouter's public pricing-catalog row (distinct field names from OpenRouter). */
+export interface OrcarouterCatalogModel {
+  model_name?: string;
+  display_name?: string;
+  is_free_tier?: boolean;
+  context_length?: number;
+  supported_parameters?: string[];
+  input_modalities?: string[];
+}
+
 export interface OpenRouterModel {
   id: string;
   name?: string;
@@ -169,7 +179,7 @@ export async function fetchOrcarouterFreeModels(apiKey?: string): Promise<ModelI
       throw new Error(`Orcarouter pricing catalog returned HTTP ${res.status}: ${res.statusText}`);
     }
 
-    const json = (await res.json()) as { data?: Array<any> };
+    const json = (await res.json()) as { data?: OrcarouterCatalogModel[] };
     if (!Array.isArray(json?.data)) {
       throw new Error("Orcarouter pricing catalog response missing data array");
     }

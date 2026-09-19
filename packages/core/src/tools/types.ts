@@ -1,4 +1,8 @@
 import type { TeamRunResult } from "../agent/team/types.js";
+import type { AgentEvent, PermissionBroker } from "../agent/types.js";
+import type { Checkpoint } from "../agent/checkpoints.js";
+import type { RunLedgerEntry } from "../agent/ledger.js";
+import type { ModelProvider } from "../providers/types.js";
 
 export interface ToolContext {
   projectRoot: string;
@@ -30,16 +34,16 @@ export type ToolExecutor = (
 
 export interface ToolSessionContext {
   setPlan?: (plan: string) => void;
-  recordLedger: (entry: unknown) => void;
+  recordLedger: (entry: Omit<RunLedgerEntry, "seq" | "ts">) => void;
   allowDelegation?: boolean;
   tryConsumeDelegation: (max: number) => boolean;
-  provider: unknown;
+  provider: ModelProvider;
   model: string;
   projectRoot: string;
-  permissionBroker: unknown;
+  permissionBroker: PermissionBroker;
   tools: readonly ToolDefinition[];
   signal: AbortSignal;
-  mergeSubCheckpoints?: (checkpoints: unknown[]) => Promise<void>;
+  mergeSubCheckpoints?: (checkpoints: Checkpoint[]) => Promise<void>;
   recordMutation?: () => void;
   /** Called once when a `delegate_task` team run completes (Phase 25.2 introspection). */
   onTeamRunResult?: (result: TeamRunResult) => void;
@@ -49,4 +53,4 @@ export type SessionToolExecutor = (
   input: unknown,
   ctx: ToolSessionContext,
   inputKey: string
-) => AsyncGenerator<any, ToolExecutionResult>;
+) => AsyncGenerator<AgentEvent, ToolExecutionResult>;

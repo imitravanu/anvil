@@ -3,8 +3,7 @@ import { runSubAgentLive, MAX_DELEGATIONS_PER_TURN, capReport } from "../agent/s
 import { runTeam } from "../agent/team/index.js";
 import { TEAM_DEFAULT_ITERATIONS } from "../config/constants.js";
 import type { TeamSpec, TeamMemberSpec, TeamMemberResult, TeamRunnerDeps } from "../agent/team/types.js";
-import type { ModelProvider } from "../providers/types.js";
-import type { PermissionBroker } from "../agent/types.js";
+import type { AgentEvent } from "../agent/types.js";
 
 export const definition: ToolDefinition = {
   name: "delegate_task",
@@ -63,7 +62,7 @@ export async function* executeSession(
   input: unknown,
   ctx: ToolSessionContext,
   inputKey: string
-): AsyncGenerator<any, ToolExecutionResult> {
+): AsyncGenerator<AgentEvent, ToolExecutionResult> {
   const raw = input as { task?: unknown; team?: unknown };
   // Phase 25.2 → product: a `team` field on delegate_task routes through the
   // real runTeam orchestrator. Members run as sub-agents (runSubAgentLive) so
@@ -124,7 +123,7 @@ export async function* executeSession(
     // collected events per member after runTeam resolves. Tradeoff: cross-
     // member streaming isn't live — the parent still sees each member's
     // start and finish in order.
-    const collected: Map<string, unknown[]> = new Map();
+    const collected: Map<string, AgentEvent[]> = new Map();
     // Enforce the budget the team runner computed: the sub-session is created
     // with exactly the passed iteration cap, so splitBudget is a real bound,
     // not a decorative number. A per-member override clamps to [1, total].
@@ -136,7 +135,7 @@ export async function* executeSession(
     ): Promise<TeamMemberResult> => {
       const override = memberOverrides.get(member.id);
       const effectiveBudget = Math.max(1, Math.min(override ?? budget, totalBudget));
-      const events: unknown[] = [];
+      const events: AgentEvent[] = [];
       ctx.recordLedger({
         eventType: "subagent_started",
         tool: "delegate_task",
@@ -147,14 +146,14 @@ export async function* executeSession(
       events.push({ type: "subagent_started", task: member.task });
       const startedAt = Date.now();
       const gen = runSubAgentLive({
-        provider: ctx.provider as ModelProvider,
+        provider: ctx.provider,
         model: ctx.model,
         projectRoot: ctx.projectRoot,
-        permissionBroker: ctx.permissionBroker as PermissionBroker,
+        permissionBroker: ctx.permissionBroker,
         task: member.task,
         signal,
         maxInnerIterations: effectiveBudget,
-        tools: ctx.tools as ToolDefinition[],
+        tools: [...ctx.tools],
       });
       let step = await gen.next();
       while (!step.done) {
@@ -259,13 +258,13 @@ export async function* executeSession(
   yield { type: "subagent_started", task };
   const subStartedAt = Date.now();
   const subGen = runSubAgentLive({
-    provider: ctx.provider as ModelProvider,
+    provider: ctx.provider,
     model: ctx.model,
     projectRoot: ctx.projectRoot,
-    permissionBroker: ctx.permissionBroker as PermissionBroker,
+    permissionBroker: ctx.permissionBroker,
     task,
     signal: ctx.signal,
-    tools: ctx.tools as ToolDefinition[],
+    tools: [...ctx.tools],
   });
   let subStep = await subGen.next();
   while (!subStep.done) {

@@ -1,4 +1,4 @@
-import { ToolExecutionResult } from "../tools/types.js";
+import type { ToolExecutionResult } from "../tools/types.js";
 import type { ToolDefinition } from "../tools/types.js";
 
 // The core loop never touches a terminal or a UI framework directly. It asks this interface
