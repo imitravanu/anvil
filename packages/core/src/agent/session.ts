@@ -420,46 +420,8 @@ export class AgentSession {
           return;
         }
 
-        // Reactive compaction: if the previous turn's input tokens crossed the
-        // model's context-window threshold, summarize older history first.
-        // Best-effort: a summarizer failure must never kill the turn, and a
-        // second attempt later in the same turn would thrash history — so the
-        // turn gets exactly one summarization ATTEMPT. The cheap guards are
-        // peeked first: a below-threshold loop-top must not burn the attempt
-        // (lastInputTokens is stale until the first round of THIS turn lands).
-        const modelInfo = getModel(this.options.model, this.provider.id);
-        // Free-form model ids are supported on purpose, so an unknown id must
-        // still compact — a conservative default window beats dying on the
-        // provider's real limit.
-        const contextWindow = modelInfo?.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
-        if (
-          !turn.compactedThisTurn &&
-          this.lastInputTokens >= contextWindow * COMPACTION_THRESHOLD &&
-          this.history.length > KEEP_RECENT_MESSAGES
-        ) {
-          turn.markCompactionAttempted();
-          try {
-                        const { history: compacted, result } = await compactIfNeeded(
-              this.history.snapshot(),
-              contextWindow,
-              this.lastInputTokens,
-              this.provider,
-              this.options.model,
-              controller.signal,
-              { summarizerModel: this.options.compactionModel, task: turn.task }
-            );
-            if (result.compacted) {
-              // Preserve role alternation on merge (several providers reject
-              // consecutive users); HistoryStore owns the merge.
-              this.history.applyCompacted(compacted);
-              yield { type: "compacted", summary: result.summary! };
-            }
-          } catch (err) {
-            console.warn(`[session] Warning: compaction failed: ${getErrorMessage(err)}`);
-            // Summarization failed (or was aborted) — proceed uncompacted.
-            // An abort surfaces as `cancelled` at the next loop-top check.
-          }
-        }
+        // Reactive compaction: at most one attempt per turn (see maybeCompact).
+        yield* this.maybeCompact(controller, turn);
 
         if (isCircuitOpen(this.provider.id, this.options.model)) {
           yield { type: "error", message: `Provider circuit breaker is open. Wait before retrying.` };
@@ -535,175 +497,26 @@ export class AgentSession {
         const prepared: PreparedCall[] = LoopGuard.classify(toolCalls, this.toolDefs, turn);
         const handled = new Map<string, ToolExecutionResult>();
 
-        // ── Phase 25.6 → product: native guardian gate ─────────────────────
-        // Intercept pending file mutations BEFORE they reach the orchestrator.
-        // Safe auto-fixes rewrite the pending write content in place; surviving
-        // violations refuse the offending calls only (same ToolExecutionResult
-        // shape LoopGuard uses), the rest of the batch still runs, and a repair
-        // prompt goes to the model — mirroring verifyTurnMutations.
-        const fileWriteTools = new Set(["write_file", "edit_file"]);
-        const pending: { call: PreparedCall; path: string; diff: string }[] = [];
-        // Calls the guardian refused. They carry an error result in `handled`
-        // and MUST be skipped by the dispatch loop below — putting them in
-        // `toRun` anyway would execute the mutation the refusal promised not
-        // to run (reported-vs-executed divergence, S1.1).
-        const guardianBlocked = new Set<string>();
-        for (const p of prepared) {
-          if (!p.def?.mutating) continue;
-          const input = (p.call.input ?? {}) as { path?: unknown; content?: unknown; new_str?: unknown };
-          const relPath = typeof input.path === "string" ? input.path : undefined;
-          if (!relPath) continue;
-          let diff: string;
-          if (fileWriteTools.has(p.def.name)) {
-            const body =
-              typeof input.content === "string"
-                ? input.content
-                : typeof input.new_str === "string"
-                  ? input.new_str
-                  : "";
-            if (body.length === 0) continue;
-            // describe-file tools: scan the literal new content (added lines).
-            diff = body.split("\n").map((l) => `+${l}`).join("\n");
-          } else {
-            // Command-based mutations (bash, plugin tools): describeToolInput
-            // is the sanctioned preview surface and returns a real unified
-            // diff for file-touching commands. Empty = nothing to scan.
-            diff = await describeToolInput(p.def.name, p.call.input, {
-              projectRoot: this.options.projectRoot,
-              signal: controller.signal,
-            });
-          }
-          if (diff.length > 0) pending.push({ call: p, path: relPath, diff });
-        }
-
-        if (pending.length > 0) {
-          const intercept = interceptTurn(pending.map((p) => ({ path: p.path, diff: p.diff })));
-          if (intercept.fixed.length > 0) {
-            // Auto-fix: raw-error ternary → getErrorMessage, applied back to
-            // each call's OWN input BY POSITION (fix.index). A path-keyed map
-            // is wrong when one turn carries two pending edits to the same
-            // file: the second edit would reuse the first's repaired text.
-            for (const fix of intercept.fixed) {
-              const p = pending[fix.index];
-              if (!p) continue;
-              const fixedText = guardianFixedText(fix.diff);
-              const input = (p.call.call.input ?? {}) as { content?: string; new_str?: string };
-              if (typeof input.content === "string") input.content = fixedText;
-              else if (typeof input.new_str === "string") input.new_str = fixedText;
-            }
-          }
-          if (!intercept.allowed) {
-            const blockedByPath = new Set(intercept.violations.map((v) => v.file));
-            for (const { call, path } of pending) {
-              if (!blockedByPath.has(path)) continue;
-              const callViolations = intercept.violations.filter((v) => v.file === path);
-              guardianBlocked.add(call.call.id);
-              handled.set(call.call.id, {
-                output: {
-                  error:
-                    `Guardian blocked this call — pending changes to ${path} violate the project's hygiene rules: ` +
-                    callViolations
-                      .map((v) => `${v.rule} (line ${v.line}): ${v.detail}`)
-                      .join("; ") +
-                    ". Fix the violations and retry — do NOT re-emit the call unchanged.",
-                },
-                isError: true,
-                summary: `Guardian blocked ${call.def?.name ?? "tool"} on ${path}`,
-              });
-              this.recordLedger({
-                eventType: "loop_refused",
-                tool: call.def?.name ?? "tool",
-                inputHash: call.key,
-                outcome: "error",
-                elapsedMs: 0,
-              });
-            }
-            yield {
-              type: "guardian_blocked",
-              count: blockedByPath.size,
-              fixed: intercept.fixed.length,
-              firstRule: intercept.violations[0]?.rule ?? "unknown",
-            };
-            this.history.pushUserText(
-              `[Guardian] Your pending file mutation${intercept.violations.length === 1 ? " was" : "s were"} blocked before execution. ` +
-                `Violations:\n` +
-                intercept.violations.map((v) => `- ${v.file}: line ${v.line} — ${v.rule}: ${v.detail}`).join("\n") +
-                `\nFix these issues (use getErrorMessage(err) for error formatting; never catch-and-ignore) and retry.`
-            );
-          }
-        }
-        // ───────────────────────────────────────────────────────────────────
+        // Phase 25.6 → product: native guardian gate. Refuses (or auto-fixes)
+        // pending file mutations BEFORE they reach the orchestrator.
+        const guardian = await this.guardianIntercept(prepared, controller.signal);
+        const guardianBlocked = guardian.blocked;
+        for (const [id, result] of guardian.handled) handled.set(id, result);
+        if (guardian.event) yield guardian.event;
 
         const toRun: RunnableCall[] = [];
-        for (const p of prepared) {
-          if (p.loopWarn) {
-            this.recordLedger({ eventType: "loop_detected", tool: p.call.name, inputHash: p.key, outcome: "error", elapsedMs: 0 });
-            yield { type: "loop_detected", tool: p.call.name };
-            turnNotes.push(LoopGuard.warnText(p.call.name, "consecutive"));
-          }
-          if (p.repeatWarn) {
-            this.recordLedger({ eventType: "loop_detected", tool: p.call.name, inputHash: p.key, outcome: "error", elapsedMs: 0 });
-            yield { type: "loop_detected", tool: p.call.name };
-            turnNotes.push(LoopGuard.warnText(p.call.name, "non-consecutive"));
-          }
-          if (p.refused) {
-            // Refusal is decided BEFORE session-tool handling: a loop-refused
-            // delegate_task/update_plan must never reach its executor.
-            this.recordLedger({ eventType: "loop_refused", tool: p.call.name, inputHash: p.key, outcome: "error", elapsedMs: 0 });
-            handled.set(p.call.id, LoopGuard.refusedResult());
-            continue;
-          }
-          if (guardianBlocked.has(p.call.id)) {
-            continue; // result already in `handled` (guardian refusal)
-          }
-          const sessionTool = getSessionToolHandler(p.call.name);
-          if (sessionTool) {
-            const toolGen = sessionTool(
-              p.call.input,
-              {
-                setPlan: (newPlan: string) => {
-                  this.plan = newPlan;
-                },
-                recordLedger: (entry) => {
-                  this.recordLedger(entry as RunLedgerEntry);
-                },
-                allowDelegation: this.options.allowDelegation !== false,
-                tryConsumeDelegation: (max: number) => turn.tryConsumeDelegation(max),
-                provider: this.provider,
-                model: this.options.model,
-                projectRoot: this.options.projectRoot,
-                permissionBroker: this.options.permissionBroker,
-                tools: this.toolDefs,
-                signal: controller.signal,
-                mergeSubCheckpoints: async (cps: unknown[]) => {
-                  await this.mergeSubCheckpoints(cps as Checkpoint[]);
-                },
-                recordMutation: () => {
-                  turn.mutationsOccurred = true;
-                },
-                onTeamRunResult: (result) => {
-                  this.lastTeamRun = result;
-                },
-              },
-              p.key
-            );
-            let item = await toolGen.next();
-            let cancelled = false;
-            while (!item.done) {
-              yield item.value;
-              if (item.value.type === "cancelled") {
-                cancelled = true;
-              }
-              item = await toolGen.next();
-            }
-            if (cancelled) {
-              this.pushCancelledToolResults(prepared, handled, undefined, turnNotes);
-              return;
-            }
-            handled.set(p.call.id, item.value);
-            continue;
-          }
-          toRun.push({ p, startedAt: Date.now() });
+        const cancelled = yield* this.dispatchToolCalls(
+          prepared,
+          turn,
+          controller,
+          turnNotes,
+          handled,
+          guardianBlocked,
+          toRun
+        );
+        if (cancelled) {
+          this.pushCancelledToolResults(prepared, handled, undefined, turnNotes);
+          return;
         }
 
         const pendingCp = await this.takeRewindSnapshot(prepared);
@@ -760,6 +573,242 @@ export class AgentSession {
       if (this.currentController === controller) this.currentController = null;
       this.isSending = false;
     }
+  }
+
+  /**
+   * Reactive compaction. Runs at most once per turn: a summarizer failure must
+   * never kill the turn, and a second attempt in the same turn would thrash
+   * history. The cheap guards are peeked inside so a below-threshold loop-top
+   * never burns the attempt (lastInputTokens is stale until this turn's first
+   * round lands).
+   */
+  private async *maybeCompact(
+    controller: AbortController,
+    turn: TurnState
+  ): AsyncGenerator<AgentEvent> {
+    const modelInfo = getModel(this.options.model, this.provider.id);
+    // Free-form model ids are supported on purpose, so an unknown id must still
+    // compact — a conservative default window beats dying on the real limit.
+    const contextWindow = modelInfo?.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
+    if (
+      turn.compactedThisTurn ||
+      this.lastInputTokens < contextWindow * COMPACTION_THRESHOLD ||
+      this.history.length <= KEEP_RECENT_MESSAGES
+    ) {
+      return;
+    }
+    turn.markCompactionAttempted();
+    try {
+      const { history: compacted, result } = await compactIfNeeded(
+        this.history.snapshot(),
+        contextWindow,
+        this.lastInputTokens,
+        this.provider,
+        this.options.model,
+        controller.signal,
+        { summarizerModel: this.options.compactionModel, task: turn.task }
+      );
+      if (result.compacted) {
+        // Preserve role alternation on merge (several providers reject
+        // consecutive users); HistoryStore owns the merge.
+        this.history.applyCompacted(compacted);
+        yield { type: "compacted", summary: result.summary! };
+      }
+    } catch (err) {
+      console.warn(`[session] Warning: compaction failed: ${getErrorMessage(err)}`);
+      // Summarization failed (or was aborted) — proceed uncompacted. An abort
+      // surfaces as `cancelled` at the next loop-top check.
+    }
+  }
+
+  /**
+   * Phase 25.6 native guardian gate. Intercepts pending file mutations BEFORE
+   * they reach the orchestrator. Safe auto-fixes rewrite the pending write
+   * content in place; surviving violations refuse only the offending calls
+   * (their error results ride back in `handled`) while the rest of the batch
+   * runs, and a repair prompt goes to the model. Returned blocked ids are
+   * skipped by the dispatch loop — executing a refused call would be a
+   * reported-vs-executed divergence (S1.1).
+   */
+  private async guardianIntercept(
+    prepared: readonly PreparedCall[],
+    signal: AbortSignal
+  ): Promise<{ blocked: Set<string>; handled: Map<string, ToolExecutionResult>; event: AgentEvent | null }> {
+    const blocked = new Set<string>();
+    const handled = new Map<string, ToolExecutionResult>();
+    const fileWriteTools = new Set(["write_file", "edit_file"]);
+    const pending: { call: PreparedCall; path: string; diff: string }[] = [];
+    for (const p of prepared) {
+      if (!p.def?.mutating) continue;
+      const input = (p.call.input ?? {}) as { path?: unknown; content?: unknown; new_str?: unknown };
+      const relPath = typeof input.path === "string" ? input.path : undefined;
+      if (!relPath) continue;
+      let diff: string;
+      if (fileWriteTools.has(p.def.name)) {
+        const body =
+          typeof input.content === "string"
+            ? input.content
+            : typeof input.new_str === "string"
+              ? input.new_str
+              : "";
+        if (body.length === 0) continue;
+        // describe-file tools: scan the literal new content (added lines).
+        diff = body.split("\n").map((l) => `+${l}`).join("\n");
+      } else {
+        // Command-based mutations (bash, plugin tools): describeToolInput is
+        // the sanctioned preview surface and returns a real unified diff for
+        // file-touching commands. Empty = nothing to scan.
+        diff = await describeToolInput(p.def.name, p.call.input, {
+          projectRoot: this.options.projectRoot,
+          signal,
+        });
+      }
+      if (diff.length > 0) pending.push({ call: p, path: relPath, diff });
+    }
+
+    if (pending.length === 0) return { blocked, handled, event: null };
+    const intercept = interceptTurn(pending.map((p) => ({ path: p.path, diff: p.diff })));
+    if (intercept.fixed.length > 0) {
+      // Auto-fix: raw-error ternary → getErrorMessage, applied back to each
+      // call's OWN input BY POSITION (fix.index). A path-keyed map is wrong
+      // when one turn carries two pending edits to the same file: the second
+      // edit would reuse the first's repaired text.
+      for (const fix of intercept.fixed) {
+        const p = pending[fix.index];
+        if (!p) continue;
+        const fixedText = guardianFixedText(fix.diff);
+        const input = (p.call.call.input ?? {}) as { content?: string; new_str?: string };
+        if (typeof input.content === "string") input.content = fixedText;
+        else if (typeof input.new_str === "string") input.new_str = fixedText;
+      }
+    }
+    if (intercept.allowed) return { blocked, handled, event: null };
+
+    const blockedByPath = new Set(intercept.violations.map((v) => v.file));
+    for (const { call, path } of pending) {
+      if (!blockedByPath.has(path)) continue;
+      const callViolations = intercept.violations.filter((v) => v.file === path);
+      blocked.add(call.call.id);
+      handled.set(call.call.id, {
+        output: {
+          error:
+            `Guardian blocked this call — pending changes to ${path} violate the project's hygiene rules: ` +
+            callViolations
+              .map((v) => `${v.rule} (line ${v.line}): ${v.detail}`)
+              .join("; ") +
+            ". Fix the violations and retry — do NOT re-emit the call unchanged.",
+        },
+        isError: true,
+        summary: `Guardian blocked ${call.def?.name ?? "tool"} on ${path}`,
+      });
+      this.recordLedger({
+        eventType: "loop_refused",
+        tool: call.def?.name ?? "tool",
+        inputHash: call.key,
+        outcome: "error",
+        elapsedMs: 0,
+      });
+    }
+    this.history.pushUserText(
+      `[Guardian] Your pending file mutation${intercept.violations.length === 1 ? " was" : "s were"} blocked before execution. ` +
+        `Violations:\n` +
+        intercept.violations.map((v) => `- ${v.file}: line ${v.line} — ${v.rule}: ${v.detail}`).join("\n") +
+        `\nFix these issues (use getErrorMessage(err) for error formatting; never catch-and-ignore) and retry.`
+    );
+    return {
+      blocked,
+      handled,
+      event: {
+        type: "guardian_blocked",
+        count: blockedByPath.size,
+        fixed: intercept.fixed.length,
+        firstRule: intercept.violations[0]?.rule ?? "unknown",
+      },
+    };
+  }
+
+  /**
+   * Loop-guard annotations + session-tool dispatch, in DECLARED call order.
+   * Loop-refused calls never reach their session-tool executor. Returns true
+   * when a session tool reported cancellation, so the caller can close out.
+   */
+  private async *dispatchToolCalls(
+    prepared: readonly PreparedCall[],
+    turn: TurnState,
+    controller: AbortController,
+    turnNotes: string[],
+    handled: Map<string, ToolExecutionResult>,
+    guardianBlocked: ReadonlySet<string>,
+    toRun: RunnableCall[]
+  ): AsyncGenerator<AgentEvent, boolean> {
+    for (const p of prepared) {
+      if (p.loopWarn) {
+        this.recordLedger({ eventType: "loop_detected", tool: p.call.name, inputHash: p.key, outcome: "error", elapsedMs: 0 });
+        yield { type: "loop_detected", tool: p.call.name };
+        turnNotes.push(LoopGuard.warnText(p.call.name, "consecutive"));
+      }
+      if (p.repeatWarn) {
+        this.recordLedger({ eventType: "loop_detected", tool: p.call.name, inputHash: p.key, outcome: "error", elapsedMs: 0 });
+        yield { type: "loop_detected", tool: p.call.name };
+        turnNotes.push(LoopGuard.warnText(p.call.name, "non-consecutive"));
+      }
+      if (p.refused) {
+        // Refusal is decided BEFORE session-tool handling: a loop-refused
+        // delegate_task/update_plan must never reach its executor.
+        this.recordLedger({ eventType: "loop_refused", tool: p.call.name, inputHash: p.key, outcome: "error", elapsedMs: 0 });
+        handled.set(p.call.id, LoopGuard.refusedResult());
+        continue;
+      }
+      if (guardianBlocked.has(p.call.id)) {
+        continue; // result already in `handled` (guardian refusal)
+      }
+      const sessionTool = getSessionToolHandler(p.call.name);
+      if (sessionTool) {
+        const toolGen = sessionTool(
+          p.call.input,
+          {
+            setPlan: (newPlan: string) => {
+              this.plan = newPlan;
+            },
+            recordLedger: (entry) => {
+              this.recordLedger(entry);
+            },
+            allowDelegation: this.options.allowDelegation !== false,
+            tryConsumeDelegation: (max: number) => turn.tryConsumeDelegation(max),
+            provider: this.provider,
+            model: this.options.model,
+            projectRoot: this.options.projectRoot,
+            permissionBroker: this.options.permissionBroker,
+            tools: this.toolDefs,
+            signal: controller.signal,
+            mergeSubCheckpoints: async (cps) => {
+              await this.mergeSubCheckpoints(cps);
+            },
+            recordMutation: () => {
+              turn.mutationsOccurred = true;
+            },
+            onTeamRunResult: (result) => {
+              this.lastTeamRun = result;
+            },
+          },
+          p.key
+        );
+        let item = await toolGen.next();
+        let cancelled = false;
+        while (!item.done) {
+          yield item.value;
+          if (item.value.type === "cancelled") {
+            cancelled = true;
+          }
+          item = await toolGen.next();
+        }
+        if (cancelled) return true;
+        handled.set(p.call.id, item.value);
+        continue;
+      }
+      toRun.push({ p, startedAt: Date.now() });
+    }
+    return false;
   }
 
   private async *streamAssistantTurn(
