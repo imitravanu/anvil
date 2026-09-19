@@ -284,6 +284,11 @@ Boundaries, stated plainly:
 
 - **Transports: stdio + SSE.** `https://` required for remote URLs (plain
   `http://` only for localhost). Auth goes in `headers`, never in logs.
+- **SSE keeps its requests on the origin you configured.** The server's `endpoint`
+  event decides where Anvil POSTs, so an off-origin endpoint is refused rather than
+  handed your headers, and redirects are refused in both directions. Each event
+  frame and response body is size-capped, so a broken or hostile server cannot grow
+  Anvil's memory without limit.
 - **No undo.** MCP and shell actions can't be rewound — only local file
   writes (`/rewind`).
 - **Servers see tool arguments.** Anything the model sends a server tool

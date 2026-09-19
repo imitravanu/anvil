@@ -4,6 +4,31 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### MCP Transport Hardened Against Hostile or Broken Servers (2026-09-20)
+
+- **A silent server could hang the connect path forever.** The SSE connect budget was
+  installed only *after* the initial GET resolved, so a server that accepted the connection
+  and never answered left the fetch pending with nothing able to abort it — measured at
+  **still-pending 2s into a 300ms budget** against the previous build. One deadline now covers
+  the GET, endpoint discovery, and the first byte; it is installed before the request and
+  cleared once the endpoint is known (the stream must outlive it).
+- **Failed connect attempts leaked their stream.** An endpoint timeout rejected the caller but
+  never aborted or untracked the open stream (measured: **1 stream still open and retained**
+  after the failure). Every failed-attempt path now aborts, untracks, and finishes its own
+  pump, and each retry gets a fresh pump — a single shared pump meant a retry could read an
+  already-finished stream.
+- **Unbounded server-controlled memory is closed.** The pump queue had no cap, an unterminated
+  SSE frame could grow without limit, and the POST path buffered a whole response before any
+  size check. All three are byte-capped now (`MCP_MAX_PUMP_QUEUE_LINES` / `_BYTES` are
+  env-overridable), the response is read with the cap enforced *during* the read, and overflow
+  fails the transport — pending calls error as closed rather than messages vanishing silently.
+- **The POST target has a stated policy.** The `endpoint` event is server-controlled and
+  decides where auth headers and tool payloads are sent, so an off-origin endpoint is refused
+  terminally (with a credential-free message), and redirects are refused on both the GET and
+  every POST. Documented in the module header, README §MCP servers, and the roadmap.
+- Closes the `STABILIZATION-ROADMAP-2026-09.md` S3.1 and S3.2 items. Pre-fix behavior was
+  reproduced against the previous build before any of it was changed.
+
 ### Read-Only Safe-List Escape Closed (2026-09-20)
 
 - **`git diff` could read any host file with no permission prompt.** The read-only

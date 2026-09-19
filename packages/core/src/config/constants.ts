@@ -44,6 +44,14 @@ export const SSE_CONNECT_MAX_RETRIES = getEnvNumber("ANVIL_SSE_CONNECT_RETRIES",
 export const SSE_CONNECT_INITIAL_DELAY_MS = getEnvNumber("ANVIL_SSE_CONNECT_RETRY_MS", 500);
 export const SSE_CONNECT_MAX_DELAY_MS = getEnvNumber("ANVIL_SSE_CONNECT_RETRY_MAX_MS", 8_000);
 
+// MCP transport retention bounds. The pump queue is what holds server messages
+// no reader has consumed yet, so a flooding (or broken) remote server could
+// otherwise grow the agent's memory without limit. Capped by BOTH count and
+// bytes; overflow fails the transport so pending calls error as closed instead
+// of messages being dropped silently.
+export const MCP_MAX_PUMP_QUEUE_LINES = getEnvNumber("ANVIL_MCP_QUEUE_LINES", 1_000);
+export const MCP_MAX_PUMP_QUEUE_BYTES = getEnvNumber("ANVIL_MCP_QUEUE_BYTES", 8 * 1024 * 1024);
+
 // Subagent Limits
 export const SUB_AGENT_REPORT_MAX_CHARS = getEnvNumber("ANVIL_MAX_SUBAGENT_REPORT_CHARS", 8000);
 

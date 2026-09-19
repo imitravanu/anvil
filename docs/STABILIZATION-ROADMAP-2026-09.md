@@ -183,20 +183,55 @@ neither retry loop tracks whether deltas were already emitted.
 installed, so the advertised `timeoutMs` does not bound connect time; failed attempts do
 not always abort+untrack their controller.
 
-- [ ] One deadline covering connect + endpoint discovery; enforced on the fetch itself
+> **Both halves confirmed empirically before the fix** (driving the pre-change build with a
+> throwaway server): with `timeoutMs: 300`, a server that completes the SSE handshake and
+> then sends no `endpoint` frame rejected after 301ms but **left 1 stream open and tracked**,
+> and a server that never answered the GET at all was **still pending after 2003ms**.
+
+- [x] One deadline covering connect + endpoint discovery; enforced on the fetch itself
       (compose an AbortSignal).
-- [ ] Every failed attempt path aborts the stream, untracks, and finishes the pump.
-- [ ] Test: server that never sends `endpoint` fails within `timeoutMs` ± ε with zero
+      *Done: `openSseStream` computes its budget and installs the deadline BEFORE the GET,
+      aborting `streamCtrl` (which also unwinds a body already streaming), so the timeout now
+      bounds the handshake itself. Cleared once the endpoint is known, since the stream must
+      outlive it.*
+- [x] Every failed attempt path aborts the stream, untracks, and finishes the pump.
+      *Done: fetch-failure, non-OK, pre-flight-budget, unusable-endpoint, oversized-frame, and
+      endpoint-failure paths all abort + untrack + finish, and each attempt now gets its OWN
+      pump — sharing one across attempts left the retry reading a dead stream.*
+- [x] Test: server that never sends `endpoint` fails within `timeoutMs` ± ε with zero
       retained controllers.
+      *Done: two `sse.test.ts` cases. The silent-after-handshake server asserts the stream is
+      released (the server's own open-stream count returns to 0 — RED before the fix at 1);
+      the never-answers-the-GET server asserts the connect itself is bounded. A new
+      `SseBudgetExhausted` marker keeps the retry loop reporting the last REAL connect error
+      (e.g. ECONNREFUSED) instead of overwriting it with "no time left".*
 
 ### S3.2 — Bounds and destination policy (F10)
 
-- [ ] Bound the transport pump queue (bytes + lines) — overflow fails the transport.
-- [ ] Cap SSE frame buffering (per-frame and aggregate).
-- [ ] Stream-response reads: enforce size during read, not after `res.text()`
+- [x] Bound the transport pump queue (bytes + lines) — overflow fails the transport.
+      *Done: capped by `MCP_MAX_PUMP_QUEUE_LINES` + `MCP_MAX_PUMP_QUEUE_BYTES`
+      (env-overridable). Overflow drops the queue and finishes the transport, so pending calls
+      error as closed — never a silent drop. Also: `deliver()` after `finish()` is no longer
+      banked, which previously let a dead transport accumulate.
+- [x] Cap SSE frame buffering (per-frame and aggregate).
+      *Done: `SseFrameParser` takes a frame cap (default `MAX_MCP_LINE_BYTES`) and exposes
+      `overflowed`. It bounds the RETAINED unterminated tail rather than the inbound chunk, so
+      a chunk full of complete frames is unaffected (pinned by a test). Aggregate framing
+      memory needs no separate cap: the parser holds at most one partial frame by
+      construction, and queued (complete) frames are bounded by the pump caps above. Overflow
+      is terminal — the transport is failed rather than resyncing mid-frame.*
+- [x] Stream-response reads: enforce size during read, not after `res.text()`
       (`transport.ts:516-517` currently reads fully, then checks).
-- [ ] POST-destination policy: validate the discovered `endpoint` (scheme + host) against
+      *Done: `readBodyBounded()` streams the body, aborts the moment the cap is passed, and
+      honours a declared `content-length` early. `res.text()` buffered the whole body before
+      any check could run. Covered by an end-to-end oversize-response case.*
+- [x] POST-destination policy: validate the discovered `endpoint` (scheme + host) against
       the original server URL before every POST; document redirect behavior.
+      *Done: `isSameOrigin()` (exported + unit-tested) is enforced at discovery and refused
+      terminally with a sanitized message. One check covers every POST because only the FIRST
+      `endpoint` event resolves discovery — a later one cannot change the target. Redirect
+      behavior is now explicit: `redirect: "error"` on BOTH the GET and every POST, so a
+      redirect cannot relocate the stream or the auth headers to another origin.*
 
 ---
 
