@@ -2,6 +2,7 @@ import { getErrorMessage } from "../errors.js";
 import { GUARDIAN_MAX_AUTO_FIXES } from "../config/constants.js";
 import { scanDiffForSlop, type GuardianViolation } from "./scanner.js";
 import type { CustomGuardianRule } from "./rules.js";
+import type { GuardianScope } from "./scope.js";
 
 export interface TurnFileChange {
   path: string;
@@ -43,9 +44,14 @@ export function guardianFixedText(diff: string): string {
  *
  * Project-declared `customRules` (the guardian:rules block) are honored on the
  * same pass, so a repo's own rules block a turn exactly like the built-ins.
+ *
+ * `scope` decides which rules exist at all: the Anvil-specific families (and
+ * therefore the raw-error auto-fix, which rewrites to an `@anvil/core` helper)
+ * only apply inside Anvil's own monorepo. See ./scope.ts.
  */
 export function interceptTurn(
   changes: TurnFileChange[],
+  scope: GuardianScope,
   customRules: readonly CustomGuardianRule[] = []
 ): InterceptResult {
   const violations: GuardianViolation[] = [];
@@ -56,7 +62,7 @@ export function interceptTurn(
   for (const [idx, change] of changes.entries()) {
     let diff = change.diff;
     try {
-      const initial = scanDiffForSlop(change.path, diff, customRules);
+      const initial = scanDiffForSlop(change.path, diff, scope, customRules);
       // Repair every safely-fixable raw-error violation, then report what
       // survives. Re-scanning after each successful fix keeps the survivor
       // set honest: a fixed occurrence vanishes from the new text, while an
@@ -73,7 +79,7 @@ export function interceptTurn(
           if (repaired !== diff) {
             diff = repaired;
             fixesUsed += 1;
-            found = scanDiffForSlop(change.path, diff, customRules);
+            found = scanDiffForSlop(change.path, diff, scope, customRules);
             i = 0;
             continue;
           }

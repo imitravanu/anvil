@@ -2,6 +2,57 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 
+## 2026-09-20 — STABILIZATION §S5: guardian scoping (F2)
+
+**Agent (this session)** — owns & changed:
+- `packages/core/src/guardian/scope.ts` — **NEW.** `detectGuardianScope(projectRoot)` returns
+  `"anvil"` when the root is this monorepo (a `packages/core/package.json` declaring
+  `@anvil/core`), else `"foreign"`; cached per root, never throws.
+- `packages/core/src/guardian/scanner.ts` — every built-in rule (single-line and split-line)
+  carries `scope: "universal" | "anvil"`; Anvil-only families are skipped unless the scan is
+  `"anvil"`. Built-ins are also skipped for positively non-code extensions (`isNonCodePath`),
+  while a name with no extension is still treated as code.
+- `packages/core/src/guardian/interceptor.ts`, `guardian/index.ts` — `interceptTurn` takes the
+  scope and forwards it; both symbols re-exported from the core barrel.
+- `packages/core/src/agent/session.ts` — scope detected ONCE per session, passed to every turn
+  intercept.
+- `packages/cli/src/gate.ts` — the `anvil gate --watch` working-tree scan is scoped by project
+  identity instead of assuming Anvil's rules.
+- `packages/core/src/eval/runner.ts` — the harness pins `"anvil"`: it judges the agent against
+  Anvil's conventions even though the scanned files live in a temp dir.
+- Tests: `guardian/__tests__/guardian.test.ts` (+19: foreign-scope silence for Anvil families,
+  universal families still firing, markdown-is-not-code, extensionless name still scanned,
+  `detectGuardianScope` identity cases, split-line scope parity) and
+  `agent/__tests__/guardianDispatch.test.ts` (fixture now writes the `@anvil/core` manifest and
+  asserts the classification before each session, so a detector-contract change fails loudly
+  instead of as a confusing auto-fix miss).
+- Docs: `docs/STABILIZATION-ROADMAP-2026-09.md` (S5.1/S5.2 ticked with evidence and the
+  identity-vs-opt-in deviation recorded; **S5.3 left UNCHECKED — the import rule is still
+  regex-based**), `CHANGELOG.md`.
+
+**How the stop was resumed:** the previous session left 2 failing tests in
+`guardianDispatch.test.ts`. Diagnosis before touching anything: the fixtures used a bare temp
+root, which under the new detector is `"foreign"` — where the raw-error auto-fix is *supposed* to
+be silent, because it rewrites to an `@anvil/core` helper that does not exist in a user's
+project. The fix was to make the fixture declare its identity, NOT to widen the rule back to
+`universal` (that would reintroduce F2 and make the guardian inject undefined identifiers into
+foreign code). Verified red→green: file went 2 failed/6 passed → 8/8.
+
+**Also fixed in passing:** `packages/cli` typecheck failed on the missing `detectGuardianScope`
+re-export purely because `packages/core/dist` was stale; rebuilt core (no source change).
+
+**Evidence:** full `npm test` green — 800 tests, 121 files (core 531 / tui 228 / cli 41);
+`npm run typecheck` exit 0 across core+tui+cli+scripts; full `npm run gate` green.
+
+**Not a protected artifact** — no `AGENTS.md`/gate/manifest/allowlist/sentinel/CI path involved,
+so no manifest work is required. `docs/PHASE-21-25-AUDIT.md` deliberately untouched.
+
+**Not mine, left alone:** the TUI transcript scroll-pinning files
+(`packages/tui/src/{components/App,InputBar,MessageList}.tsx`, `util/transcriptWindow.ts`,
+`util/displayLimits.ts` and their tests) belong to the OpenCode session above and are **un-staged
+and uncommitted** by this session.
+
+
 ## 2026-09-20 — OpenCode session (scroll-first)
 
 **Owns (done, gate green):**

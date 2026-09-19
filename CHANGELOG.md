@@ -4,6 +4,32 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Guardian Rules Scoped to Their Own Project (2026-09-20)
+
+- **Anvil's repo-specific rules were being enforced on every project it scanned.** The
+  guardian's built-in families name Anvil's own APIs — the raw-error family's auto-fix rewrites
+  a fallback into a call to an `@anvil/core` helper, the architecture family asserts the
+  core/tui/cli boundary, and the color and placeholder families encode this repo's conventions.
+  Applied to a user's project those rules can only misfire, and the auto-fix was actively
+  harmful: it rewrote the code into a call to an identifier that does not exist there.
+  `guardian/scope.ts` now classifies a scan as `"anvil"` (this monorepo) or `"foreign"` (anything
+  else) from repo identity — a `packages/core/package.json` declaring `@anvil/core` — cached per
+  root and never throwing. Each rule carries a `scope`: Anvil-only families are skipped entirely
+  outside Anvil, while the universal families (type escape, silent catch) apply everywhere.
+  Project-declared rules stay unconditional, so a project that opts in by writing its own rule is
+  still enforced. Closes `STABILIZATION-ROADMAP-2026-09.md` S5.1/S5.2 (F2); S5.3, the
+  syntax-aware import check, is left open and recorded as such.
+- **The guardian also treated prose as code.** Anvil's own roadmap markdown was blocked twice by
+  the turn interceptor — once by the architecture rule on a quoted import path inside a sentence,
+  once by the placeholder rule on the word used as prose. The built-ins now skip positively
+  non-code extensions, mirroring the gate's source-only PATHSPEC, while a name with no extension
+  (the `"(working tree)"` label the CLI passes) is still scanned as code so the working-tree scan
+  cannot be silently disabled.
+- Reproduced red first: the session-level auto-fix tests failed because a bare temp root now
+  classifies as `"foreign"`, where that family correctly never fires — the fixtures were fixed to
+  declare their identity rather than the rule being widened back. Green: 800 tests (core 531 /
+  tui 228 / cli 41), full `npm run typecheck`, full `npm run gate`.
+
 ### `edit_file` Result Size Capped (2026-09-20)
 
 - **A small, legal file plus a huge `new_str` bypassed the write cap.** `edit_file` bounded

@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AgentSession, type AgentEvent } from "../index.js";
+import { detectGuardianScope } from "../../guardian/scope.js";
 import { FakeProvider } from "./fakeProvider.js";
 import type { StreamEvent } from "../../providers/types.js";
 import { registerExternalExecutor } from "../../tools/index.js";
@@ -12,6 +13,20 @@ let root: string;
 
 beforeEach(async () => {
   root = await fs.mkdtemp(path.join(os.tmpdir(), "anvil-guardian-dispatch-"));
+  // These dispatch tests exercise the Anvil-scoped families (raw-error
+  // auto-fix rewrites to getErrorMessage, an @anvil/core helper), so the
+  // fixture root must BE the Anvil repo as far as the scope detector is
+  // concerned: packages/core declaring @anvil/core. A bare temp dir now
+  // classifies as "foreign", where that family correctly never fires.
+  await fs.mkdir(path.join(root, "packages", "core"), { recursive: true });
+  await fs.writeFile(
+    path.join(root, "packages", "core", "package.json"),
+    JSON.stringify({ name: "@anvil/core" })
+  );
+  // Assert the classification BEFORE any session runs: if the detector's
+  // sentinel contract ever changes, these tests fail here with the real
+  // cause instead of as confusing auto-fix misses.
+  expect(detectGuardianScope(root)).toBe("anvil");
 });
 
 afterEach(async () => {

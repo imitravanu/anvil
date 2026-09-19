@@ -1,9 +1,9 @@
 # Anvil Stabilization Roadmap — 2026-09 (post-audit)
 
-> **Status:** PARTIALLY COMPLETE — S0, S1.1–S1.4, S2.1, S2.2, S3.1–S3.2, S4.1, and S4.2 are
-> **done** (each landed test-first with the full `npm run gate` green; checkboxes annotated
-> in place — S3 in 2026-09-20, S4.1 in 2026-09-20, S4.2 in 2026-09-20).
-> Still open: S1.3 rewind external-edit warning, S2.3, S5, S6, S7.
+> **Status:** PARTIALLY COMPLETE — S0, S1.1–S1.4, S2.1, S2.2, S3.1–S3.2, S4.1, S4.2, and S5.1/S5.2
+> are **done** (each landed test-first with the full `npm run gate` green; checkboxes annotated
+> in place — S3 in 2026-09-20, S4.1 in 2026-09-20, S4.2 in 2026-09-20, S5.1/S5.2 in 2026-09-20).
+> Still open: S1.3 rewind external-edit warning, S2.3, S5.3 syntax-aware import rules, S6, S7.
 > **Principle:** No new features until the chain **approved → executed → changed → verified → reported**
 > is provably consistent. Every finding below cites the inspected source location; none has
 > yet been reproduced with a regression test — Step 0 of each phase is to write that test first.
@@ -305,14 +305,51 @@ clean `{error, summary}` shape and never reaches `atomicWriteText`. Green: `edit
 `guardian/scanner.ts` applies Anvil-repo rules (core-imports, TUI colors, placeholder
 markers) to *any* scanned project, with only a test-path exception.
 
-- [ ] Tests: a user project importing anvil's own workspace packages (legitimate for them)
+- [x] Tests: a user project importing anvil's own workspace packages (legitimate for them)
       or containing the placeholder-marker word in a string → not blocked, or blocked only
       under an explicit per-project rules file. (See Phase S2 note below: this exact
       document was blocked by those two rules on 2026-09 — live confirmation of F2.)
-- [ ] Gate Anvil-specific rule families behind project config (`AGENTS.md` presence /
+      *Done 2026-09-20: `guardian/scope.ts` classifies a scan as `"anvil"` (this monorepo) or
+      `"foreign"` (anything else) from repo identity — a `packages/core/package.json` declaring
+      `@anvil/core` — cached per root, never throwing (an unreadable/malformed project is simply
+      `"foreign"`). Every rule now carries a `scope` field; Anvil-only families (raw-error,
+      architecture, TUI hardcoded colors, placeholder markers) are skipped entirely unless the
+      scope is `"anvil"`, while the universal families (type escape, empty catch) still apply
+      everywhere. Project-declared `guardian:rules` blocks stay unconditional, so a foreign
+      project that opts in by writing a rule still gets enforcement — the second half of this
+      checkbox. Tests: `guardian.test.ts` foreign-scope cases (Anvil families silent, universal
+      families still fire) + `detectGuardianScope` identity cases.*
+- [x] Gate Anvil-specific rule families behind project config (`AGENTS.md` presence /
       `.fresh-allowlist.json` opt-in), per `docs/guardian/init.ts`'s own provisioning flow.
+      *Done 2026-09-20 with a deliberate deviation: gated behind **repo identity** rather than an
+      `AGENTS.md`/allowlist opt-in. Rationale — `AGENTS.md` presence is an ambiguous signal (a
+      foreign project may legitimately ship one, and inheriting it would reproduce F2 exactly as
+      before), whereas workspace identity is the precise condition under which those rules are
+      *true*. Cost of the deviation: a project vendoring Anvil's packages under the same manifest
+      name would be scanned as Anvil — not a safety regression (universal rules apply regardless;
+      the Anvil families only add rules there), and recorded here rather than silently dropped.*
 - [ ] Prefer syntax-aware checks for import rules (cheap: resolve the scanned file's
-      package membership first).
+      package membership first). *NOT DONE — still regex-based, now merely scoped. Left
+      unchecked deliberately: scoping removed the foreign-project false positive, but a comment
+      or string carrying a quoted import path inside Anvil's own repo still matches. **Live
+      evidence for this item, 2026-09-20:** landing S5 itself tripped the gate's own Step-1
+      architecture rule on a doc comment in `guardian/scope.ts` that merely *described* the
+      boundary between the packages — no import existed. Also note the asymmetry: the native
+      scanner's rule requires a quoted import (`from "…"`), so it did catch the markdown case,
+      but this gate-side rule is a bare substring match.*
+
+### Extra fix landed with S5 (F2, second half) — docs are not code
+
+`scanTextForSlop` ran the built-in rules over any file type, so Anvil's own roadmap markdown
+was blocked twice for the placeholder word used in prose (the live evidence in the S2 note
+below). The built-ins are now skipped for positively non-code extensions (`isNonCodePath`),
+matching the gate's source-only PATHSPEC; custom rules stay unconditional. A name with no
+extension — the `"(working tree)"` label `anvil gate` passes — is still scanned as code, since
+treating it as non-code would silently disable the working-tree scan. Consumer wiring:
+`AgentSession` detects the scope once per session, `gate.ts` scopes the working-tree scan, and
+the eval harness pins `"anvil"` (it judges the agent against Anvil's own conventions even though
+the scanned files live in a temp dir). Evidence: full `npm run gate` green; 800 tests
+(core 531 / tui 228 / cli 41).
 
 ### S2 note — live evidence for F2 (recorded 2026-09)
 

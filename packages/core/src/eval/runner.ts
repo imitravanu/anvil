@@ -155,7 +155,10 @@ export async function runEvalTask(
           walkForSlop(full);
         } else if (/\.(ts|tsx|js)$/.test(entry.name)) {
           const content = fs.readFileSync(full, "utf8");
-          slopViolations.push(...scanTextForSlop(full, content));
+          // "anvil" scope: the eval harness judges the agent against Anvil's own
+          // conventions, so its rule families are the right ones here even though
+          // the scanned files live in a temp dir.
+          slopViolations.push(...scanTextForSlop(full, content, "anvil"));
         }
       }
     }

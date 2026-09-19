@@ -15,6 +15,7 @@ import { clearRateLimitRecord, getConsecutiveRateLimitCount, isCircuitOpen, isRa
 import { MAX_DELEGATIONS_PER_TURN, runSubAgentLive } from "./subagent.js";
   import { interceptTurn, guardianFixedText } from "../guardian/interceptor.js";
 import { loadCustomGuardianRules, type CustomGuardianRule } from "../guardian/rules.js";
+import { detectGuardianScope, type GuardianScope } from "../guardian/scope.js";
 import { TurnState } from "./turnState.js";
 import { LoopGuard, type AccumulatedToolCall, type PreparedCall } from "./loopGuard.js";
 import type { TeamRunResult } from "./team/types.js";
@@ -88,6 +89,8 @@ export class AgentSession {
   private checkpoints: Checkpoint[] = [];
   // Project-declared guardian rules, loaded ONCE per session (no per-turn I/O).
   private readonly guardianRules: CustomGuardianRule[];
+  /** Whether Anvil's own rule families apply to this project (see guardian/scope.ts). */
+  private readonly guardianScope: GuardianScope;
   // First-seen pre-mutation content per path across the WHOLE session. The
   // ring above is capped (CHECKPOINT_KEEP) and evicts the earliest snapshots;
   // this map never evicts, so /diff and the goal debrief keep reporting every
@@ -116,6 +119,7 @@ export class AgentSession {
     // tool-list override (sub-agents exclude delegate_task; MCP seam).
     this.toolDefs = options.tools ?? TOOL_DEFINITIONS;
     this.guardianRules = loadCustomGuardianRules(this.options.projectRoot);
+    this.guardianScope = detectGuardianScope(this.options.projectRoot);
     this.id = restore?.metadata.id ?? randomUUID();
     this.title = restore?.metadata.title ?? null;
     this.createdAt = restore?.metadata.createdAt ?? new Date().toISOString();
@@ -702,6 +706,7 @@ export class AgentSession {
     if (pending.length === 0) return { blocked, handled, event: null };
     const intercept = interceptTurn(
       pending.map((p) => ({ path: p.path, diff: p.diff })),
+      this.guardianScope,
       this.guardianRules
     );
     if (intercept.fixed.length > 0) {

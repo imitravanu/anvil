@@ -1,5 +1,7 @@
 export { scanTextForSlop, scanDiffForSlop } from "./scanner.js";
 export type { GuardianViolation, GuardianRuleFamily } from "./scanner.js";
+export { detectGuardianScope } from "./scope.js";
+export type { GuardianScope } from "./scope.js";
 export { interceptTurn, autoFixRawErrorFormat } from "./interceptor.js";
 export type { TurnFileChange, InterceptResult, GuardianFixedFix } from "./interceptor.js";
 export { guardedInit } from "./init.js";

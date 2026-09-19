@@ -1,6 +1,7 @@
 import { execSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import {
+  detectGuardianScope,
   getErrorMessage,
   scanDiffForSlop,
   GUARDIAN_WATCH_INTERVAL_MS,
@@ -40,7 +41,9 @@ export function scanWorkingTree(cwd: string): WorkingTreeScan {
   } catch (err: unknown) {
     return { violations: [], error: `cannot read git diff: ${getErrorMessage(err)}` };
   }
-  return { violations: scanDiffForSlop("(working tree)", diff) };
+  // Scope by project identity: in a user's own project only the universal rules
+  // apply, because the Anvil-specific families name APIs that live here.
+  return { violations: scanDiffForSlop("(working tree)", diff, detectGuardianScope(cwd)) };
 }
 
 /** Honest banner: watch sees the diff vs HEAD only, not the full tree. */
