@@ -1,44 +1,70 @@
 # PHASE 21–25 ROADMAP — Pre-Execution Audit
 
 > **Purpose:** The roadmap is accurate but decays. This audit re-verified its claims
-> against the live tree (2026-09-13) so agents start from current reality instead of
-> re-deriving it. Per AGENTS.md §1.3, re-verify the specific item you are about to fix
-> before touching code — line numbers below are as of the audit date; function names
-> are the durable anchors.
+> against the live tree (2026-09-13, re-audited 2026-09-20) so agents start from current
+> reality instead of re-deriving it. Per AGENTS.md §1.3, re-verify the specific item you
+> are about to fix before touching code — line numbers below are as of the audit date;
+> function names are the durable anchors. This doc is itself a protected artifact: an
+> audit outlives roadmaps, so it is re-verified in place rather than abandoned.
+
+## 🔁 Re-audit (2026-09-20)
+
+Every item in the matrix below was re-checked against the live tree by symbol, not by
+line number. Net result:
+
+- **The matrix is now all-green.** Every item previously marked 🔴 LIVE is fixed in the
+  live tree. Nothing here should be "fixed" again.
+- **22.13 remains 🟣 BY-DESIGN and must NOT be changed.**
+- Three items previously ⚪ UNVERIFIED were promoted: **22.9, 22.11, 22.17 are all fixed**
+  (evidence in the matrix).
+- One item is honestly **PARTIAL**: **23.4** — only `MessageView` is memoized; the rest of
+  the hot-component list was not audited. Do not read it as done.
+- Test counts in the roadmap §8/§21.4 are stale by ~230 tests (see corrections below).
+- The "Standing gap" section (this doc, 2026-09-13) was **already closed** by gate Step 1.5
+  at the time it was written — the two sections of this doc contradicted each other. Fixed.
+
+**Consequence for the entry protocol:** a new agent following AGENTS.md §1.5 into this doc
+must not open work on any matrix item. The remaining work lives in
+`docs/STABILIZATION-ROADMAP-2026-09.md`, `PHASE-26`/`PHASE-27` progress docs, and the
+forward-looking notes at the end of this file.
 
 ## Verified item matrix
 
-| Item | Claim | Status | Evidence (as of audit) |
-|---|---|---|---|
-| 21.1 | Quote-bypass in `pathsInsideRoot` | 🔴 LIVE | `bash.ts` — no quote stripping before resolve; `cat "/etc/passwd"` passes containment |
-| 21.2 | `isRootWipe` misses `rm -rf /usr` etc. | 🔴 LIVE | final regex matches only `/`, `/*`, `~`, `$HOME`. **Severity note:** exposure is in auto-approve / `-y` / headless paths; interactive mode still prompts. |
-| 21.3 | Flag injection via `verify_tests` pattern | 🔴 LIVE | `argvWithPattern` has no `startsWith("-")` / null-byte guard |
-| 22.1 | `cancel()` before first `send()` is a no-op | 🔴 LIVE | `session.ts` `cancel()` is plain `this.currentController?.abort()`; no `pendingCancel` field |
-| 22.2 | Malformed tool-call JSON becomes `{}` | 🔴 LIVE | `session.ts:514-516` `catch { input = {}; }` — model never learns its JSON was bad |
-| 22.3 | Gemini `unknown_tool` on truncated history | 🔴 LIVE | `gemini.ts:149` `callNames.get(...) ?? "unknown_tool"` |
-| 22.4 | Pricing check `=== "0"` is fragile | 🔴 LIVE | `freeModels.ts:58` string comparison |
-| 22.5 | Goal verdict regex too strict | 🔴 LIVE | `goalEngine.ts:271-272` rejects `"YES."`, `"YES, ..."` |
-| 22.6 | `read_file` has no binary detection | 🔴 LIVE | no binary/NUL sniff in `readFile.ts` |
-| 22.7 | Keyless Ollama blocked by key filter | 🔴 LIVE | `config/index.ts:128-132` requires `apiKey.length > 0` for ALL providers |
-| 22.8 | Vision forwarded to non-vision models | 🔴 LIVE | `supportsVision` exists on the type only; no gate in the message path |
-| 22.10 | Sync `readdirSync` in async path | 🔴 LIVE | `awareness.ts:128` |
-| 22.11 | Broker subscribe fires during render | ⚪ UNVERIFIED | `TuiPermissionBroker.subscribe()` does call the listener synchronously; React impact not independently confirmed |
-| 22.12 | `/session rename` misses in-memory title | 🔴 LIVE | `commands/registry.ts:317-324` never sets `session.title` — next autosave reverts the rename |
-| 22.13 | Empty sync response fails to demote | 🟣 BY-DESIGN — DO NOT FIX | `mergeFreeModels` (`freeModels.ts:444-448`) deliberately returns early on `live.length === 0`: "an empty list is a source glitch or network failure, not 'everything became paid'". Demoting on outage would wipe the whole free registry. The roadmap's fix and acceptance criteria contradict this safer design. If demote-on-empty is ever wanted, trigger only on HTTP 200 + empty payload, never on failure/catch paths. |
-| 22.15 | Subagent checkpoint orphans on crash | ✅ ALREADY FIXED | `subagent.ts` — cleanup guaranteed AND the sub-ring is handed to the parent (`drainCheckpoints()`) before deleting the persisted file — better than the roadmap's proposed fix (rewind still reaches sub-agent changes). Remove from backlog. |
-| 22.16 | Eval timeout can't break a stalled stream | ✅ ALREADY FIXED | `eval/runner.ts:119-126` — timeout calls `session.cancel()` ("aborts the in-flight provider stream, which unwinds the loop promptly"). Remove from backlog. |
-| 22.17 | MCP boot notices dropped in TUI | ⚪ UNVERIFIED | notice plumbing exists (`util/mcp.ts`); the drop point was not traced during this audit |
-| 23.2 | Ledger O(n²) copy-append | 🔴 LIVE | `session.ts:307` `capLedger([...this.ledger, {...}])` per event — O(n) copy per append inside a turn |
-| 23.3 | Compaction O(n²) `isSplit` | 🔴 LIVE | `compaction.ts:83-99` — `intervals.some` re-scanned for every candidate cut |
-| 23.4 | No `React.memo` on hot components | 🔴 LIVE | zero `memo(` hits in `tui/src/components/` |
-| 23.5 | Word-diff LCS bail-out too high | 🔴 LIVE | bail-out exists (`wordDiff.ts:41`); threshold value not yet compared with the spec — confirm at execution |
-| 24.4 | `as never` escapes in providers | 🔴 LIVE | 5 hits: `gemini.ts:194,206,212`, `openai.ts:231,232,236` |
-| 24.10 | `getErrorMessage` adoption | 🔴 LIVE (rescoped) | helper already exists (`errors.ts:19`) with **zero production callers**; 17 raw `err instanceof Error ? err.message : String(err)` sites in core. The work is adoption, not authorship. |
+Legend: ✅ fixed · 🟡 partial · 🟣 by-design (do NOT fix) · ⚪ unverified.
 
+| Item | Claim | Status | Evidence (re-verified 2026-09-20) |
+|---|---|---|---|
+| 21.1 | Quote-bypass in `pathsInsideRoot` | ✅ FIXED | `bash.ts` — quotes stripped (`stripShellQuotes`) before resolve and residual quotes rejected post-strip. |
+| 21.2 | `isRootWipe` misses `rm -rf /usr` etc. | ✅ FIXED | `bash.ts` — `SYSTEM_PATHS` now covers `/usr`, `/etc`, `/var`, `/dev`, `/boot`; asserted by test. |
+| 21.3 | Flag injection via `verify_tests` pattern | ✅ FIXED | `verifyTests.ts` — leading `-` flag / null-byte guards present in `argvWithPattern`. |
+| 22.1 | `cancel()` before first `send()` is a no-op | ✅ FIXED | `session.ts` — `pendingCancel` field set/consumed around the first controller creation. |
+| 22.2 | Malformed tool-call JSON becomes `{}` | ✅ FIXED | `__parseError` + `rawInput` sentinel carried through `providers/streaming.ts`, `tools/index.ts`, `agent/orchestrator.ts`. |
+| 22.3 | Gemini `unknown_tool` on truncated history | ✅ FIXED | `gemini.ts` — orphaned tool results (compacted-away tool_call) are skipped, not sent as `unknown_tool`. |
+| 22.4 | Pricing check `=== "0"` is fragile | ✅ FIXED | `freeModels.ts` — numeric comparison; zero string-equality sites remain. |
+| 22.5 | Goal verdict regex too strict | ✅ FIXED | `goalEngine.ts` — `/^YES\b/i` accepted, explicit hedge regex rejects `"Yes, but…"`. |
+| 22.6 | `read_file` has no binary detection | ✅ FIXED | `readFile.ts` — NUL-byte/binary sniff before returning content. |
+| 22.7 | Keyless Ollama blocked by key filter | ✅ FIXED | `config/index.ts` — `KEYLESS_PROVIDERS` exempted from the `apiKey.length > 0` requirement. |
+| 22.8 | Vision forwarded to non-vision models | ✅ FIXED | `supportsVision` gate in the message path (image parts omitted for non-vision models). |
+| 22.9 | `checkpointStore` wipe-on-read-error | ✅ FIXED (was ⚪) | `loadCheckpoints` logs via `getErrorMessage` and returns `[]` only for a genuinely absent/corrupt file (commented); per-entry validation stops one bad entry discarding the ring. Save path warns too. |
+| 22.10 | Sync `readdirSync` in async path | ✅ FIXED | `awareness.ts` — `fs.promises.readdir`; zero `readdirSync` hits. |
+| 22.11 | Broker subscribe fires during render | ✅ FIXED (was ⚪) | `usePermissionBroker.ts` — `useEffect(() => broker.subscribe(setPending), [broker])`, unsubscribe returned. Not called during render. |
+| 22.12 | `/session rename` misses in-memory title | ✅ FIXED | `commands/handlers/session.ts` — sets `session.title`, so autosave no longer reverts the rename. |
+| 22.13 | Empty sync response fails to demote | 🟣 BY-DESIGN — DO NOT FIX | `mergeFreeModels` (`freeModels.ts`) deliberately returns early on `live.length === 0`: "an empty list is a source glitch or network failure, not 'everything became paid'". Demoting on outage would wipe the whole free registry. The roadmap's fix and acceptance criteria contradict this safer design. If demote-on-empty is ever wanted, trigger only on HTTP 200 + empty payload, never on failure/catch paths. |
+| 22.15 | Subagent checkpoint orphans on crash | ✅ ALREADY FIXED | `subagent.ts` — cleanup guaranteed AND the sub-ring is handed to the parent (`drainCheckpoints()`) before deleting the persisted file — better than the roadmap's proposed fix (rewind still reaches sub-agent changes). |
+| 22.16 | Eval timeout can't break a stalled stream | ✅ ALREADY FIXED | `eval/runner.ts` — timeout calls `session.cancel()` ("aborts the in-flight provider stream, which unwinds the loop promptly"). |
+| 22.17 | MCP boot notices dropped in TUI | ✅ FIXED (was ⚪) | `components/App.tsx` mount effect — each `mcp.notices` entry is printed via `printSystemMessage`. |
+| 23.2 | Ledger O(n²) copy-append | ✅ FIXED | `session.ts` — appends with a single `ledger.push`; `capLedger` runs only on restore/snapshot, not per event. |
+| 23.3 | Compaction O(n²) `isSplit` | ✅ FIXED | `compaction.ts` — `splitCuts` set replaces the per-candidate interval rescan. |
+| 23.4 | No `React.memo` on hot components | 🟡 PARTIAL | `components/MessageView.tsx` memoized; the remainder of the hot-component list was **not** audited. Treat as open work. |
+| 23.5 | Word-diff LCS bail-out too high | ✅ FIXED | `diff/wordDiff.ts` — bail-out at the `10_000` product threshold; matches spec. |
+| 24.4 | `as never` escapes in providers | ✅ FIXED | 0 production `as any` / `as never` hits across core/tui/cli src (was 5 in `gemini.ts`/`openai.ts`). |
+| 24.10 | `getErrorMessage` adoption | ✅ FIXED | 0 raw error-format ternaries in production across core/tui/cli src (was 17 in core). Helper + adoption both done. |
 
 ## Gate-count corrections (roadmap §8 and §21.4)
 
-- Unit tests: **556, not "494+"** (verified 2026-09-13, all green: core 391 / tui 157 / cli 8).
+- Unit tests: **788, not "494+"** (re-verified 2026-09-20, all green: core 519 / tui 228 /
+  cli 41, across 121 test files). The prior figure of 556 (2026-09-13, core 391 / tui 157 /
+  cli 8) is superseded; preserving the old number here is the point — counts decay.
 - **Correction (self-audit):** an earlier draft of this audit claimed `npm run eval` was
   missing — it is not. `package.json:16` defines `"eval": "npx tsx evals/run.ts"`, so the
   Guardian Gate's Step 5 (`npm run eval -- --fast --mock`) resolves correctly. Likewise
@@ -46,23 +72,31 @@
   (documented in its usage header), and `certify-all.sh` forwards extra args. No gate
   script changes required.
 
-## Standing gap discovered: the gate only scans NEW lines
+## Standing gap discovered: the gate only scans NEW lines — ✅ RESOLVED
 
-`scripts/verify-gate.mjs` inspects added diff lines, so pre-existing violations survive
-indefinitely (today: 17 raw error-format sites in core; `as never` in providers). That is
-a sensible design for incremental work, but it means Phase 24 "purge" items (24.4, 24.10,
-24.11) can only be *done*, never *enforced*, by the gate. Recommendation: when executing
-24.4/24.10, convert whole files in the same commit and record them in a small
-"clean-file list" the gate may extend to full-file scanning later — the §25.6
-fresh-allowlist "drain" concept is the right long-term mechanism.
+*(Original note, 2026-09-13:)* `scripts/verify-gate.mjs` inspected added diff lines only,
+so pre-existing violations survived indefinitely (then: 17 raw error-format sites in core;
+`as never` in providers), meaning Phase 24 "purge" items (24.4, 24.10, 24.11) could only be
+*done*, never *enforced*, by the gate.
+
+**Resolution (2026-09-13, gate hardening pass #6):** gate **Step 1.5 "Residual Slop Drain
+Scan"** now scans the FULL tree (`packages/{core,cli,tui}/**/src`, tests excluded) with
+allowlist-free rules for exactly these families — raw error formatting, core self-imports,
+empty catches, hardcoded TUI colors — and fails on any hit. Legacy debt can only shrink.
+The two purge items above (24.4, 24.10) are now at zero production hits, which is the
+mechanism working as designed. The §25.6 fresh-allowlist drain remains the escape valve for
+deliberate exemptions (currently empty).
 
 ## Unverified-but-plausible remaining
 
-22.9 (checkpointStore wipe-on-read-error — the `catch { return []; }` at
-`checkpointStore.ts:103` matches the claimed behavior, but the "wipes history" flow was
-not traced end-to-end), 22.14's exact user-visible impact, remaining 24.x items, and all
-Phase 25 features (forward-looking by nature). Each gets the protocol below at execution
-time.
+The 2026-09-13 list (22.9, 22.11, 22.17) is now **verified fixed** — see the matrix. Still
+open by nature, and each gets the protocol below at execution time:
+
+- 22.14's exact user-visible impact.
+- The Phase 24 items not represented in the matrix (24.x residue).
+- All Phase 25 features (forward-looking).
+- The 8 remaining open boxes in the **Destructive-command filter** family and the rest of
+  `docs/STABILIZATION-ROADMAP-2026-09.md` — that is the current live tracker.
 
 ## Reality Check Protocol (every roadmap item, before fixing)
 
@@ -165,4 +199,3 @@ own doctrine ("stability before features"). Recommendation: ship 23.1–23.7 as 
 proper; move 23.8–23.15 to a distinct phase (e.g. "Phase 23b — Terminal Platform" or
 under Phase 25). The roadmap keeps the sections in place for reference; this audit is
 the scope ruling until the roadmap text is amended.
-

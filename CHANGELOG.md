@@ -4,6 +4,21 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Pre-Execution Audit Re-classified Against the Live Tree (2026-09-20)
+
+- **The audit doc was misdirecting every agent that followed the entry protocol.**
+  `docs/PHASE-21-25-AUDIT.md` still flagged ~20 items as 🔴 LIVE that are fixed in the live
+  code — and AGENTS.md §1.5 sends each agent there *first*. Re-verified every matrix item by
+  symbol: all 26 are now green. `22.13` remains **🟣 BY-DESIGN — do not change it**; `22.9`,
+  `22.11`, and `22.17` were promoted from unverified to confirmed fixed with traced evidence;
+  `23.4` is recorded honestly as **partial** (one component memoized, not the set).
+- Corrected the stale test count **556 → 788** (core 519 / tui 228 / cli 41, 121 files) and
+  marked the "the gate only scans NEW lines" section **resolved** — gate Step 1.5 already
+  enforces it, so the doc had been contradicting its own gate-hardening notes.
+- Protected-artifact change: the audit doc's SHA-256 in `scripts/gate-manifest.json` is
+  regenerated in the same commit (AGENTS.md §3.4b). No gate, allowlist, sentinel, or CI file
+  was modified.
+
 ### MCP Transport Hardened Against Hostile or Broken Servers (2026-09-20)
 
 - **A silent server could hang the connect path forever.** The SSE connect budget was

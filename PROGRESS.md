@@ -7,9 +7,11 @@
 **Owns (done, gate green):**
 - `packages/tui/src/components/App.tsx` — transcript pin state + PgUp/PgDn input
 - `packages/tui/src/components/MessageList.tsx` — `pinnedBack` render window + follow footer
+- `packages/tui/src/components/InputBar.tsx` + `__tests__/input.test.tsx` — terminal-proof cursor (no inverse-video placeholder eat)
 - `packages/tui/src/util/transcriptWindow.ts` — pure `applyTranscriptPin` helper
 - `packages/tui/src/util/displayLimits.ts` — `TRANSCRIPT_SCROLL_PAGE` budget
 - Tests: `packages/tui/src/util/__tests__/transcriptWindow.test.ts` (+3 pin cases, 8/8 green)
+- Cursor fix: `InputBar.tsx` empty-field `█` block + `showCursor={value.length > 0}` (1 new test, 8/8 input green)
 - Evidence: `npm run typecheck -w @anvil/tui` clean, full `npm run gate` green (15/15 mock evals)
 
 ## 2026-09-19
@@ -350,4 +352,66 @@ recorded the untouched body reaching the executor. Full gate green after both fi
   claims the subcommand alone is trusted) as pre-fix.
 - Evidence: `bash.test.ts` 22 tests green; full gate green (0-5) with BOTH sessions' work on
   disk (mine + the concurrent TUI scroll-pin session's five files).
+
+---
+
+## 2026-09-20 — MCP/SSE transport hardening (same session, second slice)
+
+**Agent (this session)** — owns & changed:
+- `packages/core/src/mcp/transport.ts` — STABILIZATION §S3.1 + §S3.2 closed. One deadline
+  installed BEFORE the GET (the old one was installed only after it resolved, so an
+  unanswered GET hung forever); one pump PER ATTEMPT (a shared pump left the retry reading a
+  dead stream); every failed-attempt path aborts, untracks, and finishes its pump; pump queue
+  capped by lines and bytes; SSE frame tail capped with a terminal `overflowed` flag; response
+  bodies read with the cap enforced DURING the read; off-origin `endpoint` refused; redirects
+  refused on both GET and POST.
+- `packages/core/src/config/constants.ts` — `MCP_MAX_PUMP_QUEUE_LINES` / `MCP_MAX_PUMP_QUEUE_BYTES`
+  (env-overridable, per the no-magic-constants rule).
+- `packages/core/src/mcp/__tests__/transport.test.ts`, `.../sse.test.ts` — pump/frame/origin
+  unit tests plus end-to-end cases (unanswered GET, silent-after-handshake, off-origin
+  endpoint, oversized POST response).
+- `README.md` §MCP servers, `CHANGELOG.md`, `docs/STABILIZATION-ROADMAP-2026-09.md` (§S3.1 and
+  §S3.2 ticked with dated evidence).
+
+**Evidence:** red/green against the PREVIOUS build before changing anything — with
+`timeoutMs: 300`, a server that completed the handshake and then stayed silent left **1 stream
+open and retained** after the rejection, and a server that never answered the GET was **still
+pending after 2003ms**. Focused suites 25 green; full gate green (0-5).
+
+**Note — `PROGRESS.md` is deliberately NOT staged with this slice.** The file is contended: a
+concurrent session ("OpenCode session (scroll-first)") writes its own ownership section here,
+and commit `0c61ffa` already swept one of their sections in (docs only — none of their code
+was committed, every tui file was verified unstaged first). Leaving this file dirty avoids
+repeating that; whichever session commits it next lands both records.
+
+---
+
+## 2026-09-20 — PHASE-21-25-AUDIT re-classification (protected artifact)
+
+**Agent (this session)** — owns & changed:
+- `docs/PHASE-21-25-AUDIT.md` — **PROTECTED ARTIFACT.** Re-audited every matrix item against
+  the live tree by symbol (not line number). Result: all 26 items are now green — every 🔴 LIVE
+  item is fixed in live code; **22.13 stays 🟣 BY-DESIGN and must not be changed.** Promoted
+  **22.9 / 22.11 / 22.17** from ⚪ UNVERIFIED to ✅ FIXED, each with traced evidence. Left
+  **23.4 as 🟡 PARTIAL** (only `MessageView` memoized — not done). Corrected the stale test
+  count 556 → **788** (core 519 / tui 228 / cli 41 across 121 files) and marked the
+  "gate only scans NEW lines" section **RESOLVED** by Step 1.5 (the doc had contradicted its
+  own gate-hardening §6). Motivation: AGENTS.md §1.5 sends every agent here first, and the doc
+  was directing them to re-fix already-fixed items — a trap, not just stale prose.
+- `scripts/gate-manifest.json` — **PROTECTED ARTIFACT.** SHA-256 for `docs/PHASE-21-25-AUDIT.md`
+  regenerated in the same commit (AGENTS.md §3.4b); coverage key set unchanged, `generated`
+  bumped to 2026-09-20. No other protected file was touched.
+- `CHANGELOG.md` — Under [Unreleased].
+
+**Declaration per AGENTS.md §3.4(a):** this is a protected-artifact change. It touches
+`docs/PHASE-21-25-AUDIT.md` (re-classification) and `scripts/gate-manifest.json` (same-commit
+manifest regen, §3.4b). The sentinel test asserts the manifest against live content, so it
+stays in sync without an edit. `AGENTS.md`, `verify-gate.mjs`, `.fresh-allowlist.json`, the
+sentinel test, and `.github/workflows/*` are **unchanged**. Requirement §3.4(c) — explicit
+human review of the protected-path diff — is pending the user's review; the gate was run with
+`--ack-protected-change` as the local acknowledgement.
+
+**Evidence:** per-item symbol checks recorded in the matrix (e.g. 22.11 `usePermissionBroker`
+subscribes in `useEffect`; 22.17 `App.tsx` mount effect prints `mcp.notices`; 24.4 and 24.10
+both at 0 production hits across core/tui/cli). Full `npm run gate` green (0–5).
 
