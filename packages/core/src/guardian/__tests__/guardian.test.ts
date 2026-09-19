@@ -27,6 +27,11 @@ describe("scanTextForSlop", () => {
     expect(violations.some((v) => v.rule === "no-as-any")).toBe(false);
   });
 
+  it("tags each violation with a structured rule family", () => {
+    expect(scanTextForSlop("src/a.ts", FIX_AS_ANY)[0].family).toBe("type-escape");
+    expect(scanTextForSlop("src/a.ts", FIX_RAW_ERROR)[0].family).toBe("raw-error");
+  });
+
   it("flags raw error formatting", () => {
     const violations = scanTextForSlop("src/a.ts", FIX_RAW_ERROR);
     expect(violations.some((v) => v.rule === "no-raw-error-format")).toBe(true);
@@ -66,6 +71,18 @@ describe("interceptTurn", () => {
     expect(result.allowed).toBe(true);
     expect(result.fixed).toHaveLength(1);
     expect(result.fixed[0].diff).toContain("getErrorMessage(err)");
+    // The repaired violation is reported as autofixed, not silently dropped.
+    expect(result.autofixed).toHaveLength(1);
+    expect(result.autofixed[0].autofixed).toBe(true);
+  });
+
+  it("enforces project-declared custom rules", () => {
+    const result = interceptTurn(
+      [{ path: "src/a.ts", diff: '+import moment from "moment";\n' }],
+      [{ rule: "no-moment", pattern: /from ["']moment["']/, detail: "Use date-fns instead" }]
+    );
+    expect(result.allowed).toBe(false);
+    expect(result.violations.some((v) => v.rule === "no-moment" && v.family === "rule")).toBe(true);
   });
 
   it("blocks a raw-error violation it cannot auto-fix (no silent pass-through)", () => {

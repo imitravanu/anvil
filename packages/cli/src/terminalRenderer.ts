@@ -70,10 +70,14 @@ export function renderCliEvent(event: AgentEvent, opts?: RenderCliOptions): Rend
     case "guardian_blocked":
       if (!raw) {
         process.stderr.write(
-          `⚠ [guardian] ${event.count} pending call(s) blocked before execution ` +
-            `(${event.fixed} auto-fixed); fix and retry — do not re-emit unchanged.\n`
+          `\n⚠ [guardian] ${event.count} pending call(s) blocked before execution (${event.fixed} auto-fixed):\n`
         );
+        for (const v of event.violations.slice(0, 10)) {
+          process.stderr.write(`   - ${v.file}:${v.line} [${v.rule}] ${v.detail}\n`);
+        }
+        process.stderr.write("   Fix and retry — do not re-emit unchanged.\n");
       } else {
+        // Stable machine line — scripts and CI key off this exact shape.
         process.stderr.write(`guardian_blocked count=${event.count} fixed=${event.fixed}\n`);
       }
       return undefined;

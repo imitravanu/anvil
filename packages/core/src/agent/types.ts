@@ -1,5 +1,7 @@
 import type { ToolExecutionResult } from "../tools/types.js";
 import type { ToolDefinition } from "../tools/types.js";
+import type { GuardianViolation } from "../guardian/scanner.js";
+import type { GuardianFixedFix } from "../guardian/interceptor.js";
 
 // The core loop never touches a terminal or a UI framework directly. It asks this interface
 // whenever a mutating tool is about to run, and the TUI implements it with a real
@@ -54,7 +56,16 @@ export type AgentEvent =
   // results are refusals and a repair prompt went to the model); `fixed` =
   // calls whose raw-error formatting was auto-repaired in place and allowed
   // to proceed. firstRule is the first surviving rule (display only).
-  | { type: "guardian_blocked"; count: number; fixed: number; firstRule: string };
+  | {
+      type: "guardian_blocked";
+      count: number;
+      fixed: number;
+      firstRule: string;
+      /** Surviving violations (structured, for the Phase 26.1 turn report). */
+      violations: GuardianViolation[];
+      /** The in-place auto-fixes, positionally identified. */
+      fixes: GuardianFixedFix[];
+    };
 
 export interface AgentOptions {
   systemPrompt: string;

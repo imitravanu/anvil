@@ -1,6 +1,7 @@
 import { getErrorMessage } from "../errors.js";
 import { GUARDIAN_MAX_AUTO_FIXES } from "../config/constants.js";
 import { scanDiffForSlop, type GuardianViolation } from "./scanner.js";
+import type { CustomGuardianRule } from "./rules.js";
 
 export interface TurnFileChange {
   path: string;
@@ -18,6 +19,8 @@ export interface GuardianFixedFix {
 
 export interface InterceptResult {
   violations: GuardianViolation[];
+  /** Violations the interceptor safely repaired in place (reported, never blocking). */
+  autofixed: GuardianViolation[];
   /** Auto-fixed diffs by positional index (empty when nothing was safely fixable). */
   fixed: GuardianFixedFix[];
   /** True when the turn may proceed (no violations or all auto-fixed). */
@@ -37,15 +40,23 @@ export function guardianFixedText(diff: string): string {
  * turn writes to disk or presents to the user. Auto-fixes the one safe
  * family (raw error formatting → getErrorMessage); everything else blocks
  * with actionable violations for the model to repair.
+ *
+ * Project-declared `customRules` (the guardian:rules block) are honored on the
+ * same pass, so a repo's own rules block a turn exactly like the built-ins.
  */
-export function interceptTurn(changes: TurnFileChange[]): InterceptResult {
+export function interceptTurn(
+  changes: TurnFileChange[],
+  customRules: readonly CustomGuardianRule[] = []
+): InterceptResult {
   const violations: GuardianViolation[] = [];
+  const autofixed: GuardianViolation[] = [];
   const fixed: GuardianFixedFix[] = [];
   let fixesUsed = 0;
 
   for (const [idx, change] of changes.entries()) {
     let diff = change.diff;
     try {
+      const initial = scanDiffForSlop(change.path, diff, customRules);
       // Repair every safely-fixable raw-error violation, then report what
       // survives. Re-scanning after each successful fix keeps the survivor
       // set honest: a fixed occurrence vanishes from the new text, while an
@@ -53,7 +64,7 @@ export function interceptTurn(changes: TurnFileChange[]): InterceptResult {
       // remains and must still block the turn. The previous filter dropped
       // surviving raw-error violations whenever the fix budget was unspent,
       // silently allowing them through.
-      let found = scanDiffForSlop(change.path, diff);
+      let found = initial;
       let i = 0;
       while (i < found.length) {
         const v = found[i];
@@ -62,12 +73,20 @@ export function interceptTurn(changes: TurnFileChange[]): InterceptResult {
           if (repaired !== diff) {
             diff = repaired;
             fixesUsed += 1;
-            found = scanDiffForSlop(change.path, diff);
+            found = scanDiffForSlop(change.path, diff, customRules);
             i = 0;
             continue;
           }
         }
         i += 1;
+      }
+      // A raw-error violation present before the repair and absent after was
+      // fixed in place — report it as such rather than dropping it silently.
+      for (const v of initial) {
+        if (v.family !== "raw-error") continue;
+        if (!found.some((s) => s.line === v.line && s.rule === v.rule)) {
+          autofixed.push({ ...v, autofixed: true });
+        }
       }
       violations.push(...found);
       if (diff !== change.diff) fixed.push({ index: idx, path: change.path, diff });
@@ -76,12 +95,13 @@ export function interceptTurn(changes: TurnFileChange[]): InterceptResult {
         file: change.path,
         line: 0,
         rule: "interceptor-error",
+        family: "style",
         detail: `Guardian scan failed: ${getErrorMessage(err)}`,
       });
     }
   }
 
-  return { violations, fixed, allowed: violations.length === 0 };
+  return { violations, autofixed, fixed, allowed: violations.length === 0 };
 }
 
 /** Safe auto-fix: common raw-error ternary → getErrorMessage call. */

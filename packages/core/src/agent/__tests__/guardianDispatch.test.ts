@@ -141,6 +141,37 @@ describe("Guardian dispatch", () => {
     expect(events.filter((e) => e.type === "plan_updated")).toHaveLength(3);
   });
 
+  it("enforces a project's guardian:rules block loaded from AGENTS.md", async () => {
+    await fs.mkdir(path.join(root, "src"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, "AGENTS.md"),
+      [
+        "# Project rules",
+        "<!-- guardian:rules",
+        'no-moment: /from ["\']moment["\']/ : "Use date-fns instead"',
+        "-->",
+      ].join("\n")
+    );
+    const session = makeSession([
+      [
+        { type: "tool_call_start", id: "m0", name: "write_file" },
+        {
+          type: "tool_call_end",
+          id: "m0",
+          name: "write_file",
+          input: { path: "src/time.ts", content: 'import moment from "moment";\n' },
+        },
+        { type: "turn_end", stopReason: "tool_use" },
+      ],
+      textTurn("ok"),
+    ]);
+
+    const events = await collect(session.send("add a date helper"));
+    const blocked = events.find((e) => e.type === "guardian_blocked");
+    expect(blocked).toBeDefined();
+    await expect(fs.access(path.join(root, "src/time.ts"))).rejects.toThrow();
+  });
+
   it("auto-fixes two edits to the SAME path independently in one batch", async () => {
     const target = path.join(root, "src/fixed.ts");
     await fs.mkdir(path.join(root, "src"), { recursive: true });

@@ -4,6 +4,22 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Phase 26.0 + 26.1 — Guardian Rules Bridge and Turn Report (2026-09-19)
+
+- **Project rules are now enforced, not just advised**: a repo can declare machine-
+  enforceable rules in an `<!-- guardian:rules -->` block in `AGENTS.md` / `.anvil/rules`;
+  they are parsed once per session and applied by the turn interceptor alongside the
+  built-ins (same block a foreign agent can be provisioned with).
+- **`.fresh-allowlist.json` read side added**: `loadFreshAllowlist` validates the file
+  against the gate's own shape rules (broad/malformed entries rejected, never half-loaded) —
+  the data source the health telemetry will need.
+- **Guardian violations are structured**: each carries a `family` (type-escape, raw-error,
+  style, architecture, placeholder, rule) and repaired violations are reported as
+  `autofixed` rather than silently dropped.
+- **Guardian turn report**: a `GuardianReportCard` renders what was blocked and auto-fixed,
+  with per-violation `file:line` and rule family; the headless/CI stderr line keeps its
+  stable `guardian_blocked count=N fixed=M` shape.
+
 ### Core Hygiene + Engine Modularization (2026-09-19)
 
 - **Guardian false-negative fixed**: the turn interceptor's post-fix re-scan dropped

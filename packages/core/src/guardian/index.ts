@@ -1,6 +1,10 @@
 export { scanTextForSlop, scanDiffForSlop } from "./scanner.js";
-export type { GuardianViolation } from "./scanner.js";
+export type { GuardianViolation, GuardianRuleFamily } from "./scanner.js";
 export { interceptTurn, autoFixRawErrorFormat } from "./interceptor.js";
-export type { TurnFileChange, InterceptResult } from "./interceptor.js";
+export type { TurnFileChange, InterceptResult, GuardianFixedFix } from "./interceptor.js";
 export { guardedInit } from "./init.js";
 export type { GuardedInitResult } from "./init.js";
+export { parseCustomGuardianRules, loadCustomGuardianRules, MAX_CUSTOM_RULES } from "./rules.js";
+export type { CustomGuardianRule } from "./rules.js";
+export { loadFreshAllowlist } from "./allowlist.js";
+export type { FreshAllowlist, FreshAllowlistEntry } from "./allowlist.js";

@@ -70,6 +70,21 @@ export interface DisplayGoal {
   maxTurns: number;
 }
 
+/** Phase 26.1 — structured guardian turn report. */
+export interface DisplayGuardianReport {
+  /** Pending mutations refused this turn. */
+  blocked: number;
+  /** Changes the guardian repaired in place before execution. */
+  fixed: number;
+  violations: {
+    file: string;
+    line: number;
+    rule: string;
+    family: string;
+    detail: string;
+  }[];
+}
+
 export interface DisplayMessage {
   id: string;
   role: "user" | "assistant" | "system";
@@ -78,6 +93,8 @@ export interface DisplayMessage {
   toolCalls: DisplayToolCall[];
   subAgents: DisplaySubAgent[];
   verifications?: DisplayVerification[];
+  /** Guardian turn reports (blocked/auto-fixed) attached to this turn. */
+  guardianReports?: DisplayGuardianReport[];
   images?: { path: string }[];
   errorText?: string;
   /** Creation time (epoch ms); absent for resumed history — no time renders. */
@@ -194,11 +211,23 @@ export function applyEvent(
       );
       break;
     case "guardian_blocked":
-      appendSystemMessage(
-        setMessages,
-        `Guardian: ${event.count} pending mutation${event.count === 1 ? " was" : "s were"} blocked before execution (${event.fixed} auto-fixed). ` +
-          "Fix the violations (see errors above) and retry — do not re-emit unchanged calls."
-      );
+      update((m) => ({
+        ...m,
+        guardianReports: [
+          ...(m.guardianReports ?? []),
+          {
+            blocked: event.count,
+            fixed: event.fixed,
+            violations: event.violations.map((v) => ({
+              file: v.file,
+              line: v.line,
+              rule: v.rule,
+              family: v.family,
+              detail: v.detail,
+            })),
+          },
+        ],
+      }));
       break;
     case "plan_updated":
       setPlan(event.plan || null);

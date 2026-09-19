@@ -67,6 +67,40 @@ describe("eventReducer", () => {
     expect(assistant.toolCalls[0].output).toEqual({ content: "hello" });
   });
 
+  it("applyEvent attaches a structured guardian report on guardian_blocked", () => {
+    let assistant: DisplayMessage = {
+      id: "a1",
+      role: "assistant",
+      text: "",
+      streaming: true,
+      toolCalls: [],
+      subAgents: [],
+    };
+    const update = (fn: (m: DisplayMessage) => DisplayMessage) => {
+      assistant = fn(assistant);
+    };
+    applyEvent(
+      {
+        type: "guardian_blocked",
+        count: 1,
+        fixed: 1,
+        firstRule: "no-placeholder-marker",
+        violations: [
+          { file: "src/a.ts", line: 3, rule: "no-placeholder-marker", family: "placeholder", detail: "placeholder left in code" },
+        ],
+        fixes: [],
+      },
+      update,
+      vi.fn(),
+      vi.fn(),
+      vi.fn()
+    );
+    expect(assistant.guardianReports).toHaveLength(1);
+    expect(assistant.guardianReports?.[0].blocked).toBe(1);
+    expect(assistant.guardianReports?.[0].fixed).toBe(1);
+    expect(assistant.guardianReports?.[0].violations[0].family).toBe("placeholder");
+  });
+
   it("applyEvent reduces plan_updated", () => {
     const update = vi.fn();
     const setUsage = vi.fn();

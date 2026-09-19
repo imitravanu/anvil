@@ -14,6 +14,7 @@ import { RunLedgerEntry, capLedger, maxSeq, LEDGER_CAP } from "./ledger.js";
 import { clearRateLimitRecord, getConsecutiveRateLimitCount, isCircuitOpen, isRateLimitMessage, noteRateLimited, rateLimitRetrySeconds, recordFailure, recordSuccess } from "../providers/freeModels.js";
 import { MAX_DELEGATIONS_PER_TURN, runSubAgentLive } from "./subagent.js";
   import { interceptTurn, guardianFixedText } from "../guardian/interceptor.js";
+import { loadCustomGuardianRules, type CustomGuardianRule } from "../guardian/rules.js";
 import { TurnState } from "./turnState.js";
 import { LoopGuard, type AccumulatedToolCall, type PreparedCall } from "./loopGuard.js";
 import type { TeamRunResult } from "./team/types.js";
@@ -59,6 +60,8 @@ export class AgentSession {
   private toolDefs: ToolDefinition[];
   // Rewind: in-memory ring of pre-mutation file snapshots (never persisted).
   private checkpoints: Checkpoint[] = [];
+  // Project-declared guardian rules, loaded ONCE per session (no per-turn I/O).
+  private readonly guardianRules: CustomGuardianRule[];
   // First-seen pre-mutation content per path across the WHOLE session. The
   // ring above is capped (CHECKPOINT_KEEP) and evicts the earliest snapshots;
   // this map never evicts, so /diff and the goal debrief keep reporting every
@@ -86,6 +89,7 @@ export class AgentSession {
     this.maxInnerIterations = options.maxInnerIterations ?? DEFAULT_MAX_INNER_ITERATIONS;
     // tool-list override (sub-agents exclude delegate_task; MCP seam).
     this.toolDefs = options.tools ?? TOOL_DEFINITIONS;
+    this.guardianRules = loadCustomGuardianRules(this.options.projectRoot);
     this.id = restore?.metadata.id ?? randomUUID();
     this.title = restore?.metadata.title ?? null;
     this.createdAt = restore?.metadata.createdAt ?? new Date().toISOString();
@@ -667,7 +671,10 @@ export class AgentSession {
     }
 
     if (pending.length === 0) return { blocked, handled, event: null };
-    const intercept = interceptTurn(pending.map((p) => ({ path: p.path, diff: p.diff })));
+    const intercept = interceptTurn(
+      pending.map((p) => ({ path: p.path, diff: p.diff })),
+      this.guardianRules
+    );
     if (intercept.fixed.length > 0) {
       // Auto-fix: raw-error ternary → getErrorMessage, applied back to each
       // call's OWN input BY POSITION (fix.index). A path-keyed map is wrong
@@ -723,6 +730,8 @@ export class AgentSession {
         count: blockedByPath.size,
         fixed: intercept.fixed.length,
         firstRule: intercept.violations[0]?.rule ?? "unknown",
+        violations: intercept.violations,
+        fixes: intercept.fixed,
       },
     };
   }

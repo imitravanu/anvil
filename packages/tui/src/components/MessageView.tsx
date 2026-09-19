@@ -10,6 +10,7 @@ import { useBlink, useSpinnerFrame } from "../util/useSpinner.js";
 import { ToolCallView } from "./ToolCallView.js";
 import { SubAgentView } from "./SubAgentView.js";
 import { VerificationCard } from "./VerificationCard.js";
+import { GuardianReportCard } from "./GuardianReportCard.js";
 
 export const MessageView = React.memo(function MessageView({ message, expandTools }: { message: DisplayMessage; expandTools?: boolean }) {
   const theme = useTheme();
@@ -98,6 +99,9 @@ export const MessageView = React.memo(function MessageView({ message, expandTool
       ))}
       {message.verifications?.map((v) => (
         <VerificationCard key={v.id} verification={v} />
+      ))}
+      {message.guardianReports?.map((r, i) => (
+        <GuardianReportCard key={i} report={r} />
       ))}
       {message.subAgents.map((sub, i) => (
         <SubAgentView key={i} sub={sub} expanded={expandTools} />
