@@ -50,6 +50,16 @@ export function scanLinesForViolations(diffLines) {
         violations.push(`${currentFile}: Forbidden type escape "${addedText}" (Rule 2.2: No 'as any' / 'as never')`);
       }
 
+      // Rule 1b: No bare `any` type annotations. Annotations (`: any`),
+      // generics (`<any>`/`Foo<any,`), and `any[]` evade the cast-only rule
+      // above — exactly how such sites slipped past review. Same test-file
+      // exemption (mock fixtures).
+      // The (`(?<!\?)`) guard keeps `(?:any` non-capturing groups from
+      // reading as a `: any` annotation.
+      if (/((?<!\?):\s*any\b|<\s*any\b|\bany\s*\[\])/.test(addedText) && !currentFile.includes("__tests__") && !currentFile.includes(".test.")) {
+        violations.push(`${currentFile}: Bare any type annotation "${addedText}" (Rule 2.2: use unknown + narrowing)`);
+      }
+
       // Rule 2: No empty catch blocks in new code
       if (/catch\s*(?:\([^)]*\))?\s*\{\s*\}/.test(addedText)) {
         violations.push(`${currentFile}: Silent catch block "${addedText}" (Rule 2.3: No silent catch {})`);
@@ -102,10 +112,11 @@ const sensorTestFixtures = [
   "+ const msg3 = e.message ?? String(e);",
   "+ import { TuiComponent } from '@anvil/tui';",
   "+ // TODO: finish later",
+  "+ const z: any = 1;",
 ];
 const sensorResults = scanLinesForViolations(sensorTestFixtures);
-if (sensorResults.length < 7) {
-  fail("STEP 0", `Gate sensor failed to detect intentional test slop (caught ${sensorResults.length}/7). Sensor integrity compromised.`);
+if (sensorResults.length < 8) {
+  fail("STEP 0", `Gate sensor failed to detect intentional test slop (caught ${sensorResults.length}/8). Sensor integrity compromised.`);
 } else {
   pass("STEP 0", "Gate sensor successfully verified against all intentional violation fixtures.");
 }
@@ -365,6 +376,7 @@ const RESIDUAL_RULES = [
   { name: "core self-import (@anvil/core inside packages/core)", re: /from\s+["']@anvil\/core["']/, onlyCore: true },
   { name: "core boundary breach (imports tui/cli)", re: /@anvil\/(tui|cli)/, onlyCore: true },
   { name: "type escape (as any/never)", re: /\bas\s+(any|never)\b/ },
+  { name: "type escape (bare any annotation)", re: /((?<!\?):\s*any\b|<\s*any\b|\bany\s*\[\])/ },
   { name: "placeholder marker (TODO/FIXME/XXX)", re: /\b(TODO|FIXME|XXX)\b/ },
   { name: "empty catch block", re: /catch\s*(?:\([^)]*\))?\s*\{\s*\}/ },
   { name: "hardcoded color in TUI components", re: /\b(?:color|borderColor|backgroundColor)\s*=\s*["'](?:cyan|green|red|yellow|blue|magenta|white|black|gray)["']/, onlyTuiComponents: true },

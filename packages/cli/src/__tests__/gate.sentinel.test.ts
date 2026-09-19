@@ -36,6 +36,7 @@ describe("gate integrity sentinel", () => {
   it("every anti-slop rule regex is still enforced", () => {
     const gate = read("scripts/verify-gate.mjs");
     expect(gate).toContain("as\\s+(any|never)"); // rule: no `as any` / `as never`
+    expect(gate).toContain(":\\s*any\\b"); // rule: no bare `any` annotations
     expect(gate).toContain("catch\\s*"); // rule: no silent catch blocks
     expect(gate).toContain("@anvil/tui"); // rule: core must not import tui
     expect(gate).toContain("tui|cli"); // rule: residual arch covers cli too
@@ -114,6 +115,7 @@ describe("gate integrity sentinel", () => {
     expect(gate).toContain("walkSourceFiles");
     expect(gate).toContain(".message\\s*\\?\\?\\s*String\\(");
     expect(gate).toContain("type escape (as any/never)");
+    expect(gate).toContain("type escape (bare any annotation)");
     expect(gate).toContain("placeholder marker (TODO/FIXME/XXX)");
     expect(gate).toContain("core boundary breach");
     expect(gate).toContain("Full-tree residual scan clean");
