@@ -3,8 +3,8 @@
 > **Status:** PARTIALLY COMPLETE — S0, S1.1–S1.4, S2.1, S2.2, S3.1–S3.2, S4.1, S4.2, and S5.1/S5.2
 > are **done** (each landed test-first with the full `npm run gate` green; checkboxes annotated
 > in place — S3 in 2026-09-20, S4.1 in 2026-09-20, S4.2 in 2026-09-20, S5.1/S5.2 in 2026-09-20,
-> S1.3 in 2026-09-20).
-> Still open: S2.3, S5.3 syntax-aware import rules, S6, S7.
+> S1.3 in 2026-09-20, S2.3 in 2026-09-20).
+> Still open: S5.3 syntax-aware import rules, S6, S7.
 > **Principle:** No new features until the chain **approved → executed → changed → verified → reported**
 > is provably consistent. Every finding below cites the inspected source location; none has
 > yet been reproduced with a regression test — Step 0 of each phase is to write that test first.
@@ -192,9 +192,32 @@ neither retry loop tracks whether deltas were already emitted.
 
 ### S2.3 — Compaction realism (audit note)
 
-- [ ] Property test: after `applyCompacted`, history has valid role alternation and no
+- [x] Property test: after `applyCompacted`, history has valid role alternation and no
       orphaned tool_call/tool_result pairs (`compaction.ts` + `HistoryStore`).
-- [ ] Document (and test) the "single enormous message" boundary stated in the README.
+      *Done 2026-09-20 — and it found two REAL bugs in the live `task` path, both reachable only
+      when selective keep is active (`session.ts` passes `task: turn.task`, so in practice always).
+      Seeded property test: deterministic LCG, 60 generated histories × both option variants,
+      asserting alternation plus both directions of tool pairing, with `compactedRuns > 20` so the
+      test cannot silently go vacuous; the generator also asserts its OWN output is valid, so a
+      fixture bug cannot masquerade as a compactor bug (it caught one during development).*
+      *Bug 1 — orphans: `selectiveKeep` ranks by relevance, not adjacency, so a kept `tool_result`
+      whose `tool_call` was summarized away replayed a malformed payload (probe: seed 2, "orphan
+      tool_result for call_4_2_0"). Fixed with `closeToolPairs`, which widens the kept set until no
+      pair is half-kept.*
+      *Bug 2 — alternation: `mergeSummaryIntoHistory` repaired only the FIRST same-role pair, but a
+      selectively-kept message of the summary's own role can land anywhere in the result (probe:
+      seed 1, consecutive users at index 1/2). Generalized to merge every adjacent same-role pair,
+      ordering tool results first inside a merged user turn (providers require them at the start),
+      and still returning the input reference when nothing changes.*
+      *Both fixes confirmed load-bearing by reverting each one separately (revert Bug 1's fix →
+      the seed-2 orphan returns).*
+- [x] Document (and test) the "single enormous message" boundary stated in the README.
+      *Done 2026-09-20: pinned by a test — 4 × 200 KB messages, hopelessly over the window →
+      `compacted: false`, summarizer never called, history identical ("refuses rather than mangling
+      when everything is inside the keep window"). The README bullet was rewritten to describe what
+      the code does (a deliberate no-op when there is no older region to summarize) instead of the
+      vaguer "can still exceed the window", and now also states the guarantee the compactor does
+      provide: no split tool pair, never two same-role messages in a row.*
 
 ---
 
@@ -360,6 +383,12 @@ markers) to *any* scanned project, with only a test-path exception.
       `as never` spanning the word "was" and the next one. The gate's own Step 1 does not share
       that flaw (it uses the quoted-import form); the hook header already concedes that it is
       context-free by design.*
+      * **Third instance, 2026-09-20 (S2.3):** the gate's bare-`any` rule is
+      `(?<!\?):\\s*any\\b|<\\s*any\\b|\\bany\\s*\\[\\]`, so it flagged the English words
+      "alternation: any two adjacent" in a doc comment — the lookbehind guards `?:any` but
+      nothing distinguishes prose from an annotation. Reworded, not argued with: the rule is
+      doing its job on real code, and the fix belongs in the checker's precision, which is
+      exactly this item.*
 
 ### Extra fix landed with S5 (F2, second half) — docs are not code
 

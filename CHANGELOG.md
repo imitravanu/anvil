@@ -4,6 +4,30 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Compaction Can No Longer Hand A Provider A Malformed History (2026-09-20)
+
+- **Two bugs in the selective-keep path, both reachable in normal use** (the session always passes
+  the turn's task, which is what activates it). Compaction rewrites the exact array providers
+  replay, so this was provider-facing breakage rather than a cosmetic flaw.
+  - **A kept `tool_result` whose `tool_call` was summarized away.** Messages are kept for
+    *relevance*, not adjacency, so the kept prefix could hold half a tool interaction — a
+    `tool_result` for a call the provider never received. The kept set is now widened until no pair
+    is half-kept (`closeToolPairs`).
+  - **Two messages of the same role in a row.** The merge step repaired only the *first* such pair,
+    but a kept message sharing the summary's role can land anywhere in the result. It now merges
+    every adjacent same-role pair, keeping tool results first inside a merged user turn (where
+    providers require them) and preserving all content.
+- **Pinned by a seeded property test** — deterministic, so a failing shape reproduces exactly: 60
+  generated histories × both option variants, asserting role alternation and tool pairing in both
+  directions, with a guard that fails if the test stops compacting (a property test that no longer
+  exercises the path passes and proves nothing). The generator asserts its own output is valid, so a
+  fixture bug cannot masquerade as a compactor bug. Both fixes were confirmed load-bearing by
+  reverting each separately.
+- **The "single enormous message" boundary is documented as what it actually is:** a deliberate
+  no-op when there is no older region to summarize — pinned by a test (four 200 KB messages far over
+  the window → nothing happens, the summarizer is never called). README corrected accordingly, and
+  now states the guarantee the compactor does make.
+
 ### `/rewind` Now Says When It Overwrites An Outside Edit (2026-09-20)
 
 - **Restoring a checkpoint silently clobbered hand edits.** `restoreCheckpoint` wrote the

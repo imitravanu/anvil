@@ -2,6 +2,46 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 
+## 2026-09-20 — STABILIZATION §S2.3: compaction realism (2 real bugs found + fixed)
+
+**Agent (this session)** — owns & changed:
+- `packages/core/src/agent/compaction.ts` — two fixes. (1) `closeToolPairs` widens a selective-keep
+  selection until no tool interaction is half-kept, so a kept `tool_result` can never outlive its
+  summarized-away `tool_call`. (2) `mergeSummaryIntoHistory` generalized from "repair the first
+  same-role pair" to "merge every adjacent same-role pair", with tool results ordered first inside a
+  merged user turn; it still returns the input reference when nothing needs changing (the existing
+  identity test pins that).
+- `packages/core/src/agent/__tests__/compaction.test.ts` — +3: a seeded (deterministic LCG) property
+  test over 60 generated histories × both option variants asserting role alternation and tool
+  pairing in both directions; a selective-keep variant with a real keep budget; and the
+  enormous-message boundary case. Coverage guards (`compactedRuns > 20`) keep the property test from
+  passing vacuously, and the generator asserts its own output is shape-valid.
+- `README.md` — the compaction bullet now describes the boundary as a deliberate no-op and states
+  the guarantee the compactor provides.
+- Docs: `docs/STABILIZATION-ROADMAP-2026-09.md` (S2.3 both boxes ticked with the probes recorded),
+  `CHANGELOG.md`.
+
+**Why this item mattered:** the roadmap framed S2.3 as "property test + document", i.e. expected
+verification work. The test instead found two live defects in the `task`-driven path (the path the
+session always takes, `task: turn.task`): an orphaned `tool_result` (seed 2) and consecutive
+same-role messages (seed 1). Both were confirmed load-bearing by reverting each fix separately and
+watching the specific failure return. Writing the test first is what made them visible — neither was
+reachable from the existing tests, which only exercised the no-task path and short histories.
+
+**Evidence (red → green):** RED 1 — `seed 1 options={"task":"parser"}: consecutive user at index
+1/2`. RED 2 (after reverting only the pair fix) — `seed 2 options={"task":"parser"}: orphan
+tool_result for call_4_2_0 at index 0`. GREEN — `compaction.test.ts` 18/18; full suite 811 tests
+(core 540 / tui 230 / cli 41); `npm run typecheck` exit 0 across core+tui+cli+scripts; full
+`npm run gate` green.
+
+**Not a protected artifact** — no `AGENTS.md`/gate/manifest/allowlist/sentinel/CI path involved.
+`docs/PHASE-21-25-AUDIT.md` deliberately untouched.
+
+**Not mine, left alone:** the OpenCode session's TUI transcript-scroll files
+(`packages/tui/src/{components/App,InputBar,MessageList}.tsx`, `util/transcriptWindow.ts`,
+`util/displayLimits.ts` and their tests) remain un-staged and uncommitted by this session.
+
+
 ## 2026-09-20 — STABILIZATION §S1.3 (final box): /rewind reports outside edits
 
 **Agent (this session)** — owns & changed:

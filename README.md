@@ -223,8 +223,12 @@ an empty input recalls messages you sent this session; typing **/** opens the co
 - "Always allow" permission grants are in-memory, per session — never persisted, never restored
   on `/session resume`.
 - Compaction is proactive on resume (a chars/4 estimate decides whether to summarize before the
-  first request) and reactive between turns; a single enormous message can still exceed the
-  context window in one hop.
+  first request) and reactive between turns. It is deliberately conservative: it summarizes only
+  when there is an older region outside the recent-message window, and **refuses as a no-op** when
+  the history is already just a few messages — so a single enormous message, or a handful of them,
+  can still exceed the context window in one hop rather than being half-rewritten. What it does
+  guarantee: the history it hands back never splits a tool call from its result and never puts two
+  messages of the same role in a row, whatever the model returns.
 
 ## How this was built
 

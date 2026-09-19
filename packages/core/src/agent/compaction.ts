@@ -10,25 +10,89 @@ import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, SUMMARIZER_TOOL_ERROR_MAX_C
 export { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES };
 
 /**
- * Fold a compacted history ([summary(user), ...recent]) to preserve role
- * alternation: if the kept tail also starts with a user message (reachable
- * after empty tool-result pushes, error/abort tails, or legacy resumed
- * histories), merge the summary text into it instead of pushing two
- * consecutive users — several providers reject that shape. Pure.
+ * Fold a compacted history ([summary(user), ...recent], or with selectively
+ * kept messages in front) so role alternation survives — every two adjacent
+ * same-role messages are merged into one. The kept tail can start with a user
+ * message, and a selectively-kept message can land beside the summary or
+ * beside another kept message of its own role (the selection is by relevance,
+ * not adjacency), so repairing only the first pair is not enough — several
+ * providers reject any consecutive same-role pair. Merging preserves every
+ * part's content; nothing is invented and nothing is dropped. Pure, and
+ * returns the input array itself when it is already valid.
  */
 export function mergeSummaryIntoHistory(
   compacted: ConversationMessage[]
 ): ConversationMessage[] {
-  const [first, ...rest] = compacted;
-  if (
-    first &&
-    rest.length > 0 &&
-    first.role === "user" &&
-    rest[0].role === "user"
-  ) {
-    return [{ role: "user", content: [...first.content, ...rest[0].content] }, ...rest.slice(1)];
+  if (compacted.length < 2) return compacted;
+  const out: ConversationMessage[] = [compacted[0]];
+  let changed = false;
+  for (let i = 1; i < compacted.length; i++) {
+    const prev = out[out.length - 1];
+    const msg = compacted[i];
+    if (prev.role === msg.role) {
+      out[out.length - 1] = { role: prev.role, content: mergeContent(prev.content, msg.content) };
+      changed = true;
+      continue;
+    }
+    out.push(msg);
   }
-  return compacted;
+  return changed ? out : compacted;
+}
+
+/**
+ * Merge two same-role messages' content. Tool results lead: providers require
+ * tool_result blocks at the start of the user turn that answers them (and
+ * Anthropic rejects them anywhere else in it), so merged text must not push a
+ * result behind narration.
+ */
+function mergeContent(
+  a: ConversationMessage["content"],
+  b: ConversationMessage["content"]
+): ConversationMessage["content"] {
+  const isResult = (c: ConversationMessage["content"][number]): boolean => c.type === "tool_result";
+  return [...a.filter(isResult), ...b.filter(isResult), ...a.filter((c) => !isResult(c)), ...b.filter((c) => !isResult(c))];
+}
+
+/**
+ * Widen a selectively-kept index set so it never orphans a tool interaction: a
+ * kept tool_call pulls in its tool_result and vice versa, as far as
+ * `messages` knows them. Without this the kept prefix can hold half a pair
+ * (the call summarized away, the result kept verbatim) and the history the
+ * provider replays is malformed. Pairs spanning the compaction cut are the
+ * cut's business, not this function's. Pure.
+ */
+function closeToolPairs(
+  kept: readonly number[],
+  messages: readonly ConversationMessage[]
+): number[] {
+  const set = new Set(kept);
+  const callAt = new Map<string, number>();
+  const resultAt = new Map<string, number>();
+  for (let i = 0; i < messages.length; i++) {
+    for (const c of messages[i].content) {
+      if (c.type === "tool_call") callAt.set(c.call.id, i);
+      else if (c.type === "tool_result") resultAt.set(c.result.toolCallId, i);
+    }
+  }
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const i of [...set]) {
+      for (const c of messages[i].content) {
+        const partner =
+          c.type === "tool_call"
+            ? resultAt.get(c.call.id)
+            : c.type === "tool_result"
+              ? callAt.get(c.result.toolCallId)
+              : undefined;
+        if (partner !== undefined && !set.has(partner)) {
+          set.add(partner);
+          changed = true;
+        }
+      }
+    }
+  }
+  return [...set].sort((x, y) => x - y);
 }
 
 /**
@@ -149,9 +213,13 @@ export async function compactIfNeeded(
     // Keep only the recent tail within the budget; everything older than the
     // oldest kept message is what the summarizer condenses.
     const keptIndices = selectiveKeep(toSummarize, options.task, keepTokens);
-    if (keptIndices.length > 0 && keptIndices.length < toSummarize.length) {
-            summariesToKeep = keptIndices.map((i) => toSummarize[i]);
-      summarizeThese = toSummarize.filter((_, i) => !keptIndices.includes(i));
+    // Relevance is scored per message, not per adjacency, so the selection can
+    // hold half a tool interaction. Widen it to whole pairs before slicing:
+    // replaying a lone call or lone result is a malformed payload.
+    const closedKept = closeToolPairs(keptIndices, toSummarize);
+    if (closedKept.length > 0 && closedKept.length < toSummarize.length) {
+      summariesToKeep = closedKept.map((i) => toSummarize[i]);
+      summarizeThese = toSummarize.filter((_, i) => !closedKept.includes(i));
     }
   }
 

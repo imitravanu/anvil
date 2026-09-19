@@ -273,6 +273,197 @@ describe("compaction in the agent loop", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// S2.3 — Compaction realism. `compactIfNeeded` rewrites the array the providers
+// replay, so the invariants below are not cosmetic: a provider rejects a history
+// with two consecutive same-role messages, and a tool_result whose tool_call was
+// summarized away (or a tool_call left unanswered) is a malformed payload.
+// Deterministic PRNG: a failing shape reproduces exactly, so this cannot flake.
+// ---------------------------------------------------------------------------
+
+/** Linear congruential generator — seeded, reproducible, no dependency. */
+function rng(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 0x100000000;
+  };
+}
+
+/** A VALID history: alternating roles, every tool pair intact and adjacent. */
+function generatedHistory(rand: () => number, turns: number): ConversationMessage[] {
+  const out: ConversationMessage[] = [];
+  for (let t = 0; t < turns; t++) {
+    out.push(textMsg("user", `request ${t} about the parser`));
+    // Mirror the agent loop: it keeps calling the model while responses carry
+    // tool calls, and a response with none ENDS the turn. So an assistant
+    // message is never adjacent to another, and tool results are always
+    // followed by the assistant that consumed them.
+    for (let s = 0; s < 4; s++) {
+      const calls = Math.floor(rand() * 3); // 0..2 calls
+      if (calls === 0) {
+        out.push(textMsg("assistant", `answer ${t}.${s} about the parser`));
+        break;
+      }
+      const assistantContent: ConversationMessage["content"] = [
+        { type: "text", text: `working ${t}.${s}` },
+      ];
+      for (let c = 0; c < calls; c++) {
+        assistantContent.push({
+          type: "tool_call",
+          call: { id: `call_${t}_${s}_${c}`, name: "read_file", input: { path: "src/parser.ts" } },
+        });
+      }
+      out.push({ role: "assistant", content: assistantContent });
+      const results: ConversationMessage["content"] = [];
+      for (let c = 0; c < calls; c++) {
+        results.push({
+          type: "tool_result",
+          result: { toolCallId: `call_${t}_${s}_${c}`, content: `parser output ${t} ${s} ${c}` },
+        });
+      }
+      if (rand() < 0.5) results.push({ type: "text", text: `notes for ${t}.${s}` });
+      out.push({ role: "user", content: results });
+    }
+    // The loop can run out of steps with results still last; the real session
+    // closes that with an assistant budget notice, so do the same here.
+    if (out[out.length - 1].role === "user") {
+      out.push(textMsg("assistant", `done with ${t}`));
+    }
+  }
+  return out;
+}
+
+/** Assert the shape every provider must accept. Names the offending index. */
+function expectProviderShape(history: ConversationMessage[], label: string): void {
+  for (let i = 1; i < history.length; i++) {
+    expect(
+      history[i].role,
+      `${label}: consecutive ${history[i].role} at index ${i - 1}/${i}`
+    ).not.toBe(history[i - 1].role);
+  }
+  // Forward: a result must have its call earlier. Backward: a call must have its
+  // result later. Together these forbid orphans in both directions.
+  const callsSeen = new Set<string>();
+  history.forEach((m, i) => {
+    for (const c of m.content) {
+      if (c.type === "tool_call") callsSeen.add(c.call.id);
+      if (c.type === "tool_result") {
+        expect(
+          callsSeen.has(c.result.toolCallId),
+          `${label}: orphan tool_result for ${c.result.toolCallId} at index ${i}`
+        ).toBe(true);
+      }
+    }
+  });
+  const resultsSeen = new Set<string>();
+  for (let i = history.length - 1; i >= 0; i--) {
+    for (const c of history[i].content) {
+      if (c.type === "tool_result") resultsSeen.add(c.result.toolCallId);
+      if (c.type === "tool_call") {
+        expect(
+          resultsSeen.has(c.call.id),
+          `${label}: unanswered tool_call ${c.call.id} at index ${i}`
+        ).toBe(true);
+      }
+    }
+  }
+}
+
+function summaryProvider(): FakeProvider {
+  return new FakeProvider([
+    [
+      { type: "text_delta", text: "Decisions: kept the parser." },
+      { type: "turn_end", stopReason: "end_turn" },
+    ],
+  ]);
+}
+
+describe("S2.3: compaction preserves the provider shape (seeded property test)", () => {
+  it("holds for every generated history, with and without a task", async () => {
+    let compactedRuns = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const rand = rng(seed);
+      const history = generatedHistory(rand, 6 + Math.floor(rand() * 6));
+      // The generator must produce valid input, or this would measure the
+      // fixture instead of the compactor.
+      expectProviderShape(history, `seed ${seed} input`);
+
+      for (const options of [undefined, { task: "parser" }]) {
+        const { history: out, result } = await compactIfNeeded(
+          history,
+          1000,
+          990,
+          summaryProvider(),
+          model,
+          undefined,
+          options
+        );
+        if (!result.compacted) continue;
+        compactedRuns += 1;
+        // The session routes this through HistoryStore.applyCompacted, which is
+        // this merge — assert on what a provider would actually receive.
+        const merged = mergeSummaryIntoHistory(out);
+        expectProviderShape(merged, `seed ${seed} options=${JSON.stringify(options)}`);
+        expect(merged.length).toBeLessThan(history.length);
+      }
+    }
+    // A property test that stops compacting still passes — and proves nothing.
+    expect(compactedRuns).toBeGreaterThan(20);
+  });
+
+  it("holds when selective keep picks messages out of the summarized region", async () => {
+    // A real keep budget, so selectiveKeep can afford several NON-adjacent
+    // messages: the regime where kept and dropped messages interleave.
+    let compactedRuns = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const rand = rng(seed);
+      const history = generatedHistory(rand, 8 + Math.floor(rand() * 6));
+      expectProviderShape(history, `seed ${seed} input`);
+
+      const { history: out, result } = await compactIfNeeded(
+        history,
+        4000,
+        3200, // above the 0.75 threshold, leaving keep budget
+        summaryProvider(),
+        model,
+        undefined,
+        { task: "parser" }
+      );
+      if (!result.compacted) continue;
+      compactedRuns += 1;
+      expectProviderShape(mergeSummaryIntoHistory(out), `seed ${seed} selective`);
+    }
+    // Same guard as above: the selective path must actually be exercised.
+    expect(compactedRuns).toBeGreaterThan(20);
+  });
+});
+
+describe("S2.3: the enormous-message boundary the README states", () => {
+  it("refuses rather than mangling when everything is inside the keep window", async () => {
+    // Few messages, each enormous: no older region exists to summarize, so the
+    // honest answer is a no-op — what the README tells the user to expect.
+    const huge = "x".repeat(200_000);
+    const history: ConversationMessage[] = [
+      textMsg("user", huge),
+      textMsg("assistant", huge),
+      textMsg("user", huge),
+      textMsg("assistant", huge),
+    ];
+    const provider = new FakeProvider([]); // must never be called
+    const { history: out, result } = await compactIfNeeded(
+      history,
+      1000,
+      999_999, // hopelessly over the window
+      provider,
+      model
+    );
+    expect(result.compacted).toBe(false);
+    expect(out).toEqual(history);
+    expect(provider.calls).toHaveLength(0);
+  });
+});
+
 describe("toSummarizerMessages", () => {
   it("keeps text, marks tool calls, drops successful results, keeps short errors", () => {
     const msgs: ConversationMessage[] = [
