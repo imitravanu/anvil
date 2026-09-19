@@ -218,6 +218,121 @@ describe("run_command read-only safe-list", () => {
     expect(isReadOnlyCommand('cat "README.md"', root)).toBe(true);
   });
 
+  it("contains subcommand arguments to the project root", async () => {
+    const { isReadOnlyCommand } = await import("../bash.js");
+    // A read-only SUBCOMMAND can still carry an escape flag or an out-of-tree
+    // path: `git diff --no-index` diffs two arbitrary host paths, dumping a
+    // host file into the transcript with no prompt, and `--output` writes one.
+    // Abbreviations must be refused too — git accepts unambiguous prefixes.
+    for (const cmd of [
+      "git diff --no-index /dev/null /etc/hosts",
+      "git diff --no-index ~/.ssh/id_rsa /dev/null",
+      "git diff --output=./out.patch .",
+      "git diff --out=./out.patch .",
+      "git diff --no-ind /dev/null /etc/hosts",
+      "git diff --textconv HEAD",
+      "git diff --ext-diff",
+      "git show /etc/hosts",
+      "git log /etc/passwd",
+    ]) {
+      expect(isReadOnlyCommand(cmd, root), cmd).toBe(false);
+    }
+    // The plain read-only invocations the safe-list exists for still pass.
+    for (const cmd of [
+      "git status",
+      "git log --oneline",
+      "git log --format=%H --max-count=5",
+      "git diff",
+      "git diff --stat",
+      "git diff ./src",
+      "git rev-parse HEAD",
+      "npm ls",
+      "npm ls -g",
+      "pip show requests",
+    ]) {
+      expect(isReadOnlyCommand(cmd, root), cmd).toBe(true);
+    }
+    // No projectRoot means fail closed, exactly like the file readers.
+    expect(isReadOnlyCommand("git status")).toBe(false);
+  });
+
+  it("documents the verdict for every safe-listed binary (S4.1 auto-approval audit)", async () => {
+    const { isReadOnlyCommand } = await import("../bash.js");
+    // Each row records the DELIBERATE verdict and its basis, so the safe-list
+    // is auditable rather than assumed. bases: "contained" = path arguments
+    // must resolve inside the project root; "inert" = no path semantics at
+    // all; "metadata" = reveals existence/mount info, never file contents;
+    // "gated" = not auto-allowed, the permission prompt is the gate.
+    const table: { cmd: string; allowed: boolean; why: string }[] = [
+      // inert printers — arguments cannot reach the filesystem
+      { cmd: "pwd", allowed: true, why: "inert" },
+      { cmd: "whoami", allowed: true, why: "inert" },
+      { cmd: "date", allowed: true, why: "inert" },
+      { cmd: "uname -a", allowed: true, why: "inert" },
+      { cmd: "echo hello world", allowed: true, why: "inert" },
+      { cmd: "node --version", allowed: true, why: "inert" },
+      { cmd: "python3 --version", allowed: true, why: "inert" },
+      { cmd: "python -V", allowed: true, why: "inert" },
+      // metadata only — usable as a target but never returns file bytes
+      { cmd: "df", allowed: true, why: "metadata" },
+      { cmd: "df /etc", allowed: true, why: "metadata" },
+      { cmd: "which bash", allowed: true, why: "metadata" },
+      // contained readers — arguments must stay inside the project root
+      { cmd: "ls", allowed: true, why: "contained" },
+      { cmd: "ls -la", allowed: true, why: "contained" },
+      { cmd: "ls ./src", allowed: true, why: "contained" },
+      { cmd: "cat file.txt", allowed: true, why: "contained" },
+      { cmd: 'cat "file.txt"', allowed: true, why: "contained" },
+      { cmd: "head -n 5 log.txt", allowed: true, why: "contained" },
+      { cmd: "tail -20 log.txt", allowed: true, why: "contained" },
+      { cmd: "wc -l src/index.ts", allowed: true, why: "contained" },
+      { cmd: "file ./README.md", allowed: true, why: "contained" },
+      { cmd: "stat ./README.md", allowed: true, why: "contained" },
+      { cmd: "du ./src", allowed: true, why: "contained" },
+      { cmd: "tree ./src", allowed: true, why: "contained" },
+      { cmd: "git status", allowed: true, why: "contained" },
+      { cmd: "git log --oneline", allowed: true, why: "contained" },
+      { cmd: "git log -p", allowed: true, why: "contained" },
+      { cmd: "git diff", allowed: true, why: "contained" },
+      { cmd: "git diff --stat", allowed: true, why: "contained" },
+      { cmd: "git diff ./src", allowed: true, why: "contained" },
+      { cmd: "git show HEAD", allowed: true, why: "contained" },
+      { cmd: "git rev-parse HEAD", allowed: true, why: "contained" },
+      { cmd: "npm ls", allowed: true, why: "contained" },
+      { cmd: "npm ls -g", allowed: true, why: "contained" },
+      { cmd: "npm view --json some-pkg", allowed: true, why: "contained" },
+      { cmd: "pip list", allowed: true, why: "contained" },
+      { cmd: "pip show requests", allowed: true, why: "contained" },
+      { cmd: "pip freeze", allowed: true, why: "contained" },
+      // gated — no auto-allow, whatever the spelling
+      { cmd: "cat /etc/passwd", allowed: false, why: "gated" },
+      { cmd: "cat ~/.ssh/id_rsa", allowed: false, why: "gated" },
+      { cmd: "ls /etc", allowed: false, why: "gated" },
+      { cmd: "du /usr", allowed: false, why: "gated" },
+      { cmd: "stat /etc/shadow", allowed: false, why: "gated" },
+      { cmd: "git diff --no-index /dev/null /etc/hosts", allowed: false, why: "gated" },
+      { cmd: "git diff --output=./x.patch .", allowed: false, why: "gated" },
+      { cmd: "git diff --textconv HEAD", allowed: false, why: "gated" },
+      { cmd: "git diff --ext-diff", allowed: false, why: "gated" },
+      { cmd: "git show /etc/hosts", allowed: false, why: "gated" },
+      { cmd: "git push", allowed: false, why: "gated" },
+      { cmd: "npm run build", allowed: false, why: "gated" },
+      { cmd: "python3 -c 'import os'", allowed: false, why: "gated" },
+      { cmd: "rm file.txt", allowed: false, why: "gated" },
+      { cmd: "cat a > b", allowed: false, why: "gated" },
+      { cmd: "ls; rm -rf /", allowed: false, why: "gated" },
+      { cmd: "find . -delete", allowed: false, why: "gated" },
+      { cmd: "ls *.txt", allowed: false, why: "gated" },
+      { cmd: "", allowed: false, why: "gated" },
+    ];
+
+    for (const row of table) {
+      expect(isReadOnlyCommand(row.cmd, root), `${row.cmd || "(empty)"} [${row.why}]`).toBe(
+        row.allowed
+      );
+    }
+  });
+
   it("blocks system directory wipes like /usr, /etc, /dev (Phase 21.2)", () => {
     expect(isBlockedCommand("rm -rf /usr")).not.toBeNull();
     expect(isBlockedCommand("rm -rf /etc")).not.toBeNull();

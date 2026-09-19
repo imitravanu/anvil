@@ -2,7 +2,7 @@ import { getErrorMessage, sleepAbortable } from "../errors.js";
 import { randomUUID } from "node:crypto";
 import { type ModelProvider, type ConversationMessage } from "../providers/types.js";
 import { getModel } from "../providers/registry.js";
-import { TOOL_DEFINITIONS, describeToolInput, getSessionToolHandler } from "../tools/index.js";
+import { TOOL_DEFINITIONS, getSessionToolHandler } from "../tools/index.js";
 import type { ToolExecutionResult, ToolDefinition } from "../tools/types.js";
 import { verifyTurnMutations } from "./turnVerifier.js";
 import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded, estimateTokens } from "./compaction.js";
@@ -36,6 +36,32 @@ import { BASELINE_MAX_BYTES, BASELINE_MAX_PATHS } from "../config/constants.js";
 export interface RestoreData {
   metadata: SessionMetadata;
   history: ConversationMessage[];
+}
+
+/**
+ * File-body keys a mutating external (MCP / plugin) tool is expected to carry
+ * its NEW content under. Only these are inspected: scanning the whole input
+ * payload would flag legitimate arguments (a query for a placeholder marker is
+ * not slop). A tool that names its body something else is not scanned — the
+ * coverage note on `guardianIntercept` states that limit.
+ */
+const GUARDIAN_CONTENT_KEYS = ["content", "new_str", "new_content", "text", "body", "data"];
+
+/** Concatenate the recognized file-body fields of an external tool's input. */
+function externalToolBody(input: unknown): string {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) return "";
+  const record = input as Record<string, unknown>;
+  const parts: string[] = [];
+  for (const key of GUARDIAN_CONTENT_KEYS) {
+    const value = record[key];
+    if (typeof value === "string" && value.length > 0) parts.push(value);
+  }
+  return parts.join("\n");
+}
+
+/** Literal text rendered as the added-line form the diff scanner expects. */
+function asAddedLines(text: string): string {
+  return text.split("\n").map((line) => `+${line}`).join("\n");
 }
 
 export class AgentSession {
@@ -503,7 +529,7 @@ export class AgentSession {
 
         // Phase 25.6 → product: native guardian gate. Refuses (or auto-fixes)
         // pending file mutations BEFORE they reach the orchestrator.
-        const guardian = await this.guardianIntercept(prepared, controller.signal);
+        const guardian = await this.guardianIntercept(prepared);
         const guardianBlocked = guardian.blocked;
         for (const [id, result] of guardian.handled) handled.set(id, result);
         if (guardian.event) yield guardian.event;
@@ -633,10 +659,17 @@ export class AgentSession {
    * runs, and a repair prompt goes to the model. Returned blocked ids are
    * skipped by the dispatch loop — executing a refused call would be a
    * reported-vs-executed divergence (S1.1).
+   *
+   * Coverage, stated precisely: a call is scanned when it is mutating AND its
+   * input carries a `path` string. `write_file` / `edit_file` bodies are
+   * scanned literally; every other tool (MCP, plugins) is scanned through its
+   * known file-body fields. `run_command` is NOT scanned — it declares no
+   * `path`, and scanning raw command text would refuse legitimate commands (a
+   * grep for a placeholder marker is not slop). Shell mutations are gated by
+   * the permission prompt and the destructive-command refusal instead.
    */
   private async guardianIntercept(
-    prepared: readonly PreparedCall[],
-    signal: AbortSignal
+    prepared: readonly PreparedCall[]
   ): Promise<{ blocked: Set<string>; handled: Map<string, ToolExecutionResult>; event: AgentEvent | null }> {
     const blocked = new Set<string>();
     const handled = new Map<string, ToolExecutionResult>();
@@ -647,27 +680,23 @@ export class AgentSession {
       const input = (p.call.input ?? {}) as { path?: unknown; content?: unknown; new_str?: unknown };
       const relPath = typeof input.path === "string" ? input.path : undefined;
       if (!relPath) continue;
-      let diff: string;
+      // write_file/edit_file declare their body explicitly; external (MCP /
+      // plugin) tools are scanned through their known file-body fields, because
+      // their input is not a diff and the permission-prompt preview is prose
+      // with no `+` lines — scanning that could never match anything.
+      let body: string;
       if (fileWriteTools.has(p.def.name)) {
-        const body =
+        body =
           typeof input.content === "string"
             ? input.content
             : typeof input.new_str === "string"
               ? input.new_str
               : "";
-        if (body.length === 0) continue;
-        // describe-file tools: scan the literal new content (added lines).
-        diff = body.split("\n").map((l) => `+${l}`).join("\n");
       } else {
-        // Command-based mutations (bash, plugin tools): describeToolInput is
-        // the sanctioned preview surface and returns a real unified diff for
-        // file-touching commands. Empty = nothing to scan.
-        diff = await describeToolInput(p.def.name, p.call.input, {
-          projectRoot: this.options.projectRoot,
-          signal,
-        });
+        body = externalToolBody(p.call.input);
       }
-      if (diff.length > 0) pending.push({ call: p, path: relPath, diff });
+      if (body.length === 0) continue;
+      pending.push({ call: p, path: relPath, diff: asAddedLines(body) });
     }
 
     if (pending.length === 0) return { blocked, handled, event: null };

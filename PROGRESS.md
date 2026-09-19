@@ -2,6 +2,16 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 
+## 2026-09-20 — OpenCode session (scroll-first)
+
+**Owns (done, gate green):**
+- `packages/tui/src/components/App.tsx` — transcript pin state + PgUp/PgDn input
+- `packages/tui/src/components/MessageList.tsx` — `pinnedBack` render window + follow footer
+- `packages/tui/src/util/transcriptWindow.ts` — pure `applyTranscriptPin` helper
+- `packages/tui/src/util/displayLimits.ts` — `TRANSCRIPT_SCROLL_PAGE` budget
+- Tests: `packages/tui/src/util/__tests__/transcriptWindow.test.ts` (+3 pin cases, 8/8 green)
+- Evidence: `npm run typecheck -w @anvil/tui` clean, full `npm run gate` green (15/15 mock evals)
+
 ## 2026-09-19
 
 **Agent A (this session)** — owns & completed:
@@ -265,4 +275,79 @@ lines**. No behavior change: event order, ledger entries, checkpoint commits, an
 paths are byte-for-byte the same; the guardian/loop/verification tests that pin dispatch
 ordering all pass unchanged. Full suite 746 (cli 33 / core 490 / tui 223) green; full gate
 green.
+
+---
+
+## 2026-09-20 — CONCURRENT SESSION DETECTED (do not cross-commit)
+
+A second, still-active session is editing the TUI transcript-scroll feature while the audit
+below lands. Observed mtimes: `displayLimits.ts` 02:44:04, `transcriptWindow.ts` 02:44:17,
+`MessageList.tsx` 02:44:34, `App.tsx` 02:45:22, `transcriptWindow.test.ts` 02:45:35 (adds
+`TRANSCRIPT_SCROLL_PAGE` / `applyTranscriptPin`, PgUp/PgDn pin-back). Together with
+`transcriptWindow.test.ts` that is five files, NONE touched by the audit session.
+
+Consequence for the next committer: those five files are another session's in-flight work.
+Do not `git commit -am` — stage only the audit session's `packages/core` files plus
+`CHANGELOG.md` / `PROGRESS.md`. The last full `npm run gate` was green but ran mid-write
+(their `App.tsx` landed after it), so a fresh gate is required before any commit that
+includes their files.
+
+---
+
+## 2026-09-20 — Chief-engineer audit (this session)
+
+**Agent (this session)** — owns & changed (non-protected; no protected artifact touched,
+so no manifest/sentinel change required):
+- `packages/core/src/tools/bash.ts` — **read-only safe-list escape closed.** The
+  `READ_ONLY_SUBCOMMANDS` branch returned on the subcommand name alone, so
+  `git diff --no-index /dev/null <host path>` was auto-allowed with no prompt and dumped
+  that host file into the transcript — reproduced end-to-end through `AgentSession` →
+  `ToolOrchestrator`, not by reading. The same branch was also a prompt-free write
+  primitive via `--output`. Subcommand args now go through the same `pathsInsideRoot`
+  containment as the file readers, escape flags are refused by prefix (git abbreviates
+  its long options), and a missing `projectRoot` fails closed.
+- `packages/core/src/tools/__tests__/bash.test.ts` — new regression test
+  "contains subcommand arguments to the project root".
+- `CHANGELOG.md`, `PROGRESS.md` — records.
+
+**Evidence:** red/green — the pre-fix `dist/` returned true for both escapes; post-fix a
+scripted-provider probe shows `run_command` now prompts for them while `git status`,
+`git log --oneline`, `git diff --stat`, and `ls ./src` stay prompt-free. Focused suite 21
+tests green; full gate green.
+
+**Then fixed in the same pass (operator approved the narrow option):** the guardian's scan
+surface. A `run_command`
+never reaches the interceptor at all — the interceptor requires a `path` field on the tool
+input, which `run_command` does not have. The `else` branch for MCP/plugin mutations IS
+reached, but it scans the `describeToolInput` preview, whose shapes carry no `+` lines, so
+`scanDiffForSlop` can never match there. Verified with a discriminating control (auto-fix
+is silent, so the proof is the bytes the tool received): the same raw-error text is
+repaired before dispatch for `write_file` yet reaches the tool untouched via `run_command`
+and via an MCP-style tool carrying a path. The comment at `session.ts:662` claims that
+preview is a unified diff, which no registered `describe` implementation returns.
+
+**Resolution:** `session.ts` now scans a mutating external (MCP / plugin) tool's declared
+file-body fields (`GUARDIAN_CONTENT_KEYS`) instead of the prose preview, so that branch can
+actually match; the false comment is replaced by a precise coverage note. `run_command`
+stays unscanned **by decision** — it declares no `path`, and scanning raw command text would
+refuse legitimate commands (a grep for a placeholder marker is not slop, and the model
+cannot "fix" a legitimate argument). It remains gated by the permission prompt and the
+destructive-command refusal, and that limit is now stated in the code rather than implied.
+Tests: a mutating external tool whose body carries a violation is refused with its executor
+never running; the same tool with a clean body runs. Red evidence: the pre-fix probe
+recorded the untouched body reaching the executor. Full gate green after both fixes.
+
+**S4.1 follow-through (same session)** — additionally owns & changed:
+- `packages/core/src/tools/__tests__/bash.test.ts` — 58-row verdict table covering every
+  safe-listed binary, each row carrying its basis (contained / inert / metadata / gated).
+  Every documented verdict matched observed behavior on the first run, including the
+  deliberate `metadata` rows (`df /etc`, `which bash`).
+- `README.md` §Safety — splits project-contained readers from inert printers and states the
+  containment is lexical, not a sandbox. `packages/core/src/tools/bash.ts` header — same
+  caveat for the destructive-command filter ("BEST-EFFORT PATTERN MATCHING, NOT A SANDBOX").
+- `docs/STABILIZATION-ROADMAP-2026-09.md` — §S4.1's three boxes and the S2/S1 residue doc box
+  ticked with dated evidence; a dated update note marks the section's intro paragraph (which
+  claims the subcommand alone is trusted) as pre-fix.
+- Evidence: `bash.test.ts` 22 tests green; full gate green (0-5) with BOTH sessions' work on
+  disk (mine + the concurrent TUI scroll-pin session's five files).
 

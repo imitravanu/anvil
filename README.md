@@ -194,11 +194,20 @@ an empty input recalls messages you sent this session; typing **/** opens the co
 
 ## Safety notes
 
-- **Read-only commands don't prompt.** `run_command` auto-allows a conservative safe-list of
-  plain, positively-recognized read-only invocations (`ls`, `pwd`, `cat`, `git status`,
-  `node --version`, …). Anything not on the list — and any command containing a shell
-  metacharacter (`|`, `&&`, `>`, `$()`, globs) — goes through the normal permission prompt.
-  Auto-allows are recorded in the run ledger (`/ledger`), never silent.
+- **Read-only commands don't prompt — the auto-allow is scoped, not assumed.** Two classes
+  skip the prompt: *project-contained readers* (`ls`, `cat`, `head`, `wc`, `file`, `du`,
+  `git status`, `git diff`, `npm ls`, …), whose path arguments must resolve inside the
+  project root — `~`/`$HOME` and out-of-tree absolute paths fail closed, and escaping flags
+  such as `git diff --no-index` / `--output` are refused — and *inert printers* with no path
+  semantics (`pwd`, `echo`, `date`, `uname`, `node --version`). Anything not positively on
+  that list — including any command containing a shell metacharacter (`|`, `&&`, `>`, `$()`,
+  globs) — goes through the normal permission prompt. Auto-allows are recorded in the run
+  ledger (`/ledger`), never silent.
+- **That containment is lexical, and the destructive-command filter is pattern matching.**
+  Unlike the file tools (which resolve the deepest existing component physically, symlinks
+  included), the safe-list compares resolved paths textually; both it and the refusal list
+  below are best-effort defense in depth behind the permission prompt — a usability policy,
+  not a sandbox.
 - All file tools are contained to the directory Anvil was started in, including symlink-aware
   checks on the deepest existing path component.
 - Reads and writes are capped at 512 KiB. Shell-command output is capped at about 20 KiB per

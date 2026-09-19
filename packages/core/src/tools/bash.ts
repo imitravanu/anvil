@@ -93,6 +93,11 @@ export const definition: ToolDefinition = {
 // `rm -rf ~` inside a chained command (`npm run build && rm -rf ~`) that a
 // hurried user might Allow. These patterns never spawn a child — the turn
 // gets an isError tool_result explaining the refusal instead.
+//
+// BEST-EFFORT PATTERN MATCHING, NOT A SANDBOX. It recognizes known destructive
+// shapes; it does not enumerate every equivalent spelling, and a novel
+// construction can slip past. The permission prompt remains the real gate —
+// treat a pass here as "not obviously destructive", never as "proven safe".
 // A command segment is one `&&`/`;`/`|`-separated piece: flags in one segment
 // must not be able to reach a target in another (`rm -rf ./build && rm -rf /`
 // is still blocked because the second segment matches on its own).
@@ -207,6 +212,16 @@ const READ_ONLY_SUBCOMMANDS: Record<string, Set<string>> = {
   pip: new Set(["list", "show", "freeze"]),
 };
 
+/**
+ * Flags that turn an ostensibly read-only subcommand into a filesystem escape.
+ * Matched by PREFIX, because git accepts unambiguous abbreviations of its long
+ * options — an exact-name check would let `--no-ind` / `--out=x` straight
+ * through. `--no-index` diffs two arbitrary host paths, `--output` writes a
+ * file, and `--textconv` / `--ext-diff` execute external filter programs.
+ * Over-blocking here only costs a permission prompt, so the guard is broad.
+ */
+const SUBCOMMAND_ESCAPE_FLAG = /^--(?:no-i|out|textc|ext-d)/;
+
 // Any redirection, pipe, chain, substitution, or expansion means the command
 // is not the plain read-only invocation it claims to be (`cat a > b` writes,
 // `echo hi; rm -rf x` chains). The permission prompt remains the gate there.
@@ -217,7 +232,9 @@ const SHELL_METACHARS = /[|;&<>()`$\\\n]/;
  * binary (with an allowed subcommand where relevant) and contains no shell
  * metacharacters or globs. File-reader binaries additionally require every
  * positional argument to stay inside projectRoot — without a projectRoot they
- * are never auto-allowed (fail closed). Conservative by construction.
+ * are never auto-allowed (fail closed). Subcommands get the same treatment:
+ * the subcommand is read-only, its ARGUMENTS need not be. Conservative by
+ * construction.
  */
 export function isReadOnlyCommand(command: string, projectRoot?: string): boolean {
   const trimmed = command.trim();
@@ -226,7 +243,18 @@ export function isReadOnlyCommand(command: string, projectRoot?: string): boolea
   const parts = trimmed.split(/\s+/);
   const bin = parts[0];
   const sub = READ_ONLY_SUBCOMMANDS[bin];
-  if (sub) return parts.length > 1 && sub.has(parts[1]);
+  if (sub) {
+    if (parts.length <= 1 || !sub.has(parts[1])) return false;
+    const rest = parts.slice(2);
+    if (rest.some((arg) => SUBCOMMAND_ESCAPE_FLAG.test(arg))) return false;
+    // Containment applies to subcommand arguments exactly as it does to the
+    // file readers below: `git diff --no-index /dev/null /etc/shadow` streams
+    // a host file into the model's context, and `git diff --output=…` writes
+    // one — both with no permission prompt otherwise. No projectRoot means
+    // fail closed, same as the readers.
+    if (projectRoot === undefined) return false;
+    return pathsInsideRoot(rest, projectRoot);
+  }
   if (!READ_ONLY_BINARIES.has(bin)) return false;
   if (FILE_READER_BINARIES.has(bin)) {
     if (!projectRoot) return false;

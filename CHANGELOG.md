@@ -4,6 +4,48 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Read-Only Safe-List Escape Closed (2026-09-20)
+
+- **`git diff` could read any host file with no permission prompt.** The read-only
+  safe-list gated a subcommand's *name* but never its arguments, so
+  `git diff --no-index /dev/null <host path>` streamed that host file straight into
+  the model's context — in every mode, including unattended headless runs where no
+  human gate exists. The same branch made `--output` a prompt-free **write**
+  primitive: `git diff --no-index --output=<path> …` serializes the diff into an
+  arbitrary path, and the write lands even though the command exits non-zero and the
+  tool reports an error. Subcommand arguments now get the same project-root
+  containment the file readers already had, escape flags are refused by prefix so
+  git's own abbreviations (`--no-ind`, `--out=x`) cannot slip past an exact-name
+  check, and a subcommand with no `projectRoot` fails closed like the readers.
+- Found by an adversarial audit of the sibling branch Phase 21.1 never covered.
+  Red/green regression test in `bash.test.ts` (escapes and abbreviations refused;
+  `git status`, `git log --oneline`, `git diff --stat` stay prompt-free).
+- **The safe-list is now auditable, and the docs stop implying it is a sandbox.** A 58-row
+  verdict table records every safe-listed binary with the basis for its verdict (contained /
+  inert / metadata / gated), so the auto-allow is a reviewed policy rather than an assumption.
+  README §Safety distinguishes project-contained readers from inert printers and states that
+  the containment is lexical — a usability policy, not a security boundary — and the `bash.ts`
+  header carries the same caveat for the destructive-command filter. Closes the §S4.1 items
+  and the S2/S1 residue doc box in `docs/STABILIZATION-ROADMAP-2026-09.md`.
+
+### Guardian Scan Surface Corrected (2026-09-20)
+
+- **The interceptor could not match anything outside `write_file` / `edit_file`.** For every
+  other mutating tool it scanned the permission-prompt preview, whose shapes (a
+  `Run command: …` line, a `Parameters:` bullet list) contain no `+` lines — and the diff
+  scanner only inspects added lines. An MCP or plugin tool writing a file therefore passed
+  through unscanned while the guardian advertised coverage; the accompanying comment
+  asserted the preview was a unified diff, which no registered preview implementation
+  returns. Those calls are now scanned through the tool's declared file-body fields, and the
+  comment states the real scope instead of implying one.
+- **`run_command` is documented as deliberately NOT scanned.** It declares no `path`, and
+  scanning raw command text would refuse legitimate commands (a grep for a placeholder
+  marker is not slop, and the model cannot "fix" a legitimate argument). Shell mutations
+  remain gated by the permission prompt and the destructive-command refusal. Both limits are
+  now stated in the `guardianIntercept` doc comment.
+- Regression tests: a mutating external tool whose body carries a violation is refused with
+  its executor never running, and the same tool with a clean body runs.
+
 ### Phase 26.2 — `anvil gate --watch` (2026-09-19)
 
 - **Continuous guarding of the working tree**: `anvil gate --watch` re-scans the

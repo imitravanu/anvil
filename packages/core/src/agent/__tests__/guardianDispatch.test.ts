@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AgentSession, type AgentEvent } from "../index.js";
 import { FakeProvider } from "./fakeProvider.js";
 import type { StreamEvent } from "../../providers/types.js";
+import { registerExternalExecutor } from "../../tools/index.js";
+import type { ToolDefinition } from "../../tools/types.js";
 
 let root: string;
 
@@ -45,13 +47,14 @@ function textTurn(text = "Done."): StreamEvent[] {
   return [{ type: "text_delta", text }, { type: "turn_end", stopReason: "end_turn" }];
 }
 
-function makeSession(script: StreamEvent[][]): AgentSession {
+function makeSession(script: StreamEvent[][], tools?: ToolDefinition[]): AgentSession {
   return new AgentSession(new FakeProvider(script), {
     systemPrompt: "test",
     model: "fake-model",
     maxTokens: 1024,
     projectRoot: root,
     permissionBroker: { async requestPermission() { return true; } },
+    ...(tools ? { tools } : {}),
   });
 }
 
@@ -216,5 +219,75 @@ describe("Guardian dispatch", () => {
     expect(written).toContain("const two = getErrorMessage(e2);");
     // Untouched line survived both edits.
     expect(written).toContain("const b = 2;");
+  });
+});
+
+// Regression: the interceptor used to scan a mutating external tool's
+// permission-prompt preview, which carries no `+` lines — so the diff scanner
+// could never match, and an MCP/plugin file write passed through unscanned
+// while the guardian claimed to be intercepting it.
+describe("Guardian scan surface for external tools", () => {
+  function externalWriteDef(prefix: string, onRun: () => void): ToolDefinition {
+    registerExternalExecutor(prefix, async () => {
+      onRun();
+      return {
+        claimed: true,
+        result: { output: { ok: true }, isError: false, summary: "probe write finished." },
+      };
+    });
+    return {
+      name: `${prefix}write_file`,
+      description: "probe write tool",
+      inputSchema: { type: "object", properties: {} },
+      mutating: true,
+    };
+  }
+
+  function turnFor(def: ToolDefinition, id: string, input: unknown): StreamEvent[] {
+    return [
+      { type: "tool_call_start", id, name: def.name },
+      { type: "tool_call_end", id, name: def.name, input },
+      { type: "turn_end", stopReason: "tool_use" },
+    ];
+  }
+
+  it("blocks a mutating MCP-style tool whose file body carries a violation", async () => {
+    let executed = false;
+    const def = externalWriteDef("mcp_guardprobe__", () => {
+      executed = true;
+    });
+    const session = makeSession(
+      [
+        turnFor(def, "m0", { path: "src/via-mcp.ts", content: `${AS_ANY}\n` }),
+        textTurn("Fixing the violation."),
+      ],
+      [def]
+    );
+
+    const events = await collect(session.send("write a helper"));
+
+    expect(events.some((e) => e.type === "guardian_blocked")).toBe(true);
+    expect(events.some((e) => e.type === "tool_started")).toBe(false);
+    // The refusal is execution-faithful: the external executor never ran.
+    expect(executed).toBe(false);
+  });
+
+  it("lets the same tool through when its file body is clean", async () => {
+    let executed = false;
+    const def = externalWriteDef("mcp_guardclean__", () => {
+      executed = true;
+    });
+    const session = makeSession(
+      [
+        turnFor(def, "c0", { path: "src/clean.ts", content: "export const ok = 1;\n" }),
+        textTurn(),
+      ],
+      [def]
+    );
+
+    const events = await collect(session.send("write a helper"));
+
+    expect(events.some((e) => e.type === "guardian_blocked")).toBe(false);
+    expect(executed).toBe(true);
   });
 });

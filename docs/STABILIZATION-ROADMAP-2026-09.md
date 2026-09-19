@@ -208,16 +208,34 @@ File-tool containment (physical, symlink-aware) and shell auto-allow (lexical, `
 are different guarantees; subcommand-keyed classification (`git`/`npm`/`node`…) trusts the
 subcommand alone.
 
-- [ ] Table-test every safe-listed binary × plausible flag combinations; document verdicts.
-- [ ] Anything with non-trivial option semantics (`git log -p`, `npm view --json <pkg>`)
+> **Update 2026-09-20:** the subcommand alone is no longer trusted — its arguments now get the
+> same `pathsInsideRoot` containment the file readers use, and escape flags are refused. The
+> paragraph above describes the pre-fix state. Two of the three guarantees are therefore now
+> lexical-but-identical; the file tools' symlink-aware PHYSICAL check remains the stronger one.
+
+- [x] Table-test every safe-listed binary × plausible flag combinations; document verdicts.
+      *Done: 58-row verdict table in `tools/__tests__/bash.test.ts`, each row carrying its
+      basis (`contained` | `inert` | `metadata` | `gated`). Every documented verdict matched
+      observed behavior on the first run — including the deliberate `metadata` calls
+      (`df /etc`, `which bash`), which expose existence/mount info but can never return file
+      bytes.*
+- [x] Anything with non-trivial option semantics (`git log -p`, `npm view --json <pkg>`)
       either gets the same physical-path treatment or drops off the safe-list.
-- [ ] Re-word README "Read-only commands don't prompt" to distinguish
+      *Done: the subcommand branch now runs `pathsInsideRoot` and refuses escape flags by
+      PREFIX (`--no-i…`, `--out…`, `--textc…`, `--ext-d…`) so git's own option abbreviations
+      cannot slip past an exact-name check. `git log -p` and `npm view --json <pkg>` keep
+      their auto-allow — now with argument containment.*
+- [x] Re-word README "Read-only commands don't prompt" to distinguish
       *no-prompt-by-policy* from *provably contained*.
+      *Done: README §Safety splits project-contained readers from inert printers and states
+      that the containment is lexical — a usability policy, not a sandbox.*
 
 ### S2/S1 residue — `isRootWipe` doc
 
-- [ ] Mark the destructive-command filter as best-effort defense-in-depth (never a sandbox)
+- [x] Mark the destructive-command filter as best-effort defense-in-depth (never a sandbox)
       in `bash.ts` header comment and README §Safety.
+      *Done: the `bash.ts` header now reads "BEST-EFFORT PATTERN MATCHING, NOT A SANDBOX" and
+      the README §Safety bullet matches it.*
 
 ---
 
