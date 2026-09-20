@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimatedLines, hiddenMessageCount } from "../transcriptWindow.js";
+import { estimatedLines, hiddenMessageCount, applyTranscriptPin } from "../transcriptWindow.js";
 import type { DisplayMessage } from "../../hooks/useAgentController.js";
 
 function msg(text: string, role: DisplayMessage["role"] = "assistant", toolCalls = 0): DisplayMessage {
@@ -58,5 +58,21 @@ describe("transcript window estimator", () => {
     const ten = "x".repeat(600); // est ~10 rows at width 80
     const messages = [msg(ten, "user"), msg(ten), msg(ten)];
     expect(hiddenMessageCount(messages, 80, 21)).toBe(1);
+  });
+});
+
+describe("transcript pin window", () => {
+  it("follows live when nothing is pinned", () => {
+    expect(applyTranscriptPin(4, 1, 0)).toEqual({ start: 1, end: 4, pinned: 0 });
+  });
+
+  it("holds back newest messages and keeps at least one visible", () => {
+    expect(applyTranscriptPin(4, 0, 2)).toEqual({ start: 0, end: 2, pinned: 2 });
+    expect(applyTranscriptPin(1, 0, 9)).toEqual({ start: 0, end: 1, pinned: 0 });
+    expect(applyTranscriptPin(0, 0, 5)).toEqual({ start: 0, end: 0, pinned: 0 });
+  });
+
+  it("never starts past the pinned end", () => {
+    expect(applyTranscriptPin(5, 4, 4)).toEqual({ start: 0, end: 1, pinned: 4 });
   });
 });

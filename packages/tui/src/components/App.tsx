@@ -1,6 +1,6 @@
 import { getErrorMessage } from "@anvil/core";
 import { useEffect, useReducer, useRef, useState } from "react";
-import { Box, Text, useStdout } from "ink";
+import { Box, Text, useInput, useStdout } from "ink";
 import {
   AgentSession,
   createProviders,
@@ -35,6 +35,7 @@ import { RewindModal } from "./RewindModal.js";
 import { SessionPicker } from "./SessionPicker.js";
 import { ThemePicker } from "./ThemePicker.js";
 import { StatusBar } from "./StatusBar.js";
+import { TRANSCRIPT_SCROLL_PAGE } from "../util/displayLimits.js";
 
 // Provider labels live in util/labels.ts — single source of truth.
 
@@ -152,6 +153,8 @@ export function App({
   // full tool-output display, toggled by /expand. Session-scoped,
   // never persisted — a resumed session starts compact.
   const [expandTools, setExpandTools] = useState(false);
+  // Transcript scroll pin: newest messages held back (0 = follow live).
+  const [transcriptPinned, setTranscriptPinned] = useState(0);
 
   const { themeName, resolveTheme, applyTheme, previewTheme } = useThemeManager({ initialTheme, printSystemMessage });
   // Theme active before the picker started previewing — previews mutate
@@ -160,6 +163,31 @@ export function App({
   useEffect(() => {
     if (!isThemePickerOpen) themeBeforePicker.current = themeName;
   }, [isThemePickerOpen, themeName]);
+
+  // PgUp/PgDn transcript scroll (keyboard-first; trackpads need inline mode).
+  // Overlays own their keys while open, so the transcript stays put then.
+  const overlaysOpen =
+    pendingPermission !== null ||
+    isDiffOpen ||
+    isRewindOpen ||
+    isModelPickerOpen ||
+    isSessionPickerOpen ||
+    isThemePickerOpen ||
+    isConnectOpen;
+  useInput((_input, key) => {
+    if (overlaysOpen) return;
+    if (key.pageUp) {
+      setTranscriptPinned((prev) => prev + TRANSCRIPT_SCROLL_PAGE);
+      return;
+    }
+    if (key.pageDown) {
+      setTranscriptPinned((prev) => Math.max(0, prev - TRANSCRIPT_SCROLL_PAGE));
+    }
+  });
+  // Clamp the pin when the transcript shrinks (clear/resume/switch).
+  useEffect(() => {
+    setTranscriptPinned((prev) => Math.max(0, Math.min(prev, Math.max(0, messages.length - 1))));
+  }, [messages.length]);
 
   const { handleSubmit, resumeFromStored, persist, mruCommands } = useSessionCommands({
     session,
@@ -278,7 +306,7 @@ export function App({
           <Divider />
         </Box>
         <Box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0}>
-          <MessageList messages={messages} model={currentModel} expandTools={expandTools} />
+          <MessageList messages={messages} model={currentModel} expandTools={expandTools} pinnedBack={transcriptPinned} />
         </Box>
         <Box flexShrink={0}>
           <Divider />
@@ -357,7 +385,11 @@ export function App({
         ) : (
           <InputBar
             isBusy={isBusy}
-            onSubmit={handleSubmit}
+            onSubmit={(text) => {
+              // New turn returns to live follow so the reply is visible.
+              setTranscriptPinned(0);
+              void handleSubmit(text);
+            }}
             onCancel={cancel}
             sentHistory={sentHistory}
             mruCommands={mruCommands}

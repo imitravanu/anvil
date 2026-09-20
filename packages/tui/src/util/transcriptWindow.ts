@@ -123,3 +123,19 @@ export function hiddenMessageCount(
   }
   return hidden;
 }
+
+/**
+ * Pin-back window for keyboard scrolling. `pinnedBack` counts newest
+ * messages held back (0 = follow). Pure so the estimator stays testable.
+ */
+export function applyTranscriptPin(
+  total: number,
+  hidden: number,
+  pinnedBack: number
+): { start: number; end: number; pinned: number } {
+  if (total <= 0) return { start: 0, end: 0, pinned: 0 };
+  const pinned = Math.max(0, Math.min(pinnedBack, total - 1));
+  const end = total - pinned;
+  const start = Math.min(Math.max(0, hidden), Math.max(0, end - 1));
+  return { start, end, pinned };
+}

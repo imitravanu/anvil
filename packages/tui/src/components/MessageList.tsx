@@ -5,7 +5,7 @@ import type { DisplayMessage } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { MessageView } from "./MessageView.js";
 import { displayModelLabel, providerLabel, providerOfModel } from "../util/format.js";
-import { hiddenMessageCount } from "../util/transcriptWindow.js";
+import { hiddenMessageCount, applyTranscriptPin } from "../util/transcriptWindow.js";
 
 function EmptyState({ model }: { model: string }) {
   const theme = useTheme();
@@ -34,7 +34,7 @@ function EmptyState({ model }: { model: string }) {
   );
 }
 
-export function MessageList({ messages, model, expandTools }: { messages: DisplayMessage[]; model: string; expandTools?: boolean }) {
+export function MessageList({ messages, model, expandTools, pinnedBack }: { messages: DisplayMessage[]; model: string; expandTools?: boolean; pinnedBack?: number }) {
   const theme = useTheme();
   const { stdout } = useStdout();
   const termRows = stdout?.rows ?? 24;
@@ -54,6 +54,8 @@ export function MessageList({ messages, model, expandTools }: { messages: Displa
     () => hiddenMessageCount(messages, width, rowBudget, expandTools ?? false),
     [messages, width, rowBudget, expandTools]
   );
+  // Keyboard scroll window: pinning holds back newest messages (0 = follow).
+  const { start, end, pinned } = applyTranscriptPin(messages.length, hidden, pinnedBack ?? 0);
   // Shared bounded container for both states: bottom-anchored, clipped at the
   // top exactly like terminal scrollback. No explicit height here: the parent
   // frame is height={rows} and every chrome zone is flexShrink={0}, so this
@@ -81,10 +83,10 @@ export function MessageList({ messages, model, expandTools }: { messages: Displa
   // vanished with no trace, as if the message had never been sent.
   return (
     <Box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden" paddingX={1}>
-      {hidden > 0 && (
+      {hidden > 0 && start > 0 && (
         <Box flexShrink={0}>
           <Text color={theme.colors.dim}>
-            … {hidden} earlier message{hidden === 1 ? "" : "s"} above — full history in the session file
+            … {start} earlier message{start === 1 ? "" : "s"} above — full history in the session file
           </Text>
         </Box>
       )}
@@ -96,12 +98,19 @@ export function MessageList({ messages, model, expandTools }: { messages: Displa
         overflow="hidden"
         justifyContent="flex-end"
       >
-        {messages.slice(hidden).map((message, index) => (
+        {messages.slice(start, end).map((message, index) => (
           <Box key={message.id} marginTop={index > 0 ? 1 : 0} flexShrink={0}>
             <MessageView message={message} expandTools={expandTools} />
           </Box>
         ))}
       </Box>
+      {pinned > 0 && (
+        <Box flexShrink={0}>
+          <Text color={theme.colors.dim}>
+            ↓ {pinned} newer below — PgDn to follow
+          </Text>
+        </Box>
+      )}
     </Box>
   );
 }

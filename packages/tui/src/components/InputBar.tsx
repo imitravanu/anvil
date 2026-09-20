@@ -173,8 +173,14 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [], mruComm
         <Text color={theme.colors.brand}>{"❯ "}</Text>
         <Box flexGrow={1}>
           <Text color={theme.colors.userText}>
+            {/* Empty-field cursor: ink-text-input draws it as inverse-video
+                over the placeholder's first char, which some terminals render
+                invisibly ("ype a message"). Ours is a plain brand block — the
+                same cursor language as streaming text — so the hint stays whole. */}
+            {value === "" && <Text color={theme.colors.brand}>{"█"}</Text>}
             <TextInput
               value={value}
+              showCursor={value.length > 0}
               onChange={handleTextInputChange}
               placeholder={isBusy ? "working… (Esc to cancel)" : "Type a message, / for commands"}
               onSubmit={(text) => {

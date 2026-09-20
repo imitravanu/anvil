@@ -17,6 +17,17 @@ function idleBar(over: Record<string, unknown> = {}) {
 }
 
 describe("InputBar", () => {
+  it("shows the full placeholder with a visible block cursor when empty", async () => {
+    const { app } = idleBar();
+    await tick();
+    const frame = frameText(app.lastFrame);
+    // Regression: the library's inverse-video cursor ate the first
+    // placeholder char on some terminals ("ype a message").
+    expect(frame).toContain("Type a message, / for commands");
+    expect(frame).toContain("█");
+    app.unmount();
+  });
+
   it("echoes typing and submits trimmed text on Enter, then clears", async () => {
     const { app, onSubmit } = idleBar();
     await tick();
