@@ -4,7 +4,7 @@
 > are **done** (each landed test-first with the full `npm run gate` green; checkboxes annotated
 > in place — S3 in 2026-09-20, S4.1 in 2026-09-20, S4.2 in 2026-09-20, S5.1/S5.2 in 2026-09-20,
 > S1.3 in 2026-09-20, S2.3 in 2026-09-20).
-> Still open: S6 (product truth), S7 (test equity — coverage reporting added 2026-09-21).
+> Still open: S7 (test equity — coverage reporting added 2026-09-21; first CLI baseline 33.9%).
 > **Principle:** No new features until the chain **approved → executed → changed → verified → reported**
 > is provably consistent. Every finding below cites the inspected source location; none has
 > yet been reproduced with a regression test — Step 0 of each phase is to write that test first.
@@ -442,9 +442,19 @@ Fixes land in this phase.
       Verified against `checkpointStore.ts` (`chmod 0o600`, `ANVIL_HOME/checkpoints/<id>.json`)
       and `config/constants.ts` (`CHECKPOINT_KEEP = getEnvNumber("ANVIL_CHECKPOINT_KEEP", 5)`).
       The remaining S6 boxes are untouched.*
-- [ ] `/diff`: surface incomplete-coverage warnings when `baselineByPath` eviction
+- [x] `/diff`: surface incomplete-coverage warnings when `baselineByPath` eviction
       (BASELINE_MAX_PATHS/BASELINE_MAX_BYTES) or ring cap (CHECKPOINT_KEEP) narrowed history
       (`session.ts:354-370` contradicts its own "never evicts" comment — fix comment too).
+      *Done 2026-09-21. The stale comment is gone: it lived in `session.ts`'s now-removed
+      `recordBaseline`, and `RewindRing.recordBaseline` states the bound accurately. `RewindRing`
+      now counts `baselineDroppedPaths` and `ringDroppedCheckpoints`; `AgentSession.diffCoverage()`
+      exposes them, and both `/diff` surfaces warn — `DiffModal` renders "⚠ Review incomplete: N
+      path(s) aged out of the baseline[, N checkpoint(s) aged out of /rewind]." and the headless
+      `handleShowDiff` prepends the same. Tests: `rewindRing.test.ts` +1 (both counters fire),
+      `cockpitModals.test.tsx` +1 (banner renders with `baselineDropped: 3`). **Honest scope note:**
+      ring-cap eviction does NOT narrow `/diff` (the review baseline is ring-independent by
+      design), so its warning is phrased as `/rewind` undo depth, not `/diff` coverage — the item's
+      "or ring cap" grouping was imprecise, and the UI says the true thing rather than copying it.*
 - [x] TUI: on cancel during a busy turn, keep queued messages but announce they are held
       (or clear them) — today they drain immediately into a new turn (`useAgentController.ts`).
       *Done 2026-09-21 (HOLD chosen per operator): `runTurn` returns `{cancelled}`, set from the
@@ -454,10 +464,23 @@ Fixes land in this phase.
       `useAgentController.test.tsx` +2 (signal-aware hanging provider; RED was a 5s timeout pre-fix).
       Full TUI suite 232/232, `tsc` clean. Independent of the `SessionLedger`/`RewindRing`
       extraction — depends only on the `cancelled` event shape, which that refactor preserves.*
-- [ ] Provider certification: mock badges labeled "mock"; live results get timestamped
+- [x] Provider certification: mock badges labeled "mock"; live results get timestamped
       artifacts in the README table.
-- [ ] Retire the 34,006-LOC figure everywhere — it included `dist/*.d.ts` and excluded TSX;
+      *Done 2026-09-21 (README table; picker badge deliberately untouched). The table's Status column
+      now reads `mock · 2026-09-10` / `live · 2026-09-18` — the certification BASIS, not a blanket
+      "live". The note paragraph states plainly that most rows are the deterministic mock suite,
+      that only Gemini has a recorded live probe, and that the same probe is what exposed the
+      retired `gemini-2.0-flash` as `broken`. **Deliberate limit:** the `/model` picker badge still
+      renders `[✅ live]` from `certified`, because the registry has no `certifiedMode` field —
+      adding one is a behavior change (badge + `formatCertificationBadge` + tests) that belongs in
+      its own landing, not a docs pass; recorded here so the residual gap is visible, not hidden.*
+- [x] Retire the 34,006-LOC figure everywhere — it included `dist/*.d.ts` and excluded TSX;
       recount production sources (`src/**/*.{ts,tsx}` minus tests) and note it here.
+      *Done 2026-09-21: a repo-wide grep for `34,006` finds it only in this line, so there was
+      nothing else to retire. Corrected count: **23,205 production lines across 182 files**
+      (`packages/*/src/**/*.{ts,tsx}` excluding `__tests__`/`*.test.*`/`__visual__`) — core 14,407,
+      tui 7,558, cli 1,240. For scale, tests are 15,759 lines, so the test/production ratio is
+      ~0.68. Counted 2026-09-21, after the `sessionLedger`/`rewindRing` extraction.*
 
 ---
 

@@ -148,6 +148,20 @@ export class AgentSession {
     return this.rewindRing.summarizeChanges();
   }
 
+  /**
+   * Coverage honesty for /diff and /rewind: how many paths aged out of the
+   * bounded review baseline, and how many checkpoints the ring cap evicted.
+   * Zero on a normal session; non-zero means the review (or undo depth) is no
+   * longer complete, and the UI must say so instead of presenting a partial
+   * result as whole.
+   */
+  diffCoverage(): { baselineDropped: number; ringDropped: number } {
+    return {
+      baselineDropped: this.rewindRing.baselineDroppedPaths,
+      ringDropped: this.rewindRing.ringDroppedCheckpoints,
+    };
+  }
+
   /** Read-only view of the conversation history (exposed for tests / future phases). */
   getHistory(): readonly ConversationMessage[] {
     return this.history.get();

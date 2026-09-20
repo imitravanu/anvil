@@ -138,18 +138,24 @@ Every model provider adapter undergoes strict verification across 5 criteria: st
 
 | Provider | Environment Variable / Key | Free Tier | Primary Certified Models | Tools | Vision | Status |
 |---|---|---|---|---|---|---|
-| **Anthropic** | `ANTHROPIC_API_KEY` | Paid | `claude-sonnet-5`, `claude-3-7-sonnet-20250219`, `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022` | Yes | Yes | ✅ live* |
-| **OpenAI** | `OPENAI_API_KEY` | Paid | `gpt-4o`, `gpt-4o-mini`, `o3-mini` | Yes | Yes | ✅ live* |
-| **Google Gemini** | `GEMINI_API_KEY` | Free & Paid | `gemini-3.6-flash` (verified 2026-09-18), `gemini-2.0-flash`  retired by Google, `gemini-1.5-pro`, `gemini-1.5-flash` (unverified) | Yes | Yes | ✅ live (see note) |
-| **OpenRouter** | `OPENROUTER_API_KEY` | Free & Paid | `openrouter/free`, `google/gemma-4-31b-it:free` | Yes | Yes | ✅ live |
-| **Orcarouter** | `ORCAROUTER_API_KEY` | Free & Paid | `orcarouter/free`, `z-ai/glm-5.3-flash-free`, `deepseek/deepseek-v4-flash-free` | Yes | Yes | ✅ live |
-| **Groq** | `GROQ_API_KEY` | Free Tier | `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, `qwen-2.5-coder-32b` | Yes | No | ✅ live |
-| **GitHub Models** | `GITHUB_TOKEN` / PAT | Free Preview | `gpt-4o-mini`, `meta-llama-3.3-70b-instruct`, `mistral-large-2411` | Yes | Mini: Yes | ✅ live |
-| **Cerebras** | `CEREBRAS_API_KEY` | Free Tier (1M/day) | `llama3.3-70b`, `llama3.1-8b` | Yes | No | ✅ live |
-| **Mistral AI** | `MISTRAL_API_KEY` | Free Experimentation | `codestral-latest`, `mistral-small-latest` | Yes | No | ✅ live |
-| **Ollama** | None / `OLLAMA_HOST` | 100% Free / Local | `qwen2.5-coder:latest`, `llama3.2:latest` | Yes | Model-dependent | ✅ live |
+| **Anthropic** | `ANTHROPIC_API_KEY` | Paid | `claude-sonnet-5`, `claude-3-7-sonnet-20250219`, `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022` | Yes | Yes | mock · 2026-09-10* |
+| **OpenAI** | `OPENAI_API_KEY` | Paid | `gpt-4o`, `gpt-4o-mini`, `o3-mini` | Yes | Yes | mock · 2026-09-10* |
+| **Google Gemini** | `GEMINI_API_KEY` | Free & Paid | `gemini-3.6-flash` (verified 2026-09-18), `gemini-2.0-flash`  retired by Google, `gemini-1.5-pro`, `gemini-1.5-flash` (unverified) | Yes | Yes | live · 2026-09-18 (see note) |
+| **OpenRouter** | `OPENROUTER_API_KEY` | Free & Paid | `openrouter/free`, `google/gemma-4-31b-it:free` | Yes | Yes | mock · 2026-09-10 |
+| **Orcarouter** | `ORCAROUTER_API_KEY` | Free & Paid | `orcarouter/free`, `z-ai/glm-5.3-flash-free`, `deepseek/deepseek-v4-flash-free` | Yes | Yes | mock · 2026-09-10 |
+| **Groq** | `GROQ_API_KEY` | Free Tier | `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, `qwen-2.5-coder-32b` | Yes | No | mock · 2026-09-10 |
+| **GitHub Models** | `GITHUB_TOKEN` / PAT | Free Preview | `gpt-4o-mini`, `meta-llama-3.3-70b-instruct`, `mistral-large-2411` | Yes | Mini: Yes | mock · 2026-09-10 |
+| **Cerebras** | `CEREBRAS_API_KEY` | Free Tier (1M/day) | `llama3.3-70b`, `llama3.1-8b` | Yes | No | mock · 2026-09-10 |
+| **Mistral AI** | `MISTRAL_API_KEY` | Free Experimentation | `codestral-latest`, `mistral-small-latest` | Yes | No | mock · 2026-09-10 |
+| **Ollama** | None / `OLLAMA_HOST` | 100% Free / Local | `qwen2.5-coder:latest`, `llama3.2:latest` | Yes | Model-dependent | mock · 2026-09-10 |
 
-Status `✅ live` means the adapter passes all 5 criteria; `*` marks providers whose two newest models (`claude-opus-5`, `gpt-5.1`) are still `untested`. CI runs the deterministic mock suite; the weekly live lane (`live-eval.yml`) re-certifies against real providers and uploads the matrix (`--out`).
+**Status records the certification *basis*, not a blanket claim of live testing.** `mock · <date>`
+means the adapter passed the deterministic suite CI runs (`npm run certify -- --mock --all`);
+`live · <date>` means a real-provider probe. Most rows are `mock` — only Google Gemini has a live
+probe recorded (`gemini-3.6-flash`, 2026-09-18), which is also how its retired `gemini-2.0-flash`
+was found and marked `broken`. `*` marks providers whose two newest models (`claude-opus-5`,
+`gpt-5.1`) are still `untested`. The weekly live lane (`live-eval.yml`) re-certifies against real
+providers and uploads the matrix (`--out`).
 
 Re-run provider certification anytime:
 ```bash

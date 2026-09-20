@@ -7,10 +7,12 @@ import type { AgentSession, CheckpointMeta, SessionFileChange } from "@anvil/cor
 function mockSession(over: {
   changes?: SessionFileChange[];
   checkpoints?: CheckpointMeta[];
+  coverage?: { baselineDropped: number; ringDropped: number };
 }): AgentSession {
   return {
     summarizeChanges: vi.fn().mockResolvedValue(over.changes ?? []),
     getCheckpoints: vi.fn().mockReturnValue(over.checkpoints ?? []),
+    diffCoverage: vi.fn().mockReturnValue(over.coverage ?? { baselineDropped: 0, ringDropped: 0 }),
   } as unknown as AgentSession;
 }
 
@@ -53,6 +55,23 @@ describe("DiffModal", () => {
     expect(out).toContain("~ modified");
     expect(out).toContain("old");
     expect(out).toContain("next");
+    unmount();
+  });
+
+  it("warns when the bounded baseline dropped paths (coverage honesty)", async () => {
+    const changes: SessionFileChange[] = [
+      { path: "src/auth.ts", kind: "modified", diff: "@@ -1 +1 @@\n-const old = 1;\n+const next = 2;" },
+    ];
+    const session = mockSession({ changes, coverage: { baselineDropped: 3, ringDropped: 0 } });
+    const { lastFrame, unmount } = renderThemed(
+      <DiffModal session={session} onClose={() => {}} />
+    );
+
+    await new Promise((r) => setTimeout(r, 20));
+
+    const out = frameText(lastFrame);
+    expect(out).toContain("Review incomplete");
+    expect(out).toContain("3 path(s)");
     unmount();
   });
 

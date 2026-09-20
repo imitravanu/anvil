@@ -25,6 +25,29 @@
   Depends only on the `cancelled` event shape — survives the parallel
   `SessionLedger`/`RewindRing` extraction (verified: their `rewindRing.ts` re-emits it).
 
+## 2026-09-21 — S6 product truth finished (Buffy)
+
+**Agent (this session)** — owns & changed. Skip note: the S6 cancel-queue box was already done by
+Cline above; I did the three docs/coverage-honesty boxes.
+- `packages/core/src/agent/rewindRing.ts`, `agent/session.ts` — `RewindRing` counts
+  `baselineDroppedPaths` + `ringDroppedCheckpoints`; `AgentSession.diffCoverage()` exposes them.
+- `packages/tui/src/components/DiffModal.tsx`, `commands/handlers/diff.ts` — both `/diff` surfaces
+  render a "Review incomplete" warning when either counter is non-zero. Ring eviction is phrased as
+  `/rewind` undo depth (it does not narrow `/diff`; the baseline is ring-independent).
+- Tests: `rewindRing.test.ts` +1 (both counters fire), `cockpitModals.test.tsx` +1 (banner) and the
+  mock now stubs `diffCoverage`.
+- `README.md` — certification Status column is now `mock · 2026-09-10` / `live · 2026-09-18` (the
+  BASIS), with the note paragraph corrected. Picker badge untouched (no `certifiedMode` field yet) —
+  recorded as a known gap.
+- `docs/STABILIZATION-ROADMAP-2026-09.md` — S6's remaining three boxes ticked; the 34,006-LOC
+  figure recounted to **23,205 production lines / 182 files**. S6 is now complete.
+
+**Collision note (honest):** committing `b54cc51` staged `CHANGELOG.md` + `PROGRESS.md` while Cline
+had uncommitted DOCS edits in them, so their "Cancelled Turns" CHANGELOG section and ACTIVE PROGRESS
+note rode into that commit (docs only — their `useAgentController` code was verified unstaged first
+and remains so). Recording it so the next committer knows to stage those two files by explicit
+hunks, not wholesale.
+
 ## 2026-09-21 — S5.3 precision + S7 coverage + session.ts ledger/rewind extraction (Buffy)
 
 **Agent (this session)** — owns & changed. Disjoint from the Cline S6 cancel-queue work above;

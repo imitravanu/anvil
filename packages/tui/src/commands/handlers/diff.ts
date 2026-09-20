@@ -37,8 +37,20 @@ export function handleShowDiff(deps: CommandHandlerDeps, branch?: string): void 
   }
   void session.summarizeChanges()
     .then((changes) => {
+      // Coverage honesty: the bounded baseline/ring can drop entries, after
+      // which a partial review must not read as a complete one.
+      const coverage = session.diffCoverage();
+      const coverageNote =
+        coverage.baselineDropped > 0 || coverage.ringDropped > 0
+          ? `⚠ Review may be incomplete: ${coverage.baselineDropped} path(s) aged out of the review baseline` +
+            (coverage.ringDropped > 0 ? `, ${coverage.ringDropped} checkpoint(s) aged out of /rewind` : "") +
+            ".\n\n"
+          : "";
       if (changes.length === 0) {
-        printSystemMessage("No file changes this session yet — /diff reviews write_file and edit_file edits.");
+        printSystemMessage(
+          coverageNote +
+            "No file changes this session yet — /diff reviews write_file and edit_file edits."
+        );
         return;
       }
       const shown = changes.slice(0, 8);
@@ -47,7 +59,7 @@ export function handleShowDiff(deps: CommandHandlerDeps, branch?: string): void 
         const body = c.diff === null ? "(file deleted)" : capLines(c.diff.split("\n")).join("\n");
         return `${mark} ${c.path} (${c.kind})\n${body}`;
       });
-      let msg = parts.join("\n\n");
+      let msg = coverageNote + parts.join("\n\n");
       if (changes.length > shown.length) msg += `\n\n… +${changes.length - shown.length} more file(s)`;
       printSystemMessage(msg);
     })

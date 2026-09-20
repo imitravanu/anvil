@@ -103,6 +103,15 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
 
   // DW-3.1 arrows = waiting on async work.
   const waiting = useSpinnerFrame(loading, "arrows");
+  // Review honesty: the bounded stores can drop paths/checkpoints; if they
+  // have, say so rather than presenting a partial review as complete.
+  const coverage = session.diffCoverage();
+  const coverageWarning =
+    coverage.baselineDropped > 0 || coverage.ringDropped > 0
+      ? `Review incomplete: ${coverage.baselineDropped} path(s) aged out of the baseline` +
+        (coverage.ringDropped > 0 ? `, ${coverage.ringDropped} checkpoint(s) aged out of /rewind` : "") +
+        "."
+      : null;
   if (loading) {
     return (
       <Box
@@ -188,6 +197,7 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
           Diff Inspector
         </Text>
         <Text dimColor>No files modified in this session yet.</Text>
+        {coverageWarning && <Text color={theme.colors.accent}>⚠ {coverageWarning}</Text>}
         <Box marginTop={1}>
           <Text dimColor>Press Esc to close.</Text>
         </Box>
@@ -224,6 +234,11 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
       {copiedNote && (
         <Box flexShrink={0} paddingX={1}>
           <Text color={theme.colors.success}>{copiedNote}</Text>
+        </Box>
+      )}
+      {coverageWarning && (
+        <Box flexShrink={0} paddingX={1}>
+          <Text color={theme.colors.accent}>⚠ {coverageWarning}</Text>
         </Box>
       )}
 

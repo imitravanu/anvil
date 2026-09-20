@@ -44,6 +44,11 @@ export class RewindRing {
   private seq = 0;
   private readonly baselineByPath = new Map<string, Buffer | null>();
   private baselineBytes = 0;
+  // Coverage honesty: how much the bounded stores have dropped. The UI warns
+  // that /diff (baseline) or /rewind depth (ring) is no longer complete rather
+  // than presenting a silently partial review as whole.
+  private baselineDropped = 0;
+  private ringDropped = 0;
 
   constructor(private readonly deps: RewindRingDeps) {
     // Persistent rewind ring: resumed sessions keep their undo history.
@@ -74,7 +79,7 @@ export class RewindRing {
     if (sub.length === 0) return;
     for (const cp of sub) {
       this.seq += 1;
-      this.checkpoints = capCheckpoints([...this.checkpoints, { ...cp, id: this.seq }]);
+      this.addCheckpoint({ ...cp, id: this.seq });
       this.recordBaseline({ ...cp, id: this.seq });
     }
     await this.persist();
@@ -108,7 +113,7 @@ export class RewindRing {
     if (committedFiles.length === 0) return null;
     const committed: Checkpoint = { ...pending, files: committedFiles };
     this.seq = pending.id;
-    this.checkpoints = capCheckpoints([...this.checkpoints, committed]);
+    this.addCheckpoint(committed);
     await this.persist();
     this.deps.recordLedger({ eventType: "checkpoint_created", outcome: "ok", elapsedMs: 0 });
     return committed;
@@ -155,6 +160,24 @@ export class RewindRing {
     return summarizeSessionChangesFromBaseline(this.deps.projectRoot, this.baselineByPath);
   }
 
+  /** Paths that aged out of the bounded review baseline (BASELINE_MAX_*). */
+  get baselineDroppedPaths(): number {
+    return this.baselineDropped;
+  }
+
+  /** Checkpoints evicted by the ring cap (CHECKPOINT_KEEP) — /rewind undo depth. */
+  get ringDroppedCheckpoints(): number {
+    return this.ringDropped;
+  }
+
+  /** Append with ring capping, counting what the cap evicted. */
+  private addCheckpoint(cp: Checkpoint): void {
+    const next = capCheckpoints([...this.checkpoints, cp]);
+    const dropped = this.checkpoints.length + 1 - next.length;
+    if (dropped > 0) this.ringDropped += dropped;
+    this.checkpoints = next;
+  }
+
   /** Best-effort persist of the ring. Awaited to avoid data loss on crash. */
   private async persist(): Promise<void> {
     await saveCheckpointsAsync(this.deps.sessionId, this.checkpoints);
@@ -181,6 +204,7 @@ export class RewindRing {
         const dropped = this.baselineByPath.get(oldest.value);
         this.baselineBytes -= dropped?.length ?? 0;
         this.baselineByPath.delete(oldest.value);
+        this.baselineDropped += 1;
       }
     }
   }

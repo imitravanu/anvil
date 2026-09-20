@@ -4,6 +4,23 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### /diff Admits When Its Review Is Incomplete; Certification Table Stops Saying "live" (2026-09-21)
+
+- **`/diff` now warns when its bounded stores dropped entries (S6).** The review baseline
+  (`BASELINE_MAX_PATHS`/`_BYTES`) and the undo ring (`CHECKPOINT_KEEP`) can evict; a partial review
+  was previously presented as whole. `RewindRing` counts both, `AgentSession.diffCoverage()`
+  exposes them, and the `DiffModal` and headless `/diff` render "⚠ Review incomplete: N path(s)
+  aged out of the baseline[, N checkpoint(s) aged out of /rewind]." The ring-cap note is scoped to
+  `/rewind` on purpose — ring eviction does not narrow `/diff`, because the baseline is
+  ring-independent. Also removes the stale "never evicts" comment that contradicted the bound.
+- **The README certification table no longer claims blanket "live" (S6).** Status now reads
+  `mock · 2026-09-10` / `live · 2026-09-18` — the certification *basis*. Most rows are the
+  deterministic mock suite; only Gemini has a recorded live probe, the same one that found its
+  retired `gemini-2.0-flash` to be `broken`. The picker badge still shows `[✅ live]` from the
+  registry's `certified` field (no `certifiedMode` exists yet) — a known, recorded gap, not hidden.
+- **The stale 34,006-LOC figure is retired and recounted (S6):** 23,205 production lines across 182
+  files (core 14,407 / tui 7,558 / cli 1,240); tests are 15,759.
+
 ### Cancelled Turns Hold the Message Queue Instead of Firing It (2026-09-21)
 
 - **Cancelling a busy turn no longer launches the next turn by surprise (S6).** Messages typed
