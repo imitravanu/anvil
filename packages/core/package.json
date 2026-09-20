@@ -20,7 +20,8 @@
     "build": "tsc -p tsconfig.build.json",
     "prepublishOnly": "npm run build",
     "typecheck": "tsc -p . --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",

@@ -20,6 +20,7 @@
     "dev": "tsx src/index.tsx",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
+    "coverage": "vitest run --coverage",
     "typecheck": "tsc -p . --noEmit"
   },
   "devDependencies": {

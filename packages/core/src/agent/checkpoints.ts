@@ -7,7 +7,9 @@ import { resolveWithinRoot } from "../tools/paths.js";
 
 // ---------------------------------------------------------------------------
 // Rewind checkpoints: pre-mutation snapshots of write_file/edit_file targets.
-// Memory-only, ring-bounded. // ---------------------------------------------------------------------------
+// Persisted per session under $ANVIL_HOME/checkpoints (see checkpointStore.ts),
+// ring-bounded by CHECKPOINT_KEEP.
+// ---------------------------------------------------------------------------
 
 export interface FileSnapshot {
   /** Project-root-relative path as the tool call gave it. */

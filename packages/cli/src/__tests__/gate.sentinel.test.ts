@@ -45,6 +45,19 @@ describe("gate integrity sentinel", () => {
     expect(gate).toContain("borderColor|backgroundColor"); // rule: no hardcoded colors
   });
 
+  it("comment-awareness guard is present for the code rules (S5.3 precision)", () => {
+    const gate = read("scripts/verify-gate.mjs");
+    // A comment cannot execute; without this guard the gate flagged doc
+    // comments that merely described the package boundary (and prose with
+    // ": any"). The placeholder rule stays comment-visible by design.
+    expect(gate).toContain("isCommentLine");
+    expect(gate).toContain("!comment &&");
+    // The Step 1.5 residual loop must carry the same guard, exempting only the
+    // placeholder marker (".`TODO` in a comment is the target, not a false positive").
+    expect(gate).toContain("lineIsComment");
+    expect(gate).toContain('rule.name !== "placeholder marker (TODO/FIXME/XXX)"');
+  });
+
   it("failure wiring is intact (gate cannot be no-op'd)", () => {
     const gate = read("scripts/verify-gate.mjs");
     expect(gate).toContain("process.exit(1)");

@@ -10,7 +10,8 @@ import { FALLBACK_CONTEXT_WINDOW, MAX_VERIFY_REPAIRS } from "../config/constants
 export { MAX_VERIFY_REPAIRS };
 import { SessionMetadata, StoredSession } from "../session/types.js";
 import { AgentEvent, AgentOptions, DEFAULT_MAX_INNER_ITERATIONS } from "./types.js";
-import { RunLedgerEntry, capLedger, maxSeq, LEDGER_CAP } from "./ledger.js";
+import { RunLedgerEntry } from "./ledger.js";
+import { SessionLedger } from "./sessionLedger.js";
 import { clearRateLimitRecord, getConsecutiveRateLimitCount, isCircuitOpen, isRateLimitMessage, noteRateLimited, rateLimitRetrySeconds, recordFailure, recordSuccess } from "../providers/freeModels.js";
 import { MAX_DELEGATIONS_PER_TURN, runSubAgentLive } from "./subagent.js";
   import { interceptTurn, guardianFixedText } from "../guardian/interceptor.js";
@@ -22,19 +23,11 @@ import type { TeamRunResult } from "./team/types.js";
 import { ToolOrchestrator, type RunnableCall } from "./orchestrator.js";
 import { HistoryStore } from "./historyStore.js";
 import {
-  Checkpoint,
-  summarizeSessionChangesFromBaseline,
-  type SessionFileChange,
-  capCheckpoints,
-  checkpointMeta,
-  takeSnapshot,
-  restoreCheckpoint,
-  fingerprintPath,
+  type Checkpoint,
   type CheckpointMeta,
-  type FileSnapshot,
+  type SessionFileChange,
 } from "./checkpoints.js";
-import { loadCheckpoints, saveCheckpointsAsync } from "./checkpointStore.js";
-import { BASELINE_MAX_BYTES, BASELINE_MAX_PATHS } from "../config/constants.js";
+import { RewindRing } from "./rewindRing.js";
 
 export interface RestoreData {
   metadata: SessionMetadata;
@@ -80,29 +73,21 @@ export class AgentSession {
   readonly maxInnerIterations: number;
   /** Current plan, set by the update_plan tool; persists on save. */
   plan: string | null = null;
-  private ledger: RunLedgerEntry[] = [];
-  private ledgerSeq = 0;
+  private ledger = new SessionLedger();
   private lastUsage: { inputTokens: number; outputTokens: number } | null = null;
   // resolved tool list (sub-agents exclude delegate_task; MCP seam).
   // Per-turn counters (iterations, delegations, loop streaks) live in
   // TurnState, fresh per send() — never as session fields.
   private toolDefs: ToolDefinition[];
-  // Rewind: in-memory ring of pre-mutation file snapshots (never persisted).
-  private checkpoints: Checkpoint[] = [];
+  // Rewind state: persisted, ring-bounded pre-mutation snapshots + the
+  // ring-independent review baseline (see rewindRing.ts).
+  private readonly rewindRing: RewindRing;
   // Project-declared guardian rules, loaded ONCE per session (no per-turn I/O).
   private readonly guardianRules: CustomGuardianRule[];
   /** Whether Anvil's own rule families apply to this project (see guardian/scope.ts). */
   private readonly guardianScope: GuardianScope;
-  // First-seen pre-mutation content per path across the WHOLE session. The
-  // ring above is capped (CHECKPOINT_KEEP) and evicts the earliest snapshots;
-  // this map never evicts, so /diff and the goal debrief keep reporting every
-  // file the session touched even after many snapshots. Restore/rewind uses
-  // the ring; the baseline is review-only.
-  private baselineByPath = new Map<string, Buffer | null>();
-  private baselineBytes = 0;
   /** Last completed delegate_task team run (Phase 25.2 introspection for /team status). */
   private lastTeamRun: TeamRunResult | null = null;
-  private checkpointSeq = 0;
   readonly id: string;
   title: string | null; // null until the first user message sets a default
   readonly createdAt: string;
@@ -123,19 +108,17 @@ export class AgentSession {
     this.guardianRules = loadCustomGuardianRules(this.options.projectRoot);
     this.guardianScope = detectGuardianScope(this.options.projectRoot);
     this.id = restore?.metadata.id ?? randomUUID();
+    this.rewindRing = new RewindRing({
+      projectRoot: this.options.projectRoot,
+      sessionId: this.id,
+      recordLedger: (e) => this.recordLedger(e),
+    });
     this.title = restore?.metadata.title ?? null;
     this.createdAt = restore?.metadata.createdAt ?? new Date().toISOString();
     if (restore) {
       this.history = new HistoryStore(restore.history);
       this.plan = restore.metadata.plan ?? null;
-      this.ledger = capLedger(restore.metadata.runLedger ?? []);
-      this.ledgerSeq = maxSeq(this.ledger);
-      // Persistent rewind ring: resumed sessions keep their undo history.
-      this.checkpoints = loadCheckpoints(this.id);
-      this.checkpointSeq = this.checkpoints.reduce((m, cp) => Math.max(m, cp.id), 0);
-      // Rebuild the review baseline from whatever the persisted ring holds
-      // (first-seen per path) — the best available after a restart.
-      for (const cp of this.checkpoints) this.recordBaseline(cp);
+      this.ledger = new SessionLedger(restore.metadata.runLedger ?? []);
       // Proactive compaction seed: a resumed session has no measured usage,
       // so the reactive loop-top check would sail past an oversized history
       // and the first request would die on the provider's context limit.
@@ -162,7 +145,7 @@ export class AgentSession {
    * baseline so capped checkpoint eviction never hides changes.
    */
   summarizeChanges(): Promise<SessionFileChange[]> {
-    return summarizeSessionChangesFromBaseline(this.options.projectRoot, this.baselineByPath);
+    return this.rewindRing.summarizeChanges();
   }
 
   /** Read-only view of the conversation history (exposed for tests / future phases). */
@@ -249,7 +232,7 @@ export class AgentSession {
         // plan + run ledger persist so a resumed session
         // tells the truth about what the previous run did.
         ...(this.plan !== null ? { plan: this.plan } : {}),
-        ...(this.ledger.length > 0 ? { runLedger: capLedger(this.ledger) } : {}),
+        ...(this.ledger.size > 0 ? { runLedger: this.ledger.toPersist() } : {}),
       },
       history: this.history.snapshot(),
     };
@@ -257,12 +240,12 @@ export class AgentSession {
 
   /** read-only view of this session's run ledger. */
   getRunLedger(): readonly RunLedgerEntry[] {
-    return [...this.ledger];
+    return this.ledger.snapshot();
   }
 
   /** Rewind: metadata view of in-memory checkpoints (contents never exposed). */
   getCheckpoints(): CheckpointMeta[] {
-    return this.checkpoints.map(checkpointMeta);
+    return this.rewindRing.listMeta();
   }
 
   /**
@@ -271,24 +254,12 @@ export class AgentSession {
    * not part of the UI surface.
    */
   drainCheckpoints(): Checkpoint[] {
-    const drained = [...this.checkpoints];
-    this.checkpoints = [];
-    return drained;
+    return this.rewindRing.drain();
   }
 
   /** Merge sub-agent checkpoints into this session's ring with fresh ids. */
   private async mergeSubCheckpoints(sub: readonly Checkpoint[]): Promise<void> {
-    if (sub.length === 0) return;
-    for (const cp of sub) {
-      this.checkpointSeq += 1;
-      this.checkpoints = capCheckpoints([
-        ...this.checkpoints,
-        { ...cp, id: this.checkpointSeq },
-      ]);
-      this.recordBaseline({ ...cp, id: this.checkpointSeq });
-    }
-    await this.persistCheckpoints();
-    this.recordLedger({ eventType: "checkpoint_merged", outcome: "ok", elapsedMs: 0 });
+    await this.rewindRing.merge(sub);
   }
 
   /**
@@ -305,87 +276,18 @@ export class AgentSession {
     externallyModified: string[];
     message: string;
   }> {
-    const cp = this.checkpoints.find((c) => c.id === id);
-    if (!cp) {
-      this.recordLedger({ eventType: "rewind", outcome: "error", elapsedMs: 0 });
-      return {
-        ok: false,
-        restored: [],
-        deleted: [],
-        errors: [`No checkpoint #${id} in this session.`],
-        externallyModified: [],
-        message: `No checkpoint #${id} in this session.`,
-      };
-    }
-    const startedAt = Date.now();
-    // The whole ring, not just this checkpoint: a file the session wrote AFTER
-    // the checkpoint being restored has drifted by the session's own hand, and
-    // must not be reported as an outside edit.
-    const result = await restoreCheckpoint(this.options.projectRoot, cp, this.checkpoints);
-    const ok = result.errors.length === 0;
-    this.recordLedger({ eventType: "rewind", outcome: ok ? "ok" : "error", elapsedMs: Date.now() - startedAt });
-    const parts: string[] = [];
-    if (result.restored.length > 0) parts.push(`restored ${result.restored.length}: ${result.restored.join(", ")}`);
-    if (result.deleted.length > 0) parts.push(`deleted ${result.deleted.length} created: ${result.deleted.join(", ")}`);
-    if (result.errors.length > 0) parts.push(`errors: ${result.errors.join("; ")}`);
-    return { ...result, ok, message: parts.length > 0 ? parts.join(" ") : "Checkpoint was empty — nothing to restore." };
+    return this.rewindRing.rewind(id);
   }
 
   private recordLedger(
     entry: Omit<RunLedgerEntry, "seq" | "ts">
   ): void {
-    this.ledgerSeq += 1;
-    this.ledger.push({
-      ...entry,
-      // Measured usage rides along ONLY on completion entries (record,
-      // never predict) — control events (loop_detected, budget_exhausted,
-      // cancelled, checkpoint_created, …) must not fabricate attribution.
-      // Explicit tokens (e.g. a sub-agent's own usage) always win.
-      ...(entry.tokens ??
-        (entry.eventType === "tool_finished" && this.lastUsage
-          ? { tokens: { in: this.lastUsage.inputTokens, out: this.lastUsage.outputTokens } }
-          : {})),
-      seq: this.ledgerSeq,
-      ts: new Date().toISOString(),
-    });
-    if (this.ledger.length > LEDGER_CAP) {
-      this.ledger = capLedger(this.ledger);
-    }
-  }
-
-  /** Best-effort persist of the rewind ring. Awaited to avoid data loss on crash. */
-  private async persistCheckpoints(): Promise<void> {
-    await saveCheckpointsAsync(this.id, this.checkpoints);
+    this.ledger.record(entry, this.lastUsage);
   }
 
   /** Last completed team run, or null before any team delegation this session. */
   get teamRun(): TeamRunResult | null {
     return this.lastTeamRun;
-  }
-
-  /**
-   * First-seen-per-path merge into the review baseline. A file previously
-   * snapped (by a direct write or a merged sub-agent) keeps its ORIGINAL
-   * content — the oldest snapshot per path is the session baseline. Bounded
-   * by BASELINE_MAX_PATHS / BASELINE_MAX_BYTES (oldest-seen evicted first):
-   * eviction only narrows /diff coverage, it never corrupts history.
-   */
-  private recordBaseline(cp: Checkpoint): void {
-    for (const f of cp.files) {
-      if (this.baselineByPath.has(f.path)) continue;
-      this.baselineByPath.set(f.path, f.content);
-      this.baselineBytes += f.content?.length ?? 0;
-      while (
-        this.baselineByPath.size > BASELINE_MAX_PATHS ||
-        this.baselineBytes > BASELINE_MAX_BYTES
-      ) {
-        const oldest = this.baselineByPath.keys().next();
-        if (oldest.done) break;
-        const dropped = this.baselineByPath.get(oldest.value);
-        this.baselineBytes -= dropped?.length ?? 0;
-        this.baselineByPath.delete(oldest.value);
-      }
-    }
   }
 
   /**
@@ -955,12 +857,7 @@ export class AgentSession {
       return typeof target === "string" && target.length > 0 ? [target] : [];
     }))];
     if (rewindTargets.length === 0) return null;
-    const cp = await takeSnapshot(this.options.projectRoot, this.checkpointSeq + 1, rewindTargets);
-    if (cp.files.length > 0) {
-      this.recordBaseline(cp);
-      return cp;
-    }
-    return null;
+    return this.rewindRing.take(rewindTargets);
   }
 
   private async commitRewindSnapshot(
@@ -980,21 +877,8 @@ export class AgentSession {
       if (typeof target === "string") succeededPaths.add(target);
     }
     if (succeededPaths.size === 0) return null;
-    // Post-mutation fingerprints, taken now: the succeeded calls are the only
-    // writers of these paths in this batch, so what is on disk IS the state
-    // this session left behind. /rewind compares against it to tell an
-    // out-of-band edit from the session's own later work.
-    const committedFiles: FileSnapshot[] = await Promise.all(
-      pendingCp.files
-        .filter((f) => succeededPaths.has(f.path))
-        .map(async (f) => ({ ...f, postHash: await fingerprintPath(this.options.projectRoot, f.path) }))
-    );
-    if (committedFiles.length === 0) return null;
-    const committed: Checkpoint = { ...pendingCp, files: committedFiles };
-    this.checkpointSeq = pendingCp.id;
-    this.checkpoints = capCheckpoints([...this.checkpoints, committed]);
-    await this.persistCheckpoints();
-    this.recordLedger({ eventType: "checkpoint_created", outcome: "ok", elapsedMs: 0 });
+    const committed = await this.rewindRing.commit(pendingCp, succeededPaths);
+    if (!committed) return null;
     return { type: "checkpoint", id: committed.id, files: committed.files.length };
   }
 }

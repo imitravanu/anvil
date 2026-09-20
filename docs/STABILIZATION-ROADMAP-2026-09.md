@@ -4,7 +4,7 @@
 > are **done** (each landed test-first with the full `npm run gate` green; checkboxes annotated
 > in place — S3 in 2026-09-20, S4.1 in 2026-09-20, S4.2 in 2026-09-20, S5.1/S5.2 in 2026-09-20,
 > S1.3 in 2026-09-20, S2.3 in 2026-09-20).
-> Still open: S5.3 syntax-aware import rules, S6, S7.
+> Still open: S6 (product truth), S7 (test equity — coverage reporting added 2026-09-21).
 > **Principle:** No new features until the chain **approved → executed → changed → verified → reported**
 > is provably consistent. Every finding below cites the inspected source location; none has
 > yet been reproduced with a regression test — Step 0 of each phase is to write that test first.
@@ -369,10 +369,17 @@ markers) to *any* scanned project, with only a test-path exception.
       *true*. Cost of the deviation: a project vendoring Anvil's packages under the same manifest
       name would be scanned as Anvil — not a safety regression (universal rules apply regardless;
       the Anvil families only add rules there), and recorded here rather than silently dropped.*
-- [ ] Prefer syntax-aware checks for import rules (cheap: resolve the scanned file's
-      package membership first). *NOT DONE — still regex-based, now merely scoped. Left
-      unchecked deliberately: scoping removed the foreign-project false positive, but a comment
-      or string carrying a quoted import path inside Anvil's own repo still matches. **Live
+- [x] Prefer syntax-aware checks for import rules (cheap: resolve the scanned file's
+      package membership first). *DONE 2026-09-21 — package membership is now resolved BEFORE
+      the import rule is judged, and comments are not treated as code. The original framing said
+      "still regex-based, now merely scoped"; the fix here is on two axes rather than a regex
+      rewrite: (1) `scanner.ts` skips the import rule for files outside `packages/core/`, and
+      (2) a match inside a **comment** is not a violation for any built-in family except the
+      placeholder marker (a marker word in a comment is exactly what that family exists to
+      catch). The same comment guard now covers the repo gate's Step 1 and Step 1.5 and the
+      pre-commit hook, which closes the three false positives recorded below. Still regex-based
+      in the sense that a *string literal* carrying the import path can match; that limit is
+      stated, not hidden — it was not worth a parser for a self-review heuristic. **Live
       evidence for this item, 2026-09-20:** landing S5 itself tripped the gate's own Step-1
       architecture rule on a doc comment in `guardian/scope.ts` that merely *described* the
       boundary between the packages — no import existed. Also note the asymmetry: the native
@@ -389,6 +396,17 @@ markers) to *any* scanned project, with only a test-path exception.
       nothing distinguishes prose from an annotation. Reworded, not argued with: the rule is
       doing its job on real code, and the fix belongs in the checker's precision, which is
       exactly this item.*
+      * **Resolved, 2026-09-21:** all three instances are the same defect — a code rule
+      matching comment text. `isCommentLine` now short-circuits the code families in
+      `scanner.ts`, `scripts/verify-gate.mjs` (Steps 1 and 1.5), and `.githooks/pre-commit`
+      (the hook also gained `\b` word boundaries on `as (any|never)`, the exact "was never"
+      miss). New scanner tests pin it: a comment naming the package boundary is clean, a real
+      core→tui import still fires, a non-core package file is not judged, and a marker word in a
+      comment still fires. The gate Step 0 sensor is unchanged and still catches every fixture,
+      including the comment-carried placeholder marker it asserts. This was a **protected-artifact
+      change** (gate + hook + manifest + sentinel), declared here per AGENTS.md §3.4 and landed
+      with `npm run gate -- --ack-protected-change`; explicit human review of the protected diff
+      remains the operator's step.
 
 ### Extra fix landed with S5 (F2, second half) — docs are not code
 
@@ -427,8 +445,15 @@ Fixes land in this phase.
 - [ ] `/diff`: surface incomplete-coverage warnings when `baselineByPath` eviction
       (BASELINE_MAX_PATHS/BASELINE_MAX_BYTES) or ring cap (CHECKPOINT_KEEP) narrowed history
       (`session.ts:354-370` contradicts its own "never evicts" comment — fix comment too).
-- [ ] TUI: on cancel during a busy turn, keep queued messages but announce they are held
+- [x] TUI: on cancel during a busy turn, keep queued messages but announce they are held
       (or clear them) — today they drain immediately into a new turn (`useAgentController.ts`).
+      *Done 2026-09-21 (HOLD chosen per operator): `runTurn` returns `{cancelled}`, set from the
+      engine's `cancelled` event; `send()` holds the queue on a cancelled turn and prints
+      "Turn cancelled — N queued message(s) held, not sent. Send again to deliver them." The
+      next explicit send drains them; a normally completed turn still auto-drains with no notice.
+      `useAgentController.test.tsx` +2 (signal-aware hanging provider; RED was a 5s timeout pre-fix).
+      Full TUI suite 232/232, `tsc` clean. Independent of the `SessionLedger`/`RewindRing`
+      extraction — depends only on the `cancelled` event shape, which that refactor preserves.*
 - [ ] Provider certification: mock badges labeled "mock"; live results get timestamped
       artifacts in the README table.
 - [ ] Retire the 34,006-LOC figure everywhere — it included `dist/*.d.ts` and excluded TSX;
@@ -444,7 +469,16 @@ File-count gaps ≠ coverage gaps, but the subtlest async logic has the thinnest
 - [ ] MCP: transport pump, line-splitter limits, SSE parser, reconnect paths.
 - [ ] LSP client: request timeouts, server death, fallback honesty.
 - [ ] Goal engine: budget exhaustion classification, milestone failure propagation.
-- [ ] Add `c8`/coverage reporting to `npm test` so future audits argue from data.
+- [x] Add `c8`/coverage reporting to `npm test` so future audits argue from data.
+      *Done 2026-09-21, with one deliberate deviation: coverage is an opt-in `npm run coverage`
+      (the v8 provider via `@vitest/coverage-v8`), NOT a step in `npm test`. Gating on an
+      unreviewed coverage threshold would fail the pipeline on debt that S7 is still inventorying;
+      the number is for audits, not a wall. Each workspace got a `vitest.config.ts` coverage block
+      whose `include` is `src/**` with tests excluded, so the figure is production surface, not
+      tests measuring themselves. First measured baseline (core): **85.03% statements / 87.06%
+      lines / 74.86% branches / 87.46% functions** — the old ANALYSIS_REPORT "~60%" estimate was
+      too pessimistic for core; the thin areas S7 names (mcp/lsp/goal/cli) are what the per-task
+      hunt should target.*
 
 ---
 

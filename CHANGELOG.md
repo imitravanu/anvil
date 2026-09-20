@@ -4,6 +4,39 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Cancelled Turns Hold the Message Queue Instead of Firing It (2026-09-21)
+
+- **Cancelling a busy turn no longer launches the next turn by surprise (S6).** Messages typed
+  while a turn runs queue as before — but if the turn is cancelled, they are now HELD (kept in
+  `queued`, visible in the UI) with a notice: "Turn cancelled — N queued message(s) held, not
+  sent. Send again to deliver them." The next explicit send drains them; a normally completed
+  turn still auto-drains with no notice. `runTurn` returns `{cancelled}`, observed from the
+  engine's `cancelled` event. Pinned by two `useAgentController.test.tsx` cases (cancel-hold +
+  announce; normal completion still drains). HOLD chosen over CLEAR per operator: dropping typed
+  text on cancel would destroy user intent.
+
+### Slop Rules Stop Matching Comments, and AgentSession Sheds Its Ledger/Rewind State (2026-09-21)
+
+- **Comment lines are no longer judged as code (S5.3).** The gate, the pre-commit hook, and the
+  native guardian scanner each flagged text that could not execute: a doc comment that merely
+  *described* the core→tui package boundary, prose containing `: any`, and a phrase whose letters
+  happened to spell `as never` (`w·as never`, the hook's missing word boundary). Every built-in
+  family now short-circuits on a comment line — except the placeholder marker, whose entire job is
+  to catch a marker word left in a comment. The import rule also resolves package membership first:
+  `packages/tui`/`packages/cli` files are not judged against a rule about `packages/core`.
+  **Protected artifacts changed** (`scripts/verify-gate.mjs`, `.githooks/pre-commit`, the gate
+  sentinel, and the regenerated manifest) under AGENTS.md §3.4, acknowledged with
+  `npm run gate -- --ack-protected-change`; explicit human review of that diff is required.
+- **Coverage is now measurable, not estimated (S7).** Opt-in `npm run coverage` (v8 provider,
+  `src/**` only, tests excluded) across all three workspaces. First core baseline: 85.03%
+  statements / 87.06% lines / 74.86% branches — the old "~60%" audit estimate was wrong. Kept
+  opt-in on purpose: an unreviewed threshold would gate on debt the roadmap is still inventorying.
+- **`AgentSession` sheds two more concerns.** The run ledger moved to `agent/sessionLedger.ts`
+  (`SessionLedger` — cap, monotonic sequence, and the measured-usage attribution rule) and the
+  rewind ring + review baseline to `agent/rewindRing.ts` (`RewindRing` — persist, take/commit,
+  rewind, diff summary, sub-agent merge). `send()`/the class now delegate instead of inlining:
+  `session.ts` 1000 → 872 lines. Behavior-preserving; new direct unit tests for both modules.
+
 ### AgentSession.send() Terminal Sequence Extracted Into turnVerifier.finishTurn (2026-09-21)
 
 - **Internal refactor, no behavior change.** The verify → cancel/repair/error/complete tail of

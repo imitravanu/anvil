@@ -35,23 +35,29 @@ fi
 added=$(git diff --cached -- 'packages/*/src/**/*.ts' 'packages/*/src/**/*.tsx' 'packages/*/src/**/*.js' 'packages/*/src/**/*.mjs' 'packages/*/scripts/**/*.ts' \
         | grep -E '^\+' | grep -vE '^\+\+\+' || true)
 if [ -n "$added" ]; then
+  # A comment line cannot execute, so the code rules below judge only code
+  # lines (S5.3: this layer refused a doc phrase containing "was never"
+  # because `as never` has no word boundary, and flagged comments naming the
+  # package boundary). The placeholder rule keeps the FULL text — a TODO
+  # comment is exactly what it hunts.
+  code=$(printf '%s\n' "$added" | grep -vE '^\+[[:space:]]*(//|\*|/\*)' || true)
   hits=""
-  h=$(printf '%s\n' "$added" | grep -nE 'instanceof[[:space:]]+Error[[:space:]]*\?' || true)
+  h=$(printf '%s\n' "$code" | grep -nE 'instanceof[[:space:]]+Error[[:space:]]*\?' || true)
   [ -n "$h" ] && hits="$hits
 (hook) raw error ternary/instanceof: $h"
-  h=$(printf '%s\n' "$added" | grep -nE '\.message[[:space:]]*\?\?[[:space:]]*String\(' || true)
+  h=$(printf '%s\n' "$code" | grep -nE '\.message[[:space:]]*\?\?[[:space:]]*String\(' || true)
   [ -n "$h" ] && hits="$hits
 (hook) ?.message ?? String: $h"
-  h=$(printf '%s\n' "$added" | grep -nE 'as[[:space:]]+(any|never)' || true)
+  h=$(printf '%s\n' "$code" | grep -nE '\bas[[:space:]]+(any|never)\b' || true)
   [ -n "$h" ] && hits="$hits
 (hook) type escape: $h"
-  h=$(printf '%s\n' "$added" | grep -nE 'catch[[:space:]]*(\([^)]*\))?[[:space:]]*\{[[:space:]]*\}' || true)
+  h=$(printf '%s\n' "$code" | grep -nE 'catch[[:space:]]*(\([^)]*\))?[[:space:]]*\{[[:space:]]*\}' || true)
   [ -n "$h" ] && hits="$hits
 (hook) empty catch: $h"
   h=$(printf '%s\n' "$added" | grep -nE '\b(TODO|FIXME|XXX)\b' || true)
   [ -n "$h" ] && hits="$hits
 (hook) placeholder marker: $h"
-  h=$(printf '%s\n' "$added" | grep -nE '@anvil/(tui|cli)' || true)
+  h=$(printf '%s\n' "$code" | grep -nE '@anvil/(tui|cli)' || true)
   [ -n "$h" ] && hits="$hits
 (hook) core->tui/cli import (check path is packages/core): $h"
   if [ -n "$hits" ]; then

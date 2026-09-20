@@ -29,6 +29,7 @@
     "prepublishOnly": "npm run build",
     "typecheck": "tsc -p . --noEmit",
     "test": "vitest run",
+    "coverage": "vitest run --coverage",
     "visual": "vitest run src/__visual__/visual.test.tsx",
     "visual:update": "VISUAL_UPDATE=1 vitest run src/__visual__/visual.test.tsx",
     "visual:capture": "node scripts/visual-capture.mjs",

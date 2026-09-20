@@ -9,6 +9,7 @@
     "dev": "npm run dev --workspace=packages/cli",
     "typecheck": "npm run typecheck -w @anvil/core && npm run typecheck -w @anvil/tui && npm run typecheck -w @anvil/cli && tsc -p tsconfig.scripts.json",
     "test": "npm run test --workspaces --if-present",
+    "coverage": "npm run coverage --workspaces --if-present",
     "visual": "npm run visual -w @anvil/tui",
     "visual:capture": "npm run visual:capture -w @anvil/tui",
     "visual:diff": "npm run visual:diff -w @anvil/tui",
@@ -21,15 +22,15 @@
     "hooks:install": "git config core.hooksPath .githooks && chmod +x .githooks/pre-commit",
     "prepublishOnly": "npm run build"
   },
-
   "devDependencies": {
-    "typescript": "^5.7.2",
-    "@types/node": "^22.10.2"
+    "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^4.1.11",
+    "typescript": "^5.7.2"
   },
   "engines": {
     "node": ">=20"
   },
-  "description": "Anvil \u2014 a terminal-based AI coding agent (monorepo: core, tui, cli)",
+  "description": "Anvil — a terminal-based AI coding agent (monorepo: core, tui, cli)",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/imitravanu/anvil.git"

@@ -92,6 +92,28 @@ function isTestPath(file: string): boolean {
   return file.includes("__tests__") || file.includes(".test.");
 }
 
+/**
+ * A comment line cannot execute, so a built-in rule match inside one is a
+ * false positive (S5.3) — the scanner flagged its own documentation for
+ * *naming* the boundary it describes. The one exception is the placeholder
+ * marker: a marker word left in a comment is exactly what that rule exists to
+ * catch, so it is judged on comment text too.
+ */
+function isCommentLine(text: string): boolean {
+  return /^\s*(?:\/\/|\/\*|\*)/.test(text);
+}
+
+/**
+ * Path-aware import rule (S5.3): "core must never import tui/cli" can only be
+ * judged on files that ARE `packages/core`. A path with no `packages/` prefix
+ * (the working-tree label, a foreign project) stays in scope, so the rule is
+ * never silently dropped — that would be a coverage gap, not a precision win.
+ */
+function isCorePackageFile(file: string): boolean {
+  if (!/(^|\/)packages\//.test(file)) return true;
+  return /(^|\/)packages\/core\//.test(file);
+}
+
 /** Source types the guardian scans — the same set the repo gate's PATHSPEC covers. */
 const CODE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 
@@ -157,9 +179,13 @@ export function scanTextForSlop(
   if (scanBuiltins) {
     for (let i = 0; i < lines.length - 1; i++) {
       const joined = lines[i] + "\n" + lines[i + 1];
+      // A comment pair cannot execute; the split families carry no placeholder
+      // rule, so every split match inside comments is a false positive.
+      const commentPair = isCommentLine(lines[i]) || isCommentLine(lines[i + 1]);
       for (const { rule, family, scope: ruleScope, pattern, detail } of SPLIT_PATTERNS) {
         if (ruleScope === "anvil" && scope !== "anvil") continue;
         if (rule === "no-as-any" && isTestPath(file)) continue;
+        if (commentPair) continue;
         if (pattern.test(joined)) {
           violations.push({ file, line: i + 1, rule, family, detail });
         }
@@ -170,9 +196,14 @@ export function scanTextForSlop(
   // Single-line detection.
   lines.forEach((lineText, i) => {
     if (scanBuiltins) {
+      const comment = isCommentLine(lineText);
       for (const { rule, family, scope: ruleScope, pattern, detail } of RULES) {
         if (ruleScope === "anvil" && scope !== "anvil") continue;
         if (rule === "no-as-any" && isTestPath(file)) continue;
+        if (rule === "no-architecture-breach" && !isCorePackageFile(file)) continue;
+        // Comments are not code — except for the placeholder marker, whose
+        // whole purpose is to catch a marker word left in a comment.
+        if (comment && rule !== "no-placeholder-marker") continue;
         if (pattern.test(lineText)) {
           violations.push({ file, line: i + 1, rule, family, detail });
         }

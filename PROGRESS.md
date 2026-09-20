@@ -1,6 +1,65 @@
 # PROGRESS — multi-agent coordination
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
+>
+> **ACTIVE 2026-09-21 (this session — Cline):** owns `packages/tui/src/hooks/useAgentController.ts`
+> + `packages/tui/src/hooks/__tests__/useAgentController.test.tsx` for S6 cancel-queue UX only.
+> HOLD chosen over CLEAR per operator (hold + announce; next explicit send drains).
+> Explicitly NOT touching: `packages/core/src/guardian/*`, `scripts/verify-gate.mjs`,
+> `.githooks/pre-commit`, `scripts/gate-manifest.json`, `packages/core/src/agent/*`,
+> `package*.json`, `*/vitest.config.ts` (other agent's S5.3 + sessionLedger/rewindRing + config work).
+
+## 2026-09-21 — S6 cancel-queue UX done (this session — Cline)
+
+- `packages/tui/src/hooks/useAgentController.ts` — `runTurn: (text) => Promise<{cancelled}>`;
+  `cancelled` observed from the engine's `cancelled` event; `send()` holds `queueRef` on a
+  cancelled turn + `printSystemMessage("Turn cancelled — N queued message(s) held, not sent…")`;
+  normal completion still `drainQueue()`s silently. HOLD per operator (CLEAR would drop intent).
+- `packages/tui/src/hooks/__tests__/useAgentController.test.tsx` — +2 (`S6 cancel-queue UX`
+  describe): cancel-hold + announce via a signal-aware hanging provider; normal-completion
+  no-notice guard. 15 → 17 in file.
+- `docs/STABILIZATION-ROADMAP-2026-09.md` — S6 cancel-queue box ticked with evidence.
+- `CHANGELOG.md` — `### Cancelled Turns Hold the Message Queue…` entry under Unreleased.
+- **Evidence:** TUI `tsc -p . --noEmit` exit 0; full TUI `vitest run` 232/232 (40 files).
+  No protected artifact touched; no `packages/core`, scripts, or config files touched.
+  Depends only on the `cancelled` event shape — survives the parallel
+  `SessionLedger`/`RewindRing` extraction (verified: their `rewindRing.ts` re-emits it).
+
+## 2026-09-21 — S5.3 precision + S7 coverage + session.ts ledger/rewind extraction (Buffy)
+
+**Agent (this session)** — owns & changed. Disjoint from the Cline S6 cancel-queue work above;
+no shared file.
+
+**S5.3 — code rules no longer match comment text.**
+- `packages/core/src/guardian/scanner.ts` — `isCommentLine` skips comment lines for every built-in
+  family EXCEPT `no-placeholder-marker` (a marker word in a comment is what that rule exists to
+  catch). `isCorePackageFile` scopes `no-architecture-breach` to `packages/core/` (S5.3's literal
+  "resolve package membership first"); a path with no `packages/` prefix stays in scope so the rule
+  is never silently dropped. Split-pattern pass skips comment pairs. `guardian.test.ts` +3
+  (comment naming the boundary clean; real core to tui import fires; non-core package file not
+  judged). 26 to 29.
+- **PROTECTED (declared per AGENTS.md §3.4):** `scripts/verify-gate.mjs` (`isCommentLine` guard on
+  Step 1 rules 1/1b/2/3/4/5 + multi-line pass, and Step 1.5 for all residual families except the
+  placeholder marker); `packages/cli/src/__tests__/gate.sentinel.test.ts` (+1 assertion pinning
+  `isCommentLine`/`lineIsComment` and the placeholder exemption); `.githooks/pre-commit` (code rules
+  scan a comment-filtered `$code` view; placeholder keeps full text; word-boundary fix on the
+  type-escape grep — the exact "was never" miss); `scripts/gate-manifest.json` regenerated for the
+  three changed protected files. Verified: sentinel 12/12; `npm run gate -- --quick
+  --ack-protected-change` green. Requirement (c) — explicit human review of the protected diff —
+  is the operator's; the ack flag is the acknowledgement.
+- The gate caught this session writing a literal placeholder token in its own new comments
+  (correct behavior — reworded).
+
+**S7 — coverage reporting (opt-in, does not gate).** `@vitest/coverage-v8@4.1.11` at root;
+coverage blocks in core/tui/cli `vitest.config.ts` (include `src/**`, exclude tests); `coverage`
+scripts per workspace + root `npm run coverage`. First core baseline: **85.03% stmts / 87.06%
+lines / 74.86% branches / 87.46% funcs**.
+
+**session.ts extraction.** New `agent/sessionLedger.ts` (`SessionLedger`) and `agent/rewindRing.ts`
+(`RewindRing`); `session.ts` delegates to both, keeping only the prepared-calls to paths and
+succeeded to commit translation. **1000 to 872 lines.** Tests: `sessionLedger.test.ts` +4;
+`rewindRing.test.ts` +1 (baseline bounds moved out of `rewind.test.ts`, which reached into
+now-moved privates). Core suite 546 green; core typecheck 0; full gate green.
 
 ## 2026-09-21 — Operator-authorized commit of the OpenCode TUI scroll work + README truth fix
 

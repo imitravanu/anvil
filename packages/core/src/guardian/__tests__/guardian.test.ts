@@ -66,6 +66,35 @@ describe("scanTextForSlop", () => {
     // non-code would silently disable the working-tree scan entirely.
     expect(scanTextForSlop("(working tree)", FIX_AS_ANY, "anvil").some((v) => v.rule === "no-as-any")).toBe(true);
   });
+
+  it("does not flag the import path merely named in a comment (S5.3)", () => {
+    // The comment describes the boundary; it does not cross it. Landing the
+    // original scoping change tripped the gate on exactly this shape.
+    const comment = `// core must never import "@anvil/` + `tui" — see scope.ts`;
+    expect(
+      scanTextForSlop("packages/core/src/x.ts", comment, "anvil").some(
+        (v) => v.rule === "no-architecture-breach"
+      )
+    ).toBe(false);
+  });
+
+  it("still flags a real core -> tui import in code", () => {
+    expect(
+      scanTextForSlop("packages/core/src/x.ts", TUI_IMPORT, "anvil").some(
+        (v) => v.rule === "no-architecture-breach"
+      )
+    ).toBe(true);
+  });
+
+  it("does not judge the core import rule on a non-core package file", () => {
+    // S5.3: resolve package membership before applying the import rule. A tui
+    // file naming @anvil/tui is not a core boundary breach.
+    expect(
+      scanTextForSlop("packages/tui/src/x.ts", TUI_IMPORT, "anvil").some(
+        (v) => v.rule === "no-architecture-breach"
+      )
+    ).toBe(false);
+  });
 });
 
 describe("scanTextForSlop — foreign scope (not Anvil's own repo)", () => {

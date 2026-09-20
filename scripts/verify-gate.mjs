@@ -29,6 +29,15 @@ console.log(` 🛡️  ANVIL AGENT GUARDIAN GATE (v2.2) — Anti-Slop & Quality 
 console.log(`================================================================${RESET}`);
 
 /**
+ * A comment line cannot execute: a built-in-rule match inside one is a false
+ * positive (S5.3 — the gate flagged a doc comment that merely *described* the
+ * package boundary, and prose containing ": any"). The placeholder marker is
+ * deliberately exempt: a `TODO` in a comment is exactly what that rule exists
+ * to catch, and the Step 0 sensor pins that behavior.
+ */
+const isCommentLine = (text) => /^\s*(?:\/\/|\/\*|\*)/.test(text);
+
+/**
  * Pure violation scanner for diff lines.
  * Evaluates added lines and returns an array of violation messages.
  */
@@ -44,9 +53,10 @@ export function scanLinesForViolations(diffLines) {
     // Only inspect newly added lines (starting with '+', not '+++')
     if (line.startsWith("+") && !line.startsWith("+++")) {
       const addedText = line.slice(1).trim();
+      const comment = isCommentLine(addedText);
 
       // Rule 1: No 'as any' or 'as never' in production code
-      if (/\bas\s+(any|never)\b/.test(addedText) && !currentFile.includes("__tests__") && !currentFile.includes(".test.")) {
+      if (!comment && /\bas\s+(any|never)\b/.test(addedText) && !currentFile.includes("__tests__") && !currentFile.includes(".test.")) {
         violations.push(`${currentFile}: Forbidden type escape "${addedText}" (Rule 2.2: No 'as any' / 'as never')`);
       }
 
@@ -56,22 +66,22 @@ export function scanLinesForViolations(diffLines) {
       // exemption (mock fixtures).
       // The (`(?<!\?)`) guard keeps `(?:any` non-capturing groups from
       // reading as a `: any` annotation.
-      if (/((?<!\?):\s*any\b|<\s*any\b|\bany\s*\[\])/.test(addedText) && !currentFile.includes("__tests__") && !currentFile.includes(".test.")) {
+      if (!comment && /((?<!\?):\s*any\b|<\s*any\b|\bany\s*\[\])/.test(addedText) && !currentFile.includes("__tests__") && !currentFile.includes(".test.")) {
         violations.push(`${currentFile}: Bare any type annotation "${addedText}" (Rule 2.2: use unknown + narrowing)`);
       }
 
       // Rule 2: No empty catch blocks in new code
-      if (/catch\s*(?:\([^)]*\))?\s*\{\s*\}/.test(addedText)) {
+      if (!comment && /catch\s*(?:\([^)]*\))?\s*\{\s*\}/.test(addedText)) {
         violations.push(`${currentFile}: Silent catch block "${addedText}" (Rule 2.3: No silent catch {})`);
       }
 
       // Rule 3: packages/core must never import from tui or cli
-      if (currentFile.startsWith("packages/core/") && (addedText.includes("@anvil/tui") || addedText.includes("@anvil/cli"))) {
+      if (!comment && currentFile.startsWith("packages/core/") && (addedText.includes("@anvil/tui") || addedText.includes("@anvil/cli"))) {
         violations.push(`${currentFile}: Architecture violation "${addedText}" (Rule 2.5: Core must never import TUI or CLI)`);
       }
 
       // Rule 4: Zero hardcoded color strings in TUI components (must derive from theme)
-      if (currentFile.startsWith("packages/tui/src/components/") && !currentFile.includes("__tests__")) {
+      if (!comment && currentFile.startsWith("packages/tui/src/components/") && !currentFile.includes("__tests__")) {
         const hardcodedColorMatch = /\b(?:color|borderColor|backgroundColor)\s*=\s*["'](cyan|green|red|yellow|blue|magenta|white|black|gray)["']/.exec(addedText);
         if (hardcodedColorMatch) {
           violations.push(`${currentFile}: Forbidden hardcoded color "${hardcodedColorMatch[0]}" (Rule 2.6: All colors must derive from useTheme())`);
@@ -82,9 +92,9 @@ export function scanLinesForViolations(diffLines) {
       // 5a: ternary with String() fallback. 5b: ternary with ANY fallback
       // (e.g. JSON.stringify) — still slop, use getErrorMessage. 5c: optional-
       // chaining fallback form (also covered by residual drain 1.5).
-      if (/instanceof\s+Error\s*\?/.test(addedText)) {
+      if (!comment && /instanceof\s+Error\s*\?/.test(addedText)) {
         violations.push(`${currentFile}: Raw error formatting "${addedText}" (Rule 2.1: Import and use getErrorMessage(err) from @anvil/core)`);
-      } else if (/\.\s*message\s*\?\?\s*String\s*\(/.test(addedText)) {
+      } else if (!comment && /\.\s*message\s*\?\?\s*String\s*\(/.test(addedText)) {
         violations.push(`${currentFile}: Raw error formatting "${addedText}" (Rule 2.1: Import and use getErrorMessage(err) from @anvil/core)`);
       }
 
@@ -251,6 +261,10 @@ try {
     for (const line of lines) {
       if (line.startsWith("+++ b/")) { cur = line.slice(6); continue; }
       if (line.startsWith("+") && !line.startsWith("+++")) {
+        // Split families are code-only; a comment pair can never be a real
+        // split type escape / catch / raw-error, so drop comment lines before
+        // joining (S5.3 precision).
+        if (isCommentLine(line.slice(1).trim())) continue;
         perFile.set(cur, (perFile.get(cur) ?? "") + line.slice(1) + "\n");
       }
     }
@@ -406,12 +420,15 @@ function walkSourceFiles(dir, out) {
     const isTestFile = rel.includes(".test.");
     const lines = fs.readFileSync(file, "utf-8").split("\n");
     for (let i = 0; i < lines.length; i++) {
+      const lineIsComment = isCommentLine(lines[i]);
       for (const rule of RESIDUAL_RULES) {
         if (rule.onlyCore && !isCore) continue;
         if (rule.onlyTuiComponents && !isTuiComponent) continue;
         // Mirror Step 1 exemption: type escapes are allowed in test fixtures
         // (mock providers, ink harnesses matched by __tests__/ or .test.).
         if (isTestFile && rule.name.startsWith("type escape")) continue;
+        // Comments are not code (S5.3) — except for the placeholder marker.
+        if (lineIsComment && rule.name !== "placeholder marker (TODO/FIXME/XXX)") continue;
         if (rule.re.test(lines[i])) {
           hits.push(`${rel}:${i + 1} ${rule.name}`);
         }

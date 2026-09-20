@@ -5,5 +5,14 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    // Coverage is opt-in (`npm run coverage`), separate from `npm test`, so a
+    // low-coverage area never blocks the gate. Counts production src/ only —
+    // the __visual__ baseline tests are golden fixtures, not coverage surface.
+    coverage: {
+      provider: "v8",
+      reporter: ["text-summary"],
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["**/__tests__/**", "**/*.test.*", "src/**/*.d.ts", "src/__visual__/**"],
+    },
   },
 });
