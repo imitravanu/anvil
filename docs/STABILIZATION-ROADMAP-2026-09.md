@@ -502,6 +502,16 @@ File-count gaps ≠ coverage gaps, but the subtlest async logic has the thinnest
       lines / 74.86% branches / 87.46% functions** — the old ANALYSIS_REPORT "~60%" estimate was
       too pessimistic for core; the thin areas S7 names (mcp/lsp/goal/cli) are what the per-task
       hunt should target.*
+- [x] CLI coverage raised from the measured baseline (2026-09-21).
+      *`packages/cli` went **33.86% → 44.02% statements** (branches 33.78 → 37.16). The wins were
+      the two thin, testable files, not the interactive entry: `headless.ts` 36.6 → 91.5% (new
+      `readStdin.test.ts` covers the non-TTY branches — end, byte cap, idle window, hard timeout,
+      stream error — with a stand-in stdin stream) and `gate.ts` 46.9 → 58.0% (new
+      `gate.native.test.ts` drives `runNativeGate` end-to-end in a throwaway git repo: clean tree →
+      0, planted slop → 1, no-git → 1). `goalRunner` got a provider-failure case (exits 1 cleanly),
+      which confirmed the engine handles a throwing provider itself rather than reaching the
+      runner's catch. **Remaining ceiling:** `index.tsx` is 0% — a 514-line interactive entry whose
+      coverage needs Ink/`process.exit` harness work; recorded as the open CLI gap.*
 
 ---
 

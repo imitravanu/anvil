@@ -4,6 +4,16 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### CLI Test Coverage Raised From 33.9% to 44.0% (2026-09-21)
+
+- **The two thin, testable CLI files, not the interactive entry.** `headless.ts` 36.6 → 91.5%
+  (new `readStdin.test.ts`: non-TTY end, byte cap, idle window, hard timeout, stream error — with a
+  stand-in stdin stream) and `gate.ts` 46.9 → 58.0% (new `gate.native.test.ts` drives
+  `runNativeGate` in a throwaway git repo: clean → 0, planted slop → 1, no-repo → 1). A
+  `goalRunner` provider-failure case was added too; it confirmed the engine swallows a throwing
+  provider and reports `goal_failed` rather than the runner's catch handling it. `index.tsx`
+  remains 0% — a 514-line interactive entry needing an Ink harness; that is the recorded CLI gap.
+
 ### /diff Admits When Its Review Is Incomplete; Certification Table Stops Saying "live" (2026-09-21)
 
 - **`/diff` now warns when its bounded stores dropped entries (S6).** The review baseline

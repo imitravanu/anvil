@@ -18,6 +18,16 @@ class TestFakeProvider implements ModelProvider {
   }
 }
 
+class ThrowingProvider implements ModelProvider {
+  readonly id = "anthropic" as const;
+  readonly displayName = "Throwing Provider";
+  isConfigured(): boolean { return true; }
+  // The throw is the behavior under test; no yield is reachable.
+  async *streamCompletion(): AsyncGenerator<StreamEvent> {
+    throw new Error("provider exploded");
+  }
+}
+
 describe("runGoalHeadless", () => {
   let tmpDir: string;
   let stdoutSpy: any;
@@ -138,5 +148,21 @@ describe("runGoalHeadless", () => {
     const stderrOutput = stderrSpy.mock.calls.map((c: any) => c[0]).join("");
     expect(stderrOutput).not.toContain("[Awareness]");
     expect(stderrOutput).not.toContain("[Goal Plan]");
+  });
+
+  it("exits 1 on a provider failure instead of crashing", async () => {
+    // The engine contains a throwing provider and reports goal_failed itself,
+    // so the mission surfaces as a clean exit 1 — not an unhandled throw.
+    const code = await runGoalHeadless({
+      goal: "crash me",
+      provider: new ThrowingProvider(),
+      model: "test-model",
+      projectRoot: tmpDir,
+      autoApprove: false,
+      raw: false,
+    });
+    expect(code).toBe(1);
+    const stderrOutput = stderrSpy.mock.calls.map((c: any) => c[0]).join("");
+    expect(stderrOutput).toContain("Goal failed");
   });
 });

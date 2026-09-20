@@ -25,6 +25,24 @@
   Depends only on the `cancelled` event shape — survives the parallel
   `SessionLedger`/`RewindRing` extraction (verified: their `rewindRing.ts` re-emits it).
 
+## 2026-09-21 — S7 CLI coverage raised (Buffy)
+
+**Agent (this session)** — owns & changed:
+- NEW `packages/cli/src/__tests__/readStdin.test.ts` (+5) — non-TTY branches of `readStdin` with a
+  stand-in stdin stream: end, byte cap (truncates + notices), idle window (destroys + continues),
+  stream error, hard timeout. `headless.ts` coverage **36.6% → 91.5%**.
+- NEW `packages/cli/src/__tests__/gate.native.test.ts` (+3) — `runNativeGate` in a temp git repo:
+  clean tree → 0, planted universal slop → 1 (lists the violation), no-git → 1. `gate.ts`
+  coverage **46.9% → 58.0%**.
+- `packages/cli/src/__tests__/goalRunner.test.ts` (+1) — a throwing provider exits 1 cleanly. It
+  found that the engine contains the provider error and reports `goal_failed`, so the runner's own
+  catch is not reached; the assertion records the real behavior.
+- `docs/STABILIZATION-ROADMAP-2026-09.md` — S7 CLI-coverage note; `CHANGELOG.md` records it.
+
+**Result:** `packages/cli` **33.86% → 44.02% statements** (branches 33.78 → 37.16). Remaining
+ceiling is `index.tsx` at 0% (514-line interactive entry; needs an Ink/process.exit harness) —
+recorded, not hidden. MCP/LSP/goal-engine S7 items remain open.
+
 ## 2026-09-21 — S6 product truth finished (Buffy)
 
 **Agent (this session)** — owns & changed. Skip note: the S6 cancel-queue box was already done by
