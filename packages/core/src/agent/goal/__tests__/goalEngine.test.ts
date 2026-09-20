@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { GoalEngine, parseMilestones } from "../goalEngine.js";
-import { FakeProvider, ScriptEntry } from "../../__tests__/fakeProvider.js";
+import { FakeProvider, ScriptEntry, stalledStream } from "../../__tests__/fakeProvider.js";
 import { StreamEvent } from "../../../providers/types.js";
 
 const textTurn = (text: string): StreamEvent[] => [
@@ -412,7 +412,128 @@ Let's begin.`;
       );
       expect(skipped).toBeDefined();
     });
-it("does not fail a milestone whose verification failed then passed after repair", async () => {
+    /** Wait until the provider has begun its Nth streamed turn. */
+    async function waitForTurn(provider: FakeProvider, n: number): Promise<void> {
+      const deadline = Date.now() + 3000;
+      while (provider.calls.length < n && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      expect(provider.calls.length).toBeGreaterThanOrEqual(n);
+    }
+
+    it("aborts the mission when the PLANNING turn is cancelled", async () => {
+      const provider = new FakeProvider([
+        (req) => stalledStream(req.signal ?? new AbortController().signal, { type: "text_delta", text: "thinking..." }),
+      ]);
+      const engine = new GoalEngine({
+        provider,
+        model: "fake-model",
+        projectRoot: tmpDir,
+        permissionBroker: { async requestPermission() { return true; } },
+        autoVerify: false,
+      });
+
+      const runPromise = collect(engine, "Ambiguous goal");
+      await waitForTurn(provider, 1);
+      engine.cancel();
+      const { events, result } = await runPromise;
+
+      const failed = events.find((e) => e.type === "goal_failed");
+      expect(failed).toBeDefined();
+      expect(String(failed?.error)).toContain("cancelled");
+      expect(result.summary).toBe("Mission cancelled during planning.");
+      expect(result.totalTurns).toBe(1);
+      expect(result.milestones).toEqual([]);
+      expect(result.success).toBe(false);
+    });
+
+    it("aborts the mission when a MILESTONE turn is cancelled", async () => {
+      const planResponse: StreamEvent[] = [
+        {
+          type: "text_delta",
+          text: JSON.stringify([{ id: "1", title: "Only", criteria: "Do it" }]),
+        },
+        { type: "turn_end", stopReason: "end_turn" },
+      ];
+      const provider = new FakeProvider([
+        planResponse,
+        (req) => stalledStream(req.signal ?? new AbortController().signal, { type: "text_delta", text: "working..." }),
+      ]);
+      const engine = new GoalEngine({
+        provider,
+        model: "fake-model",
+        projectRoot: tmpDir,
+        permissionBroker: { async requestPermission() { return true; } },
+        autoVerify: false,
+      });
+
+      const runPromise = collect(engine, "Think only");
+      await waitForTurn(provider, 2);
+      engine.cancel();
+      const { events, result } = await runPromise;
+
+      expect(events.map((e) => e.type)).toContain("milestone_started");
+      expect(events.map((e) => e.type)).toContain("goal_failed");
+      expect(result.summary).toBe("Mission cancelled during milestone 1.");
+      expect(result.milestones[0].status).toBe("in_progress");
+      expect(result.success).toBe(false);
+    });
+
+    it("aborts the mission when the REVIEW turn is cancelled", async () => {
+      const planResponse: StreamEvent[] = [
+        {
+          type: "text_delta",
+          text: JSON.stringify([{ id: "1", title: "Only", criteria: "Do it" }]),
+        },
+        { type: "turn_end", stopReason: "end_turn" },
+      ];
+      const provider = new FakeProvider([
+        planResponse,
+        textTurn("Milestone 1 done."),
+        (req) => stalledStream(req.signal ?? new AbortController().signal, { type: "text_delta", text: "reviewing..." }),
+      ]);
+      const engine = new GoalEngine({
+        provider,
+        model: "fake-model",
+        projectRoot: tmpDir,
+        permissionBroker: { async requestPermission() { return true; } },
+        autoVerify: false,
+      });
+
+      const runPromise = collect(engine, "Think only");
+      await waitForTurn(provider, 3);
+      engine.cancel();
+      const { events, result } = await runPromise;
+
+      expect(events.map((e) => e.type)).toContain("goal_failed");
+      expect(result.summary).toBe("Mission cancelled during milestone 1 review.");
+      expect(result.success).toBe(false);
+    });
+
+    it("aborts the mission when the planning turn ERRORS", async () => {
+      const provider = new FakeProvider([
+        [
+          { type: "error", message: "provider exploded", isRetryable: false },
+          { type: "turn_end", stopReason: "error" },
+        ],
+      ]);
+      const engine = new GoalEngine({
+        provider,
+        model: "fake-model",
+        projectRoot: tmpDir,
+        permissionBroker: { async requestPermission() { return true; } },
+        autoVerify: false,
+      });
+
+      const { events, result } = await collect(engine, "Anything");
+      const failed = events.find((e) => e.type === "goal_failed");
+      expect(String(failed?.error)).toContain("Planning turn failed");
+      expect(result.summary).toBe("Mission aborted: the planning turn errored.");
+      expect(result.milestones).toEqual([]);
+      expect(result.success).toBe(false);
+    });
+
+    it("does not fail a milestone whose verification failed then passed after repair", async () => {
       // The turn verifies FAIL (fixed.txt absent) → repair → verifies PASS.
       // The outcome must report the LAST verdict. Treating "failed once" as
       // sticky marked a successfully repaired milestone as failed, so with the

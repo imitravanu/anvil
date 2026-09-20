@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -47,6 +47,37 @@ describe("Situational Awareness Engine", () => {
     expect(ctx.summary).toContain("node");
     expect(ctx.summary).toContain("pnpm");
     expect(ctx.summary).toContain("vitest run");
+  });
+
+  it("identifies yarn and bun lockfiles as the package manager", async () => {
+    fs.writeFileSync(path.join(tmpDir, "package.json"), JSON.stringify({ name: "yarn-project" }));
+    fs.writeFileSync(path.join(tmpDir, "yarn.lock"), "");
+    expect((await analyzeWorkspace(tmpDir)).ecosystem.packageManager).toBe("yarn");
+
+    fs.rmSync(path.join(tmpDir, "yarn.lock"));
+    fs.writeFileSync(path.join(tmpDir, "bun.lockb"), "");
+    expect((await analyzeWorkspace(tmpDir)).ecosystem.packageManager).toBe("bun");
+  });
+
+  it("warns but keeps going when package.json is malformed", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      fs.writeFileSync(path.join(tmpDir, "package.json"), "{ this is not json");
+
+      const ctx = await analyzeWorkspace(tmpDir);
+
+      expect(ctx.ecosystem.type).toBe("node");
+      expect(ctx.ecosystem.testScript).toBeUndefined();
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("degrades to an empty entry list when the root cannot be read", async () => {
+    const ctx = await analyzeWorkspace(path.join(tmpDir, "does-not-exist"));
+    expect(ctx.topLevelEntries).toEqual([]);
+    expect(ctx.ecosystem.type).toBe("generic");
   });
 
   it("detects Rust ecosystem from Cargo.toml", async () => {

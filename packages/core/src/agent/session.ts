@@ -12,13 +12,14 @@ import { SessionMetadata, StoredSession } from "../session/types.js";
 import { AgentEvent, AgentOptions, DEFAULT_MAX_INNER_ITERATIONS } from "./types.js";
 import { RunLedgerEntry } from "./ledger.js";
 import { SessionLedger } from "./sessionLedger.js";
-import { clearRateLimitRecord, getConsecutiveRateLimitCount, isCircuitOpen, isRateLimitMessage, noteRateLimited, rateLimitRetrySeconds, recordFailure, recordSuccess } from "../providers/freeModels.js";
+import { clearRateLimitRecord, isCircuitOpen, isRateLimitMessage, noteRateLimited, recordFailure, recordSuccess } from "../providers/freeModels.js";
 import { MAX_DELEGATIONS_PER_TURN, runSubAgentLive } from "./subagent.js";
   import { interceptTurn, guardianFixedText } from "../guardian/interceptor.js";
 import { loadCustomGuardianRules, type CustomGuardianRule } from "../guardian/rules.js";
 import { detectGuardianScope, type GuardianScope } from "../guardian/scope.js";
 import { TurnState } from "./turnState.js";
-import { LoopGuard, type AccumulatedToolCall, type PreparedCall } from "./loopGuard.js";
+import { streamAssistantTurn, type TurnStreamResult } from "./turnStream.js";
+import { LoopGuard, type PreparedCall } from "./loopGuard.js";
 import type { TeamRunResult } from "./team/types.js";
 import { ToolOrchestrator, type RunnableCall } from "./orchestrator.js";
 import { HistoryStore } from "./historyStore.js";
@@ -354,10 +355,9 @@ export class AgentSession {
       controller.abort();
     }
 
-    // per-turn loop state starts clean on every send().
     // A fresh TurnState per call — budget and loop-guard state must never
     // leak across turns (a reused instance would instantly budget_exhaust).
-        const turn = new TurnState(this.maxInnerIterations);
+    const turn = new TurnState(this.maxInnerIterations);
     turn.task = userText;
 
     try {
@@ -439,7 +439,7 @@ export class AgentSession {
 
         turn.markIteration();
 
-                const turnNotes: string[] = [];
+        const turnNotes: string[] = [];
         const prepared: PreparedCall[] = LoopGuard.classify(toolCalls, this.toolDefs, turn);
         const handled = new Map<string, ToolExecutionResult>();
 
@@ -766,102 +766,28 @@ export class AgentSession {
     return false;
   }
 
-  private async *streamAssistantTurn(
+  /**
+   * Streams one assistant round. The accumulation/rate-limit contract lives in
+   * turnStream.ts; the session only supplies its live provider + history.
+   */
+  private streamAssistantTurn(
     controller: AbortController,
     turn: TurnState
-  ): AsyncGenerator<
-    AgentEvent,
-    {
-      textParts: string[];
-      toolCalls: AccumulatedToolCall[];
-      stopReason: string | undefined;
-      rateLimitRetry: number | null;
-      sawUsage: boolean;
-    } | null
-  > {
-    const stream = this.provider.streamCompletion({
+  ): AsyncGenerator<AgentEvent, TurnStreamResult | null> {
+    return streamAssistantTurn({
+      provider: this.provider,
       model: this.options.model,
       systemPrompt: this.options.systemPrompt,
       messages: this.history.snapshot(),
       tools: this.toolDefs,
       maxTokens: this.options.maxTokens,
-      signal: controller.signal,
+      controller,
+      turn,
+      onUsage: (usage) => {
+        this.lastInputTokens = usage.inputTokens;
+        this.lastUsage = usage;
+      },
     });
-
-    const textParts: string[] = [];
-    const toolCalls: AccumulatedToolCall[] = [];
-    const openCalls = new Map<string, { name: string; inputJson: string }>();
-    let stopReason: string | undefined;
-    let rateLimitRetry: number | null = null;
-    let sawUsage = false;
-
-    for await (const event of stream) {
-      switch (event.type) {
-        case "text_delta":
-          textParts.push(event.text);
-          yield { type: "text_delta", text: event.text };
-          break;
-        case "tool_call_start":
-          openCalls.set(event.id, { name: event.name, inputJson: "" });
-          break;
-        case "tool_call_delta": {
-          const open = openCalls.get(event.id);
-          if (open) open.inputJson = event.cumulativeInputJson;
-          break;
-        }
-        case "tool_call_end": {
-          const open = openCalls.get(event.id);
-          let input: unknown;
-          if (event.input !== undefined && event.input !== null) {
-            input = event.input;
-          } else {
-            const raw = open?.inputJson ?? "";
-            if (raw.trim()) {
-              try {
-                input = JSON.parse(raw);
-              } catch {
-                input = { __parseError: true, rawInput: raw.slice(0, 200) };
-              }
-            } else {
-              input = {};
-            }
-          }
-          openCalls.delete(event.id);
-          toolCalls.push({
-            id: event.id,
-            name: event.name ?? open?.name ?? "",
-            input,
-            ...(event.providerMetadata ? { providerMetadata: event.providerMetadata } : {}),
-          });
-          break;
-        }
-        case "usage":
-          sawUsage = true;
-          this.lastInputTokens = event.inputTokens;
-          this.lastUsage = { inputTokens: event.inputTokens, outputTokens: event.outputTokens };
-          yield { type: "usage", inputTokens: event.inputTokens, outputTokens: event.outputTokens };
-          break;
-        case "error": {
-          if (isRateLimitMessage(event.message)) {
-            noteRateLimited(this.provider.id, this.options.model);
-            recordFailure(this.provider.id, this.options.model);
-            if (!turn.rateLimitRetried) {
-              turn.rateLimitRetried = true;
-              const consecutive = getConsecutiveRateLimitCount(this.provider.id, this.options.model);
-              rateLimitRetry = rateLimitRetrySeconds(event.message, consecutive);
-              break;
-            }
-          }
-          yield { type: "error", message: event.message };
-          return null;
-        }
-        case "turn_end":
-          stopReason = event.stopReason;
-          break;
-      }
-    }
-
-    return { textParts, toolCalls, stopReason, rateLimitRetry, sawUsage };
   }
 
   private async takeRewindSnapshot(prepared: PreparedCall[]): Promise<Checkpoint | null> {

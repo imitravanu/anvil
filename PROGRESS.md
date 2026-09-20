@@ -2,12 +2,29 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
-> **ACTIVE 2026-09-21 (this session — Cline):** owns `packages/tui/src/hooks/useAgentController.ts`
-> + `packages/tui/src/hooks/__tests__/useAgentController.test.tsx` for S6 cancel-queue UX only.
-> HOLD chosen over CLEAR per operator (hold + announce; next explicit send drains).
-> Explicitly NOT touching: `packages/core/src/guardian/*`, `scripts/verify-gate.mjs`,
-> `.githooks/pre-commit`, `scripts/gate-manifest.json`, `packages/core/src/agent/*`,
-> `package*.json`, `*/vitest.config.ts` (other agent's S5.3 + sessionLedger/rewindRing + config work).
+> **ACTIVE 2026-09-21 (this session — Cline, takeover):** owns the unfinished turnStream split:
+> `packages/core/src/agent/turnStream.ts` + `packages/core/src/agent/__tests__/turnStream.test.ts`
+> (NEW), `packages/core/src/agent/session.ts` (wiring only),
+> `packages/core/src/agent/goal/__tests__/awareness.test.ts`,
+> `packages/core/src/agent/goal/__tests__/goalEngine.test.ts`,
+> `packages/core/src/mcp/__tests__/clientUnit.test.ts`,
+> `packages/core/src/mcp/__tests__/clientReconnect.test.ts` (NEW),
+> `packages/core/src/lsp/__tests__/lspclientEdges.test.ts`,
+> `packages/core/src/lsp/__tests__/lspToolsLsp.test.ts` (NEW).
+## 2026-09-21 — turnStream split + S7 MCP/LSP/goal tests landed (this session — Cline, takeover)
+
+- Took over Buffy's half-done work (out of credit ~02:24): the `turnStream.ts` extraction was
+  complete on disk but uncommitted, with 5 new S7 test files + goal test edits.
+- `packages/core/src/agent/turnStream.ts` (NEW, 140 lines) — `streamAssistantTurn(input)` owns the
+  provider-streaming contract (text accumulation, tool-call assembly from deltas, malformed-JSON
+  `__parseError`, usage via `onUsage`, rate-limit retry via `TurnState`). `session.ts` keeps a thin
+  delegate wrapper (~20 lines vs ~100 inlined); the only behavior-neutral rename is the wrapper
+  method. Verified: core `tsc` clean, turnStream 9/9, session 14/14, cancelHistory 2/2.
+- S7 tests (NEW/edited, all green): `mcp/clientUnit` + `mcp/clientReconnect`, `lsp/lspclientEdges`
+  (timeout/crash honesty with real child processes) + `lsp/lspToolsLsp`, goal `awareness` (+33)
+  + `goalEngine` (+125, incl. verify-failed-then-repaired milestone case).
+- **Evidence:** full core suite **603/603 (82 files)** green. No protected artifact touched.
+  Goal diffs are test-files-only (no prod `goal/` change).
 
 ## 2026-09-21 — S6 cancel-queue UX done (this session — Cline)
 
