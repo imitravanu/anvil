@@ -1,0 +1,125 @@
+<svg width="880" height="260" viewBox="0 0 880 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Dark Cyber-Forge Canvas -->
+    <linearGradient id="an-bg" x1="0" y1="0" x2="880" y2="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#0a0c13" />
+      <stop offset="50%" stopColor="#101420" />
+      <stop offset="100%" stopColor="#080a0f" />
+    </linearGradient>
+
+    <!-- Forge Ambient Glows -->
+    <radialGradient id="an-glow-amber" cx="160" cy="110" r="240" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#ff7b00" stopOpacity="0.38" />
+      <stop offset="45%" stopColor="#ff4500" stopOpacity="0.12" />
+      <stop offset="100%" stopColor="#ff4500" stopOpacity="0" />
+    </radialGradient>
+    <radialGradient id="an-glow-cyan" cx="720" cy="150" r="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#00d2ff" stopOpacity="0.25" />
+      <stop offset="50%" stopColor="#0071e3" stopOpacity="0.08" />
+      <stop offset="100%" stopColor="#0071e3" stopOpacity="0" />
+    </radialGradient>
+
+    <!-- Anvil Metal Gradients -->
+    <linearGradient id="an-metal" x1="50" y1="50" x2="160" y2="160" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#2c3244" />
+      <stop offset="50%" stopColor="#1a1e2b" />
+      <stop offset="100%" stopColor="#11141e" />
+    </linearGradient>
+
+    <linearGradient id="an-ember" x1="80" y1="75" x2="140" y2="135" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#ffaa00" />
+      <stop offset="50%" stopColor="#ff5500" />
+      <stop offset="100%" stopColor="#d80032" />
+    </linearGradient>
+
+    <filter id="an-icon-shadow" x="35" y="35" width="145" height="145" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" floodColor="#000000" floodOpacity="0.5" />
+      <feDropShadow dx="0" dy="4" stdDeviation="8" floodColor="#ff6a00" floodOpacity="0.35" />
+    </filter>
+
+    <!-- Terminal Grid Pattern -->
+    <pattern id="an-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1" fill="rgba(255, 255, 255, 0.04)" />
+    </pattern>
+  </defs>
+
+  <!-- Canvas Surface -->
+  <rect width="880" height="260" rx="20" fill="url(#an-bg)" />
+  <rect width="880" height="260" fill="url(#an-grid)" />
+  <rect x="0.5" y="0.5" width="879" height="259" rx="19.5" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1" />
+
+  <!-- Luminous Glow Overlays -->
+  <circle cx="160" cy="110" r="240" fill="url(#an-glow-amber)" />
+  <circle cx="720" cy="150" r="260" fill="url(#an-glow-cyan)" />
+
+  <!-- App Icon / Forge Anvil Symbol (Left Hero) -->
+  <g filter="url(#an-icon-shadow)">
+    <!-- Titanium Squircle Badge -->
+    <rect x="58" y="55" width="92" height="92" rx="24" fill="url(#an-metal)" />
+    <rect x="58.75" y="55.75" width="90.5" height="90.5" rx="23.25" stroke="rgba(255, 140, 0, 0.4)" stroke-width="1.5" />
+
+    <!-- Stylized Geometric Anvil & Terminal Spark -->
+    <!-- Anvil Horn & Face -->
+    <path d="M76 80 L132 80 L126 92 L112 92 L116 112 L128 116 L128 123 L80 123 L80 116 L92 112 L96 92 L76 92 Z" fill="url(#an-ember)" />
+    
+    <!-- Anvil Specular Edge Highlight -->
+    <path d="M78 82 L130 82 L125 90 L113 90" stroke="rgba(255, 255, 255, 0.7)" stroke-width="1.2" stroke-linecap="round" fill="none" />
+
+    <!-- Terminal Prompt Spark (Delta / Carrot) -->
+    <path d="M100 97 L108 102 L100 107" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+    <line x1="112" y1="107" x2="119" y2="107" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+  </g>
+
+  <!-- Typography -->
+  <g font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', 'Fira Code', sans-serif">
+    <!-- Title -->
+    <text x="176" y="93" font-size="38" font-weight="800" letter-spacing="-0.03em" fill="#ffffff">ANVIL</text>
+
+    <!-- Version / Status Pill -->
+    <g transform="translate(322, 68)">
+      <rect width="84" height="24" rx="12" fill="rgba(255, 106, 0, 0.20)" stroke="rgba(255, 140, 0, 0.60)" stroke-width="1" />
+      <text x="42" y="16.5" font-size="11.5" font-weight="700" fill="#ffa726" text-anchor="middle">v1.0.0 · TUI</text>
+    </g>
+
+    <!-- Subtitle -->
+    <text x="176" y="125" font-size="16" font-weight="450" fill="#a1a1aa" letter-spacing="-0.01em">
+      Professional-grade terminal AI coding agent with unified diffs & 10 LLM providers
+    </text>
+
+    <!-- Feature Pills -->
+    <!-- Pill 1: 10 Providers -->
+    <g transform="translate(176, 154)">
+      <rect width="138" height="28" rx="8" fill="rgba(255, 255, 255, 0.06)" stroke="rgba(255, 255, 255, 0.14)" stroke-width="1" />
+      <text x="69" y="18" font-size="12" font-weight="600" fill="#f4f4f5" text-anchor="middle">⚡ 10 LLM Providers</text>
+    </g>
+
+    <!-- Pill 2: Unified Diffs -->
+    <g transform="translate(322, 154)">
+      <rect width="158" height="28" rx="8" fill="rgba(255, 255, 255, 0.06)" stroke="rgba(255, 255, 255, 0.14)" stroke-width="1" />
+      <text x="79" y="18" font-size="12" font-weight="600" fill="#f4f4f5" text-anchor="middle">🛡️ Interactive Diffs</text>
+    </g>
+
+    <!-- Pill 3: Ink TUI -->
+    <g transform="translate(488, 154)">
+      <rect width="118" height="28" rx="8" fill="rgba(255, 255, 255, 0.06)" stroke="rgba(255, 255, 255, 0.14)" stroke-width="1" />
+      <text x="59" y="18" font-size="12" font-weight="600" fill="#f4f4f5" text-anchor="middle">⚛️ React · Ink</text>
+    </g>
+
+    <!-- Pill 4: LSP Code Intelligence -->
+    <g transform="translate(614, 154)">
+      <rect width="144" height="28" rx="8" fill="rgba(255, 255, 255, 0.06)" stroke="rgba(255, 255, 255, 0.14)" stroke-width="1" />
+      <text x="72" y="18" font-size="12" font-weight="600" fill="#f4f4f5" text-anchor="middle">🧠 LSP Intelligence</text>
+    </g>
+
+    <!-- Pill 5: 100% Free / Local -->
+    <g transform="translate(766, 154)">
+      <rect width="84" height="28" rx="8" fill="rgba(255, 255, 255, 0.06)" stroke="rgba(255, 255, 255, 0.14)" stroke-width="1" />
+      <text x="42" y="18" font-size="12" font-weight="600" fill="#34c759" text-anchor="middle">🆓 Free/Local</text>
+    </g>
+
+    <!-- Bottom Line Tagline -->
+    <text x="176" y="217" font-size="13" font-weight="400" fill="#71717a">
+      Autonomous 15-Tool Agent Loop • Checkpoints &amp; /rewind • Context Compaction • Zero Telemetry
+    </text>
+  </g>
+</svg>

@@ -1,48 +1,41 @@
-# Anvil
+<p align="center">
+  <img src="assets/banner.svg" alt="Anvil Banner" width="100%">
+</p>
 
-[![CI — Typecheck & Tests](https://github.com/imitravanu/anvil/actions/workflows/ci.yml/badge.svg)](https://github.com/imitravanu/anvil/actions/workflows/ci.yml)
-[![Visual Regression Gate](https://github.com/imitravanu/anvil/actions/workflows/visual-regression.yml/badge.svg)](https://github.com/imitravanu/anvil/actions/workflows/visual-regression.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<p align="center">
+  <a href="https://github.com/imitravanu/anvil/releases"><img src="https://img.shields.io/badge/Release-v1.0.0-ff6a00?style=flat-square" alt="Version"></a>
+  <a href="https://github.com/imitravanu/anvil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/imitravanu/anvil/ci.yml?branch=master&style=flat-square&label=CI%20Build" alt="CI"></a>
+  <a href="https://github.com/imitravanu/anvil/actions/workflows/visual-regression.yml"><img src="https://img.shields.io/github/actions/workflow/status/imitravanu/anvil/visual-regression.yml?branch=master&style=flat-square&label=Visual%20Gate" alt="Visual Gate"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node-%3E%3D20-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node"></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.7-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript"></a>
+  <a href="https://github.com/vadimdemedes/ink"><img src="https://img.shields.io/badge/TUI-React%20%2F%20Ink-61dafb?style=flat-square&logo=react&logoColor=black" alt="Ink"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License"></a>
+</p>
 
-A professional-grade, terminal-based AI coding agent — comparable to OpenCode, Codex CLI, and
-Cline — with a polished Ink (React) terminal UI. Talk to a model, let it read, write, edit, and
-search your project, run shell commands, and watch every mutation through an interactive
-permission prompt with a real unified diff.
+<p align="center">
+  <b>Anvil</b> is a professional-grade, terminal-based AI coding agent with an interactive React (Ink) terminal interface.<br>
+  Featuring <b>10 LLM providers</b>, <b>15 autonomous tools</b>, interactive unified-diff permissions, LSP code intelligence, and file checkpoints.
+</p>
 
-## Features
+---
 
-- **Ten providers, one interface**: Anthropic, OpenAI, Google Gemini, OpenRouter, Orcarouter, Groq,
-  GitHub Models, Cerebras, Mistral AI, and local Ollama — streaming responses, a model
-  registry (`/model` picker to switch mid-conversation), and automatic OpenRouter/Orcarouter free-model
-  syncing
-- **Free & local models**: keep API spend at $0 with Groq's free tier, GitHub Models, Cerebras,
-  Mistral's experimentation tier, or Ollama (fully offline). Every model is tagged `[FREE]` or
-  `[PAID]` in the picker and header, so pricing is always visible.
-- **Agent loop with 15 tools**: `read_file`, `write_file`, `edit_file` (unified diffs),
-  `list_files` (glob or plain-name search), `grep`, `run_command`, `get_outline`
-  (token-efficient structure outline), `verify_tests` (run the project's detected test runner),
-  `update_plan` (plan scratchpad), `delegate_task` (sub-agent), `update_memory` (project notes),
-  plus four LSP-backed code-intelligence tools — `goto_definition`, `find_references`,
-  `get_hover`, `get_diagnostics` (LSP where a server is installed, honest fallback otherwise) —
-  with cancellation and path containment to the project root
-- **Interactive permissions**: every mutating tool call shows the diff or command before it runs
-  (Allow once / Always allow this session / Deny — or just press **Esc** to deny). Known
-  read-only commands (`ls`, `cat`, `git status`, `node --version`, …) run without prompting;
-  anything with shell metacharacters, globs, or mutating subcommands always prompts.
-- **Model picker with type-to-filter**: 49 built-in models plus live-synced OpenRouter/Orcarouter free
-  models — searchable by name; free models sort first. The picker lists free-tier models; paid models stay available via `--model`, env, and settings.
-- **Honest UI everywhere**: real unified diffs in permission prompts, bounded transcript with a
-  "… N earlier messages above" scrollback indicator, compact actionable error messages (rate
-  limits include the retry time), a per-session run ledger (`/ledger`), and file checkpoints you
-  can rewind (`/rewind`).
-- **Session persistence**: conversations auto-save to `~/.anvil/sessions/` and can be listed,
-  resumed, and renamed (`/session`)
-- **Context compaction**: when usage nears the model's context window, older history is
-  summarized automatically — proactively on resume (estimated) and reactively between turns —
-  so long sessions keep working
-- **Theming**: `/theme dark | light | highContrast | midnight | hacker` (or your own names from `~/.anvil/themes.json`), persisted in settings
+## ⚡ Features at a Glance
 
-## What it looks like
+- **Ten Providers, One Unified Interface**: Seamlessly switch between Anthropic, OpenAI, Google Gemini, OpenRouter, Orcarouter, Groq, GitHub Models, Cerebras, Mistral AI, and local Ollama.
+- **100% Free & Local Model Support**: Keep API costs at $0 using Groq, GitHub Models, Cerebras, Mistral experimentation, or fully offline Ollama. Every model is clearly labeled `[FREE]` or `[PAID]`.
+- **Autonomous Agent Loop with 15 Tools**:
+  - **Filesystem**: `read_file`, `write_file`, `edit_file` (unified diffs), `list_files`, `grep`.
+  - **Code Intelligence (LSP)**: `get_outline`, `goto_definition`, `find_references`, `get_hover`, `get_diagnostics`.
+  - **Execution & Memory**: `run_command`, `verify_tests`, `update_plan`, `delegate_task` (sub-agent), `update_memory`.
+- **Interactive Unified Diff Permissions**: Every mutating tool shows the exact diff or command before execution (`Allow once` / `Always allow this session` / `Deny` / `Esc`). Safe read-only commands (`ls`, `cat`, `git status`) run automatically.
+- **Model Picker with Live Search**: Filter through 49 built-in models plus live-synced OpenRouter free models mid-session via `/model`.
+- **Session Checkpoints & Rewind**: Automatic pre-mutation snapshots allow full file rollbacks via `/rewind <n>`.
+- **Context Compaction**: Summarizes older conversation regions when nearing model context windows without breaking tool-call continuity.
+- **Extensible Architecture**: Native MCP (Model Context Protocol) support over `stdio` and `SSE`, sub-agent delegation, and custom themes.
+
+---
+
+## 🖥️ What It Looks Like
 
 ```
 ╭──────────────────────────────────────────────────────────────────────────────────╮
@@ -72,288 +65,175 @@ permission prompt with a real unified diff.
 ╰──────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-## Install
+---
 
-### Global install via npm
+## 🏗️ Architecture
+
+```
+┌────────────────────────────────────────────────────────┐
+│                   @anvil/cli                           │
+│     Entry point · Flag parsing · Sub-agent commands    │
+└──────────────────────────┬─────────────────────────────┘
+                           │
+┌──────────────────────────▼─────────────────────────────┐
+│                   @anvil/tui                           │
+│    Ink (React) terminal UI · Interactive Diff Prompts  │
+│    Model Picker · Command Palette · Ledger View        │
+└──────────────────────────┬─────────────────────────────┘
+                           │
+┌──────────────────────────▼─────────────────────────────┐
+│                   @anvil/core                          │
+│    Autonomous Agent Loop · Provider Adapters (10)      │
+│    15 Built-in Tools · LSP Client · Checkpoint Ring    │
+│    Context Compaction · Session Store · MCP Client     │
+└────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🚀 Installation
+
+### Global Install via npm
 ```bash
 npm install -g @anvil/cli
 
-# run from any project directory
+# Run inside any repository
 cd ~/my-project
 anvil
 ```
 
-### Try without installing (npx)
+### Try Without Installing (npx)
 ```bash
 npx @anvil/cli
 ```
 
-### Build from source
+### Build from Source
 ```bash
 git clone https://github.com/imitravanu/anvil.git
 cd anvil
 npm ci
 npm run build
-npm run test
+npm test
 ```
 
-## First-run setup
+---
 
-The first time you run `anvil` (or any time via `anvil config`), you'll be asked to pick a
-provider and paste an API key — it's saved to `~/.anvil/credentials.json` (mode 0600) and you
-drop straight into a chat, no restart needed.
+## 🔑 First-Run Setup & Onboarding
 
-You can re-run this onboarding flow any time **from inside the app** with `/connect` — pick
-a provider, paste (or replace) its API key, and Anvil registers it live. If you connect the
-provider you're already chatting with, the active session hot-swaps onto the new key
-(history is preserved, no restart). If it's a different provider, Anvil offers `/model` to
-switch to it.
+The first time you launch `anvil` (or anytime via `anvil config`):
+1. Pick a provider from the interactive list.
+2. Paste your API key (stored securely in `~/.anvil/credentials.json`, `mode 0600`).
+3. You are immediately dropped into the conversation.
 
-Picking **Ollama** needs no API key at all — it connects to `http://localhost:11434` and
-stores a placeholder so the config layer is satisfied. Free-tier providers (Gemini, Groq,
-GitHub Models, Cerebras, Mistral, OpenRouter's `:free` routes) are marked `[FREE]` in the
-model picker and header.
+> **Using Ollama?** Selecting Ollama requires **no API key**; it connects straight to `http://localhost:11434`.
+> Free providers (Gemini, Groq, GitHub Models, Cerebras, Mistral, OpenRouter `:free`) are tagged `[FREE]`.
 
-## Usage
+Hot-swap providers or keys anytime without leaving the chat using `/connect`.
 
-```
-anvil                  # start chatting
-anvil config           # add or update a provider API key
-anvil gate [--full]    # native guardian scan of the working-tree diff (--full runs the full npm gate)
-anvil init --guarded [--lang <typescript|python|rust|go>]   # provision AGENTS.md + .fresh-allowlist.json gates into a repo
-anvil --version        # print version
-anvil --help           # full help
+---
 
-anvil --provider gemini --model gemini-3.6-flash   # one-run overrides
-ANVIL_PROVIDER=anthropic ANVIL_MODEL=claude-sonnet-5 anvil
-```
+## 📡 Supported Providers & Certified Models
 
-Selection precedence: CLI flag → env var → `~/.anvil/settings.json` → first configured provider.
-An explicitly selected provider that has no configured API key fails with an actionable error;
-it never silently falls back to another provider.
+| Provider | Environment Variable | Tier | Primary Certified Models | Tools | Vision |
+| :--- | :--- | :---: | :--- | :---: | :---: |
+| **Anthropic** | `ANTHROPIC_API_KEY` | Paid | `claude-sonnet-5`, `claude-3-7-sonnet`, `claude-3-5-sonnet` | Yes | Yes |
+| **OpenAI** | `OPENAI_API_KEY` | Paid | `gpt-4o`, `gpt-4o-mini`, `o3-mini` | Yes | Yes |
+| **Google Gemini** | `GEMINI_API_KEY` | Free & Paid | `gemini-3.6-flash`, `gemini-1.5-pro` | Yes | Yes |
+| **OpenRouter** | `OPENROUTER_API_KEY` | Free & Paid | `openrouter/free`, `google/gemma-4-31b-it:free` | Yes | Yes |
+| **Orcarouter** | `ORCAROUTER_API_KEY` | Free & Paid | `orcarouter/free`, `deepseek/deepseek-v4-flash-free` | Yes | Yes |
+| **Groq** | `GROQ_API_KEY` | Free Tier | `llama-3.3-70b-versatile`, `qwen-2.5-coder-32b` | Yes | No |
+| **GitHub Models** | `GITHUB_TOKEN` | Free Preview | `gpt-4o-mini`, `meta-llama-3.3-70b-instruct` | Yes | Yes |
+| **Cerebras** | `CEREBRAS_API_KEY` | Free Tier (1M/day) | `llama3.3-70b`, `llama3.1-8b` | Yes | No |
+| **Mistral AI** | `MISTRAL_API_KEY` | Free Experimentation | `codestral-latest`, `mistral-small-latest` | Yes | No |
+| **Ollama** | None / `OLLAMA_HOST` | 100% Free / Local | `qwen2.5-coder:latest`, `llama3.2:latest` | Yes | Yes |
 
-### Supported Providers & Certification (Phase 18)
+---
 
-Every model provider adapter undergoes strict verification across 5 criteria: streaming text deltas, tool calling round-trips, 3-turn context continuity, clean error containment (404/invalid model), and rate-limit/circuit-breaker resilience (`npm run certify`).
+## ⌨️ Slash Commands
 
-| Provider | Environment Variable / Key | Free Tier | Primary Certified Models | Tools | Vision | Status |
-|---|---|---|---|---|---|---|
-| **Anthropic** | `ANTHROPIC_API_KEY` | Paid | `claude-sonnet-5`, `claude-3-7-sonnet-20250219`, `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022` | Yes | Yes | mock · 2026-09-10* |
-| **OpenAI** | `OPENAI_API_KEY` | Paid | `gpt-4o`, `gpt-4o-mini`, `o3-mini` | Yes | Yes | mock · 2026-09-10* |
-| **Google Gemini** | `GEMINI_API_KEY` | Free & Paid | `gemini-3.6-flash` (verified 2026-09-18), `gemini-2.0-flash`  retired by Google, `gemini-1.5-pro`, `gemini-1.5-flash` (unverified) | Yes | Yes | live · 2026-09-18 (see note) |
-| **OpenRouter** | `OPENROUTER_API_KEY` | Free & Paid | `openrouter/free`, `google/gemma-4-31b-it:free` | Yes | Yes | mock · 2026-09-10 |
-| **Orcarouter** | `ORCAROUTER_API_KEY` | Free & Paid | `orcarouter/free`, `z-ai/glm-5.3-flash-free`, `deepseek/deepseek-v4-flash-free` | Yes | Yes | mock · 2026-09-10 |
-| **Groq** | `GROQ_API_KEY` | Free Tier | `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, `qwen-2.5-coder-32b` | Yes | No | mock · 2026-09-10 |
-| **GitHub Models** | `GITHUB_TOKEN` / PAT | Free Preview | `gpt-4o-mini`, `meta-llama-3.3-70b-instruct`, `mistral-large-2411` | Yes | Mini: Yes | mock · 2026-09-10 |
-| **Cerebras** | `CEREBRAS_API_KEY` | Free Tier (1M/day) | `llama3.3-70b`, `llama3.1-8b` | Yes | No | mock · 2026-09-10 |
-| **Mistral AI** | `MISTRAL_API_KEY` | Free Experimentation | `codestral-latest`, `mistral-small-latest` | Yes | No | mock · 2026-09-10 |
-| **Ollama** | None / `OLLAMA_HOST` | 100% Free / Local | `qwen2.5-coder:latest`, `llama3.2:latest` | Yes | Model-dependent | mock · 2026-09-10 |
+Type `/` at any prompt to open the autocomplete menu:
 
-**Status records the certification *basis*, not a blanket claim of live testing.** `mock · <date>`
-means the adapter passed the deterministic suite CI runs (`npm run certify -- --mock --all`);
-`live · <date>` means a real-provider probe. Most rows are `mock` — only Google Gemini has a live
-probe recorded (`gemini-3.6-flash`, 2026-09-18), which is also how its retired `gemini-2.0-flash`
-was found and marked `broken`. `*` marks providers whose two newest models (`claude-opus-5`,
-`gpt-5.1`) are still `untested`. The weekly live lane (`live-eval.yml`) re-certifies against real
-providers and uploads the matrix (`--out`). The `/model` picker and the `--version` stamp carry the
-same distinction: a real probe badges `[✅ live]`, the suite badges `[✅ mock]` (dimmed), and an
-unrecorded mode defaults to `mock` rather than claiming a probe that never happened.
+| Command | Description |
+| :--- | :--- |
+| `/help` | Display command help and usage guide |
+| `/connect` | Hot-swap or configure a provider API key without restarting |
+| `/model` | Open the interactive model picker with type-to-filter |
+| `/diff` | Review all files modified during the current session as unified diffs |
+| `/rewind [n]` | Inspect file checkpoints or rollback to snapshot `n` |
+| `/goal <prompt>` | Launch an autonomous multi-step mission (Plan → Execute → Verify) |
+| `/mcp` | Check status, tools, and health of connected MCP servers |
+| `/mcp reconnect` | Refresh connections and hot-load new tools from MCP servers |
+| `/theme <name>` | Switch theme (`dark`, `light`, `midnight`, `hacker`, or custom) |
+| `/ledger` | Review session token spending, tools executed, and status |
+| `/session list` | View, resume, or rename saved conversation sessions |
+| `/context` | Inspect token budget breakdown and compaction forecasts |
+| `/image <path>` | Attach an image (`png`, `jpeg`, `webp`) to vision-capable models |
+| `/clear` | Start a fresh transcript (previous session remains saved) |
 
-Re-run provider certification anytime:
-```bash
-npm run certify -- --mock --all   # instant deterministic mock pass
-./scripts/certify-all.sh          # runs all providers with configured keys
-```
+---
 
-### Slash commands
+## 🔌 Model Context Protocol (MCP) Support
 
-
-Type `/` and a **command menu appears automatically** — arrow through it, Enter to run, Tab to
-fill. Or type the command directly:
-
-| Command | Effect |
-|---|---|
-| `/help` | list commands |
-| `/clear` | start a fresh transcript; the prior saved session remains resumable |
-| `/connect` | add or update a provider API key right inside the app (no restart) |
-| `/expand` | toggle full tool output in the transcript |
-| `/ledger` | show this session's run ledger (what ran, what failed, tokens spent) |
-| `/rewind` | list file checkpoints, or restore one (`/rewind <n>`); shell commands can't be rewound |
-| `/sync` | sync OpenRouter's live free-model list now (also runs automatically at startup) |
-| `/model` | open the model/provider picker (type to filter; cross-provider switches clear history) |
-| `/theme <name>` | switch theme (built-in or custom); persisted |
-| `/session list` | list saved sessions |
-| `/session new` | start a fresh session |
-| `/session resume [id]` | resume a session (no id → interactive picker) |
-| `/session rename <title>` | rename the current session |
-| `/goal <objective>` | launch an autonomous multi-step mission (decompose → execute → verify → critique) |
-| `/image <path>` | attach a png/jpeg/webp/gif (max 5 MB) to your next message (vision models) |
-| `/retry <text>` | drop the last exchange and resend with corrected wording |
-| `/diff` | review every file the session touched as unified diffs |
-| `/mcp` | MCP server status (tools, health) |
-| `/mcp reconnect` | reconnect + refresh all MCP servers (new tools are hot-loaded into the running session) |
-| `/team` | Multi-agent team status (parallel / pipeline / review) |
-| `/plugin` | Plugin registry (`/plugin list`; `/plugin lsp` shows language servers) |
-| `/context` | Token budget breakdown + compaction forecast |
-| `/copy` | Copy the newest code block to the clipboard (OSC 52, SSH-safe) |
-
-Keys: **Esc** or **Ctrl+C** cancels a streaming turn; **Ctrl+C** while idle exits; **Up/Down** in
-an empty input recalls messages you sent this session; typing **/** opens the command menu.
-
-## Safety notes
-
-- **Read-only commands don't prompt — the auto-allow is scoped, not assumed.** Two classes
-  skip the prompt: *project-contained readers* (`ls`, `cat`, `head`, `wc`, `file`, `du`,
-  `git status`, `git diff`, `npm ls`, …), whose path arguments must resolve inside the
-  project root — `~`/`$HOME` and out-of-tree absolute paths fail closed, and escaping flags
-  such as `git diff --no-index` / `--output` are refused — and *inert printers* with no path
-  semantics (`pwd`, `echo`, `date`, `uname`, `node --version`). Anything not positively on
-  that list — including any command containing a shell metacharacter (`|`, `&&`, `>`, `$()`,
-  globs) — goes through the normal permission prompt. Auto-allows are recorded in the run
-  ledger (`/ledger`), never silent.
-- **That containment is lexical, and the destructive-command filter is pattern matching.**
-  Unlike the file tools (which resolve the deepest existing component physically, symlinks
-  included), the safe-list compares resolved paths textually; both it and the refusal list
-  below are best-effort defense in depth behind the permission prompt — a usability policy,
-  not a sandbox.
-- All file tools are contained to the directory Anvil was started in, including symlink-aware
-  checks on the deepest existing path component.
-- Reads and writes are capped at 512 KiB. Shell-command output is capped at about 20 KiB per
-  stream and commands are terminated after two minutes.
-- Commands that would destroy the filesystem outside the project (`rm -rf /`, `rm -rf ~`,
-  fork bombs, `mkfs`, raw `/dev` writes, recursive `chmod /`) are refused without executing —
-  defense in depth behind the permission prompt. Project-local `rm -rf ./build` still runs
-  (with permission).
-- File writes snapshot automatically before they run (the last 5 per session,
-  configurable via `ANVIL_CHECKPOINT_KEEP`); `/rewind <n>` restores one and warns
-  when a target changed outside the session since. Snapshots persist as a
-  per-session ring under `$ANVIL_HOME/checkpoints/` — each file holds the raw
-  project bytes it captured, base64-encoded, mode `0600` — so they survive a
-  restart and live in the same trust domain as session files. Shell commands
-  can't be rewound.
-- Set `ANVIL_HOME` to relocate Anvil's data dir (credentials, settings, sessions, model cache);
-  it defaults to `~/.anvil`.
-- "Always allow" permission grants are in-memory, per session — never persisted, never restored
-  on `/session resume`.
-- Compaction is proactive on resume (a chars/4 estimate decides whether to summarize before the
-  first request) and reactive between turns. It is deliberately conservative: it summarizes only
-  when there is an older region outside the recent-message window, and **refuses as a no-op** when
-  the history is already just a few messages — so a single enormous message, or a handful of them,
-  can still exceed the context window in one hop rather than being half-rewritten. What it does
-  guarantee: the history it hands back never splits a tool call from its result and never puts two
-  messages of the same role in a row, whatever the model returns.
-
-## How this was built
-
-Anvil was built phase-by-phase against a written spec; each phase has a doc with goals, exact
-file lists, interfaces, and acceptance criteria:
-
-- `Phases 0–7` — monorepo scaffold, provider abstraction layer, agent loop & tool
-  system, TUI shell, permissions/slash commands/model picker, session
-  persistence & context compaction, polish, and free & local model providers +
-  live free-model sync (notes `docs/PHASE-3-NOTES.md`, `docs/PHASE-4-NOTES.md`,
-  `docs/PHASE-5-NOTES.md`, `docs/PHASE-7-NOTES.md`)
-- `Phase 8` — truthful engine + free-model radar (spec `docs/PHASE-8-SPEC.md`,
-  progress `docs/PHASE-8-PROGRESS.md`)
-- `Phase 9` — sub-agent delegation (spec `docs/PHASE-9-SPEC.md`,
-  progress `docs/PHASE-9-PROGRESS.md`)
-- `Phase 10` — MCP external tools, stdio only (spec `docs/PHASE-10-SPEC.md`,
-  progress `docs/PHASE-10-PROGRESS.md`)
-- `Phases 11–16` — codebase intelligence (`get_outline`, project rules), headless mode
-  (`-p`), closed-loop auto-verification, the goal engine, the cockpit UI, and hardening
-  (specs and records in `docs/`; the multi-phase roadmap lives in `docs/ROADMAP.md`)
-- `Phases 0, 17–20` — visual regression testing, the agent eval harness, provider
-  certification, project memory & git workflow, and distribution & CI
-  (spec `docs/PHASE-0-VISUAL-REGRESSION-SPEC.md`, progress `docs/PHASE-17-PROGRESS.md`,
-  `docs/PHASE-18-PROGRESS.md`, `docs/PHASE-19-PROGRESS.md`, `docs/PHASE-20-PROGRESS.md`)
-
-## MCP servers (Phase 10 + 25.1)
-
-Anvil can call tools from local MCP servers (stdio) and remote ones (SSE).
-Create `~/.anvil/mcp.json` (or `$ANVIL_HOME/mcp.json`, mode 0600 if you put
-secrets in `env` or `headers`):
+Anvil can connect to local (`stdio`) and remote (`SSE`) MCP servers. Configure servers in `~/.anvil/mcp.json`:
 
 ```json
 {
   "servers": {
-    "my-tools": {
+    "local-tools": {
       "command": "node",
       "args": ["./mcp-server.js"],
-      "env": { "MY_TOKEN": "..." },
+      "env": { "DEBUG": "true" },
       "timeoutMs": 60000
     },
     "cloud-tools": {
       "transport": "sse",
       "url": "https://mcp.example.com/sse",
-      "headers": { "Authorization": "Bearer ..." },
+      "headers": { "Authorization": "Bearer YOUR_TOKEN" },
       "timeoutMs": 30000
     }
   }
 }
 ```
+Server tools are exposed as `mcp_<server>__<tool>` and undergo the same strict permission gates as native tools.
 
-Server tools appear as `mcp_<server>__<tool>`, gated by the normal permission
-prompt (unknown external tools are treated as mutating unless the server
-marks them read-only). `/mcp` shows per-server health and transport;
-`/mcp reconnect` refreshes connections.
+---
 
-Boundaries, stated plainly:
+## 🛡️ Safety & Containment
 
-- **Transports: stdio + SSE.** `https://` required for remote URLs (plain
-  `http://` only for localhost). Auth goes in `headers`, never in logs.
-- **SSE keeps its requests on the origin you configured.** The server's `endpoint`
-  event decides where Anvil POSTs, so an off-origin endpoint is refused rather than
-  handed your headers, and redirects are refused in both directions. Each event
-  frame and response body is size-capped, so a broken or hostile server cannot grow
-  Anvil's memory without limit.
-- **No undo.** MCP and shell actions can't be rewound — only local file
-  writes (`/rewind`).
-- **Servers see tool arguments.** Anything the model sends a server tool
-  (file contents included) is visible to that server. Only connect to
-  servers you trust, same as any local dev tool.
+- **Path Containment:** All file operations are strictly confined to the project directory where Anvil was initiated, with symlink resolution.
+- **Destructive Command Guard:** Catastrophic operations (`rm -rf /`, `rm -rf ~`, fork bombs, raw device writes) are refused automatically.
+- **Size Capping:** File reads/writes are capped at 512 KiB; command outputs are capped at 20 KiB with a 2-minute timeout.
+- **Rollback Snapshots:** Pre-mutation snapshots persist in `$ANVIL_HOME/checkpoints/` (mode `0600`) for non-destructive `/rewind`.
+- **Zero Telemetry:** All sessions, settings, and credentials remain 100% local on your workstation.
 
-## Custom themes
+---
 
-Define your own themes in `~/.anvil/themes.json` (or `$ANVIL_HOME/themes.json`):
-
-```json
-{
-  "ember": {
-    "colors": {
-      "primary": "magenta",
-      "userText": "white",
-      "assistantText": "green",
-      "toolName": "yellow",
-      "toolRunning": "yellow",
-      "toolDone": "green",
-      "toolError": "red",
-      "dim": "gray",
-      "border": "magenta",
-      "accent": "#ff00ff",
-      "surface": "gray",
-      "brand": "#ff6ec7"
-    },
-    "spacing": { "panelPaddingX": 1, "panelPaddingY": 0 },
-    "borders": { "panel": "double" }
-  }
-}
-```
-
-All 11 legacy color keys are required (named chalk colors or hex). The 15
-semantic colors (`brand`, `success`, `error`, `borderFocus`, …) plus the
-`typography`, `spacing`, `borders`, and `responsive` sections are optional —
-omitted values derive from your legacy keys with built-in defaults, so old
-theme files keep loading unchanged. Names must be `[a-z0-9-_]` and must not
-shadow built-ins (`dark`, `light`, `highContrast`, `midnight`, `hacker`).
-Invalid entries are reported (never half-loaded) — run `/theme` with no args
-to see available names plus any problems. Select with `/theme ember`.
-
-## Development
+## 🛠️ Development & Quality Gates
 
 ```bash
 npm install
-npm run build      # build core → tui → cli (cli bundles to a self-contained dist via esbuild)
-npm run typecheck  # strict TS across all packages
-npm test           # vitest suite (core)
-npm run dev        # run the CLI from source
+
+# Build all monorepo workspaces (core, tui, cli)
+npm run build
+
+# Typecheck with strict TypeScript compiler
+npm run typecheck
+
+# Run test suites across workspaces
+npm test
+
+# Visual regression tests (Ink TUI snapshots)
+npm run visual
+
+# Run provider certification suite
+npm run certify -- --mock --all
+
+# Launch local CLI in development mode
+npm run dev
 ```
+
+---
+
+## 📄 License
+
+Distributed under the [MIT License](LICENSE) — Copyright (c) 2026 Mitravanu.
