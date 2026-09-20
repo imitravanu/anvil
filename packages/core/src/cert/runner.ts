@@ -531,8 +531,9 @@ export async function certifyProvider(
   const allPassed = Object.values(criteria).every((c) => c.passed);
   const status = allPassed ? "live" : "broken";
 
-  // Update in-memory registry status
-  setModelCertification(model, provider.id, status);
+  // Update in-memory registry status, recording HOW it was obtained so a mock
+  // pass is never badged as a live probe.
+  setModelCertification(model, provider.id, status, undefined, options.mock ? "mock" : "live");
 
   return {
     providerId: provider.id,

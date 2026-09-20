@@ -67,9 +67,13 @@ describe("format helpers", () => {
     expect(collapsePlan("", 80)).toEqual({ lines: [], hidden: 0 });
   });
 
-  it("formatCertificationBadge returns correct badge for each status", () => {
-    expect(formatCertificationBadge("live")).toBe(" [✅ live]");
-    expect(formatCertificationBadge("broken")).toBe(" [❌ broken]");
+  it("formatCertificationBadge labels live by how it was earned", () => {
+    expect(formatCertificationBadge("live", "live")).toBe(" [✅ live]");
+    expect(formatCertificationBadge("live", "mock")).toBe(" [✅ mock]");
+    // Unrecorded mode defaults to the conservative label — absence of a mode is
+    // not evidence of a live pass.
+    expect(formatCertificationBadge("live")).toBe(" [✅ mock]");
+    expect(formatCertificationBadge("broken", "live")).toBe(" [❌ broken]");
     expect(formatCertificationBadge("untested")).toBe(" [⚠ untested]");
     expect(formatCertificationBadge(undefined)).toBe("");
   });

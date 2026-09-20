@@ -171,6 +171,9 @@ async function main() {
       model: targetModel,
       timeoutMs,
       verbose,
+      // Provenance: the registry records mock vs live so the badge can't claim
+      // a real-provider pass that never happened.
+      mock,
       onCriterionStart: (crit) => {
         if (!json && verbose) {
           process.stdout.write(`  • Running ${CRITERION_LABELS[crit]}... `);
@@ -189,7 +192,7 @@ async function main() {
     if (res.passed) totalPassed++;
 
     if (!json) {
-      const statusBadge = res.passed ? "✅ LIVE (Certified)" : "❌ BROKEN";
+      const statusBadge = res.passed ? (mock ? "✅ MOCK (Certified)" : "✅ LIVE (Certified)") : "❌ BROKEN";
       console.log(`Summary:  ${statusBadge} in ${res.totalDurationMs}ms\n`);
     }
   }

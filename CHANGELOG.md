@@ -4,6 +4,20 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Certifications Record Whether They Came From a Mock Run or a Live Probe (2026-09-21)
+
+- **The picker badge no longer calls a mock pass "live" (S6, follow-up).** `ModelInfo` gains
+  `certifiedMode: "mock" | "live"`; `certifyProvider` records it from the new `CertifyOptions.mock`
+  the CLI script now passes; `setModelCertification` takes it; and `formatCertificationBadge`
+  renders `[✅ mock]` (dimmed in the picker) vs `[✅ live]`. An **unrecorded mode defaults to
+  `mock`** — absence of provenance is not evidence of a probe. The initial 2026-09-10 registry
+  batch (all from `certify --mock --all`) is now labeled mock; Gemini's `gemini-3.6-flash` and its
+  retired `gemini-2.0-flash` carry the live probe (`live`). `ModelPicker` was switched off its
+  inline badge copy onto the shared helper, so the format is defined once. Guarded by a new
+  `registry.test.ts`: no `certified: "live"` entry may exist without a mode and timestamp.
+- The `certify` CLI summary also stops printing "✅ LIVE (Certified)" in mock mode — it now says
+  "✅ MOCK (Certified)".
+
 ### CLI Test Coverage Raised From 33.9% to 44.0% (2026-09-21)
 
 - **The two thin, testable CLI files, not the interactive entry.** `headless.ts` 36.6 → 91.5%

@@ -177,5 +177,12 @@ export interface ModelInfo {
   isFree?: boolean;
   certified?: CertificationStatus;
   certifiedAt?: string; // ISO timestamp
+  /**
+   * How the certification was obtained: the deterministic mock suite ("mock")
+   * or a real-provider probe ("live"). Absent means unrecorded — never render
+   * it as "live". Kept separate from `certified` so a passing mock run cannot
+   * masquerade as proof the real API works.
+   */
+  certifiedMode?: "mock" | "live";
 }
 

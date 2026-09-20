@@ -470,10 +470,13 @@ Fixes land in this phase.
       now reads `mock · 2026-09-10` / `live · 2026-09-18` — the certification BASIS, not a blanket
       "live". The note paragraph states plainly that most rows are the deterministic mock suite,
       that only Gemini has a recorded live probe, and that the same probe is what exposed the
-      retired `gemini-2.0-flash` as `broken`. **Deliberate limit:** the `/model` picker badge still
-      renders `[✅ live]` from `certified`, because the registry has no `certifiedMode` field —
-      adding one is a behavior change (badge + `formatCertificationBadge` + tests) that belongs in
-      its own landing, not a docs pass; recorded here so the residual gap is visible, not hidden.*
+      retired `gemini-2.0-flash` as `broken`.
+      **The picker badge gap is now closed (2026-09-21, its own landing):** `ModelInfo` gained
+      `certifiedMode: "mock" | "live"`, `certifyProvider` records it (the CLI script passes
+      `mock`), `setModelCertification` takes it, and `formatCertificationBadge(certified, mode)`
+      renders `[✅ mock]` (dimmed) vs `[✅ live]`. `ModelPicker` now calls that helper instead of
+      its inline copy, `registry.test.ts` guards that every `certified: "live"` entry records a
+      mode, and an unrecorded mode defaults to `mock` — never a free "live".*
 - [x] Retire the 34,006-LOC figure everywhere — it included `dist/*.d.ts` and excluded TSX;
       recount production sources (`src/**/*.{ts,tsx}` minus tests) and note it here.
       *Done 2026-09-21: a repo-wide grep for `34,006` finds it only in this line, so there was

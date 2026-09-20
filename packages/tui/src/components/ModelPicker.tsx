@@ -12,7 +12,7 @@ import {
 } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 import { groupByProvider } from "../util/grouping.js";
-import { formatPricingTag, pricingKind } from "../util/format.js";
+import { formatCertificationBadge, formatPricingTag, pricingKind } from "../util/format.js";
 import { MAX_VISIBLE_ROWS } from "../util/displayLimits.js";
 import { useWindowedList } from "../hooks/useWindowedList.js";
 
@@ -194,6 +194,7 @@ export function ModelPicker({
     const limited = isRateLimited(row.model.providerId, row.model.id);
 
     const certBadge = row.model.certified;
+    const certLabel = formatCertificationBadge(certBadge, row.model.certifiedMode);
 
     if (!row.enabled) {
       return (
@@ -202,7 +203,7 @@ export function ModelPicker({
           {row.model.displayName}
           {windowSuffix}
           {pricingTag}
-          {certBadge === "live" ? " [✅ live]" : certBadge === "broken" ? " [❌ broken]" : certBadge === "untested" ? " [⚠ untested]" : ""}
+          {certLabel}
           {limited ? " [rate-limited]" : ""} (no API key)
         </Text>
       );
@@ -218,11 +219,14 @@ export function ModelPicker({
           <Text color={theme.colors.dim}> [PAID]</Text>
         ) : null}
         {certBadge === "live" ? (
-          <Text color={theme.colors.toolDone}> [✅ live]</Text>
+          // A mock pass is real but weaker — dim it, don't dress it as a probe.
+          <Text color={row.model.certifiedMode === "live" ? theme.colors.toolDone : theme.colors.dim}>
+            {certLabel}
+          </Text>
         ) : certBadge === "broken" ? (
-          <Text color={theme.colors.toolError}> [❌ broken]</Text>
+          <Text color={theme.colors.toolError}>{certLabel}</Text>
         ) : certBadge === "untested" ? (
-          <Text color={theme.colors.dim}> [⚠ untested]</Text>
+          <Text color={theme.colors.dim}>{certLabel}</Text>
         ) : null}
 
         {limited ? <Text color={theme.colors.toolRunning}> [rate-limited]</Text> : null}

@@ -25,6 +25,26 @@
   Depends only on the `cancelled` event shape — survives the parallel
   `SessionLedger`/`RewindRing` extraction (verified: their `rewindRing.ts` re-emits it).
 
+## 2026-09-21 — Certification provenance: certifiedMode (Buffy)
+
+**Agent (this session)** — owns & changed:
+- `packages/core/src/providers/types.ts` — `ModelInfo.certifiedMode?: "mock" | "live"`.
+- `packages/core/src/providers/registry.ts` — every 2026-09-10 entry (mock batch) is
+  `certifiedMode: "mock"`; `gemini-3.6-flash` + `gemini-2.0-flash` are `"live"` (probe), with the
+  former's `certifiedAt` aligned to 2026-09-18; `setModelCertification` takes an optional mode and
+  only overwrites when supplied.
+- `packages/core/src/cert/runner.ts` — records `options.mock ? "mock" : "live"`.
+- `scripts/certify-provider.ts` — passes `mock` into `certifyProvider`; summary badge is now
+  "MOCK (Certified)" in mock mode.
+- `packages/tui/src/util/format.ts` — `formatCertificationBadge(certified, mode)`; unrecorded mode
+  defaults to `mock`. `ModelPicker.tsx` uses it (removes the inline copy that made the helper a
+  dead export) and dims a mock badge.
+- Tests: `providers/__tests__/registry.test.ts` (NEW, +3 provenance guards), `format.test.ts`
+  updated for the mode dimension.
+- Docs: README note + roadmap S6 note.
+
+**Evidence:** core 554 / tui 233 / cli 51 all green; full `npm run gate` green.
+
 ## 2026-09-21 — S7 CLI coverage raised (Buffy)
 
 **Agent (this session)** — owns & changed:

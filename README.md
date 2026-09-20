@@ -155,7 +155,9 @@ means the adapter passed the deterministic suite CI runs (`npm run certify -- --
 probe recorded (`gemini-3.6-flash`, 2026-09-18), which is also how its retired `gemini-2.0-flash`
 was found and marked `broken`. `*` marks providers whose two newest models (`claude-opus-5`,
 `gpt-5.1`) are still `untested`. The weekly live lane (`live-eval.yml`) re-certifies against real
-providers and uploads the matrix (`--out`).
+providers and uploads the matrix (`--out`). The `/model` picker and the `--version` stamp carry the
+same distinction: a real probe badges `[✅ live]`, the suite badges `[✅ mock]` (dimmed), and an
+unrecorded mode defaults to `mock` rather than claiming a probe that never happened.
 
 Re-run provider certification anytime:
 ```bash

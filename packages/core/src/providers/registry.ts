@@ -40,6 +40,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsVision: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "claude-3-7-sonnet-20250219",
@@ -51,6 +52,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsVision: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "claude-3-5-sonnet-20241022",
@@ -62,6 +64,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsVision: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "claude-3-5-haiku-20241022",
@@ -73,6 +76,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsVision: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "gpt-5.1",
@@ -94,6 +98,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsVision: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "gpt-4o-mini",
@@ -105,6 +110,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsVision: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "o3-mini",
@@ -116,6 +122,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsVision: false,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     // Default Gemini model. Live-verified 2026-09 with a free-tier key:
@@ -129,7 +136,8 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsVision: true,
     isFree: true,
     certified: "live",
-    certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedAt: "2026-09-18T00:00:00.000Z",
+    certifiedMode: "live",
   },
   {
     id: "gemini-2.0-flash",
@@ -145,6 +153,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     // Google retired the id. Prefer gemini-3.6-flash.
     certified: "broken",
     certifiedAt: "2026-09-18T00:00:00.000Z",
+    certifiedMode: "live",
   },
   {
     id: "gemini-1.5-pro",
@@ -156,6 +165,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsVision: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "gemini-1.5-flash",
@@ -167,6 +177,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     // Live-verified 2026-09: gemini-2.5-pro is no longer available to new
@@ -182,6 +193,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsVision: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   // OpenRouter models: free models are listed first so fallback and picker prioritize them.
   {
@@ -194,6 +206,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "google/gemma-4-31b-it:free",
@@ -205,6 +218,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "google/gemma-4-26b-a4b-it:free",
@@ -216,6 +230,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "poolside/laguna-s-2.1:free",
@@ -227,6 +242,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "poolside/laguna-xs-2.1:free",
@@ -238,6 +254,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "cohere/north-mini-code:free",
@@ -249,6 +266,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "z-ai/glm-5.2:free",
@@ -260,6 +278,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "nvidia/nemotron-3.5-lightning:free",
@@ -271,6 +290,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -282,6 +302,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "nvidia/nemotron-3-super-120b-a12b:free",
@@ -293,6 +314,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "minimax/minimax-m3:free",
@@ -304,6 +326,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "minimax/minimax-m2.7:free",
@@ -315,6 +338,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "thinkingmachines/inkling:free",
@@ -326,6 +350,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "thinkingmachines/inkling-small:free",
@@ -337,6 +362,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "dots-studio/dots-3-note-preview:free",
@@ -348,6 +374,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "inclusionai/ling-3.0-flash-fin:free",
@@ -359,6 +386,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "liquid/lfm-2.5-2.6b:free",
@@ -370,6 +398,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
@@ -381,6 +410,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   // Paid / credits required models:
   {
@@ -393,6 +423,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: false,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   // Orcarouter models: free-only policy — the source reads the public
   // pricing catalog's is_free_tier flag, so paid models never enter the
@@ -409,6 +440,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "deepseek/deepseek-v4-flash-free",
@@ -420,6 +452,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "tencent/hy3-free",
@@ -431,6 +464,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "orcarouter/free",
@@ -442,6 +476,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   // Groq models (100% Free Tier, fast LPU inference)
   {
@@ -454,6 +489,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "llama-3.1-8b-instant",
@@ -465,6 +501,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "qwen-2.5-coder-32b",
@@ -476,6 +513,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   // GitHub Models (Free with GitHub account / Personal Access Token)
   {
@@ -488,6 +526,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "meta-llama-3.3-70b-instruct",
@@ -499,6 +538,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "mistral-large-2411",
@@ -510,6 +550,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   // Cerebras models (1 Million free tokens/day)
   {
@@ -522,6 +563,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "llama3.1-8b",
@@ -533,6 +575,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   // Mistral AI models (Experimentation Free Tier)
   {
@@ -545,6 +588,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "mistral-small-latest",
@@ -556,6 +600,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   // Ollama models ($0, 100% Local and Offline)
   {
@@ -568,6 +613,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
   {
     id: "llama3.2:latest",
@@ -579,6 +625,7 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     isFree: true,
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
+    certifiedMode: "mock",
   },
 ];
 
@@ -659,12 +706,16 @@ export function setModelCertification(
   id: string,
   providerId: string,
   status: CertificationStatus,
-  certifiedAt?: string
+  certifiedAt?: string,
+  mode?: "mock" | "live"
 ): boolean {
   const model = getModel(id, providerId);
   if (!model) return false;
   model.certified = status;
   model.certifiedAt = certifiedAt ?? new Date().toISOString();
+  // Only overwrite when a mode is supplied: a caller that just flips the status
+  // must not erase a recorded live probe's provenance.
+  if (mode) model.certifiedMode = mode;
   return true;
 }
 

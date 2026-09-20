@@ -33,11 +33,17 @@ export function formatPricingTag(isFree: boolean | undefined): string {
   return kind === "free" ? " [FREE]" : kind === "paid" ? " [PAID]" : "";
 }
 
-/** Certification badge: " [✅ live]", " [❌ broken]", or " [⚠ untested]". */
+/**
+ * Certification badge. A "live" status is labeled by HOW it was earned: a real
+ * probe renders " [✅ live]", the mock suite renders " [✅ mock]". An unrecorded
+ * mode defaults to "mock" — the conservative label, since an absent mode is not
+ * evidence of a live pass.
+ */
 export function formatCertificationBadge(
-  certified: "live" | "broken" | "untested" | undefined
+  certified: "live" | "broken" | "untested" | undefined,
+  mode?: "mock" | "live"
 ): string {
-  if (certified === "live") return " [✅ live]";
+  if (certified === "live") return mode === "live" ? " [✅ live]" : " [✅ mock]";
   if (certified === "broken") return " [❌ broken]";
   if (certified === "untested") return " [⚠ untested]";
   return "";
