@@ -415,8 +415,15 @@ Fixes land in this phase.
 
 ## Phase S6 — Product truthfulness (docs + UI)
 
-- [ ] README: correct "memory-only" checkpoint claim → persistent ring under `$ANVIL_HOME`
+- [x] README: correct "memory-only" checkpoint claim → persistent ring under `$ANVIL_HOME`
       (`checkpointStore.ts`), and what that means for stored project bytes.
+      *Done 2026-09-21: the Safety bullet now reads "the last 5 per session" (with the
+      `ANVIL_CHECKPOINT_KEEP` override named), states the ring is persisted under
+      `$ANVIL_HOME/checkpoints/`, that each file holds raw project bytes base64-encoded at mode
+      `0600`, that it survives a restart, and that `/rewind` warns on out-of-band edits (S1.3).
+      Verified against `checkpointStore.ts` (`chmod 0o600`, `ANVIL_HOME/checkpoints/<id>.json`)
+      and `config/constants.ts` (`CHECKPOINT_KEEP = getEnvNumber("ANVIL_CHECKPOINT_KEEP", 5)`).
+      The remaining S6 boxes are untouched.*
 - [ ] `/diff`: surface incomplete-coverage warnings when `baselineByPath` eviction
       (BASELINE_MAX_PATHS/BASELINE_MAX_BYTES) or ring cap (CHECKPOINT_KEEP) narrowed history
       (`session.ts:354-370` contradicts its own "never evicts" comment — fix comment too).

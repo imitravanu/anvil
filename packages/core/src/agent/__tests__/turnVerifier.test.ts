@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { resolveTestCommand, verifyTurnMutations } from "../turnVerifier.js";
+import { finishTurn, resolveTestCommand, verifyTurnMutations } from "../turnVerifier.js";
 import type { TurnVerificationContext } from "../turnVerifier.js";
 import type { AgentEvent } from "../types.js";
 
@@ -139,5 +139,60 @@ describe("turnVerifier", () => {
 
     expect(item.value).toEqual({ status: "passed" });
     expect(events.map((e) => e.type)).toEqual(["verification_started", "verification_result"]);
+  });
+});
+
+describe("finishTurn (terminal seam extracted from AgentSession.send)", () => {
+  const baseCtx = (overrides: Partial<Parameters<typeof finishTurn>[0]>) => ({
+    projectRoot: process.cwd(),
+    autoVerify: false as boolean | string | undefined,
+    mutationsOccurred: false,
+    verifyRepairsUsed: 0,
+    maxVerifyRepairs: 3,
+    stopReason: "end_turn" as string | undefined,
+    signal: new AbortController().signal,
+    recordLedger: vi.fn(),
+    pushRepairPrompt: vi.fn(),
+    onSuccess: vi.fn(),
+    ...overrides,
+  });
+
+  async function drain(ctx: Parameters<typeof finishTurn>[0]) {
+    const events: AgentEvent[] = [];
+    const gen = finishTurn(ctx);
+    let item = await gen.next();
+    while (!item.done) {
+      events.push(item.value);
+      item = await gen.next();
+    }
+    return { events, completion: item.value };
+  }
+
+  it("closes a clean turn with turn_complete and success bookkeeping", async () => {
+    const ctx = baseCtx({});
+    const { events, completion } = await drain(ctx);
+    expect(completion).toEqual({ action: "done" });
+    expect(events.map((e) => e.type)).toEqual(["turn_complete"]);
+    expect(ctx.onSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces a declined turn as an error, never turn_complete", async () => {
+    const ctx = baseCtx({ stopReason: "error" });
+    const { events, completion } = await drain(ctx);
+    expect(completion).toEqual({ action: "done" });
+    expect(events.map((e) => e.type)).toEqual(["error"]);
+    expect(ctx.onSuccess).not.toHaveBeenCalled();
+  });
+
+  it("requests another round on a failed verification without closing the turn", async () => {
+    const ctx = baseCtx({
+      autoVerify: "echo 'test failure details' && exit 1",
+      mutationsOccurred: true,
+    });
+    const { events, completion } = await drain(ctx);
+    expect(completion).toEqual({ action: "continue" });
+    expect(events.some((e) => e.type === "turn_complete")).toBe(false);
+    expect(ctx.pushRepairPrompt).toHaveBeenCalledTimes(1);
+    expect(ctx.onSuccess).not.toHaveBeenCalled();
   });
 });

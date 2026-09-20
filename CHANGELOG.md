@@ -4,6 +4,30 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### AgentSession.send() Terminal Sequence Extracted Into turnVerifier.finishTurn (2026-09-21)
+
+- **Internal refactor, no behavior change.** The verify → cancel/repair/error/complete tail of
+  `send()` (which decided whether a turn continues after a failed auto-verification or closes with
+  `turn_complete` / an error) moved into an exported `finishTurn()` generator in
+  `agent/turnVerifier.ts`, alongside the `verifyTurnMutations` it wraps. `send()` keeps only the
+  mutation the seam cannot observe: bumping `verifyRepairsUsed` when the next round is requested.
+  Rationale: completion-event ordering is correctness-critical and was buried in a ~200-line loop
+  body; it now lives in one testable place, shrinking the god-object by ~30 lines. Pinned by three
+  new `turnVerifier.test.ts` cases (clean close calls `onSuccess`; a declined turn emits `error`,
+  never `turn_complete`; a failed verification returns `continue` without closing).
+
+### README Stops Calling Persistent Checkpoints "Memory-Only" (2026-09-21)
+
+- **The Safety section contradicted the shipped code.** It claimed checkpoints were
+  "last 5 turns, memory-only" while `checkpointStore.ts` has persisted a per-session ring to
+  `$ANVIL_HOME/checkpoints/<id>.json` (raw project bytes, base64, mode `0600`) for some time —
+  the same trust domain as session files, and surviving restarts. A user reading the old line
+  would under-rate what leaves the project directory and what `/rewind` can recover across
+  sessions. The bullet now states the real retention (`CHECKPOINT_KEEP`, env-overridable via
+  `ANVIL_CHECKPOINT_KEEP`), the storage location and encoding, and the S1.3 out-of-band-edit
+  warning. Docs-only change; no runtime behavior touched. (`docs/STABILIZATION-ROADMAP-2026-09.md`
+  S6 first box ticked with the source locations it was verified against.)
+
 ### Compaction Can No Longer Hand A Provider A Malformed History (2026-09-20)
 
 - **Two bugs in the selective-keep path, both reachable in normal use** (the session always passes

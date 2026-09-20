@@ -94,3 +94,62 @@ export async function* verifyTurnMutations(
   ctx.recordLedger({ eventType: "verification_gave_up", tool: testCmd, outcome: "error", elapsedMs: 0 });
   return { status: "gave_up" };
 }
+
+/**
+ * The turn-terminal sequence: verify the final state, then either ask for one
+ * more round (`continue` — a repair prompt was pushed) or close the turn with
+ * `turn_complete` / an error. Extracted from `AgentSession.send()` so the loop
+ * body reads as schedule → dispatch → verify → close, and the ordering of the
+ * completion events lives in one place. The caller owns the one mutation this
+ * cannot see: `verifyRepairsUsed` must be bumped on `"continue"` before the
+ * next round.
+ */
+export interface TurnCompletionContext {
+  projectRoot: string;
+  autoVerify: boolean | string | undefined;
+  mutationsOccurred: boolean;
+  verifyRepairsUsed: number;
+  maxVerifyRepairs: number;
+  /** `undefined` never reaches here: send() calls this only when a stop
+   *  reason exists; the field is optional upstream. `"error"` is the one
+   *  value that changes the close (a content/safety block, not a completion). */
+  stopReason: string | undefined;
+  signal: AbortSignal;
+  recordLedger: (entry: Omit<RunLedgerEntry, "seq" | "ts">) => void;
+  pushRepairPrompt: (prompt: string) => void;
+  /** Provider/model success bookkeeping — resets the circuit breaker. */
+  onSuccess: () => void;
+}
+
+export type TurnCompletion = { action: "continue" } | { action: "done" };
+
+export async function* finishTurn(
+  ctx: TurnCompletionContext
+): AsyncGenerator<AgentEvent, TurnCompletion> {
+  const vOutcome = yield* verifyTurnMutations({
+    projectRoot: ctx.projectRoot,
+    autoVerify: ctx.autoVerify,
+    mutationsOccurred: ctx.mutationsOccurred,
+    verifyRepairsUsed: ctx.verifyRepairsUsed,
+    maxVerifyRepairs: ctx.maxVerifyRepairs,
+    signal: ctx.signal,
+    recordLedger: ctx.recordLedger,
+    pushRepairPrompt: ctx.pushRepairPrompt,
+  });
+
+  if (vOutcome.status === "cancelled") return { action: "done" };
+  if (vOutcome.status === "needs_repair") return { action: "continue" };
+
+  if (ctx.stopReason === "error") {
+    yield {
+      type: "error",
+      message:
+        "The model declined to complete this turn (content filter or safety block) — no usable response was produced.",
+    };
+    return { action: "done" };
+  }
+
+  ctx.onSuccess();
+  yield { type: "turn_complete" };
+  return { action: "done" };
+}

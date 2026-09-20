@@ -216,8 +216,13 @@ an empty input recalls messages you sent this session; typing **/** opens the co
   fork bombs, `mkfs`, raw `/dev` writes, recursive `chmod /`) are refused without executing —
   defense in depth behind the permission prompt. Project-local `rm -rf ./build` still runs
   (with permission).
-- File writes snapshot automatically before they run (last 5 turns, memory-only);
-  `/rewind <n>` restores one. Shell commands can't be rewound.
+- File writes snapshot automatically before they run (the last 5 per session,
+  configurable via `ANVIL_CHECKPOINT_KEEP`); `/rewind <n>` restores one and warns
+  when a target changed outside the session since. Snapshots persist as a
+  per-session ring under `$ANVIL_HOME/checkpoints/` — each file holds the raw
+  project bytes it captured, base64-encoded, mode `0600` — so they survive a
+  restart and live in the same trust domain as session files. Shell commands
+  can't be rewound.
 - Set `ANVIL_HOME` to relocate Anvil's data dir (credentials, settings, sessions, model cache);
   it defaults to `~/.anvil`.
 - "Always allow" permission grants are in-memory, per session — never persisted, never restored

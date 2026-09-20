@@ -2,6 +2,31 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 
+## 2026-09-21 — Operator-authorized commit of the OpenCode TUI scroll work + README truth fix
+
+**Agent (this session)** — owns & changed:
+- The 7 TUI transcript-scroll files previously owned by the stopped/hand-off "OpenCode session
+  (scroll-first)" were **committed as-is** (`b02beb4`) at the operator's explicit request, after the
+  full `npm run gate` passed with them on disk. No source was edited; this removes the
+  one-disk-failure-from-loss risk PROGRESS.md had flagged.
+- `README.md` §Safety — the checkpoint bullet no longer says "memory-only"; it now states the
+  persisted per-session ring under `$ANVIL_HOME/checkpoints/`, the base64 raw-bytes/`0600`
+  storage, `ANVIL_CHECKPOINT_KEEP`, and the S1.3 external-edit warning. Verified against
+  `checkpointStore.ts` + `config/constants.ts`. Ticks the first S6 box in
+  `docs/STABILIZATION-ROADMAP-2026-09.md`; `CHANGELOG.md` records it.
+- `packages/core/src/agent/turnVerifier.ts` + `agent/session.ts` — **extracted the turn-terminal
+  sequence** into an exported `finishTurn()` generator in the verification module. `send()` no
+  longer inlines verify → cancel/repair/error/complete; it calls the seam and only owns the one
+  bit the seam cannot see (`verifyRepairsUsed` bump on `"continue"`). Behavior-preserving: same
+  event order, same ledger writes, same success bookkeeping. `send()` body 209 → ~180 lines.
+- `packages/core/src/agent/__tests__/turnVerifier.test.ts` — +3 cases pinning the seam's three
+  outcomes (clean close + `onSuccess`; declined turn is `error` not `turn_complete`; failed
+  verification returns `continue` without closing). 6 → 9 tests.
+
+**Evidence:** core build + typecheck exit 0; focused suite 9/9; full core suite 540/540; full
+`npm run gate` green (0–5, incl. the new bare-any/architecture checks). No protected artifact
+touched — no manifest/sentinel change required.
+
 ## 2026-09-20 — STABILIZATION §S2.3: compaction realism (2 real bugs found + fixed)
 
 **Agent (this session)** — owns & changed:

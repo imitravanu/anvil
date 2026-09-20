@@ -4,7 +4,7 @@ import { type ModelProvider, type ConversationMessage } from "../providers/types
 import { getModel } from "../providers/registry.js";
 import { TOOL_DEFINITIONS, getSessionToolHandler } from "../tools/index.js";
 import type { ToolExecutionResult, ToolDefinition } from "../tools/types.js";
-import { verifyTurnMutations } from "./turnVerifier.js";
+import { finishTurn } from "./turnVerifier.js";
 import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded, estimateTokens } from "./compaction.js";
 import { FALLBACK_CONTEXT_WINDOW, MAX_VERIFY_REPAIRS } from "../config/constants.js";
 export { MAX_VERIFY_REPAIRS };
@@ -500,36 +500,24 @@ export class AgentSession {
         }
 
         if (stopReason !== "tool_use") {
-          const vOutcome = yield* verifyTurnMutations({
+          // Terminal sequence (verify → close or request a repair) lives in
+          // turnVerifier.finishTurn so the event ordering is in one place.
+          const completion = yield* finishTurn({
             projectRoot: this.options.projectRoot,
             autoVerify: this.options.autoVerify,
             mutationsOccurred: turn.mutationsOccurred,
             verifyRepairsUsed: turn.verifyRepairsUsed,
             maxVerifyRepairs: MAX_VERIFY_REPAIRS,
+            stopReason,
             signal: controller.signal,
             recordLedger: (e) => this.recordLedger(e),
             pushRepairPrompt: (msg) => this.history.pushUserText(msg),
+            onSuccess: () => recordSuccess(this.provider.id, this.options.model),
           });
-
-          if (vOutcome.status === "cancelled") {
-            return;
-          }
-          if (vOutcome.status === "needs_repair") {
+          if (completion.action === "continue") {
             turn.verifyRepairsUsed += 1;
             continue;
           }
-
-          if (stopReason === "error") {
-            yield {
-              type: "error",
-              message:
-                "The model declined to complete this turn (content filter or safety block) — no usable response was produced.",
-            };
-            return;
-          }
-
-          recordSuccess(this.provider.id, this.options.model);
-          yield { type: "turn_complete" };
           return;
         }
 
