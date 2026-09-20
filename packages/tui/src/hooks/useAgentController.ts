@@ -129,7 +129,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
   }, []);
 
   const runTurn = useCallback(
-    async (text: string) => {
+    async (text: string): Promise<{ cancelled: boolean }> => {
       // busyRef belongs to the caller (send's claim covers the whole drain —
       // toggling it here opened a window where two sends ran concurrently).
       const attached = pendingImagesRef.current;
@@ -160,6 +160,12 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
       });
       setIsBusy(true);
       const turnStartMs = Date.now();
+      // S6: cancel-queue UX — tracks whether THIS turn was cancelled, so the
+      // caller can hold (not drain) messages typed during it. A cancelled turn
+      // leaves the user's intent ambiguous; silently firing the next turn
+      // reused to surprise. The flag is set from the engine's `cancelled`
+      // event, which the session emits on every cancel path.
+      let turnCancelled = false;
 
       const updateAssistant = (fn: (m: DisplayMessage) => DisplayMessage) => {
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? fn(m) : m)));
@@ -207,6 +213,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
             if (event.type === "tool_finished" || event.type === "tool_permission_denied") {
               textNeedsBreak = true;
             }
+            if (event.type === "cancelled") turnCancelled = true;
             applyEvent(event, updateAssistant, trackUsage, setMessages, setPlan, setTestStatus);
           }
         }
@@ -228,6 +235,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         updateAssistant((m) => ({ ...m, streaming: false }));
         setIsBusy(false);
         onTurnSettledRef.current?.();
+        return { cancelled: turnCancelled };
       }
     },
     [session]
@@ -270,7 +278,19 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
       }
       busyRef.current = true;
       try {
-        await runTurn(text);
+        const outcome = await runTurn(text);
+        // S6: cancel-queue UX — a cancelled turn leaves intent ambiguous, so
+        // messages typed during it are HELD, not fired. They stay in `queued`
+        // (visible in the UI) and drain on the next explicit send; the notice
+        // tells the user they are there instead of silently vanishing or
+        // launching an unexpected turn.
+        if (outcome.cancelled && queueRef.current.length > 0) {
+          const n = queueRef.current.length;
+          printSystemMessage(
+            `Turn cancelled — ${n} queued message${n === 1 ? "" : "s"} held, not sent. Send again to deliver ${n === 1 ? "it" : "them"}.`
+          );
+          return;
+        }
         await drainQueue();
       } finally {
         busyRef.current = false;

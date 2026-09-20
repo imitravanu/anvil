@@ -364,3 +364,86 @@ describe("useAgentController - Phase 23.8 stream backpressure buffer", () => {
   });
 });
 
+describe("useAgentController - S6 cancel-queue UX", () => {
+  // A provider that waits on the abort signal, then ends cleanly so the
+  // engine emits `cancelled` (the real session.cancel() path). Awaiting
+  // forever would hang the test: `send()` only observes cancellation at
+  // loop-top / stream boundaries, and a never-resolving stream has none.
+  function hangingProvider() {
+    let turnSignal: AbortSignal | null = null;
+    return {
+      id: "anthropic" as const,
+      displayName: "fake",
+      isConfigured: () => true,
+      async *streamCompletion(req: { signal?: AbortSignal }): AsyncGenerator<StreamEvent> {
+        turnSignal = req.signal ?? null;
+        await new Promise<void>((resolve) => {
+          if (turnSignal?.aborted) {
+            resolve();
+            return;
+          }
+          turnSignal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+        return;
+      },
+    };
+  }
+
+  function makeSession(provider: unknown): AgentSession {
+    return new AgentSession(provider as ConstructorParameters<typeof AgentSession>[0], {
+      systemPrompt: "test",
+      model: "fake-model",
+      maxTokens: 1024,
+      projectRoot: "/tmp",
+      permissionBroker: { async requestPermission() { return true; } },
+    });
+  }
+
+  it("holds (not drains) messages typed during a cancelled turn + announces", async () => {
+    const session = makeSession(hangingProvider());
+    const api: { current: ReturnType<typeof useAgentController> | null } = { current: null };
+    const app = render(<Harness session={session} api={api} />);
+    await new Promise((r) => setTimeout(r, 30));
+
+    const first = api.current!.send("long task");
+    await new Promise((r) => setTimeout(r, 30));
+    // Typed while busy → queues (does not throw, does not start a turn).
+    await api.current!.send("typed during turn");
+    expect(api.current!.queued).toEqual(["typed during turn"]);
+    // Cancel the in-flight turn; the queued message must NOT fire.
+    api.current!.cancel();
+    await first;
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(api.current!.queued).toEqual(["typed during turn"]);
+    const notice = api.current!.messages.find(
+      (m: DisplayMessage) => m.role === "system" && m.text.includes("held, not sent")
+    );
+    expect(notice).toBeDefined();
+    expect(notice!.text).toContain("1 queued message held");
+    app.unmount();
+  });
+
+  it("still drains the queue after a normally completed turn (no hold notice)", async () => {
+    const provider = fakeProvider([
+      [{ type: "text_delta", text: "first done" }, { type: "turn_end", stopReason: "end_turn" }],
+      [{ type: "text_delta", text: "second done" }, { type: "turn_end", stopReason: "end_turn" }],
+    ]);
+    const session = makeSession(provider);
+    const api: { current: ReturnType<typeof useAgentController> | null } = { current: null };
+    const app = render(<Harness session={session} api={api} />);
+    await new Promise((r) => setTimeout(r, 30));
+
+    await api.current!.send("first");
+    await new Promise((r) => setTimeout(r, 50));
+
+    // No queued traffic and no cancellation → no hold notice anywhere.
+    expect(api.current!.queued).toEqual([]);
+    const notice = api.current!.messages.find(
+      (m: DisplayMessage) => m.role === "system" && m.text.includes("held, not sent")
+    );
+    expect(notice).toBeUndefined();
+    app.unmount();
+  });
+});
+
