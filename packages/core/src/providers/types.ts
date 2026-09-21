@@ -146,6 +146,7 @@ export type ProviderId =
   | "cerebras"
   | "github"
   | "mistral"
+  | "inception"
   | "ollama";
 
 export interface CompletionRequest {

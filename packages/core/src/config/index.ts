@@ -95,6 +95,7 @@ const PROVIDER_ORDER: ProviderId[] = [
   "github",
   "cerebras",
   "mistral",
+  "inception",
   "ollama",
 ];
 

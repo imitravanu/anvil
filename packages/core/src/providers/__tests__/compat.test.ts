@@ -3,13 +3,14 @@ import { createGroqProvider, GROQ_BASE_URL } from "../groq.js";
 import { createCerebrasProvider, CEREBRAS_BASE_URL } from "../cerebras.js";
 import { createGitHubModelsProvider, GITHUB_MODELS_BASE_URL } from "../github.js";
 import { createMistralProvider, MISTRAL_BASE_URL } from "../mistral.js";
+import { createInceptionProvider, INCEPTION_BASE_URL } from "../inception.js";
 import {
   createOllamaProvider,
   ollamaBaseURL,
   OLLAMA_DEFAULT_BASE_URL,
 } from "../ollama.js";
 
-// Table-driven coverage for the five OpenAI-compatible adapters, which
+// Table-driven coverage for the six OpenAI-compatible adapters, which
 // previously had zero tests (only id/isConfigured were checked anywhere).
 describe("compat adapters", () => {
   it("exposes stable base URLs and ids", () => {
@@ -17,11 +18,13 @@ describe("compat adapters", () => {
     expect(CEREBRAS_BASE_URL).toBe("https://api.cerebras.ai/v1");
     expect(GITHUB_MODELS_BASE_URL).toContain("azure.com");
     expect(MISTRAL_BASE_URL).toBe("https://api.mistral.ai/v1");
+    expect(INCEPTION_BASE_URL).toBe("https://api.inceptionlabs.ai/v1");
     expect(OLLAMA_DEFAULT_BASE_URL).toBe("http://localhost:11434/v1");
     expect(createGroqProvider("k").id).toBe("groq");
     expect(createCerebrasProvider("k").id).toBe("cerebras");
     expect(createGitHubModelsProvider("k").id).toBe("github");
     expect(createMistralProvider("k").id).toBe("mistral");
+    expect(createInceptionProvider("k").id).toBe("inception");
     expect(createOllamaProvider("k").id).toBe("ollama");
   });
 

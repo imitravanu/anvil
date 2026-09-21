@@ -2,6 +2,15 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **ACTIVE 2026-09-21 (OpenCode session, inception provider):** owns NEW
+> `packages/core/src/providers/inception.ts`; `providers/{types,index}.ts`,
+> `config/index.ts` (PROVIDER_ORDER), `providers/registry.ts` (mercury models),
+> `cert/runner.ts` (cert model + env key), `scripts/certify-provider.ts`
+> (ALL_PROVIDERS), tests (`certify`, `compat`, `compatAdapters`,
+> `freeProviders`), `packages/tui/src/util/{labels,providers}.ts`,
+> `README.md` (10→11 providers), `CHANGELOG.md` (Unreleased entry). No
+> protected artifact touched.
+>
 > **ACTIVE 2026-09-21 (OpenCode session, 26 release closeout):** owns
 > `packages/core/src/version.ts`, `packages/{core,tui,cli}/package.json`
 > (1.0.0 → 1.1.0), `CHANGELOG.md` ([Unreleased] → [1.1.0] heading),

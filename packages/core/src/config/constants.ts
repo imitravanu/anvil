@@ -67,6 +67,12 @@ export const SUMMARIZER_TOOL_ERROR_MAX_CHARS = getEnvNumber("ANVIL_SUMMARIZER_TO
 // Provider streaming retry policy
 export const PROVIDER_STREAM_MAX_RETRIES = getEnvNumber("ANVIL_PROVIDER_STREAM_RETRIES", 2);
 
+// Inception Mercury burns ~250 reasoning tokens before emitting anything
+// (measured 252 on a live tool probe 2026-09-21), so small caller budgets
+// (e.g. a 50-token cert probe) return empty length-cutoff turns without a
+// floor. Env-overridable per the no-magic-constants rule.
+export const INCEPTION_MIN_COMPLETION_TOKENS = getEnvNumber("ANVIL_INCEPTION_MIN_TOKENS", 1_024);
+
 // Rate Limiting & Retry Policy
 export const RATE_LIMIT_MAX_RETRIES = 3;
 export const RATE_LIMIT_INITIAL_DELAY_MS = 1000;

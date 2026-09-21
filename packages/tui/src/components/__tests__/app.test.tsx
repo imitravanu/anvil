@@ -45,6 +45,7 @@ describe("App Component - 22.17 MCP Boot Notices", () => {
       github: provider,
       cerebras: provider,
       mistral: provider,
+      inception: provider,
       ollama: provider,
     };
 

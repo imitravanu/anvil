@@ -13,6 +13,7 @@ describe("Free Providers Integration", () => {
       githubApiKey: "ghp_test",
       cerebrasApiKey: "csk_test",
       mistralApiKey: "mis_test",
+      inceptionApiKey: "sk_test",
       ollamaApiKey: "ollama",
     });
 
@@ -28,6 +29,9 @@ describe("Free Providers Integration", () => {
     expect(providers.mistral.id).toBe("mistral");
     expect(providers.mistral.isConfigured()).toBe(true);
 
+    expect(providers.inception.id).toBe("inception");
+    expect(providers.inception.isConfigured()).toBe(true);
+
     expect(providers.ollama.id).toBe("ollama");
     expect(providers.ollama.isConfigured()).toBe(true);
   });
@@ -38,11 +42,12 @@ describe("Free Providers Integration", () => {
     expect(providers.github.isConfigured()).toBe(false);
     expect(providers.cerebras.isConfigured()).toBe(false);
     expect(providers.mistral.isConfigured()).toBe(false);
+    expect(providers.inception.isConfigured()).toBe(false);
     expect(providers.ollama.isConfigured()).toBe(false);
   });
 
   it("registers free models for each free provider in MODEL_REGISTRY", () => {
-    const freeProviders = ["groq", "github", "cerebras", "mistral", "ollama"] as const;
+    const freeProviders = ["groq", "github", "cerebras", "mistral", "inception", "ollama"] as const;
     for (const pid of freeProviders) {
       const models = getModelsForProvider(pid);
       expect(models.length).toBeGreaterThan(0);
@@ -80,6 +85,16 @@ describe("Free Providers Integration", () => {
     expect(sel).toEqual({
       providerId: "cerebras",
       model: "llama3.3-70b",
+    });
+  });
+
+  it("resolves default model for inception when inception is configured", () => {
+    const sel = resolveProviderSelection({
+      creds: { inceptionApiKey: "sk_test" },
+    });
+    expect(sel).toEqual({
+      providerId: "inception",
+      model: "mercury-2.5",
     });
   });
 });

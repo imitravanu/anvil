@@ -8,6 +8,7 @@ import { createGroqProvider } from "./groq.js";
 import { createCerebrasProvider } from "./cerebras.js";
 import { createGitHubModelsProvider } from "./github.js";
 import { createMistralProvider } from "./mistral.js";
+import { createInceptionProvider } from "./inception.js";
 import { createOllamaProvider } from "./ollama.js";
 
 export * from "./types.js";
@@ -50,6 +51,7 @@ export { GROQ_BASE_URL, createGroqProvider } from "./groq.js";
 export { CEREBRAS_BASE_URL, createCerebrasProvider } from "./cerebras.js";
 export { GITHUB_MODELS_BASE_URL, createGitHubModelsProvider } from "./github.js";
 export { MISTRAL_BASE_URL, createMistralProvider } from "./mistral.js";
+export { INCEPTION_BASE_URL, createInceptionProvider } from "./inception.js";
 export { OLLAMA_DEFAULT_BASE_URL, createOllamaProvider } from "./ollama.js";
 
 export interface ProviderCredentials {
@@ -62,6 +64,7 @@ export interface ProviderCredentials {
   cerebrasApiKey?: string;
   githubApiKey?: string;
   mistralApiKey?: string;
+  inceptionApiKey?: string;
   ollamaApiKey?: string;
 }
 
@@ -76,6 +79,7 @@ export function createProviders(creds: ProviderCredentials): Record<ProviderId, 
     cerebras: createCerebrasProvider(creds.cerebrasApiKey),
     github: createGitHubModelsProvider(creds.githubApiKey),
     mistral: createMistralProvider(creds.mistralApiKey),
+    inception: createInceptionProvider(creds.inceptionApiKey),
     ollama: createOllamaProvider(creds.ollamaApiKey),
   };
 }

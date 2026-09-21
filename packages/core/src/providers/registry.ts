@@ -602,6 +602,32 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     certifiedAt: "2026-09-10T18:00:00.000Z",
     certifiedMode: "mock",
   },
+  // Inception models (Mercury diffusion LLMs; 100M free trial tokens per account)
+  {
+    id: "mercury-2.5",
+    providerId: "inception",
+    displayName: "Mercury 2.5",
+    contextWindow: 260_000,
+    supportsTools: true,
+    supportsVision: false,
+    isFree: true,
+    // Live-certified 2026-09-21: 5/5 criteria (streaming, tool round-trip,
+    // 3-turn memory, error path, rate-limit) via the native adapter with the
+    // reasoning token floor. Probe evidence in PROGRESS.md.
+    certified: "live",
+    certifiedAt: "2026-09-21T13:08:25.000Z",
+    certifiedMode: "live",
+  },
+  {
+    id: "mercury-2",
+    providerId: "inception",
+    displayName: "Mercury 2",
+    contextWindow: 128_000,
+    supportsTools: true,
+    supportsVision: false,
+    isFree: true,
+    certified: "untested",
+  },
   // Ollama models ($0, 100% Local and Offline)
   {
     id: "qwen2.5-coder:latest",

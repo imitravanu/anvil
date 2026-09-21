@@ -14,14 +14,14 @@
 
 <p align="center">
   <b>Anvil</b> is a professional-grade, terminal-based AI coding agent with an interactive React (Ink) terminal interface.<br>
-  Featuring <b>10 LLM providers</b>, <b>15 autonomous tools</b>, interactive unified-diff permissions, LSP code intelligence, and file checkpoints.
+  Featuring <b>11 LLM providers</b>, <b>15 autonomous tools</b>, interactive unified-diff permissions, LSP code intelligence, and file checkpoints.
 </p>
 
 ---
 
 ## ⚡ Features at a Glance
 
-- **Ten Providers, One Unified Interface**: Seamlessly switch between Anthropic, OpenAI, Google Gemini, OpenRouter, Orcarouter, Groq, GitHub Models, Cerebras, Mistral AI, and local Ollama.
+- **Eleven Providers, One Unified Interface**: Seamlessly switch between Anthropic, OpenAI, Google Gemini, OpenRouter, Orcarouter, Groq, GitHub Models, Cerebras, Mistral AI, Inception, and local Ollama.
 - **100% Free & Local Model Support**: Keep API costs at $0 using Groq, GitHub Models, Cerebras, Mistral experimentation, or fully offline Ollama. Every model is clearly labeled `[FREE]` or `[PAID]`.
 - **Autonomous Agent Loop with 15 Tools**:
   - **Filesystem**: `read_file`, `write_file`, `edit_file` (unified diffs), `list_files`, `grep`.
@@ -145,6 +145,7 @@ Hot-swap providers or keys anytime without leaving the chat using `/connect`.
 | **GitHub Models** | `GITHUB_TOKEN` | Free Preview | `gpt-4o-mini`, `meta-llama-3.3-70b-instruct` | Yes | Yes |
 | **Cerebras** | `CEREBRAS_API_KEY` | Free Tier (1M/day) | `llama3.3-70b`, `llama3.1-8b` | Yes | No |
 | **Mistral AI** | `MISTRAL_API_KEY` | Free Experimentation | `codestral-latest`, `mistral-small-latest` | Yes | No |
+| **Inception** | `INCEPTION_API_KEY` | Free Trial (100M tokens) | `mercury-2.5`, `mercury-2` | Yes | No |
 | **Ollama** | None / `OLLAMA_HOST` | 100% Free / Local | `qwen2.5-coder:latest`, `llama3.2:latest` | Yes | Yes |
 
 ---

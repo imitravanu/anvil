@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 /**
  * Standalone Provider Certification Script (Phase 18)
- * Verifies live or mock behavior for all 10 Anvil model providers across 5 criteria:
+ * Verifies live or mock behavior for all 11 Anvil model providers across 5 criteria:
  *   1. Streaming text (text_delta events)
  *   2. Tool call round-trip (tool_call_start -> tool_call_end -> tool_result)
  *   3. Multi-turn context memory (3 turns retaining initial context)
@@ -40,6 +40,7 @@ const ALL_PROVIDERS: ProviderId[] = [
   "cerebras",
   "github",
   "mistral",
+  "inception",
   "ollama",
 ];
 

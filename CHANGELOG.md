@@ -2,6 +2,25 @@
 
 All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
+## [Unreleased]
+
+### Inception Provider — Mercury 2.5 Live-Certified (2026-09-21)
+
+- **11th provider: Inception (Mercury diffusion LLMs).** Native
+  `ChatCompletions`-style adapter at `https://api.inceptionlabs.ai/v1`
+  (`INCEPTION_API_KEY`), registry entries `mercury-2.5` (260K context) and
+  `mercury-2` (128K), picker onboarding, `--provider inception` selection.
+- **Reasoning token floor.** Mercury burns ~250 reasoning tokens before
+  emitting anything, so small budgets returned empty length-cutoff turns
+  (found red by the live certify run: 1/5). The shared provider gains an
+  opt-in `maxTokensFloor` seam (`Math.max`, off by default — no other
+  provider's behavior changes) fed by centralized
+  `INCEPTION_MIN_COMPLETION_TOKENS` (1024, env-overridable). Re-certified:
+  **5/5 live** (streaming, tool round-trip, 3-turn memory, error path,
+  rate-limit). Pinned by stub-server tests driving the real SDK.
+- **Free-trial eligible:** 100M free tokens per Inception account, no payment
+  required — a working free lane while OpenRouter/Gemini quotas are exhausted.
+
 ## [1.1.0] — 2026-09-21
 
 ### 26.3 Live Delta Matrix: One Valid Lane, Honest Null Delta (2026-09-21)

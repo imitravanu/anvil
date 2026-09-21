@@ -3,6 +3,7 @@ import { createGroqProvider } from "../groq.js";
 import { createCerebrasProvider } from "../cerebras.js";
 import { createGitHubModelsProvider } from "../github.js";
 import { createMistralProvider } from "../mistral.js";
+import { createInceptionProvider } from "../inception.js";
 import { createOllamaProvider } from "../ollama.js";
 import { translateChatCompletionsChunkStream, type RawOpenAIChunk } from "../openai.js";
 import type { ModelProvider, ProviderId, StreamEvent } from "../types.js";
@@ -16,6 +17,7 @@ const ADAPTERS: {
   { id: "cerebras", displayName: "Cerebras", create: createCerebrasProvider },
   { id: "github", displayName: "GitHub Models", create: createGitHubModelsProvider },
   { id: "mistral", displayName: "Mistral AI", create: createMistralProvider },
+  { id: "inception", displayName: "Inception", create: createInceptionProvider },
   { id: "ollama", displayName: "Ollama (Local)", create: createOllamaProvider },
 ];
 
@@ -25,7 +27,7 @@ async function collect(gen: AsyncGenerator<StreamEvent>): Promise<StreamEvent[]>
   return out;
 }
 
-describe("OpenAI-compat adapters (groq/cerebras/github/mistral/ollama)", () => {
+describe("OpenAI-compat adapters (groq/cerebras/github/mistral/inception/ollama)", () => {
   for (const a of ADAPTERS) {
     it(`${a.id}: wires id/displayName and configured flag`, () => {
       const p = a.create("test-key");

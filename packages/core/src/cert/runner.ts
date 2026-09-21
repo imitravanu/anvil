@@ -34,6 +34,7 @@ export const PROVIDER_CERT_MODELS: Record<ProviderId, string> = {
   cerebras: "llama3.1-8b",
   github: "Phi-3.5-mini-instruct",
   mistral: "mistral-small-latest",
+  inception: "mercury-2.5",
   ollama: "qwen2.5-coder:latest",
 };
 
@@ -52,6 +53,7 @@ export function resolveCertificationCredentials(): ProviderCredentials {
     cerebrasApiKey: process.env.CEREBRAS_API_KEY || fileCreds.cerebrasApiKey,
     githubApiKey: process.env.GITHUB_TOKEN || process.env.GITHUB_API_KEY || fileCreds.githubApiKey,
     mistralApiKey: process.env.MISTRAL_API_KEY || fileCreds.mistralApiKey,
+    inceptionApiKey: process.env.INCEPTION_API_KEY || fileCreds.inceptionApiKey,
     ollamaApiKey: process.env.OLLAMA_API_KEY || fileCreds.ollamaApiKey,
   };
 }

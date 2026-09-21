@@ -200,6 +200,14 @@ export interface ChatCompletionsStyleProviderOptions {
    * `max_tokens`. The parameter name is therefore per-provider.
    */
   maxTokensParam?: "max_tokens" | "max_completion_tokens";
+  /**
+   * Minimum completion budget enforced with Math.max (0/unset = no floor).
+   * Reasoning models burn hundreds of tokens before emitting anything, so a
+   * small caller budget (e.g. a 50-token cert probe) would otherwise return
+   * an empty length-cutoff turn. The cap stays an upper bound — actual billed
+   * usage is unchanged when the model needs less.
+   */
+  maxTokensFloor?: number;
   defaultHeaders?: Record<string, string>;
   supportsVision?: boolean;
 }
@@ -210,6 +218,7 @@ export class ChatCompletionsStyleProvider extends BaseProvider {
 
   private readonly client: OpenAI | null;
   private readonly maxTokensParam: "max_tokens" | "max_completion_tokens";
+  private readonly maxTokensFloor: number;
   protected readonly supportsVision: boolean;
 
   constructor(opts: ChatCompletionsStyleProviderOptions) {
@@ -217,6 +226,7 @@ export class ChatCompletionsStyleProvider extends BaseProvider {
     this.id = opts.id;
     this.displayName = opts.displayName;
     this.maxTokensParam = opts.maxTokensParam ?? "max_tokens";
+    this.maxTokensFloor = opts.maxTokensFloor ?? 0;
     this.supportsVision = opts.supportsVision ?? true;
 
     this.client = opts.apiKey
@@ -246,7 +256,7 @@ export class ChatCompletionsStyleProvider extends BaseProvider {
         ...(request.tools.length
           ? { tools: toOpenAITools(request.tools) as unknown as OpenAI.ChatCompletionTool[] }
           : {}),
-        [this.maxTokensParam]: request.maxTokens,
+        [this.maxTokensParam]: Math.max(request.maxTokens, this.maxTokensFloor),
         stream: true,
         stream_options: { include_usage: true },
       },
