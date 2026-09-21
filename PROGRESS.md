@@ -23,6 +23,9 @@
 > pool), `packages/core/src/eval/__tests__/runner.test.ts`,
 > `evals/run.ts` (--concurrency flag), `docs/PHASE-27-PROGRESS.md` (27.1
 > boxes), `CHANGELOG.md` (Unreleased entry). No protected artifact touched.
+> **DONE 2026-09-21:** committed 1567eca, pushed, full gate green. Two reds
+> fixed en route (own catch{} via Step 1; holes-filter pacing via the 26.3
+> sleep test).
 >
 > **ACTIVE 2026-09-21 (OpenCode session, 26 release closeout):** owns
 > `packages/core/src/version.ts`, `packages/{core,tui,cli}/package.json`
