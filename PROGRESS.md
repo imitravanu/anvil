@@ -92,9 +92,9 @@ Read this before the chronological log below. The log is history; this is truth.
 - **Gate:** `npm run gate` green, Steps 0 → 5 (sensor, protected-artifact
   manifest, diff scan, full-tree residual drain, sequential build, typecheck,
   unit tests, 15/15 mock evals).
-- **Tests:** **1013** green — core 669 / tui 255 / cli 84.
-- **CLI coverage:** 55% → 62.3% statements (the S7 target was 80%; remaining
-  gap is index.tsx's Ink/render paths, which need an interactive harness).
+- **Tests:** **1031** green — core 675 / tui 255 / cli 101.
+- **CLI coverage:** 55% → **75.65%** statements (index.tsx 27.7% → 70.5% via
+  the boot harness; the remainder is deep branches needing a live TTY).
 - **Concurrent work detected (2026-09-22):** an in-flight `qwencloud` provider
   (`packages/core/src/providers/qwencloud.ts` + `ProviderId` union change in
   `types.ts`) is in the working tree, NOT from Buffy — left untouched per the
@@ -113,6 +113,32 @@ Read this before the chronological log below. The log is history; this is truth.
   read and audited (2026-09-22, three passes); `packages/cli/src/index.tsx` is
   still partly uncovered; Windows is second-class (bash + a Unix-only kill-tree);
   no cost estimation, no session search.
+
+---
+
+## 2026-09-22 — Ink-boot harness: index.tsx mounted paths covered (Buffy)
+
+The last S7 gap — index.tsx's Ink-mounted boots — is now covered. New
+`boot.test.tsx` (6 tests) mocks only the side-effect boundaries (ink's
+render, headless/goalRunner, core's AgentSession constructor and
+syncFreeModels) and runs everything else REAL: provider selection from a
+temp credentials.json, system-prompt assembly, theme resolution from
+settings.json, MCP wiring, alt-screen (no-op under TERM=dumb — the
+earlier env fix is load-bearing here too), and exit-code plumbing.
+
+**Coverage: CLI 75.65% stmts / 71.02% branch (was 62.35/59.81);
+index.tsx 70.5% (was 27.7%).** The `bootHeadless` run takes ~2.4s — an
+`AbortSignal.timeout` lingers after the mocked run resolves; noted, not
+worth chasing. Two premises of mine were corrected by the failing tests
+while building this: (1) `anvil config` sets thenChat=false — only the
+no-credentials first-run path chains setup→chat (my "config chains into
+chat" test asserted a flow that does not exist; a probe run proved the
+chain never fires); (2) the chained boot needs credentials written
+BEFORE onDone, matching what the real FirstRunSetup does (save, then
+callback). Also pinned: SIGHUP containment (restore + kill children +
+exit 129) and unhandledRejection (report + exitCode 1, no crash).
+
+Tests: core 675 / tui 255 / cli 101 — 1,031 total, gate green.
 
 ---
 
