@@ -1,11 +1,20 @@
 import { Box, Text } from "ink";
+import type { GuardianRuleFamily } from "@anvil/core";
 import type { DisplayGuardianReport } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { curtail } from "../util/format.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
 
-/** Human labels for the coarse rule families (Phase 26.1 report). */
-const FAMILY_LABELS: Record<string, string> = {
+/**
+ * Human labels for the coarse rule families (Phase 26.1 report).
+ *
+ * Typed as a TOTAL map over core's union rather than `Record<string, string>`:
+ * adding a family in `guardian/scanner.ts` now fails the TUI typecheck here
+ * instead of silently printing the raw family id in the card. The display DTO
+ * keeps `family: string` on purpose, so the lookup below still narrows at
+ * runtime for a report from an older/newer core.
+ */
+const FAMILY_LABELS: Record<GuardianRuleFamily, string> = {
   "placeholder": "placeholder",
   "raw-error": "raw error",
   "style": "style",
@@ -15,9 +24,12 @@ const FAMILY_LABELS: Record<string, string> = {
   "rule": "project rule",
 };
 
+const isFamily = (value: string): value is GuardianRuleFamily => value in FAMILY_LABELS;
+
 export function GuardianReportCard({ report }: { report: DisplayGuardianReport }) {
   const theme = useTheme();
-  const familyLabel = (family: string): string => FAMILY_LABELS[family] ?? family;
+  const familyLabel = (family: string): string =>
+    isFamily(family) ? FAMILY_LABELS[family] : family;
   const blockedLabel = `${report.blocked} blocked`;
   const fixedLabel = report.fixed > 0 ? ` · ${report.fixed} auto-fixed` : "";
   return (

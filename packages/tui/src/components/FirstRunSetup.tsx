@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import TextInput from "ink-text-input";
 import type { ProviderId } from "@anvil/core";
-import { saveCredential } from "@anvil/core";
+import { getErrorMessage, saveCredential } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 import { PROVIDER_META } from "../util/providers.js";
 
@@ -28,6 +28,7 @@ export function FirstRunSetup({
   const [selected, setSelected] = useState(0);
   const [apiKey, setApiKey] = useState("");
   const [step, setStep] = useState<"provider" | "key" | "done">("provider");
+  const [saveError, setSaveError] = useState<string | null>(null);
   const provider = PROVIDERS[selected];
 
   useInput((_input, key) => {
@@ -68,6 +69,11 @@ export function FirstRunSetup({
         <Text color={theme.colors.primary}>
           Paste your {provider.marketLabel} API key (input is hidden):
         </Text>
+        {saveError && (
+          <Text color={theme.colors.error}>
+            Could not save the key ({saveError}) — check that {`~/.anvil`} is writable, then press Enter again.
+          </Text>
+        )}
         <TextInput
           value={apiKey}
           onChange={(next) => {
@@ -86,7 +92,23 @@ export function FirstRunSetup({
           onSubmit={(value) => {
             const trimmed = value.trim() || (provider.id === "ollama" ? "ollama" : "");
             if (!trimmed) return;
-            saveCredential(provider.field, trimmed);
+            // `saveCredential` writes to ~/.anvil and throws on a full disk or
+            // unwritable home. This runs inside an Ink input handler, where a
+            // throw escapes as an uncaught exception and kills the process
+            // mid-onboarding — so it is caught here and retried in place
+            // (`saveSession` is wrapped the same way for the same reason).
+            // `saveCredential` writes to ~/.anvil and throws on a full disk or
+            // unwritable home. This runs inside an Ink input handler, where a
+            // throw escapes as an uncaught exception and kills the process
+            // mid-onboarding — so it is caught here and retried in place
+            // (`saveSession` is wrapped the same way for the same reason).
+            try {
+              saveCredential(provider.field, trimmed);
+            } catch (err: unknown) {
+              setSaveError(getErrorMessage(err));
+              return;
+            }
+            setSaveError(null);
             setStep("done");
           }}
         />

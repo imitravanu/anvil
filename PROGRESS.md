@@ -61,6 +61,13 @@
 > plus the matching `__tests__`/`*test.tsx` updates in all three packages and this
 > PROGRESS.md entry. No protected artifact touched; no shared file edited.
 >
+> **DONE 2026-09-22 (Buffy, TUI audit, pass 3):** owns
+> `packages/tui/src/components/{FirstRunSetup,GuardianReportCard,ToolCallView}.tsx`,
+> and NEW `components/__tests__/{firstRunSetup.test.tsx,calls.test.tsx additions}`,
+> plus this PROGRESS.md entry. `packages/core/src/guardian/scanner.ts` was
+> temporarily modified to prove the new compile-time guard, then restored
+> byte-identical (verified via git status). No protected artifact touched.
+>
 > **DONE 2026-09-22 (Buffy, TUI audit, pass 2):** owns `packages/core/src/agent/session.ts`
 > (`getTools()` only), `packages/tui/src/commands/handlers/{mcp,clipboard}.ts`,
 > `packages/tui/src/util/{clipboard,notify}.ts`, `packages/tui/src/components/ContextGauge.tsx`,
@@ -85,7 +92,7 @@ Read this before the chronological log below. The log is history; this is truth.
 - **Gate:** `npm run gate` green, Steps 0 → 5 (sensor, protected-artifact
   manifest, diff scan, full-tree residual drain, sequential build, typecheck,
   unit tests, 15/15 mock evals).
-- **Tests:** **997** green — core 667 / tui 252 / cli 78.
+- **Tests:** **1000** green — core 667 / tui 255 / cli 78.
 - **Docs-vs-code is now mechanical:** `packages/cli/src/__tests__/docTruth.test.ts`
   asserts the release badge == `CORE_VERSION`, provider count == the registry,
   tool count == `TOOL_DEFINITIONS`, the Node badge == `engines.node`, the roadmap
@@ -94,10 +101,66 @@ Read this before the chronological log below. The log is history; this is truth.
   derived from code, so the suite can only fail on drift. **Do not hand-edit those
   doc claims without running it.**
 - **Remote:** `origin` is reachable; whether to push is a human decision.
-- **Known open (features/gaps, NOT defects):** the TUI render/`util` surface was
-  largely unaudited before 2026-09-22; `packages/cli/src/index.tsx` is still partly
-  uncovered; Windows is second-class (bash + a Unix-only kill-tree); no cost
-  estimation, no session search.
+- **Known open (features/gaps, NOT defects):** every TUI production file has been
+  read and audited (2026-09-22, three passes); `packages/cli/src/index.tsx` is
+  still partly uncovered; Windows is second-class (bash + a Unix-only kill-tree);
+  no cost estimation, no session search.
+
+---
+
+## 2026-09-22 — TUI audit, pass 3: last files, one crash path (Buffy)
+
+Read the final TUI files (`DiffModal`, `MissionDeck`, `RewindModal`, `ThemePicker`,
+`VerificationCard`, `index.ts`, `eventReducer.ts`) — the package is now fully read.
+One real defect, two honest reclassifications.
+
+**1. A failed credential save killed the app mid-onboarding
+(`components/FirstRunSetup.tsx`).** `saveCredential` writes `~/.anvil/credentials.json`
+and throws on a full disk or unwritable home — and the call sat bare inside an Ink
+input handler, where a throw escapes as an uncaught exception. A user pasting a key
+into a machine with a read-only home didn't get an error message; the process died.
+Now caught, surfaced in the card, retried in place (`saveSession` in
+`useSessionCommands` is already wrapped the same way for the same reason).
+**RED-proven without mocks:** core's `saveCredential` honors `ANVIL_HOME`, so the test
+points it at a path under a *file* — the write fails with ENOTDIR deterministically
+on every platform (chmod games would not bind for root), and the suite exercises the
+real write path in both directions (failure shows the error and stays on the key
+step; success writes the file).
+
+**2. Guardian family labels are now compile-time bound
+(`components/GuardianReportCard.tsx`).** `FAMILY_LABELS` was `Record<string, string>`
+with a silent fallback, so a family added in `guardian/scanner.ts` would render as
+its raw id. It is now `Record<GuardianRuleFamily, string>` (core's exported union)
+with a runtime narrowing for cross-version reports. **Proof:** temporarily adding a
+family to core's union failed the TUI typecheck at the map (`Property
+'experimental' is missing`), then core was restored byte-identical.
+
+**3. Reclassified — the tool-card JSON fallback needs no sanitize
+(`components/ToolCallView.tsx`).** I flagged the missing `sanitizeTerminalText` on the
+`JSON.stringify` branch and "fixed" it; the test passed, which is exactly why I then
+verified the premise: `JSON.stringify` escapes every control character itself (ESC →
+`\u001b`, CR → `\r`), so no raw byte can ever reach the frame and my fix was a
+no-op. Code reverted, a comment records the invariant, and the new test pins the
+*property* (no raw ESC/CR in the frame) rather than the mechanism — so replacing
+`JSON.stringify` with a manual join would now fail it.
+
+**4. Reclassified — sub-agent progress binds to the FIRST running sub-agent
+(`hooks/eventReducer.ts`).** With two sub-agents live, progress events attribute to
+whichever started first. This is a limitation of core's event contract
+(`subagent_progress` carries `{ tool, detail }` — no sub-agent id), not a TUI bug;
+the durable fix is adding an id to the event, a cross-package contract change left
+for its own decision.
+
+**Audited clean (no defect):** `DiffModal` (tab sliding, async error path, copy,
+side-by-side toggle), `MissionDeck` (milestone windowing), `RewindModal` (sliding
+window, empty state), `ThemePicker` (live preview contract), `VerificationCard`,
+`index.ts` barrel, `eventReducer` retention caps (`OUTPUT_RETAIN_MAX`, per-string
+cap, `TRANSCRIPT_STATE_CAP`).
+
+**Evidence:** core 667 / tui 255 / cli 78 green; full `npm run gate` green (Steps
+0–5, 15/15 mock evals). Note: the gate's Step 2 build typechecks TEST files too
+(`tsc -p .`), unlike `npm run typecheck` — a missing required prop in a new test
+fixture passed typecheck and failed the build until fixed.
 
 ---
 

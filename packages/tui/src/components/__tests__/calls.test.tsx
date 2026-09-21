@@ -23,6 +23,27 @@ describe("ToolCallView", () => {
     unmount();
   });
 
+  it("renders no raw control characters from the JSON-input fallback", () => {
+    // A call with no summary renders JSON.stringify(input). Model-authored input
+    // can carry \r and ANSI escapes (a bash command, a grep pattern), so this
+    // pins the property that keeps the frame sane: json does the escaping, NOT
+    // sanitizeTerminalText — the fallback has no sanitize call and does not need
+    // one. Replacing JSON.stringify with a manual join would break this.
+    const noSummary: DisplayToolCall = {
+      id: "c2",
+      name: "run_command",
+      input: { command: "echo \u001b[31mred\u001b[0m\rprogress" },
+      status: "done",
+      summary: "",
+    };
+    const { lastFrame, unmount } = renderThemed(<ToolCallView call={noSummary} />);
+    const raw = lastFrame() ?? "";
+    expect(raw).not.toContain("\u001b[31m");
+    expect(raw).not.toContain("\r");
+    expect(frameText(lastFrame)).toContain("echo");
+    unmount();
+  });
+
   it("stays collapsed by default; expands full output on demand", () => {
     const collapsed = renderThemed(<ToolCallView call={doneCall} />);
     expect(frameText(collapsed.lastFrame)).not.toContain("hello");

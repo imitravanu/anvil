@@ -15,6 +15,9 @@ function describeCall(call: DisplayToolCall): string {
   if (call.summary) {
     return curtail(sanitizeTerminalText(call.summary).split("\n")[0] ?? "", TOOL_SUMMARY_MAX);
   }
+  // The JSON fallback needs no sanitize: JSON.stringify escapes every control
+  // character (ESC → \u001b, CR → \r), so no raw byte can reach the frame —
+  // adding a sanitize call here would be a no-op (verified).
   return curtail(JSON.stringify(call.input), TOOL_SUMMARY_MAX);
 }
 
