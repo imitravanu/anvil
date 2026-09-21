@@ -99,6 +99,16 @@ describe("edit_file", () => {
     expect(preview).not.toContain("+++ b/");
   });
 
+  it("describe() survives a null input instead of dereferencing input.path", async () => {
+    // Regression: describe() dereferenced input.path inside its catch when the
+    // orchestrator called it with a malformed (null) input on the way to
+    // rejecting the mutating call.
+    const preview = await editFileTool.describe(null, ctx);
+    expect(preview).toContain("preview unavailable");
+    expect(preview).not.toContain("undefined");
+    expect(preview).not.toContain("null");
+  });
+
   it("refuses files over the size cap without reading them fully", async () => {
     const big = "z".repeat(MAX_WRITE_BYTES + 1024);
     await fs.writeFile(path.join(root, "big.txt"), big);

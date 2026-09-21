@@ -92,7 +92,7 @@ Read this before the chronological log below. The log is history; this is truth.
 - **Gate:** `npm run gate` green, Steps 0 → 5 (sensor, protected-artifact
   manifest, diff scan, full-tree residual drain, sequential build, typecheck,
   unit tests, 15/15 mock evals).
-- **Tests:** **1000** green — core 667 / tui 255 / cli 78.
+- **Tests:** **1001** green — core 668 / tui 255 / cli 78.
 - **Docs-vs-code is now mechanical:** `packages/cli/src/__tests__/docTruth.test.ts`
   asserts the release badge == `CORE_VERSION`, provider count == the registry,
   tool count == `TOOL_DEFINITIONS`, the Node badge == `engines.node`, the roadmap
@@ -105,6 +105,49 @@ Read this before the chronological log below. The log is history; this is truth.
   read and audited (2026-09-22, three passes); `packages/cli/src/index.tsx` is
   still partly uncovered; Windows is second-class (bash + a Unix-only kill-tree);
   no cost estimation, no session search.
+
+---
+
+## 2026-09-22 — Core audit complete: tools, persistence, guardian, cert, lsp (Buffy)
+
+Final unaudited surface read (~50 files). One real defect; everything else clean.
+Also retracted one of my own claims before it landed.
+
+**Retraction — the orchestrator "sync-throw gap" was never real.** I initially
+"hardened" `ToolOrchestrator` against a describe() that throws synchronously, on the
+theory that a try block only catches what crosses an await. That is false in JS: a
+synchronous throw inside a try is caught whether or not an await follows. The
+orchestrator was always safe; the only genuine bug was `editFile.describe`
+dereferencing `input.path` in its own catch. Fixed the comment to state the real
+invariant and removed the redundant guard.
+
+**1. `edit_file` describe() crashed on null input (`tools/editFile.ts`).**
+`describe` dereferenced `input.path` inside its catch — a malformed (null) input on
+its way to being rejected as malformed threw a TypeError out of the preview path.
+Only editFile was affected: bash and writeFile describe()s are already null-safe,
+and plugin describes ride the orchestrator's catch. **RED-proven:** the old body
+throws out of its own catch; the new fallback string is built from a checked path
+before the try.
+
+**Audited clean, no change:** tools (`paths`, `readFile` open-fstat-bounded-read,
+`writeFile`, `listFiles` glob/substring split, `grep` catastrophic-backtracking
+shape check + per-match cap + stat-before-read, `outline`, `verifyTests` argv-array
+spawn + env allowlist, `delegateTask` budget clamps + delegation caps, `updatePlan`,
+`updateMemory`, `mcpTools`); persistence (`historyStore` push invariants,
+`ledger`/`sessionLedger` caps + attribution rule, `canonical` cycle-guarded hash,
+`checkpoints` TOCTOU-safe bounded reads + path re-resolution + external-edit
+detection, `checkpointStore` atomic 0600 writes + per-entry load validation,
+`rewindRing` honest eviction counters); guardian (`scope`, `allowlist`, `hook`,
+`langRules`, `init`, `health` — split-literal patterns so the gate never scans its
+own rule sources, atomic telemetry, MAX-arbitrary-constants honored); `lsp/*`
+(Content-Length framing, EPIPE handling, unref'd idle timers, honest source field);
+`cert/*` (harness-only, honest mock/live provenance).
+
+**Noted, deliberately not fixed:** `verifyTests.execute` passes a non-string
+`pattern` through to `argvWithPattern`, which throws — contained by `executeTool`'s
+try/catch into a generic "verify_tests failed" (cosmetic, not a crash);
+`grepFallback` in `lsp/tools.ts` assumes the grep output shape it itself created
+(safe today, would misreport if grep's output contract changed).
 
 ---
 

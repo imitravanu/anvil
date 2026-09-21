@@ -136,11 +136,19 @@ export const execute: ToolExecutor = async (rawInput, ctx: ToolContext) => {
 
 // Permission-prompt preview: the actual unified diff, computed WITHOUT writing.
 export const describe = async (rawInput: unknown, ctx: ToolContext): Promise<string> => {
-  const input = rawInput as EditInput;
+  const input = rawInput as EditInput | null | undefined;
+  const fallbackPath =
+    input && typeof input === "object" && typeof (input as EditInput).path === "string"
+      ? (input as EditInput).path
+      : "file";
   try {
-    const { diff } = await computeEdit(input, ctx);
+    const { diff } = await computeEdit(input as EditInput, ctx);
     return diff;
   } catch (err) {
-    return `Edit ${input.path} (preview unavailable: ${(err as Error).message})`;
+    // rawInput may not even be an object (null input), so the fallback path
+    // cannot be read inside the catch — `describe` is called BEFORE the
+    // orchestrator's mutation/permission branch, and a malformed mutating call
+    // reaches here on its way to being rejected as malformed.
+    return `Edit ${fallbackPath} (preview unavailable: ${(err as Error).message})`;
   }
 };

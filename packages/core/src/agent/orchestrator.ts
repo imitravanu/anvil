@@ -127,7 +127,9 @@ export class ToolOrchestrator {
             signal,
           });
         } catch {
-          // preview failure must not block the permission flow
+          // preview failure must not block the permission flow. This catches
+          // synchronous throws from describe() too — a throw inside a try is
+          // caught whether or not it crosses an await.
         }
         let approved = false;
         {
