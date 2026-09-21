@@ -10,6 +10,7 @@ import { createGitHubModelsProvider } from "./github.js";
 import { createMistralProvider } from "./mistral.js";
 import { createInceptionProvider } from "./inception.js";
 import { createOllamaProvider } from "./ollama.js";
+import { createQwenCloudProvider } from "./qwencloud.js";
 
 export * from "./types.js";
 export * from "./registry.js";
@@ -53,6 +54,7 @@ export { GITHUB_MODELS_BASE_URL, createGitHubModelsProvider } from "./github.js"
 export { MISTRAL_BASE_URL, createMistralProvider } from "./mistral.js";
 export { INCEPTION_BASE_URL, createInceptionProvider } from "./inception.js";
 export { OLLAMA_DEFAULT_BASE_URL, createOllamaProvider } from "./ollama.js";
+export { QWENCLOUD_BASE_URL, createQwenCloudProvider, qwencloudProviderOptions } from "./qwencloud.js";
 
 export interface ProviderCredentials {
   anthropicApiKey?: string;
@@ -66,6 +68,7 @@ export interface ProviderCredentials {
   mistralApiKey?: string;
   inceptionApiKey?: string;
   ollamaApiKey?: string;
+  qwencloudApiKey?: string;
 }
 
 export function createProviders(creds: ProviderCredentials): Record<ProviderId, ModelProvider> {
@@ -81,5 +84,6 @@ export function createProviders(creds: ProviderCredentials): Record<ProviderId, 
     mistral: createMistralProvider(creds.mistralApiKey),
     inception: createInceptionProvider(creds.inceptionApiKey),
     ollama: createOllamaProvider(creds.ollamaApiKey),
+    qwencloud: createQwenCloudProvider(creds.qwencloudApiKey),
   };
 }

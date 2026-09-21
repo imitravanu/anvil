@@ -47,6 +47,7 @@ describe("App Component - 22.17 MCP Boot Notices", () => {
       mistral: provider,
       inception: provider,
       ollama: provider,
+      qwencloud: provider,
     };
 
     const { lastFrame, unmount } = renderThemed(

@@ -5,6 +5,7 @@ import { createGitHubModelsProvider } from "../github.js";
 import { createMistralProvider } from "../mistral.js";
 import { createInceptionProvider } from "../inception.js";
 import { createOllamaProvider } from "../ollama.js";
+import { createQwenCloudProvider } from "../qwencloud.js";
 import { translateChatCompletionsChunkStream, type RawOpenAIChunk } from "../openai.js";
 import type { ModelProvider, ProviderId, StreamEvent } from "../types.js";
 
@@ -19,6 +20,7 @@ const ADAPTERS: {
   { id: "mistral", displayName: "Mistral AI", create: createMistralProvider },
   { id: "inception", displayName: "Inception", create: createInceptionProvider },
   { id: "ollama", displayName: "Ollama (Local)", create: createOllamaProvider },
+  { id: "qwencloud", displayName: "QwenCloud", create: createQwenCloudProvider },
 ];
 
 async function collect(gen: AsyncGenerator<StreamEvent>): Promise<StreamEvent[]> {

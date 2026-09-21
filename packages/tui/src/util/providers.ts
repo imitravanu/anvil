@@ -29,4 +29,5 @@ export const PROVIDER_META: ProviderMeta[] = [
   { id: "mistral", shortLabel: PROVIDER_LABELS.mistral, marketLabel: "Mistral AI / Codestral (Free Tier)", field: "mistralApiKey" },
   { id: "inception", shortLabel: PROVIDER_LABELS.inception, marketLabel: "Inception (Mercury 2.5 — 100M Free Tokens)", field: "inceptionApiKey", placeholder: "sk_..." },
   { id: "ollama", shortLabel: PROVIDER_LABELS.ollama, marketLabel: "Ollama (Local $0 Offline - localhost:11434)", field: "ollamaApiKey", placeholder: "Enter to connect" },
+  { id: "qwencloud", shortLabel: PROVIDER_LABELS.qwencloud, marketLabel: "QwenCloud (Alibaba DashScope — 1M Free Tokens)", field: "qwencloudApiKey", placeholder: "sk-ws-..." },
 ];

@@ -36,6 +36,7 @@ export const PROVIDER_CERT_MODELS: Record<ProviderId, string> = {
   mistral: "mistral-small-latest",
   inception: "mercury-2.5",
   ollama: "qwen2.5-coder:latest",
+  qwencloud: "qwen3.8-flash",
 };
 
 /**
@@ -55,6 +56,7 @@ export function resolveCertificationCredentials(): ProviderCredentials {
     mistralApiKey: process.env.MISTRAL_API_KEY || fileCreds.mistralApiKey,
     inceptionApiKey: process.env.INCEPTION_API_KEY || fileCreds.inceptionApiKey,
     ollamaApiKey: process.env.OLLAMA_API_KEY || fileCreds.ollamaApiKey,
+    qwencloudApiKey: process.env.QWENCLOUD_API_KEY || process.env.DASHSCOPE_API_KEY || fileCreds.qwencloudApiKey,
   };
 }
 

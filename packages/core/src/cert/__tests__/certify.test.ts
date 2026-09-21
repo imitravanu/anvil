@@ -84,7 +84,7 @@ describe("Phase 18: Provider Certification Harness", () => {
     expect(result.criteria.errorPath.details).toContain("Clean error event");
   });
 
-  it("certifies all 11 providers in batch with mock instances", async () => {
+  it("certifies all 12 providers in batch with mock instances", async () => {
     const providers: Record<ProviderId, ReturnType<typeof createMockCertificationProvider>> = {
       anthropic: createMockCertificationProvider("anthropic"),
       openai: createMockCertificationProvider("openai"),
@@ -97,11 +97,12 @@ describe("Phase 18: Provider Certification Harness", () => {
       mistral: createMockCertificationProvider("mistral"),
       inception: createMockCertificationProvider("inception"),
       ollama: createMockCertificationProvider("ollama"),
+      qwencloud: createMockCertificationProvider("qwencloud"),
     };
 
     const results = await certifyAllProviders(providers, { timeoutMs: 5000 });
 
-    expect(Object.keys(results)).toHaveLength(11);
+    expect(Object.keys(results)).toHaveLength(12);
     for (const [id, res] of Object.entries(results)) {
       expect(res.passed).toBe(true);
       expect(res.status).toBe("live");

@@ -12,4 +12,5 @@ export const PROVIDER_LABELS: Record<string, string> = {
   mistral: "Mistral AI",
   inception: "Inception",
   ollama: "Ollama",
+  qwencloud: "QwenCloud",
 };

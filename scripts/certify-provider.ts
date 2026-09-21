@@ -42,6 +42,7 @@ const ALL_PROVIDERS: ProviderId[] = [
   "mistral",
   "inception",
   "ollama",
+  "qwencloud",
 ];
 
 function parseArgs(args: string[]) {

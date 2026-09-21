@@ -105,6 +105,7 @@ const PROVIDER_ORDER: ProviderId[] = [
   "mistral",
   "inception",
   "ollama",
+  "qwencloud",
 ];
 
 export interface SelectionInput {
