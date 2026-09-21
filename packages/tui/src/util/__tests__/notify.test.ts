@@ -58,4 +58,13 @@ describe("notifyTurnComplete", () => {
     expect(notifyTurnComplete(61_000, "done", piped, { thresholdMs: 1 })).toBe(false);
     expect(piped.chunks).toEqual([]);
   });
+
+  it("stays silent on a redirected stream, where isTTY is undefined", () => {
+    // `node app.js 2>log` leaves isTTY undefined rather than false, so the
+    // guard must fail closed — it used to test `=== false` and push BEL/OSC
+    // bytes into whatever stderr was redirected to.
+    const redirected = memoryStream(undefined);
+    expect(notifyTurnComplete(61_000, "done", redirected, { thresholdMs: 1 })).toBe(false);
+    expect(redirected.chunks).toEqual([]);
+  });
 });

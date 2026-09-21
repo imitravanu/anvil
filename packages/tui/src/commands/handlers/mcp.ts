@@ -1,4 +1,4 @@
-import { collectMcpToolDefs, TOOL_DEFINITIONS, getErrorMessage } from "@anvil/core";
+import { collectMcpToolDefs, MCP_TOOL_PREFIX, TOOL_DEFINITIONS, getErrorMessage } from "@anvil/core";
 import type { CommandHandlerDeps } from "../types.js";
 import { formatMcpStatus } from "../../util/mcp.js";
 
@@ -25,9 +25,13 @@ export function handleMcp(deps: CommandHandlerDeps, sub?: string): void {
         mcp.list(),
         TOOL_DEFINITIONS.map((d) => d.name)
       );
+      // Read-modify-write, replacing only the MCP entries. Rebuilding from
+      // TOOL_DEFINITIONS alone silently dropped plugin tools for the rest of
+      // the session (boot wires built-ins + plugins + MCP).
+      const base = session.getTools().filter((d) => !d.name.startsWith(MCP_TOOL_PREFIX));
       let hotReloaded = "";
       try {
-        session.setTools([...TOOL_DEFINITIONS, ...kept]);
+        session.setTools([...base, ...kept]);
         hotReloaded = ` ${kept.length} MCP tool(s) live in this session.`;
       } catch (err: unknown) {
         hotReloaded = ` (Tools NOT hot-loaded: ${getErrorMessage(err)})`;

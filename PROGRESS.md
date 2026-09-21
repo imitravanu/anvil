@@ -61,6 +61,13 @@
 > plus the matching `__tests__`/`*test.tsx` updates in all three packages and this
 > PROGRESS.md entry. No protected artifact touched; no shared file edited.
 >
+> **DONE 2026-09-22 (Buffy, TUI audit, pass 2):** owns `packages/core/src/agent/session.ts`
+> (`getTools()` only), `packages/tui/src/commands/handlers/{mcp,clipboard}.ts`,
+> `packages/tui/src/util/{clipboard,notify}.ts`, `packages/tui/src/components/ContextGauge.tsx`,
+> and NEW/updated tests `commands/handlers/__tests__/{mcp,clipboard}.test.ts`,
+> `util/__tests__/{clipboard,notify,providers}.test.ts`, plus this PROGRESS.md entry.
+> No protected artifact touched; no shared file edited.
+>
 > **DONE 2026-09-22 (Buffy, TUI audit):** owns `packages/tui/src/markdown/MarkdownView.tsx`,
 > `packages/tui/src/theme/custom.ts`, `packages/tui/src/hooks/useSessionCommands.ts`,
 > `packages/tui/src/commands/handlers/media.ts`, `packages/tui/src/diff/colorizeDiff.tsx`,
@@ -78,7 +85,7 @@ Read this before the chronological log below. The log is history; this is truth.
 - **Gate:** `npm run gate` green, Steps 0 → 5 (sensor, protected-artifact
   manifest, diff scan, full-tree residual drain, sequential build, typecheck,
   unit tests, 15/15 mock evals).
-- **Tests:** **988** green — core 667 / tui 243 / cli 78.
+- **Tests:** **997** green — core 667 / tui 252 / cli 78.
 - **Docs-vs-code is now mechanical:** `packages/cli/src/__tests__/docTruth.test.ts`
   asserts the release badge == `CORE_VERSION`, provider count == the registry,
   tool count == `TOOL_DEFINITIONS`, the Node badge == `engines.node`, the roadmap
@@ -91,6 +98,55 @@ Read this before the chronological log below. The log is history; this is truth.
   largely unaudited before 2026-09-22; `packages/cli/src/index.tsx` is still partly
   uncovered; Windows is second-class (bash + a Unix-only kill-tree); no cost
   estimation, no session search.
+
+---
+
+## 2026-09-22 — TUI audit, pass 2: handlers + TTY guards (Buffy)
+
+**1. `/mcp reconnect` silently deleted every plugin tool (`commands/handlers/mcp.ts`).**
+The handler rebuilt the session's tool list as `[...TOOL_DEFINITIONS, ...keptMcp]`, but
+CLI boot wires `[...TOOL_DEFINITIONS, ...pluginDefs, ...mcpDefs]` — so a plugin user who
+ran `/mcp reconnect` lost all plugin tools for the rest of the session and the model
+could no longer call them, with no notice. Fixed as a read-modify-write: core's
+`AgentSession` gained `getTools()` (the read side `setTools` never had), and the handler
+now filters the MCP entries out of the CURRENT list and appends the refreshed ones —
+robust against a third tool source being added later. **RED-proven** (plugin tool
+vanishes → present, verified by name in the resulting tool list).
+
+**2. Two TTY guards failed OPEN on real pipes (`util/clipboard.ts`, `util/notify.ts`).**
+Both tested `stream.isTTY === false`, but Node reports `isTTY` as **undefined** — not
+`false` — on a redirected stream, so `node app.js 2>log` sailed past the guard and wrote
+raw BEL / OSC 52 escape sequences into the user's log, reporting success. `altScreen.ts`
+already used the correct `isTTY !== true` form; these two were the outliers. Both now fail
+closed. **RED-proven** on both (the local test helpers could express `undefined` — they
+just never did; the suites only ever passed explicit `true`/`false`, i.e. the author's
+belief about what a pipe looks like rather than what Node actually reports).
+
+**3. `/copy` could not see blocks the transcript renders (`commands/handlers/clipboard.ts`).**
+`findLastCodeBlock` matched the language tag with `\w*` while `renderMarkdown`'s fence uses
+`[^\s`]*`, so a `c++` or `objective-c` block is displayed as code but `/copy` reported
+"no fenced code block in the transcript yet". Pattern aligned with the parser.
+**RED-proven** (`null` → the block).
+
+**Also:** a parity guard for the last two hand-maintained provider mirrors
+(`util/providers.ts` `PROVIDER_META`, `util/labels.ts` — marketing copy can't be derived,
+but completeness can): every registry provider must appear in both, exactly once, with its
+own credential `field`. **RED-proven** by deleting a row. And one comment fix:
+`ContextGauge` said "steady red" off-phase where the code uses amber.
+
+**Audited clean (no defect):** `util/{rewind,subagent,mcp,providers,labels,chrome,useSpinner}.ts`,
+`theme/adaptive.ts`, `hooks/useThemeManager.ts`,
+`commands/handlers/{diff,rewind,session,sync,goal,phase25}.ts`,
+`components/{StatusBar,ContextGauge}.tsx` (width accounting in cells, adaptive variants).
+
+**Noted, not fixed:** `util/subagent.ts` `retainReport` slices by UTF-16 code unit, so a
+report truncated mid-emoji can end in a lone surrogate (display copy only);
+`chrome.meter` throws on a negative width (unreachable — its only caller passes 6 or 10);
+`StatusBar` budget counts the sparkline even when it isn't rendered (unknown model).
+
+**Evidence:** core 667 / tui 252 / cli 78 green; typecheck 0 across all workspaces (it
+caught a missing `timeoutMs` in a new test fixture that vitest alone would not have);
+full `npm run gate` green (Steps 0–5, 15/15 mock evals).
 
 ---
 

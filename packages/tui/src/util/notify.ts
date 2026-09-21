@@ -53,7 +53,9 @@ export function notifyTurnComplete(
   opts: NotifyOptions = {}
 ): boolean {
   if (!shouldNotifyTurn(elapsedMs, opts.thresholdMs)) return false;
-  if (stream.isTTY === false) return false;
+  // `!== true`, not `=== false`: a PIPED stream reports isTTY as undefined, so
+  // the old test failed open and pushed BEL/OSC bytes into redirected stderr.
+  if (stream.isTTY !== true) return false;
   const desktop = opts.desktop ?? true;
   const sound = opts.sound ?? true;
   if (!desktop && !sound) return false;

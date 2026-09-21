@@ -34,4 +34,17 @@ describe("copyToClipboard", () => {
     expect(copyToClipboard("x", piped)).toEqual({ ok: false, reason: "not-a-tty", bytes: 1 });
     expect(piped.chunks).toEqual([]);
   });
+
+  it("refuses a redirected stream, where isTTY is undefined rather than false", () => {
+    // `node app.js 2>log` leaves isTTY undefined, so the guard has to fail
+    // CLOSED — it used to test `=== false`, miss the undefined case, and write
+    // the escape sequence into the user's log while reporting success.
+    const redirected = memoryStream(undefined);
+    expect(copyToClipboard("code()", redirected)).toEqual({
+      ok: false,
+      reason: "not-a-tty",
+      bytes: 6,
+    });
+    expect(redirected.chunks).toEqual([]);
+  });
 });

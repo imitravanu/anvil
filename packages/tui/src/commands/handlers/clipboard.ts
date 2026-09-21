@@ -13,7 +13,10 @@ export function findLastCodeBlock(messages: readonly DisplayMessage[]): { langua
   const assistants = ordered.filter((m) => m.role === "assistant");
   const rest = ordered.filter((m) => m.role !== "assistant");
   for (const message of [...assistants, ...rest]) {
-    const match = message.text.match(/```(\w*)\n([\s\S]*?)```/);
+    // Language tag matches renderMarkdown's fence (`[^\s`]*`), not `\w*`: a
+    // block tagged `c++` or `objective-c` renders as code in the transcript, so
+    // /copy must be able to see it too instead of reporting none present.
+    const match = message.text.match(/```([^\s`]*)\n([\s\S]*?)```/);
     if (match && (match[2] ?? "").trim().length > 0) {
       return { language: match[1] ?? "", code: match[2].replace(/\n$/, "") };
     }

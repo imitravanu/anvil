@@ -32,7 +32,11 @@ export function copyToClipboard(
   if (text.length === 0) return { ok: false, reason: "empty" };
   const bytes = Buffer.byteLength(text, "utf8");
   if (bytes > maxBytes) return { ok: false, reason: "too-large", bytes };
-  if (stream.isTTY === false) return { ok: false, reason: "not-a-tty", bytes };
+  // `!== true`, not `=== false`: a PIPED stream reports isTTY as undefined, not
+  // false, so the old test failed open and wrote the OSC sequence into whatever
+  // the user redirected stderr to — while reporting "copied". altScreen.ts
+  // already uses this form.
+  if (stream.isTTY !== true) return { ok: false, reason: "not-a-tty", bytes };
   try {
     stream.write(osc52Sequence(text));
     return { ok: true, reason: "copied", bytes };

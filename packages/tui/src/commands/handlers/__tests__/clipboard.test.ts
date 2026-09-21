@@ -31,6 +31,18 @@ describe("findLastCodeBlock", () => {
 });
 
 describe("handleCopy", () => {
+  it("finds blocks whose language tag has non-word characters", () => {
+    // The renderer's fence accepts `[^\s`]*`, so these DO appear as code blocks
+    // in the transcript — /copy used `\w*` and reported none present.
+    expect(findLastCodeBlock([message("assistant", "```c++\nint x = 1;\n```")])).toEqual({
+      language: "c++",
+      code: "int x = 1;",
+    });
+    expect(
+      findLastCodeBlock([message("assistant", "```objective-c\n[id go];\n```")])
+    ).toEqual({ language: "objective-c", code: "[id go];" });
+  });
+
   it("reports when there is nothing to copy", () => {
     const printSystemMessage = vi.fn();
     handleCopy({ messages: [], printSystemMessage } as unknown as CommandHandlerDeps);

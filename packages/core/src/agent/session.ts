@@ -170,6 +170,16 @@ export class AgentSession {
   }
 
   /**
+   * Current tool list — the read side of `setTools`. Callers refreshing one
+   * SOURCE of tools (MCP reconnect) need a read-modify-write: rebuilding from
+   * TOOL_DEFINITIONS alone silently dropped every plugin tool, because the
+   * session's list is built-ins + plugins + MCP.
+   */
+  getTools(): readonly ToolDefinition[] {
+    return this.toolDefs;
+  }
+
+  /**
    * Switch the active provider/model mid-session. A provider CHANGE clears
    * history: providerMetadata on tool calls (e.g. Gemini thoughtSignature) is
    * vendor-opaque and must never be replayed through a different adapter.

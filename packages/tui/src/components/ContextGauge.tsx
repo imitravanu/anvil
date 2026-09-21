@@ -6,8 +6,9 @@ import { useBlink } from "../util/useSpinner.js";
 /**
  * DW-4.2 — adaptive context gauge.
  * wide (120+):  bar + pct + absolute counts · normal: bar + pct · compact: pct.
- * Semantic colors; blinking red past 90% (steady red when blink is off-phase
- * so the state never reads as healthy).
+ * Semantic colors; past 90% the color alternates red/amber with the blink
+ * phase (amber, not red, off-phase — described correctly here because the
+ * earlier "steady red" wording disagreed with the code below).
  */
 export type GaugeVariant = "wide" | "normal" | "compact";
 
