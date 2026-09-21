@@ -116,6 +116,36 @@ Read this before the chronological log below. The log is history; this is truth.
 
 ---
 
+## 2026-09-22 — Live qwencloud certification + Finding 8 closed (Buffy)
+
+**QwenCloud live audit ran against the real API** (key found in ~/.anvil):
+9 of 22 registry models audited (the DEFAULT_AUDIT_MODELS list), all stream
+through the adapter, 8/9 complete a real tool round-trip. **qwq-plus fails
+tool calling** — streams fine but answers a direct tool prompt in prose
+(9s, no tool_call), typical reasoning-model behavior. Registry updated
+honestly: the 9 audited rows are now `certified: "live"`
+(`certifiedMode: "live"`), qwq-plus additionally `supportsTools: false` so
+default-pick never lands on it; the 13 unaudited rows stay `untested`.
+The qwencloud suite's blanket `supportsTools === true` assertion was
+over-claiming — updated to pin the observed reality (qwq false, others
+true, certification live).
+
+**Finding 8 (observability) is now CLOSED — the deliberate design decision
+finally made, minimal:** core had ONE stderr shim (`logger.ts`) plus 13
+stray `console.warn/error` call sites with three different prefix
+conventions. The logger gained an `ANVIL_LOG` level gate (debug/info/warn/
+error/silent, default **warn**, lazily read so tests and a future --verbose
+flag can flip it; legacy ANVIL_DEBUG=1 aliased to debug) and all 13 console
+sites migrated to it — zero console.* left in core production code. No
+format changes (existing [prefix]es kept; they aid grep), no callers changed
+signatures, no correlation IDs (nothing consumes them yet — adding them
+would be the §2.8 dead-export mistake). The residual-drain scan now has a
+single choke point for stderr noise.
+
+Tests: core 680 / tui 255 / cli 101 — 1,036 total, gate green.
+
+---
+
 ## 2026-09-22 — Ink-boot harness: index.tsx mounted paths covered (Buffy)
 
 The last S7 gap — index.tsx's Ink-mounted boots — is now covered. New

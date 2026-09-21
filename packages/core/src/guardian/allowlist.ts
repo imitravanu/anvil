@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { getErrorMessage } from "../errors.js";
 import { resolveWithinRoot } from "../tools/paths.js";
+import { log } from "../logger.js";
 
 /**
  * Phase 26.0 — `.fresh-allowlist.json` reader.
@@ -35,7 +36,7 @@ export function loadFreshAllowlist(projectRoot: string): FreshAllowlist {
   try {
     resolved = resolveWithinRoot(projectRoot, ".fresh-allowlist.json");
   } catch (err: unknown) {
-    console.warn(`[guardian] allowlist path rejected: ${getErrorMessage(err)}`);
+    log.warn(`[guardian] allowlist path rejected: ${getErrorMessage(err)}`);
     return EMPTY;
   }
   if (!fs.existsSync(resolved)) return EMPTY;
@@ -44,11 +45,11 @@ export function loadFreshAllowlist(projectRoot: string): FreshAllowlist {
   try {
     parsed = JSON.parse(fs.readFileSync(resolved, "utf8"));
   } catch (err: unknown) {
-    console.warn(`[guardian] allowlist is not valid JSON: ${getErrorMessage(err)}`);
+    log.warn(`[guardian] allowlist is not valid JSON: ${getErrorMessage(err)}`);
     return EMPTY;
   }
   if (typeof parsed !== "object" || parsed === null || !Array.isArray((parsed as { entries?: unknown }).entries)) {
-    console.warn("[guardian] allowlist missing an entries array — ignored");
+    log.warn("[guardian] allowlist missing an entries array — ignored");
     return EMPTY;
   }
 

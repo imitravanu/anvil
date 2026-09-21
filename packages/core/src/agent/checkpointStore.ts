@@ -4,6 +4,7 @@ import path from "node:path";
 import { anvilHome } from "../atomicWrite.js";
 import { CHECKPOINT_KEEP, type Checkpoint } from "./checkpoints.js";
 import { getErrorMessage } from "../errors.js";
+import { log } from "../logger.js";
 
 // ---------------------------------------------------------------------------
 // Persistent checkpoint ring: /rewind previously forgot every snapshot when
@@ -69,7 +70,7 @@ export async function saveCheckpointsAsync(
     await fsPromises.rename(tmp, targetPath);
   } catch (err) {
     // persistence is best-effort: an in-memory ring still covers this session
-    console.error(`[anvil] Warning: failed to save checkpoints for session ${sessionId}: ${getErrorMessage(err)}`);
+    log.error(`[anvil] Warning: failed to save checkpoints for session ${sessionId}: ${getErrorMessage(err)}`);
   }
 }
 
@@ -117,7 +118,7 @@ export function loadCheckpoints(sessionId: string, dir: string = checkpointsDir(
   } catch (err) {
     const filePath = path.join(dir, `${sessionId}.json`);
     if (fs.existsSync(filePath)) {
-      console.error(`[anvil] Warning: failed to load checkpoints for session ${sessionId}: ${getErrorMessage(err)}`);
+      log.error(`[anvil] Warning: failed to load checkpoints for session ${sessionId}: ${getErrorMessage(err)}`);
     }
     return []; // missing/corrupt file = no history, never a crash
   }

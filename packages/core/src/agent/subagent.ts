@@ -16,6 +16,7 @@ import { buildSystemPrompt } from "../config/rules.js";
 // ---------------------------------------------------------------------------
 
 import { SUB_AGENT_REPORT_MAX_CHARS } from "../config/constants.js";
+import { log } from "../logger.js";
 export { SUB_AGENT_REPORT_MAX_CHARS };
 export const SUB_AGENT_MAX_ITERATIONS = 12;
 export const SUB_AGENT_MAX_TOKENS = 4096;
@@ -151,7 +152,7 @@ export async function* runSubAgentLive(opts: {
   try {
     await saveCheckpointsAsync(sub.id, []);
   } catch (err) {
-    console.warn(`[anvil] sub-agent checkpoint cleanup failed for ${sub.id}: ${getErrorMessage(err)}`);
+    log.warn(`[anvil] sub-agent checkpoint cleanup failed for ${sub.id}: ${getErrorMessage(err)}`);
   }
   return {
     report: capReport(report),

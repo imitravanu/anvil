@@ -5,6 +5,7 @@ import { anvilHome, atomicWriteJson } from "../atomicWrite.js";
 import { getErrorMessage } from "../errors.js";
 import { loadFreshAllowlist } from "./allowlist.js";
 import type { GuardianViolation } from "./scanner.js";
+import { log } from "../logger.js";
 
 /**
  * Phase 26.5 — codebase health telemetry.
@@ -108,7 +109,7 @@ function writeSnapshot(projectRoot: string, snapshot: HealthSnapshot): void {
   } catch (err: unknown) {
     // Telemetry is best-effort: a read-only home must not fail the scan that
     // fed it.
-    console.warn(`[guardian] could not record health snapshot: ${getErrorMessage(err)}`);
+    log.warn(`[guardian] could not record health snapshot: ${getErrorMessage(err)}`);
   }
 }
 

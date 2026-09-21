@@ -102,8 +102,15 @@ describe("qwencloud adapter", () => {
 
     for (const m of models) {
       expect(m.providerId).toBe("qwencloud");
-      expect(m.supportsTools).toBe(true);
       expect(m.isFree).toBe(true);
     }
+    // Live-probed 2026-09-22: qwq-plus streams but answers tool prompts in
+    // prose — supportsTools is false so default-pick never lands on it.
+    const qwq = models.find((m) => m.id === "qwq-plus");
+    expect(qwq?.supportsTools).toBe(false);
+    expect(qwq?.certified).toBe("live");
+    // Everything else audited live with a real tool round-trip.
+    expect(models.find((m) => m.id === "qwen3.8-flash")?.certified).toBe("live");
+    expect(models.find((m) => m.id === "kimi-k3")?.supportsTools).toBe(true);
   });
 });

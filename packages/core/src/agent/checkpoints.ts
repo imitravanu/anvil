@@ -35,6 +35,7 @@ export interface Checkpoint {
 
 /** Ring size per session. */
 import { CHECKPOINT_KEEP } from "../config/constants.js";
+import { log } from "../logger.js";
 export { CHECKPOINT_KEEP };
 /** Per-file cap — matches the tool read/write caps, so any tool-touched file fits. */
 export const CHECKPOINT_FILE_MAX = 512 * 1024;
@@ -278,7 +279,7 @@ async function diffBaseline(
     try {
       abs = resolveWithinRoot(projectRoot, p);
     } catch (err) {
-      console.warn(`[checkpoints] Warning: path resolution failed for "${p}": ${getErrorMessage(err)}`);
+      log.warn(`[checkpoints] Warning: path resolution failed for "${p}": ${getErrorMessage(err)}`);
       continue; // hostile path in a snapshot — never becomes a review vector
     }
     let current: Buffer | null = null;

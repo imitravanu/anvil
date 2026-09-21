@@ -13,6 +13,7 @@ import { loadCredentials } from "../config/index.js";
 import { getErrorMessage, sleepAbortable } from "../errors.js";
 import { scanTextForSlop } from "../guardian/scanner.js";
 import { EVAL_CONCURRENCY_DEFAULT, EVAL_CONCURRENCY_MAX, EVAL_TASK_TIMEOUT_MS } from "../config/constants.js";
+import { log } from "../logger.js";
 
 /**
  * Phase 27.1 — normalize a requested worker count. Non-numeric, fractional,
@@ -205,9 +206,9 @@ export async function runEvalTask(
     }
     walkForSlop(tempDir);
     if (slopViolations.length > 0) {
-      console.warn(`[eval:${task.id}] Slop violations detected (${slopViolations.length}):`);
+      log.warn(`[eval:${task.id}] Slop violations detected (${slopViolations.length}):`);
       for (const v of slopViolations) {
-        console.warn(`  ${v.file}:${v.line} [${v.rule}] ${v.detail}`);
+        log.warn(`  ${v.file}:${v.line} [${v.rule}] ${v.detail}`);
       }
     }
 

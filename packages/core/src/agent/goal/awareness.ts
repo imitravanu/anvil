@@ -5,6 +5,7 @@ import { SituationalContext, GitContext, EcosystemContext } from "./types.js";
 import { loadProjectRules } from "../../config/rules.js";
 import { EXCLUDED_DIRS } from "../../tools/paths.js";
 import { getErrorMessage } from "../../errors.js";
+import { log } from "../../logger.js";
 
 
 /**
@@ -59,7 +60,7 @@ function inspectEcosystem(projectRoot: string): EcosystemContext {
     try {
       pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
     } catch (err) {
-      console.warn(`[awareness] Warning: malformed package.json at ${pkgJsonPath}: ${getErrorMessage(err)}`);
+      log.warn(`[awareness] Warning: malformed package.json at ${pkgJsonPath}: ${getErrorMessage(err)}`);
     }
 
     let packageManager = "npm";

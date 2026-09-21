@@ -29,6 +29,7 @@ import {
 } from "./checkpoints.js";
 import { RewindRing } from "./rewindRing.js";
 import { guardianInterceptCalls } from "./guardianIntercept.js";
+import { log } from "../logger.js";
 
 export interface RestoreData {
   metadata: SessionMetadata;
@@ -532,7 +533,7 @@ export class AgentSession {
         yield { type: "compacted", summary: result.summary! };
       }
     } catch (err) {
-      console.warn(`[session] Warning: compaction failed: ${getErrorMessage(err)}`);
+      log.warn(`[session] Warning: compaction failed: ${getErrorMessage(err)}`);
       // Summarization failed (or was aborted) — proceed uncompacted. An abort
       // surfaces as `cancelled` at the next loop-top check.
     }

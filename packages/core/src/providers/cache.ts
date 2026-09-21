@@ -3,6 +3,7 @@ import path from "node:path";
 import { anvilHome, atomicWriteJson } from "../atomicWrite.js";
 import type { ModelInfo } from "./types.js";
 import { getErrorMessage } from "../errors.js";
+import { log } from "../logger.js";
 
 const MODELS_CACHE_PATH = (): string => path.join(anvilHome(), "models-cache.json");
 
@@ -40,7 +41,7 @@ export function saveModelsCacheV2(cache: ModelsCacheV2): void {
   try {
     atomicWriteJson(MODELS_CACHE_PATH(), cache);
   } catch (err) {
-    console.warn(`[cache] Warning: failed to save models cache: ${getErrorMessage(err)}`);
+    log.warn(`[cache] Warning: failed to save models cache: ${getErrorMessage(err)}`);
   }
 }
 

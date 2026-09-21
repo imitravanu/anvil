@@ -60,7 +60,7 @@ describe("Situational Awareness Engine", () => {
   });
 
   it("warns but keeps going when package.json is malformed", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     try {
       fs.writeFileSync(path.join(tmpDir, "package.json"), "{ this is not json");
 
