@@ -12,7 +12,46 @@ import { createProviders } from "../providers/index.js";
 import { loadCredentials } from "../config/index.js";
 import { getErrorMessage, sleepAbortable } from "../errors.js";
 import { scanTextForSlop } from "../guardian/scanner.js";
-import { EVAL_TASK_TIMEOUT_MS } from "../config/constants.js";
+import { EVAL_CONCURRENCY_DEFAULT, EVAL_CONCURRENCY_MAX, EVAL_TASK_TIMEOUT_MS } from "../config/constants.js";
+
+/**
+ * Phase 27.1 — normalize a requested worker count. Non-numeric, fractional,
+ * and out-of-range values clamp into [1, EVAL_CONCURRENCY_MAX]; undefined
+ * means "not asked" and stays single-flight (mock determinism preserved).
+ */
+export function resolveConcurrency(raw: unknown): number {
+  const n = typeof raw === "string" ? Number(raw) : (raw as number);
+  if (!Number.isFinite(n)) return EVAL_CONCURRENCY_DEFAULT;
+  return Math.min(EVAL_CONCURRENCY_MAX, Math.max(1, Math.floor(n)));
+}
+
+/**
+ * Phase 27.1 — bounded worker pool without dependencies. Results land in
+ * input order regardless of completion order (the shared counter hands out
+ * indices synchronously, so no two workers ever share one). A rejection in
+ * one worker fails the map — eval tasks never reject (runEvalTask converts
+ * everything into a failed EvalResult), so one bad task can never sink the
+ * rest of the run; that isolation is asserted, not assumed.
+ */
+export async function mapWithConcurrencyLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const workerCount = Math.min(Math.max(1, limit), Math.max(items.length, 1));
+  const workers = Array.from({ length: workerCount }, async () => {
+    for (;;) {
+      const i = next;
+      next += 1;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
 
 /**
  * Discovers and parses all valid eval tasks under tasksDir.
@@ -249,21 +288,33 @@ export async function runAllEvalTasks(
     tasks = tasks.filter((t) => t.id.toLowerCase().includes(filter) || t.name.toLowerCase().includes(filter));
   }
 
-  const results: EvalResult[] = [];
+  const results: EvalResult[] = new Array(tasks.length);
   const total = tasks.length;
+  const concurrency = resolveConcurrency(options.concurrency);
+  const delayMs = options.betweenTaskDelayMs && options.betweenTaskDelayMs > 0 ? options.betweenTaskDelayMs : 0;
+  // Completions seen so far — a plain counter, because Array.filter skips
+  // holes and would read a half-filled slot array as "nothing pending".
 
-  for (let i = 0; i < tasks.length; i++) {
-    const task = tasks[i];
+  // 27.1: bounded pool. Each worker owns its slot's result index, so the
+  // report stays in task order; onTaskStart carries the original index, so
+  // progress logs ([i/total]) stay correctly labeled though completion order
+  // varies. Pacing is per completion except the final one (exactly tasks-1
+  // sleeps, never a trailing wait), so free-tier lanes keep their 429
+  // protection under concurrency too.
+  let completed = 0;
+  await mapWithConcurrencyLimit(tasks, concurrency, async (task, i) => {
     options.onTaskStart?.(task, i + 1, total);
     const result = await runEvalTask(task, options);
-    results.push(result);
+    results[i] = result;
+    // Increment and test synchronously: exactly every completion but the
+    // final one sleeps, whatever the worker interleaving.
+    completed += 1;
+    const isLast = completed >= total;
     options.onTaskComplete?.(result, i + 1, total);
-    // 26.3 free-tier pacing: sleep between tasks, never after the last one,
-    // so the report's wall clock is not extended by a trailing no-op wait.
-    if (options.betweenTaskDelayMs && options.betweenTaskDelayMs > 0 && i < total - 1) {
-      await sleepAbortable(options.betweenTaskDelayMs);
+    if (delayMs > 0 && !isLast) {
+      await sleepAbortable(delayMs);
     }
-  }
+  });
 
   const providerName = options.useMock || !options.providerId ? "mock" : options.providerId;
   const modelName = options.modelId || (options.useMock ? "eval-mock" : "default");

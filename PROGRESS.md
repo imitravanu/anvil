@@ -18,6 +18,12 @@
 > code; docs + eval reports only. **DONE 2026-09-21:** OFF 15/15 (78.5s),
 > ON 15/15 (66.4s), DELTA 0.0 — recorded, full gate green.
 >
+> **ACTIVE 2026-09-21 (OpenCode session, Phase 27.1):** owns
+> `packages/core/src/eval/{types,runner}.ts` (concurrency option + worker
+> pool), `packages/core/src/eval/__tests__/runner.test.ts`,
+> `evals/run.ts` (--concurrency flag), `docs/PHASE-27-PROGRESS.md` (27.1
+> boxes), `CHANGELOG.md` (Unreleased entry). No protected artifact touched.
+>
 > **ACTIVE 2026-09-21 (OpenCode session, 26 release closeout):** owns
 > `packages/core/src/version.ts`, `packages/{core,tui,cli}/package.json`
 > (1.0.0 → 1.1.0), `CHANGELOG.md` ([Unreleased] → [1.1.0] heading),

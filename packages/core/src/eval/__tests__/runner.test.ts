@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { loadEvalTasks, runEvalTask, runAllEvalTasks } from "../runner.js";
+import { loadEvalTasks, runEvalTask, runAllEvalTasks, mapWithConcurrencyLimit, resolveConcurrency } from "../runner.js";
 import { createEvalReport, saveEvalReport, loadRecentReports, formatEvalReport, formatTrendComparison } from "../report.js";
 import { EvalTask } from "../types.js";
 
@@ -195,5 +195,110 @@ exit 1
     const trend = formatTrendComparison([report]);
     expect(trend).toContain("ANVIL EVALUATION TREND COMPARISON");
     expect(trend).toContain("mock/model-a");
+  });
+});
+
+describe("Phase 27.1 parallel execution", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-eval-conc-"));
+  });
+
+  afterEach(() => {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      // intentional: best-effort temp cleanup; a leftover dir fails nothing
+    }
+  });
+
+  it("resolveConcurrency clamps garbage into [1, 8] and defaults to 1", () => {
+    expect(resolveConcurrency(undefined)).toBe(1);
+    expect(resolveConcurrency(4)).toBe(4);
+    expect(resolveConcurrency(0)).toBe(1);
+    expect(resolveConcurrency(-3)).toBe(1);
+    expect(resolveConcurrency(99)).toBe(8);
+    expect(resolveConcurrency(2.7)).toBe(2);
+    expect(resolveConcurrency(NaN)).toBe(1);
+    expect(resolveConcurrency("4")).toBe(4);
+  });
+
+  it("mapWithConcurrencyLimit keeps input order under out-of-order completion", async () => {
+    // Later indices sleep less, so with limit >= 2 they finish FIRST —
+    // the output must still read in input order.
+    const items = [0, 1, 2, 3, 4];
+    const out = await mapWithConcurrencyLimit(items, 3, async (n) => {
+      await new Promise<void>((r) => setTimeout(r, (items.length - n) * 10));
+      return `task-${n}`;
+    });
+    expect(out).toEqual(["task-0", "task-1", "task-2", "task-3", "task-4"]);
+  });
+
+  it("mapWithConcurrencyLimit never exceeds the worker bound", async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    await mapWithConcurrencyLimit([0, 1, 2, 3, 4, 5], 2, async (n) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise<void>((r) => setTimeout(r, 10));
+      inFlight -= 1;
+      return n;
+    });
+    expect(maxInFlight).toBeLessThanOrEqual(2);
+    expect(maxInFlight).toBeGreaterThan(1);
+  });
+
+  it("mapWithConcurrencyLimit on empty input resolves empty without work", async () => {
+    let calls = 0;
+    const out = await mapWithConcurrencyLimit([], 4, async () => {
+      calls += 1;
+      return 1;
+    });
+    expect(out).toEqual([]);
+    expect(calls).toBe(0);
+  });
+
+  it("concurrent runAllEvalTasks isolates a failing task and stays ordered", async () => {
+    // Reuse the mock-task fixture shape from the Phase 17 block above.
+    const mkTask = (taskId: string, shouldPass: boolean): void => {
+      const taskDir = path.join(tmpDir, taskId);
+      const setupDir = path.join(taskDir, "setup");
+      const assertionsDir = path.join(taskDir, "assertions");
+      fs.mkdirSync(path.join(setupDir), { recursive: true });
+      fs.mkdirSync(path.join(assertionsDir, "expected"), { recursive: true });
+      fs.writeFileSync(
+        path.join(taskDir, "task.json"),
+        JSON.stringify({ name: taskId, category: "bugfix", prompt: "Fix file.txt", fast: true })
+      );
+      fs.writeFileSync(path.join(setupDir, "file.txt"), "initial content");
+      fs.writeFileSync(
+        path.join(assertionsDir, "check.sh"),
+        shouldPass ? "#!/bin/bash\nexit 0\n" : "#!/bin/bash\necho boom\nexit 1\n"
+      );
+      fs.chmodSync(path.join(assertionsDir, "check.sh"), 0o755);
+    };
+    mkTask("c-task-1", true);
+    mkTask("c-task-2", false);
+    mkTask("c-task-3", true);
+
+    const seenStart = new Set<number>();
+    const report = await runAllEvalTasks({
+      tasksDir: tmpDir,
+      outputDir: path.join(tmpDir, "evals-out"),
+      useMock: true,
+      concurrency: 3,
+      onTaskStart: (_t, index) => {
+        seenStart.add(index);
+      },
+    });
+
+    expect(report.totalTasks).toBe(3);
+    expect(report.passedCount).toBe(2);
+    // Ordered by task id regardless of which worker finished first, and the
+    // failing middle task did not sink its siblings.
+    expect(report.results.map((r) => r.taskId)).toEqual(["c-task-1", "c-task-2", "c-task-3"]);
+    expect(report.results[1].passed).toBe(false);
+    expect(seenStart).toEqual(new Set([1, 2, 3]));
   });
 });

@@ -4,6 +4,16 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Parallel Eval Execution — `--concurrency` (Phase 27.1, 2026-09-21)
+
+- **Live eval lanes no longer run one task at a time.** `evals/run.ts` takes
+  `--concurrency <N>` (1–8, `ANVIL_EVAL_CONCURRENCY` env fallback): a
+  dependency-free worker pool fans tasks out while results stay in task order
+  and progress logs keep their `[i/total]` indices. Free-tier pacing is
+  per-worker with no trailing wait. Mock default stays 1 (deterministic);
+  bogus values exit non-zero. Covered by ordering, bound, and error-isolation
+  tests; mock smoke `--concurrency 4` → 15/15.
+
 ### First Paired Guardian Delta: 0.0 pts on Mercury 2.5 (2026-09-21)
 
 - **The 26.3 proof matrix has its first real measurement.** Both 15-task lanes

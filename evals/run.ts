@@ -4,6 +4,7 @@
  * Run benchmarks locally or in CI:
  *   npx tsx evals/run.ts [--mock] [--fast] [--filter <name>] [--report]
  *   npx tsx evals/run.ts --provider gemini --model gemini-2.0-flash
+ *   npx tsx evals/run.ts --provider inception --model mercury-2.5 --concurrency 4
  * Guardian proof matrix (26.3):
  *   npx tsx evals/run.ts --provider openrouter --model X --guardian=off
  */
@@ -19,6 +20,7 @@ import {
   findGuardianDeltaPair,
 } from "../packages/core/src/eval/index.js";
 import { EVAL_RATE_LIMIT_DELAY_MS } from "../packages/core/src/config/constants.js";
+import { resolveConcurrency } from "../packages/core/src/eval/runner.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TASKS_DIR = path.join(__dirname, "tasks");
@@ -73,10 +75,28 @@ async function main() {
   }
   const guardian = guardianRaw === undefined ? true : guardianRaw === "on";
 
+  // 27.1: parallel live execution. `--concurrency <N>` wins, then
+  // ANVIL_EVAL_CONCURRENCY, else single-flight (mock determinism + live
+  // sequential-by-default). Out-of-range values clamp to 1–8 with a warning
+  // rather than a hard failure — a typo'd flag should slow the run, not kill
+  // an unattended CI lane... except non-numeric garbage, which exits loudly
+  // like --guardian=bogus does.
+  const concurrencyArg = args.indexOf("--concurrency");
+  const concurrencyRaw =
+    concurrencyArg !== -1 ? args[concurrencyArg + 1] : process.env.ANVIL_EVAL_CONCURRENCY;
+  if (concurrencyRaw !== undefined && !/^\d+$/.test(concurrencyRaw)) {
+    console.error(`[eval] Invalid --concurrency value "${concurrencyRaw}" (expected an integer 1-8).`);
+    process.exit(1);
+  }
+  const concurrency = resolveConcurrency(
+    concurrencyRaw === undefined ? undefined : Number(concurrencyRaw)
+  );
+
   console.log("===============================================================================");
   console.log(" ANVIL EVALUATION HARNESS — Starting Task Run");
   console.log(` Provider: ${useMock ? "mock (offline deterministic)" : providerId} | Model: ${modelId || (useMock ? "eval-mock" : "default")}`);
   console.log(` Guardian: ${guardian ? "ON" : "OFF"} (interceptor ${guardian ? "active" : "disabled for this run"})`);
+  console.log(` Concurrency: ${concurrency} worker(s)`);
   console.log(` Tasks Directory: ${TASKS_DIR}`);
   if (fastOnly) console.log(" Filter: fast tasks only");
   if (taskFilter) console.log(` Filter: matching "${taskFilter}"`);
@@ -104,6 +124,7 @@ async function main() {
     modelId,
     guardian,
     timeoutMs: timeoutOverride,
+    concurrency,
     // 26.3: free-tier rate-limit pacing. Back-to-back tasks on a capped
     // provider (15–20 req/min) die on HTTP 429 before the model can work;
     // the runner sleeps this long between tasks (never after the last one).

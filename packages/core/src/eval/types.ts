@@ -63,8 +63,16 @@ export interface EvalRunnerOptions {
   /**
    * 26.3 free-tier pacing: milliseconds to sleep BETWEEN tasks (never after
    * the last one). 0/undefined keeps the run instant (mock/CI default).
+   * Under concurrency (27.1) each worker paces its OWN tasks.
    */
   betweenTaskDelayMs?: number;
+  /**
+   * 27.1 parallel live execution: how many tasks run at once (1–8).
+   * Default 1 — mock stays deterministic and live stays sequential unless
+   * asked. Out-of-range/non-numeric values clamp to the valid range (see
+   * resolveConcurrency). Report results stay in task order regardless.
+   */
+  concurrency?: number;
   onTaskStart?: (task: EvalTask, index: number, total: number) => void;
   onTaskComplete?: (result: EvalResult, index: number, total: number) => void;
 }

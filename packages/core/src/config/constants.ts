@@ -67,6 +67,11 @@ export const SUMMARIZER_TOOL_ERROR_MAX_CHARS = getEnvNumber("ANVIL_SUMMARIZER_TO
 // Provider streaming retry policy
 export const PROVIDER_STREAM_MAX_RETRIES = getEnvNumber("ANVIL_PROVIDER_STREAM_RETRIES", 2);
 
+// Phase 27.1 — parallel live execution bounds (no magic numbers). Mock runs
+// stay single-flight for determinism; live lanes scale to 8 workers.
+export const EVAL_CONCURRENCY_DEFAULT = 1;
+export const EVAL_CONCURRENCY_MAX = 8;
+
 // Inception Mercury burns ~250 reasoning tokens before emitting anything
 // (measured 252 on a live tool probe 2026-09-21), so small caller budgets
 // (e.g. a 50-token cert probe) return empty length-cutoff turns without a
