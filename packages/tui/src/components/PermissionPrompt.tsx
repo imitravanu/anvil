@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
+import { splitMcpToolName } from "@anvil/core";
 import type { PendingPermissionRequest } from "../permission/TuiPermissionBroker.js";
 import { ColorizedDiff } from "../diff/colorizeDiff.js";
 import { useTheme } from "../theme/theme.js";
@@ -22,13 +23,17 @@ function optionsFor(toolName: string): string[] {
  * U11 slice: MCP tools arrive as `mcp_<server>__<tool>`. Surface the server
  * identity in the prompt so external-tool consent is informed — the summary
  * alone ("MCP call input: …") never named the process receiving the input.
+ *
+ * Delegates to core's `splitMcpToolName` (the codec's single source of truth)
+ * and forwards the configured ids, because the separator is ambiguous: a server
+ * id or a tool name may itself contain `__`, and naming the wrong process would
+ * make this consent prompt actively misleading.
  */
-export function mcpServerOf(toolName: string): { server: string; tool: string } | null {
-  if (!toolName.startsWith("mcp_")) return null;
-  const rest = toolName.slice("mcp_".length);
-  const sep = rest.indexOf("__");
-  if (sep <= 0 || sep === rest.length - 2) return null;
-  return { server: rest.slice(0, sep), tool: rest.slice(sep + 2) };
+export function mcpServerOf(
+  toolName: string,
+  knownServerIds: readonly string[] = []
+): { server: string; tool: string } | null {
+  return splitMcpToolName(toolName, knownServerIds);
 }
 
 /**
@@ -38,9 +43,12 @@ export function mcpServerOf(toolName: string): { server: string; tool: string } 
 export function PermissionPrompt({
   request,
   broker,
+  knownServerIds,
 }: {
   request: PendingPermissionRequest;
   broker: { approveAlwaysForSession(toolName: string): void };
+  /** Configured MCP server ids — resolves `__` inside a server id or tool name. */
+  knownServerIds?: readonly string[];
 }) {
   const theme = useTheme();
   const [selected, setSelected] = useState(0);
@@ -71,7 +79,7 @@ export function PermissionPrompt({
     }
   });
 
-  const mcp = mcpServerOf(request.toolName);
+  const mcp = mcpServerOf(request.toolName, knownServerIds);
   const label = mcp
     ? `wants to run external tool ${mcp.tool}`
     : (TOOL_LABELS[request.toolName] ?? `wants to ${request.toolName.replace(/_/g, " ")}`);

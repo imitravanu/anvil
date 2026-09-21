@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MCP_TOOL_PREFIX,
+  splitMcpToolName,
   createMcpExecutor,
   describeMcpInput,
   dropCollidingMcpTools,
@@ -51,6 +52,27 @@ describe("mcp tool adapter", () => {
     expect(defs[0].description).toContain("[mcp srv]");
     expect(defs[1]).toMatchObject({ mutating: true });
     expect(MCP_TOOL_PREFIX).toBe("mcp_");
+  });
+
+  it("M1b: splitMcpToolName resolves the ambiguous separator with known ids", () => {
+    // A server id may legally contain `__` (SERVER_ID_RE allows `_`), and so may
+    // a sanitized tool name — so the separator alone is ambiguous and the
+    // known-id list is what makes the split truthful.
+    expect(splitMcpToolName("mcp_my-tools__read_doc", ["my-tools"])).toEqual({
+      server: "my-tools",
+      tool: "read_doc",
+    });
+    // Server `my__server`: longest match wins, so the prompt names the server
+    // that actually receives the call instead of a nonexistent `my`.
+    expect(splitMcpToolName("mcp_my__server__read_doc", ["my", "my__server"])).toEqual({
+      server: "my__server",
+      tool: "read_doc",
+    });
+    // Tool names keep `__` too; with no known ids the first separator splits.
+    expect(splitMcpToolName("mcp_srv__read__doc")).toEqual({ server: "srv", tool: "read__doc" });
+    expect(splitMcpToolName("edit_file", ["srv"])).toBeNull();
+    expect(splitMcpToolName("mcp_noseparator", ["srv"])).toBeNull();
+    expect(splitMcpToolName("mcp_srv__", ["srv"])).toBeNull();
   });
 
   it("M5: collisions drop the MCP tool, built-in (and first) wins", () => {

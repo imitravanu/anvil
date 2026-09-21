@@ -1,4 +1,25 @@
+import { TOOL_CALL_RAW_INPUT_CAP } from "../config/constants.js";
 import type { StreamEvent } from "./types.js";
+
+/**
+ * Parse a complete tool-arguments JSON buffer into the value handed to the tool
+ * executor. Malformed input keeps its provenance as the shared
+ * `{ __parseError, rawInput }` sentinel, which `executeTool` and the
+ * orchestrator turn into a model-visible error.
+ *
+ * Collapsing to `{}` instead let all-optional tools run on invented defaults
+ * while the model was never told its JSON was malformed — so every adapter that
+ * parses arguments for itself MUST route through here rather than re-implement
+ * the try/catch (the Anthropic translator had drifted back to `{}`).
+ */
+export function parseToolCallJson(raw: string): unknown {
+  if (!raw.trim()) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return { __parseError: true, rawInput: raw.slice(0, TOOL_CALL_RAW_INPUT_CAP) };
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Shared stream plumbing the three translators hand-rolled the same
@@ -69,16 +90,7 @@ export class ToolCallAssembler {
     this.calls.clear();
     for (const [index, entry] of ordered) {
       const id = entry.id || `call_${index}`;
-      let parsed: unknown = {};
-      try {
-        parsed = entry.args.trim() ? JSON.parse(entry.args) : {};
-      } catch {
-        // Preserve provenance with the shared sentinel the orchestrator and
-        // executeTool already turn into a model-visible error. Collapsing to {}
-        // let all-optional tools run on invented defaults while the model was
-        // never told its JSON was malformed.
-        parsed = { __parseError: true, rawInput: entry.args.slice(0, 200) };
-      }
+      const parsed = parseToolCallJson(entry.args);
       yield { type: "tool_call_end", id, name: entry.name, input: parsed };
     }
   }

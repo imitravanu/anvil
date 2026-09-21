@@ -52,6 +52,87 @@
 > `packages/core/src/lsp/__tests__/lspclientEdges.test.ts` (test-only flake fix:
 > wait for both didChange) + this PROGRESS.md declaration. Disjoint from Buffy's
 > 26.3–26.5 list above; no shared file edited.
+>
+> **DONE 2026-09-22 (Buffy, audit + defect sweep):** owns
+> `packages/core/src/providers/{streaming,anthropic}.ts`,
+> `packages/core/src/agent/turnStream.ts`, `packages/core/src/config/constants.ts`,
+> `packages/core/src/tools/{mcpTools,index}.ts`, `packages/core/src/agent/…` (none),
+> `packages/cli/src/altScreen.ts`, `packages/tui/src/components/{PermissionPrompt,App}.tsx`,
+> plus the matching `__tests__`/`*test.tsx` updates in all three packages and this
+> PROGRESS.md entry. No protected artifact touched; no shared file edited.
+
+---
+
+## CURRENT STATE — verified 2026-09-22 (Buffy)
+
+Read this before the chronological log below. The log is history; this is truth.
+
+- **Gate:** `npm run gate` green, Steps 0 → 5 (sensor, protected-artifact
+  manifest, diff scan, full-tree residual drain, sequential build, typecheck,
+  unit tests, 15/15 mock evals).
+- **Tests:** **979** green — core 667 / tui 234 / cli 78.
+- **Docs-vs-code is now mechanical:** `packages/cli/src/__tests__/docTruth.test.ts`
+  asserts the release badge == `CORE_VERSION`, provider count == the registry,
+  tool count == `TOOL_DEFINITIONS`, the Node badge == `engines.node`, the roadmap
+  status header == its own checkbox count, and the certified-provider table ==
+  the registry's rows + only env vars core actually reads. Every expected value is
+  derived from code, so the suite can only fail on drift. **Do not hand-edit those
+  doc claims without running it.**
+- **Remote:** `origin` is reachable; whether to push is a human decision.
+- **Known open (features/gaps, NOT defects):** the TUI render/`util` surface was
+  largely unaudited before 2026-09-22; `packages/cli/src/index.tsx` is still partly
+  uncovered; Windows is second-class (bash + a Unix-only kill-tree); no cost
+  estimation, no session search.
+
+---
+
+## 2026-09-22 — Audit of the unaudited surface: 3 real defects fixed (Buffy)
+
+Same method as the earlier passes: read the modules no one had read, fix only what
+is actually broken, and say so when a module is clean.
+
+**1. Anthropic collapsed malformed tool JSON to `{}` (`providers/anthropic.ts`).**
+`translateAnthropicStream` had its own `try/catch` at `content_block_stop` while
+`providers/streaming.ts` already carried the `{ __parseError, rawInput }` sentinel —
+so on Anthropic (a top-3 provider) a malformed tool-arguments buffer became `{}`,
+letting all-optional tools run on invented defaults while the model was never told
+its JSON was broken. That is exactly the 22.2 regression the sentinel exists to
+prevent, documented as FIXED in `docs/PHASE-21-25-AUDIT.md`. Root cause was
+copy-paste: the sentinel was hand-built in three places and the third drifted.
+Fix: one `parseToolCallJson()` in `streaming.ts` + `TOOL_CALL_RAW_INPUT_CAP` in
+`config/constants.ts` (the duplicated `200` was a raw magic constant), now used by
+`streaming.drain()`, `turnStream.ts` and `anthropic.ts`. **RED-proven.**
+OpenAI was already correct (`ToolCallAssembler`); Gemini passes parsed args.
+
+**2. `enterAltScreen` ignored the environment (`cli/src/altScreen.ts`).** It called
+`isAltScreenSupported(stream, {})` with a literal empty env, so **both documented
+opt-outs — `TERM=dumb` and `ANVIL_NO_ALT_SCREEN=1`, named in `--help` and in the
+boot comment — were inert in production**: a TTY always switched buffers. The
+predicate's own unit tests passed the env explicitly, so they never caught it.
+Fix: env is a parameter defaulting to `process.env`; test now drives the opt-out
+**through `enterAltScreen`**. **RED-proven.**
+
+**3. MCP permission prompt named the wrong server (`tui/…/PermissionPrompt.tsx`).**
+`mcpServerOf` split on the *first* `__`, but `SERVER_ID_RE` (`/^[a-z0-9-_]{1,40}$/`)
+permits `__` inside a server id, so for server `my__server` the consent prompt read
+`[mcp:my] server__read_doc` — naming a process that never receives the data. The
+table was ambiguous by construction (tool names keep `__` too, so last-split is no
+better). Fix: `splitMcpToolName(name, knownServerIds)` now lives next to
+`mcpToolName` in core as the codec's single source of truth and picks the longest
+known id; the TUI prompt forwards the configured ids from App. Display-only — the
+executor routes by re-encoding and comparing, so execution was never affected.
+**RED-proven.**
+
+**Audited clean (no defect):** `permission/TuiPermissionBroker.ts` (FIFO queue,
+drain-before-resolve abort path, abort-handler lifecycle), `components/App.tsx`
+(overlay precedence, resize handling, the deliberate `rows - 1` Ink frame),
+`MessageList`/`MessageView` (transcript clipping + control-char sanitizing),
+`providers/openai.ts`, `providers/gemini.ts`, `cli/{health,initGuarded,goalRunner}.ts`.
+
+**Evidence:** core 667 / tui 234 / cli 78 tests green; typecheck 0 across all
+workspaces; full `npm run gate` green (Steps 0–5, 15/15 mock evals).
+
+---
 
 ## 2026-09-21 — Full-gate red → green: LSP didOpen/didChange flake (OpenCode)
 

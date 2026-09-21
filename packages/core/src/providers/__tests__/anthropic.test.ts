@@ -136,6 +136,38 @@ describe("translateAnthropicStream", () => {
     ]);
   });
 
+  it("keeps malformed tool JSON as the __parseError sentinel instead of collapsing to {}", async () => {
+    // 22.2 regression: this translator had its own `catch {}` returning {} while
+    // streaming.ts already carried the sentinel, so on Anthropic an all-optional
+    // tool ran on invented defaults and the model was never told its arguments
+    // were malformed.
+    const events = await collect(
+      translateAnthropicStream(
+        of([
+          {
+            type: "content_block_start",
+            index: 0,
+            content_block: { type: "tool_use", id: "toolu_bad", name: "read_file" },
+          },
+          {
+            type: "content_block_delta",
+            index: 0,
+            delta: { type: "input_json_delta", partial_json: '{"path":' },
+          },
+          { type: "content_block_stop", index: 0 },
+        ])
+      )
+    );
+    expect(events.filter((e) => e.type === "tool_call_end")).toEqual([
+      {
+        type: "tool_call_end",
+        id: "toolu_bad",
+        name: "read_file",
+        input: { __parseError: true, rawInput: '{"path":' },
+      },
+    ]);
+  });
+
   it("skips id-less tool blocks entirely instead of emitting orphan starts", async () => {
     const events = await collect(
       translateAnthropicStream(

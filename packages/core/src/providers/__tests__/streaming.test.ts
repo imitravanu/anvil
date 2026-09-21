@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ToolCallAssembler, ensureTurnEnd } from "../streaming.js";
+import { ToolCallAssembler, ensureTurnEnd, parseToolCallJson } from "../streaming.js";
+import { TOOL_CALL_RAW_INPUT_CAP } from "../../config/constants.js";
 import type { StreamEvent } from "../types.js";
 
 async function collect(gen: AsyncIterable<StreamEvent>): Promise<StreamEvent[]> {
@@ -30,6 +31,26 @@ describe("ensureTurnEnd", () => {
       ensureTurnEnd(of([{ type: "error", message: "boom" }]))
     );
     expect(withError).toEqual([{ type: "error", message: "boom" }]);
+  });
+});
+
+// The single place the `__parseError` sentinel is built. Adapters that parse
+// arguments for themselves must route through it rather than re-implementing a
+// try/catch — the Anthropic translator had drifted back to a silent `{}`.
+describe("parseToolCallJson", () => {
+  it("parses a complete buffer, and treats blank input as no arguments", () => {
+    expect(parseToolCallJson('{"a":1}')).toEqual({ a: 1 });
+    expect(parseToolCallJson("")).toEqual({});
+    expect(parseToolCallJson("   ")).toEqual({});
+  });
+
+  it("marks malformed buffers with the sentinel and caps the excerpt", () => {
+    expect(parseToolCallJson('{"a":')).toEqual({ __parseError: true, rawInput: '{"a":' });
+    const huge = "x".repeat(TOOL_CALL_RAW_INPUT_CAP + 100);
+    expect(parseToolCallJson(huge)).toEqual({
+      __parseError: true,
+      rawInput: "x".repeat(TOOL_CALL_RAW_INPUT_CAP),
+    });
   });
 });
 

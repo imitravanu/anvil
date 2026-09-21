@@ -90,6 +90,18 @@ describe("PermissionPrompt", () => {
     expect(mcpServerOf("mcp___tool")).toBeNull();
   });
 
+  it("names the real server when the server id itself contains the separator", () => {
+    // The prompt is a consent surface: naming `my` while the call goes to
+    // `my__server` is worse than saying nothing. Configured ids resolve it.
+    const ids = ["my", "my__server"];
+    expect(mcpServerOf("mcp_my__server__read_doc", ids)).toEqual({
+      server: "my__server",
+      tool: "read_doc",
+    });
+    // Tool names keep `__`; the id list disambiguates without truncating it.
+    expect(mcpServerOf("mcp_srv__read__doc", ["srv"])).toEqual({ server: "srv", tool: "read__doc" });
+  });
+
   it("names the MCP server with badge, parameter list, and warns about external visibility", async () => {
     const { request } = makeRequest("mcp_docs__fetch", "Parameters:\n  • query: \"anvil\"\n  • limit: 5");
     const app = renderThemed(<PermissionPrompt request={request} broker={brokerStub()} />);

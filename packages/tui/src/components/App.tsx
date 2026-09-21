@@ -323,7 +323,11 @@ export function App({
         {/* Overlays take over keyboard input — InputBar is not rendered while one is open,
             so keystrokes can never leak into it. */}
         {pendingPermission ? (
-          <PermissionPrompt request={pendingPermission} broker={broker} />
+          <PermissionPrompt
+            request={pendingPermission}
+            broker={broker}
+            knownServerIds={mcp?.list().map((conn) => conn.id) ?? []}
+          />
         ) : isDiffOpen ? (
           <DiffModal
             session={session}

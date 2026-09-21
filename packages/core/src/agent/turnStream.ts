@@ -15,6 +15,7 @@ import {
   recordFailure,
 } from "../providers/freeModels.js";
 import type { ToolDefinition } from "../tools/types.js";
+import { parseToolCallJson } from "../providers/streaming.js";
 import type { AgentEvent } from "./types.js";
 import type { TurnState } from "./turnState.js";
 import type { AccumulatedToolCall } from "./loopGuard.js";
@@ -89,18 +90,9 @@ export async function* streamAssistantTurn(
         if (event.input !== undefined && event.input !== null) {
           parsed = event.input;
         } else {
-          // Deltas accumulate as raw JSON; a malformed buffer is recorded
-          // rather than thrown so the turn can report the tool's failure.
-          const raw = open?.inputJson ?? "";
-          if (raw.trim()) {
-            try {
-              parsed = JSON.parse(raw);
-            } catch {
-              parsed = { __parseError: true, rawInput: raw.slice(0, 200) };
-            }
-          } else {
-            parsed = {};
-          }
+          // Deltas accumulate as raw JSON; a malformed buffer is recorded as the
+          // shared sentinel rather than thrown, so the turn reports the failure.
+          parsed = parseToolCallJson(open?.inputJson ?? "");
         }
         openCalls.delete(event.id);
         toolCalls.push({

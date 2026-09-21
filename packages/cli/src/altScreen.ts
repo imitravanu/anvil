@@ -43,10 +43,17 @@ function writeSeq(seq: string, stream: AltScreenStream): void {
 
 /**
  * Enter once; no-op when unsupported or already active. Returns entered.
- * The stream is injectable for tests; production always passes stdout.
+ * The stream and env are injectable for tests; production passes neither, so
+ * the predicate's defaults (stdout + process.env) apply. Passing `{}` here
+ * as the env silently disabled BOTH documented opt-outs — `TERM=dumb` and
+ * `ANVIL_NO_ALT_SCREEN=1` never reached the check, so the escape hatch named
+ * in `--help` and in the boot comment did nothing in production.
  */
-export function enterAltScreen(stream: AltScreenStream = process.stdout as AltScreenStream): boolean {
-  if (active || !isAltScreenSupported(stream, {})) return active;
+export function enterAltScreen(
+  stream: AltScreenStream = process.stdout as AltScreenStream,
+  env: Record<string, string | undefined> = process.env
+): boolean {
+  if (active || !isAltScreenSupported(stream, env)) return active;
   writeSeq(ALT_SCREEN_ENTER, stream);
   active = true;
   return true;

@@ -67,6 +67,11 @@ export const SUMMARIZER_TOOL_ERROR_MAX_CHARS = getEnvNumber("ANVIL_SUMMARIZER_TO
 // Provider streaming retry policy
 export const PROVIDER_STREAM_MAX_RETRIES = getEnvNumber("ANVIL_PROVIDER_STREAM_RETRIES", 2);
 
+// Tool-call JSON provenance: a malformed tool-arguments buffer is model-authored
+// and unbounded, so the excerpt carried in the `__parseError` sentinel is capped
+// — the model-visible error must stay small enough to re-send on the retry.
+export const TOOL_CALL_RAW_INPUT_CAP = getEnvNumber("ANVIL_TOOL_CALL_RAW_CAP", 200);
+
 // Phase 27.1 — parallel live execution bounds (no magic numbers). Mock runs
 // stay single-flight for determinism; live lanes scale to 8 workers.
 export const EVAL_CONCURRENCY_DEFAULT = 1;

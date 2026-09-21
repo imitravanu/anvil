@@ -20,6 +20,41 @@ export function mcpToolName(serverId: string, toolName: string): string {
 }
 
 /**
+ * Inverse of `mcpToolName`, for DISPLAY only — the executor routes by
+ * re-encoding each connection's tools and comparing, so nothing depends on
+ * parsing this back.
+ *
+ * The separator is ambiguous by itself: `SERVER_ID_RE` permits `__` inside a
+ * server id and sanitized tool names keep `__` too, so `mcp_a__b__c` is either
+ * server `a` / tool `b__c` or server `a__b` / tool `c`. Callers that know the
+ * configured ids must pass them, so a permission prompt names the server that
+ * actually receives the call; the first-separator fallback is only used when
+ * nothing matches (and is what the old inline parser always did, mislabeling
+ * any server id containing `__`).
+ */
+export function splitMcpToolName(
+  name: string,
+  knownServerIds: readonly string[] = []
+): { server: string; tool: string } | null {
+  if (!name.startsWith(MCP_TOOL_PREFIX)) return null;
+  const rest = name.slice(MCP_TOOL_PREFIX.length);
+  // Longest known id wins — a shorter prefix match would truncate `a__b` to `a`.
+  let server = "";
+  for (const id of knownServerIds) {
+    if (id.length > server.length && rest.startsWith(`${id}__`) && rest.length > id.length + 2) {
+      server = id;
+    }
+  }
+  if (!server) {
+    const sep = rest.indexOf("__");
+    if (sep <= 0) return null;
+    server = rest.slice(0, sep);
+  }
+  const tool = rest.slice(server.length + 2);
+  return tool.length > 0 ? { server, tool } : null;
+}
+
+/**
  * Convert server tools to session ToolDefinitions. Unknown external tools
  * are mutating BY DEFAULT (permission prompts gate them) unless the server
  * marks readOnlyHint — the safe direction.

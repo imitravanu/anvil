@@ -2,6 +2,7 @@ import { getErrorMessage } from "../errors.js";
 import Anthropic from "@anthropic-ai/sdk";
 import { CompletionRequest, ConversationMessage, ModelProvider, ProviderId, StreamEvent } from "./types.js";
 import { BaseProvider } from "./base.js";
+import { parseToolCallJson } from "./streaming.js";
 
 export type StopReason = "end_turn" | "tool_use" | "max_tokens" | "error" | "unknown";
 
@@ -67,14 +68,11 @@ export async function* translateAnthropicStream(
       } else if (event.type === "content_block_stop") {
         const toolId = blockIndexToToolId.get(event.index ?? -1);
         if (toolId) {
-          const rawJson = toolInputBuffers.get(toolId) ?? "";
-          let parsed: unknown = {};
-          try {
-            parsed = rawJson.trim() ? JSON.parse(rawJson) : {};
-          } catch {
-            // Leave as empty object; the tool executor should treat missing
-            // required fields as a validation error it reports back to the model.
-          }
+          // Shared parser, not a local JSON.parse: a malformed buffer must keep
+          // its `__parseError` provenance so the model is told its tool call was
+          // malformed. A local `catch {}` here silently ran all-optional tools
+          // on invented defaults (the exact 22.2 regression this replaced).
+          const parsed = parseToolCallJson(toolInputBuffers.get(toolId) ?? "");
           yield { type: "tool_call_end", id: toolId, name: toolNames.get(toolId) ?? "", input: parsed };
         }
       } else if (event.type === "message_delta") {
