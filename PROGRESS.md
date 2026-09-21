@@ -60,6 +60,14 @@
 > `packages/cli/src/altScreen.ts`, `packages/tui/src/components/{PermissionPrompt,App}.tsx`,
 > plus the matching `__tests__`/`*test.tsx` updates in all three packages and this
 > PROGRESS.md entry. No protected artifact touched; no shared file edited.
+>
+> **DONE 2026-09-22 (Buffy, TUI audit):** owns `packages/tui/src/markdown/MarkdownView.tsx`,
+> `packages/tui/src/theme/custom.ts`, `packages/tui/src/hooks/useSessionCommands.ts`,
+> `packages/tui/src/commands/handlers/media.ts`, `packages/tui/src/diff/colorizeDiff.tsx`,
+> and NEW `packages/tui/src/markdown/__tests__/MarkdownView.test.tsx`,
+> `packages/tui/src/diff/__tests__/colorizeDiff.test.tsx`,
+> `packages/tui/src/commands/__tests__/media.test.ts`, plus this PROGRESS.md entry.
+> No protected artifact touched; no shared file edited.
 
 ---
 
@@ -70,7 +78,7 @@ Read this before the chronological log below. The log is history; this is truth.
 - **Gate:** `npm run gate` green, Steps 0 → 5 (sensor, protected-artifact
   manifest, diff scan, full-tree residual drain, sequential build, typecheck,
   unit tests, 15/15 mock evals).
-- **Tests:** **979** green — core 667 / tui 234 / cli 78.
+- **Tests:** **988** green — core 667 / tui 243 / cli 78.
 - **Docs-vs-code is now mechanical:** `packages/cli/src/__tests__/docTruth.test.ts`
   asserts the release badge == `CORE_VERSION`, provider count == the registry,
   tool count == `TOOL_DEFINITIONS`, the Node badge == `engines.node`, the roadmap
@@ -83,6 +91,68 @@ Read this before the chronological log below. The log is history; this is truth.
   largely unaudited before 2026-09-22; `packages/cli/src/index.tsx` is still partly
   uncovered; Windows is second-class (bash + a Unix-only kill-tree); no cost
   estimation, no session search.
+
+---
+
+## 2026-09-22 — TUI audit (Buffy)
+
+Second pass over the surface the first sweep had not opened: every `diff/` and
+`util/` module, the markdown pipeline, the command registry + handlers, the theme
+loader, `InputBar`, `App`, `MessageList`/`MessageView`, and the permission path.
+
+**1. Markdown tables padded wide cells as if they were 1 cell
+(`markdown/MarkdownView.tsx`).** A local `cellWidth()` counted CODE POINTS while
+`util/format.ts` already exported the terminal-CELL `displayWidth`. "中文" is 2
+code points but 4 cells, so every CJK/emoji cell was padded one cell short per
+wide char and the `│` separators sheared apart. Worse, the local helper's own
+comment claimed "CJK/emoji safety" — it guarded against `String#length` (surrogate
+pairs) instead of the failure that actually occurs. **RED-proven** (2 distinct
+separator columns → 1). This is the `§1.4 check existing helpers first` failure
+mode: a second, wrong width function next to the right one.
+
+**2. `BUILTINS` was a hand-kept mirror of `ThemeName` (`theme/custom.ts`).** Adding
+a built-in theme would silently leave the shadow guard behind, letting a custom
+theme of that name load — after which `isThemeName` would call the shadow
+built-in. Derived from `Object.keys(THEMES)` now, so it cannot drift. Latent, not
+live (the five names currently match).
+
+**3. The image guard guarded nothing (`commands/handlers/media.ts`).**
+`/image <path>` read the whole file with `readFileSync` and only then compared the
+buffer to `IMAGE_MAX_BYTES`, so a 2 GB file (or `/dev/zero`) allocated unbounded
+memory before the cap could fire. Now `statSync` decides first; the post-read
+check stays as the backstop for special files (size 0). **RED-proven** — the test
+asserts `readFileSync` is never CALLED for an oversize file, not merely that the
+refusal message appears.
+
+**4. A comment told maintainers to recover with `/save` (`hooks/useSessionCommands.ts`).**
+No such command exists (the registry has 20, `/save` is not one). Corrected to the
+real recovery path: the previous save is still on disk and the next settled turn
+retries the write.
+
+**Rejected a fix after testing it.** I suspected the diff gutter (`diff/colorizeDiff.tsx`)
+misaligned `│` on added lines and changed it — the alignment test I wrote failed
+immediately, falsifying the hypothesis. My repro had been unfaithful to the source
+(typed `" │ "` where the code has `"     │ "`), and the original three literals do
+align once each row's 1-char sign is counted. My edit was reverted; the test stays,
+because it pins exactly the invariant I was about to break, and an explanatory
+comment now records why the literals look asymmetric but are not.
+
+**Audited clean (no defect):** `diff/{parseDiff,wordDiff,sideBySide}.ts`,
+`util/{format,wrapSpans,sanitize,grouping,displayLimits,ledger,toolOutput,braille,errors,chrome}.ts`,
+`markdown/{renderMarkdown,highlightCodeBlocks}.ts`, `commands/{registry,palette}.ts`,
+`handlers/{diff,rewind,session}.ts`, `hooks/{useWindowedList,usePermissionBroker}.ts`,
+`theme/{themes,theme}.ts`, `permission/TuiPermissionBroker.ts`, `components/{InputBar,MessageList,MessageView}.tsx`,
+`theme/custom.ts` validation (semantic-color rejection path).
+
+**Noted, deliberately not fixed (judgment, not oversight):** `wrapSpans` and the
+transcript estimator both measure in code points and are therefore *self-consistent*
+(changing one alone would make the "… N earlier messages" count lie); `chrome.meter`
+throws on a negative width but its only caller passes 6 or 10; `/copy` is the one
+command without a `COMMAND_ICONS` entry (the dot is the documented fallback);
+`ColorizedDiff`'s `useMemo` is keyed on a fresh `slice()` and so recomputes every render.
+
+**Evidence:** core 667 / tui 243 / cli 78 green; typecheck 0; full `npm run gate`
+green (Steps 0–5, 15/15 mock evals).
 
 ---
 

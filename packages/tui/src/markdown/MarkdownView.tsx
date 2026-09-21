@@ -2,7 +2,7 @@ import { Box, Text, useStdout } from "ink";
 import { MarkdownBlock, MarkdownSpan, parseMarkdownText } from "./renderMarkdown.js";
 import { highlightCodeBlocks } from "./highlightCodeBlocks.js";
 import { useTheme } from "../theme/theme.js";
-import { curtail } from "../util/format.js";
+import { curtail, displayWidth } from "../util/format.js";
 import { wrapSpans } from "../util/wrapSpans.js";
 import {
   CODE_HEAD_LINES,
@@ -30,10 +30,10 @@ function Spans({ spans }: { spans: MarkdownSpan[] }) {
   );
 }
 
-/** Code-point-aware width (never String#length — CJK/emoji safety). */
-function cellWidth(text: string): number {
-  return Array.from(text).length;
-}
+// Table padding must use the shared terminal-CELL width, not a code-point
+// count: "中文" is 2 code points but 4 cells, so counting code points padded
+// every wide cell one cell short and sheared the "│" separators apart — the
+// exact failure the previous local helper's comment claimed to prevent.
 
 function plainText(spans: MarkdownSpan[]): string {
   return spans.map((s) => s.text).join("");
@@ -49,11 +49,11 @@ function TableView({ headers, rows }: { headers: MarkdownSpan[][]; rows: Markdow
       headers[c] ? [headers[c]] : [],
       ...rows.map((r) => (r[c] ? [r[c]] : [])),
     ].flat();
-    widths.push(Math.max(1, ...cells.map((spans) => cellWidth(plainText(spans)))));
+    widths.push(Math.max(1, ...cells.map((spans) => displayWidth(plainText(spans)))));
   }
   const pad = (spans: MarkdownSpan[], w: number) => {
     const text = plainText(spans);
-    return text + " ".repeat(Math.max(0, w - cellWidth(text)));
+    return text + " ".repeat(Math.max(0, w - displayWidth(text)));
   };
   // NOTE: padded table cells intentionally drop inline styling — alignment
   // needs plain strings, and footnotes still resolve via the links block.

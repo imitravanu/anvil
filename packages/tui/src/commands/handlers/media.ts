@@ -27,10 +27,24 @@ export function handleAttachImage(deps: CommandHandlerDeps, rawPath: string): vo
     printSystemMessage("Unsupported image type — use png, jpeg, webp, or gif.");
     return;
   }
+  const tooLarge = (bytes: number): void => {
+    printSystemMessage(
+      `Image too large (${Math.ceil(bytes / 1024)} KB) — max ${IMAGE_MAX_BYTES / (1024 * 1024)} MB.`
+    );
+  };
   try {
+    // Check the SIZE BEFORE the read. Reading first and testing the buffer
+    // afterward meant a 2 GB file (or /dev/zero) allocated unbounded memory
+    // before the cap could fire, so the cap bounded nothing. Special files
+    // report size 0 and still rely on the post-read check below.
+    const size = fs.statSync(p).size;
+    if (size > IMAGE_MAX_BYTES) {
+      tooLarge(size);
+      return;
+    }
     const buf = fs.readFileSync(p);
     if (buf.length > IMAGE_MAX_BYTES) {
-      printSystemMessage(`Image too large (${Math.ceil(buf.length / 1024)} KB) — max 5 MB.`);
+      tooLarge(buf.length);
       return;
     }
     addPendingImage({ mediaType, data: buf.toString("base64"), path: p });

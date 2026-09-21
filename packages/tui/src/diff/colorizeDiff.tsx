@@ -8,6 +8,14 @@ import { curtail } from "../util/format.js";
 /** Max diff rows rendered in the permission overlay before an omission note. */
 export const MAX_DIFF_ROWS = 40;
 
+/**
+ * Line-number gutter. These three literals must stay 12 cells with the `│` at
+ * index 10 once the row's 1-char sign is prepended (add/del carry "+"/"-",
+ * context carries none) — see the alignment test in
+ * `__tests__/colorizeDiff.test.tsx`. They look asymmetric (add " │ " vs del
+ * "     │ ") but are not: add has one fewer blank cell because " │ " already
+ * contributes a space where del's five spaces do.
+ */
 function gutter(row: DiffRow): string {
   if (row.kind === "add") return `    ${String(row.newNo).padStart(4, " ")} │ `;
   if (row.kind === "del") return `${String(row.oldNo).padStart(4, " ")}     │ `;

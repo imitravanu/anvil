@@ -122,8 +122,9 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     try {
       saveSession(session.toStoredSession(activeProviderId, currentModel));
     } catch (err) {
-      // Disk failures must not take the chat down; inform the user in-chat
-      // so their session layout isn't corrupted and they can retry with /save.
+      // Disk failures must not take the chat down; inform the user in-chat.
+      // The previous save is still on disk, and the next completed turn retries
+      // this write — there is no /save command to point at.
       const msg = getErrorMessage(err);
       printSystemMessage(`Session auto-save failed: ${msg}`);
     }

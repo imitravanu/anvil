@@ -8,6 +8,7 @@ import {
   DEFAULT_TYPOGRAPHY,
   REQUIRED_COLOR_KEYS,
   SEMANTIC_COLOR_KEYS,
+  THEMES,
   resolveThemeColors,
   type CardBorderStyle,
   type LegacyColorKey,
@@ -26,7 +27,10 @@ import {
 // ---------------------------------------------------------------------------
 
 export const CUSTOM_THEME_NAME_RE = /^[a-z0-9-_]{1,24}$/;
-const BUILTINS = new Set(["dark", "light", "highContrast", "midnight", "hacker"]);
+// Derived from the theme registry, not a hand-kept list: adding a built-in
+// theme used to silently leave this guard behind, letting a custom theme of
+// the same name shadow it (and `isThemeName` then call the shadow built-in).
+const BUILTINS = new Set(Object.keys(THEMES));
 
 export interface CustomThemeProblem {
   name: string;
