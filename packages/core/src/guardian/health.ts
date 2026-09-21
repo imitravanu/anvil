@@ -68,21 +68,34 @@ const EMPTY_SNAPSHOT: Omit<HealthSnapshot, "version" | "timestamp" | "projectRoo
 function readSnapshot(projectRoot: string): HealthSnapshot | null {
   const file = path.join(healthDir(), `${projectHealthKey(projectRoot)}.json`);
   if (!fs.existsSync(file)) return null;
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      typeof (parsed as { timestamp?: unknown }).timestamp !== "number"
-    ) {
-      return null;
-    }
-    return parsed as HealthSnapshot;
+    parsed = JSON.parse(fs.readFileSync(file, "utf8"));
   } catch {
     // A corrupted snapshot is discarded, not trusted — the next recording
     // rebuilds it. Telemetry must never become a gate failure.
     return null;
   }
+  // Shape-validate the fields every consumer dereferences: a truncated or
+  // hand-edited file that still parses as JSON would otherwise crash
+  // `deriveHealth`/`formatHealth` (and `anvil health`) instead of being
+  // discarded like any other corruption.
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const s = parsed as Partial<HealthSnapshot>;
+  if (
+    typeof s.timestamp !== "number" ||
+    typeof s.projectRoot !== "string" ||
+    typeof s.scansRun !== "number" ||
+    typeof s.scannedLines !== "number" ||
+    typeof s.cleanLines !== "number" ||
+    typeof s.allowlistEntries !== "number" ||
+    typeof s.allowlistHigh !== "number" ||
+    typeof s.blockedByRule !== "object" ||
+    s.blockedByRule === null
+  ) {
+    return null;
+  }
+  return parsed as HealthSnapshot;
 }
 
 function writeSnapshot(projectRoot: string, snapshot: HealthSnapshot): void {

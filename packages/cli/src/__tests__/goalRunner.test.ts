@@ -165,4 +165,59 @@ describe("runGoalHeadless", () => {
     const stderrOutput = stderrSpy.mock.calls.map((c: any) => c[0]).join("");
     expect(stderrOutput).toContain("Goal failed");
   });
+
+  describe("SIGINT lifecycle", () => {
+    // No mocks: the handler is genuinely prepended to the real process and
+    // must be genuinely gone when the run resolves — a leak would keep
+    // intercepting Ctrl+C after the mission ends. listenerCount is the
+    // observable fact; a leaked handler makes `after > before`.
+    const before = process.listenerCount("SIGINT");
+
+    it("removes its SIGINT handler when the run finishes normally", async () => {
+      const provider = new TestFakeProvider([
+        [
+          {
+            type: "text_delta",
+            text: JSON.stringify([{ id: "1", title: "M", criteria: "c" }]),
+          },
+          { type: "turn_end", stopReason: "end_turn" },
+        ],
+        [
+          { type: "text_delta", text: "done" },
+          { type: "turn_end", stopReason: "end_turn" },
+        ],
+        [
+          { type: "text_delta", text: "YES" },
+          { type: "turn_end", stopReason: "end_turn" },
+        ],
+        [
+          { type: "text_delta", text: "critique" },
+          { type: "turn_end", stopReason: "end_turn" },
+        ],
+      ]);
+      const code = await runGoalHeadless({
+        goal: "g",
+        provider,
+        model: "test-model",
+        projectRoot: tmpDir,
+        autoApprove: true,
+        raw: false,
+      });
+      expect(code).toBe(0);
+      expect(process.listenerCount("SIGINT")).toBe(before);
+    });
+
+    it("removes its SIGINT handler when the mission fails", async () => {
+      const code = await runGoalHeadless({
+        goal: "crash me",
+        provider: new ThrowingProvider(),
+        model: "test-model",
+        projectRoot: tmpDir,
+        autoApprove: false,
+        raw: false,
+      });
+      expect(code).toBe(1);
+      expect(process.listenerCount("SIGINT")).toBe(before);
+    });
+  });
 });

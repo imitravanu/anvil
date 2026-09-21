@@ -182,6 +182,19 @@ describe("26.5 health — robustness", () => {
     expect(snapshot.scannedLines).toBe(3);
   });
 
+  it("a shape-valid-JSON snapshot (parses, wrong fields) is discarded, not dereferenced", () => {
+    // Regression: readSnapshot only checked `timestamp`, so a truncated or
+    // hand-edited file with a timestamp but no blockedByRule/scannedLines was
+    // returned as a snapshot and crashed deriveHealth/formatHealth — an anvil
+    // health crash on corruption instead of the honest empty state.
+    recordHealthScan(project, { scannedLines: 10, violations: [] });
+    fs.writeFileSync(
+      healthSnapshotPath(project),
+      JSON.stringify({ timestamp: Date.now(), scansRun: 1 })
+    );
+    expect(loadHealthSnapshot(project)).toBeNull();
+  });
+
   it("negative scanned lines are clamped, never counted", () => {
     recordHealthScan(project, { scannedLines: -5, violations: [] });
     const snapshot = loadHealthSnapshot(project)!;
