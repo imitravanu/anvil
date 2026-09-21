@@ -45,6 +45,14 @@ export class LspStdioClient implements LspClient {
       this.dead = true;
       this.failAll(err);
     });
+    // Async stdin failures (EPIPE after the server dies) never reach the
+    // try/catch at the write site — an unlistened stream 'error' surfaces as an
+    // uncaught exception. Fail the client instead (mcp/transport.ts does the
+    // same for its child pipe).
+    child.stdin?.on("error", () => {
+      this.dead = true;
+      this.failAll(new Error("LSP server stdin closed"));
+    });
   }
 
   isDead(): boolean {

@@ -175,6 +175,10 @@ describe("LspStdioClient edge behavior", () => {
     fs.writeFileSync(file, "const c = 1;\n", "utf8");
     expect(await c1!.gotoDefinition(file, { line: 1, character: 0 })).toEqual([]);
     expect(await c1!.waitForDiagnostics(50)).toEqual([]);
+    // Writing to a dead server's stdin (notify) must be handled, not surface as
+    // an unhandled stream EPIPE that takes down the process.
+    expect(() => c1!.ensureOpen(file, "typescript", "const c = 2;\n")).not.toThrow();
+    expect(c1!.isDead()).toBe(true);
 
     // The cache sees the corpse and spawns a replacement rather than reusing it.
     const c2 = await getLspClient(server, root);

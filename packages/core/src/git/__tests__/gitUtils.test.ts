@@ -100,4 +100,12 @@ describe("getBranchDiff", () => {
       'Failed to diff against branch "no-such-branch-xyz"'
     );
   });
+
+  it("refuses a branch that git would read as a flag", async () => {
+    // `--` only ends PATH parsing — it does not protect the revision position,
+    // so `--output=<file>` used to make git WRITE a file instead of printing.
+    const target = path.join(dir, "pwned.txt");
+    await expect(getBranchDiff(dir, `--output=${target}`)).rejects.toThrow("unsafe branch name");
+    expect(fs.readdirSync(dir).filter((f) => f.startsWith("pwned"))).toEqual([]);
+  });
 });

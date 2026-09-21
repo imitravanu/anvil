@@ -979,7 +979,43 @@ repo's established idiom. Constructor DI of injected collaborators was
 deliberately NOT added: it would create optional production options with no
 production caller, which AGENTS.md §2.8 forbids, for no behavioral gain.
 
-**Evidence (this session):** core typecheck 0; cli typecheck 0; **662** core /
-**233** tui / **68** cli tests green; full `npm run gate` green (Steps 0–5,
-15/15 mock evals). No protected artifact touched — no manifest/sentinel change
-required.
+**Audit pass 2 (unread modules) — findings and fixes:**
+- `packages/core/src/git/gitUtils.ts` — **REAL BUG fixed.** `getBranchDiff`
+  passes the branch as a rev-arg; the comment claimed the trailing `--` stops a
+  `-`-prefixed branch from being read as a flag, but `--` only ends PATH parsing,
+  so `git diff --output=<file>...HEAD --` made git WRITE a file instead of
+  printing the diff. Branch is now validated (empty / leading `-` refused) and
+  the comment corrected. Reached from `/diff <branch>`
+  (`tui/src/commands/handlers/diff.ts`) with user-typed input. +1 test.
+- `packages/core/src/lsp/client.ts` — **crash path closed.** The child's stdin
+  had no `error` listener, so an async EPIPE after the server died surfaced as
+  an uncaught stream error instead of failing the client — `mcp/transport.ts`
+  already guards its pipe this way. +1 assertion in the existing crash test.
+- `packages/core/src/plugins/registry.ts` — **documented limitation.** The
+  plugin `{input}` JSON is MODEL-controlled and shell-spliced into `bash -c`,
+  so an unquoted placeholder exposes shell metacharacters. It is the plugin
+  author's explicit shell extension point and every plugin tool is gated by the
+  permission prompt, so this pass documents the risk and the durable fix
+  (pass the JSON as an argv element) rather than redesigning the plugin
+  contract — the prompt also cannot render the command (the describe seam has no
+  tool name). Recorded, not silently accepted.
+- **NEW `packages/cli/src/__tests__/entry.test.ts`** — entry-point harness:
+  sets argv, stubs `process.exit`/`console`, imports `index.tsx` fresh. Covers
+  the two branches that terminate before rendering (`--version`, `init` usage
+  error). Vitest isolates each file's process env, so the handlers index.tsx
+  registers cannot leak into other suites.
+- **NEW `packages/cli/src/__tests__/docTruth.test.ts`** — doc-truth guard (5
+  tests): every asserted value is DERIVED FROM CODE (badge == `CORE_VERSION`,
+  provider count == `createProviders()` keys, tool count == `TOOL_DEFINITIONS`,
+  Node badge == `engines.node`, roadmap header == its own checkbox count), so it
+  can only fail on drift, never on its own staleness. RED-proven by
+  re-badging the README to v1.0.0.
+
+**Reviewed clean (no defect):** `tools/verifyTests.ts` (argv-not-shell pattern
+filtering, clamped timeouts, scrubbed env), `plugins/loader.ts` (manifest
+validation/bounds), `config/mcp.ts` (SSE url/origin/header validation).
+
+**Evidence (this session):** core typecheck 0; cli typecheck 0; **663** core /
+**233** tui / **75** cli tests green; `packages/cli` statements **49.14% →
+55.05%** (294/534). Full `npm run gate` green (Steps 0–5, 15/15 mock evals). No
+protected artifact touched — no manifest/sentinel change required.

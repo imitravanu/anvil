@@ -12,6 +12,16 @@ export const PLUGIN_TOOL_PREFIX = "plugin_";
  * the literal form treats `$&` / `` $` `` / `$'` inside the JSON as pattern
  * references, so a model-controlled input containing `$&` would corrupt (or
  * inject into) the rendered shell command.
+ *
+ * TRUST NOTE (known limitation): the result is executed by `bash -c`, and the
+ * substituted JSON is MODEL-controlled. A template that splices `{input}`
+ * unquoted therefore exposes shell metacharacters in the input to the shell
+ * (`{input}` of `{"x":"; rm -rf ~"}` parses as a second command). This is the
+ * plugin author's explicit shell extension point and every plugin tool is
+ * `mutating: true`, so the permission prompt is the gate — but templates should
+ * quote the placeholder (e.g. `myscript --json '{input}'`) and the prompt shows
+ * the tool, not the rendered command. Passing the JSON as a real argv element
+ * instead of splicing it into the shell string is the durable fix.
  */
 export function renderCommand(template: string, input: unknown): string {
   const json = JSON.stringify(input ?? {});

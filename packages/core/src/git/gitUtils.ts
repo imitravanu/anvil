@@ -87,9 +87,18 @@ export async function autoCommitMilestone(
  * Generates unified git diff comparing projectRoot HEAD against a base branch.
  */
 export async function getBranchDiff(projectRoot: string, branch: string): Promise<string> {
+  // The revision position is NOT protected by `--` (that only ends PATH
+  // parsing), so a branch beginning with `-` would be read as a git option —
+  // e.g. `--output=<file>` makes git WRITE a file instead of printing the diff.
+  // A real ref never starts with `-`, so refuse it outright rather than rely on
+  // argument ordering that does not actually guard this position.
+  if (branch.length === 0 || branch.startsWith("-")) {
+    throw new Error(`Refusing to diff against an unsafe branch name: ${JSON.stringify(branch)}`);
+  }
   try {
     // Try triple-dot diff first (branch...HEAD), fallback to branch HEAD.
-    // `--` ends flag parsing so a branch beginning with `-` cannot inject flags.
+    // `--` separates the revisions from paths (defence in depth on the path
+    // side; the branch itself is validated above).
     const { stdout } = await execFileAsync("git", ["diff", `${branch}...HEAD`, "--"], {
       cwd: projectRoot,
       maxBuffer: 2 * 1024 * 1024,
