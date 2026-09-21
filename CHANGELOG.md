@@ -4,6 +4,17 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### First Paired Guardian Delta: 0.0 pts on Mercury 2.5 (2026-09-21)
+
+- **The 26.3 proof matrix has its first real measurement.** Both 15-task lanes
+  ran on `inception/mercury-2.5` (native lane, free-trial tokens): OFF 15/15
+  (100%) in 78.5s, ON 15/15 (100%) in 66.4s. `--report` pairs them
+  automatically: **DELTA 0.0 pts — no delta**.
+- **Honest reading:** the model sits at the task ceiling with or without the
+  guardian, so there is no pass-rate gain to claim — and no harm either (no
+  guardian-blocked turn failed a task). The ON lane was faster on fewer input
+  tokens, but reasoning-token variance makes that an observation, not a claim.
+
 ### Inception Provider — Mercury 2.5 Live-Certified (2026-09-21)
 
 - **11th provider: Inception (Mercury diffusion LLMs).** Native

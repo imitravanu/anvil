@@ -11,6 +11,13 @@
 > `README.md` (10→11 providers), `CHANGELOG.md` (Unreleased entry). No
 > protected artifact touched.
 >
+> **ACTIVE 2026-09-21 (OpenCode session, 26.3 inception matrix):** owns the
+> guardian ON/OFF eval lanes on `inception/mercury-2.5`
+> (`ANVIL_HOME/evals` reports only) + `docs/PHASE-26-PROGRESS.md` (delta
+> record) + `CHANGELOG.md` (delta entry) + this PROGRESS.md entry. No prod
+> code; docs + eval reports only. **DONE 2026-09-21:** OFF 15/15 (78.5s),
+> ON 15/15 (66.4s), DELTA 0.0 — recorded, full gate green.
+>
 > **ACTIVE 2026-09-21 (OpenCode session, 26 release closeout):** owns
 > `packages/core/src/version.ts`, `packages/{core,tui,cli}/package.json`
 > (1.0.0 → 1.1.0), `CHANGELOG.md` ([Unreleased] → [1.1.0] heading),

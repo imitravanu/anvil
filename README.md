@@ -218,7 +218,10 @@ Anvil ships a built-in hygiene system against AI slop (type escapes, silent catc
 - **`anvil health`:** per-project freshness, cleanliness, allowlist drain rate, and top blocked rules, tracked across sessions under `ANVIL_HOME/health/`.
 - **`anvil init --guarded [--lang <id>]`:** provisions `AGENTS.md`, `.anvil/rules`, and a dependency-free pre-commit hook into any repo (TypeScript, Python, Rust, Go), so other agents' edits are gated too. Bypass once with `git commit --no-verify`.
 
-Project-specific rules can be declared in a `guardian:rules` block. The model-agnostic proof matrix is tracked in `docs/PHASE-26-PROGRESS.md` — no pass-rate delta is claimed until a real paired live run exists.
+Project-specific rules can be declared in a `guardian:rules` block. The first paired
+measurement (`inception/mercury-2.5`, 15/15 both lanes) found **no pass-rate delta
+(0.0 pts)** — the model sits at the task ceiling either way. Details in
+`docs/PHASE-26-PROGRESS.md`.
 
 ---
 

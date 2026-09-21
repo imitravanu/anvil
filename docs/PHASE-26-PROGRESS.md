@@ -62,6 +62,9 @@
       with the toggle; banner states the mode; invalid values exit non-zero.
       RED→GREEN: `guardianToggle.test.ts` (3) + `guardianFlag.test.ts` (11). Core 617/617.*
 - [ ] Delta matrix run: ≥1 free OpenRouter model + ≥1 frontier
+      *Update 2026-09-21: first paired matrix obtained on `inception/mercury-2.5`
+      instead (15/15 both lanes, DELTA 0.0 — see below); the OpenRouter-free +
+      frontier lanes as literally specified remain open.*
       *ATTEMPTED 2026-09-21, blocked by free-tier quota exhaustion — recorded as an HONEST
       NULL (below). What was obtained: ONE complete live lane on
       `openrouter/cohere/north-mini-code:free` (probed with a real tool round-trip first; the
@@ -90,6 +93,17 @@
       (renders "Delta unavailable" for a missing half; names "no delta" and "guardian hurts"
       rather than manufacturing wins), `findGuardianDeltaPair` (newest on/off pair, legacy
       fieldless reports excluded). `--report` prints the section.*
+- [x] First real paired matrix: `inception/mercury-2.5`, 15/15 tasks, same seed
+      *Done 2026-09-21 on the native Inception lane (direct API, 100M free-trial
+      tokens — no OpenRouter quota involved). OFF: **15/15 (100%)**, 78.5s wall,
+      180k/11k tokens. ON: **15/15 (100%)**, 66.4s wall, 146k/11k tokens.
+      `--report` pairs automatically: **DELTA 0.0 pts — no delta**. Read honestly:
+      Mercury sits at the task ceiling either way, so the guardian neither helps
+      nor hurts the pass rate here — and crucially it does NOT hurt (no blocked
+      turn failed a task). The ON lane also ran faster with fewer input tokens,
+      but run-to-run reasoning variance means that is an observation, not a
+      claim. The earlier cohere honest-null stands as history; this supersedes
+      nothing — different model, first paired measurement.*
 
 ### 26.4 — Guarded Init for Foreign Agents
 - [x] Provisioning matrix TS/Python/Rust/Go verified in throwaway non-Anvil repos
