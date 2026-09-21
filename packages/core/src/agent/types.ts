@@ -91,6 +91,14 @@ export interface AgentOptions {
    * When enabled, mutations trigger automated test verification with self-repair before turn completion.
    */
   autoVerify?: boolean | string;
+  /**
+   * Master switch for the native guardian turn interceptor (Phase 26.3).
+   * Default true — the product behavior. An explicit false opts this session
+   * out entirely (no scan, no block, no auto-fix): the eval harness's proof
+   * matrix measures the same task with only the guardian toggled, and a
+   * sub-agent inherits the parent's choice.
+   */
+  guardian?: boolean;
   /** Optional designated summarizer model for compaction. */
   compactionModel?: string;
 }

@@ -4,6 +4,92 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### 26.3 Live Delta Matrix: One Valid Lane, Honest Null Delta (2026-09-21)
+
+- **One complete live lane on a free model.** `openrouter/cohere/north-mini-code:free`,
+  guardian OFF: **86.7% (13/15)**, 83k tokens, every task tool-engaged — saved with
+  `guardian: false` provenance. The 25.7-precedent `deepseek-v4-flash-0731:free` is now
+  paid-only upstream; the replacement was probed with a real tool round-trip before use.
+- **The ON half was killed by free-tier quota, and that is recorded, not papered over.**
+  Every ON-lane task 429'd (`free-models-per-day` cap — account-wide across all free
+  models; the Gemini free tier is also exhausted). Publishing "86.7% OFF vs 0% ON" would
+  have been manufacturing a result out of an outage, so the delta box is an **honest
+  null**: no delta table until quota allows a real ON lane (the harness pairs
+  automatically when one exists).
+- **The attempt hardened the pairing against both failure modes it hit.** A report where
+  fewer than half the tasks spent tokens is unpairsble (an all-429 lane can no longer pose
+  as a 0% measurement), and both halves must cover the same task-id set (a 1-task probe
+  cannot masquerade as the ON half of a 15-task run). +3 pairing tests. The failure was
+  found live: a stale-dist probe paired the dead lane and printed "DELTA: −86.7 pts —
+  guardian hurts" from pure infrastructure failure — exactly the manufactured result this
+  guard exists to prevent.
+
+### Codebase Health Telemetry — `anvil health` (Phase 26.5, 2026-09-21)
+
+- **The adaptive-ratchet story is now measurable, not claimed.** Every real `anvil gate`
+  scan records an observation into `ANVIL_HOME/health/<project-hash>.json` (12-char SHA-256
+  of the resolved root, `0600`, written synchronously so a process exit can't lose it):
+  cumulative scans, scanned/clean added lines, violations per rule, and the allowlist's
+  active entries vs its historical high. Latest-only per project — counters accumulate
+  across sessions, but there is no history array to grow without bound.
+- **`anvil health` renders the truth, including empty truths.** Freshness ("last scan 5m
+  ago"), cleanliness, the allowlist drain percent ((high − active) / high — a never-used
+  allowlist reads "no exceptions on record — nothing to drain", not a fabricated 0%), and
+  the top blocked rule families. A project with no scans says so instead of rendering zeros
+  as data.
+- **Watch mode is counted honestly.** `anvil gate --watch` re-scans the same diff many
+  times a minute; recording every re-scan would inflate the counters, so it observes
+  silently and records once when the run stops.
+- Evidence: `health.test.ts` 11/11 (two-session accumulation, drain ratchet 3→2→0,
+  per-root isolation, corruption rebuild); end-to-end through the built CLI across two
+  `gate --staged` sessions (cleanliness 50%→60%, "2 scan(s) recorded"). Core 638/638, full
+  gate green.
+
+### `anvil init --guarded` Now Provisions a Real Gate for Foreign Repos (Phase 26.4, 2026-09-21)
+
+- **The hook that was missing now exists.** `guardedInit` previously wrote only AGENTS.md and
+  an allowlist — a gate with no teeth. It now provisions four things: the language-tailored
+  AGENTS.md, a starter `.anvil/rules` block (`guardian:rules` format) with language-specific
+  slop idioms (bare `except:` for Python, `unwrap()` for Rust, `_ = err` for Go, type-escapes
+  for TypeScript), an executable `.githooks/pre-commit` (dependency-free node script — no
+  Anvil installation required on the host), and `core.hooksPath = .githooks` in the repo's git
+  config (an existing hooksPath is never overwritten). Existing files are never clobbered.
+- **The hook is honest about what it is.** It scans STAGED additions only, enforces the two
+  universal rules plus the project's own `guardian:rules` block, exempts its own rule-source
+  files from matching (the S5.3 lesson: a file defining a rule never "uses" it), skips comment
+  lines, allows empty commits, and on a missing git fails the commit with the exact recovery
+  hint instead of passing silently. Bypass is the deliberate, visible `--no-verify`.
+- **Acceptance is a real blocked commit, not a mocked one.** Tests provision throwaway
+  non-Anvil repos in all four languages, plant slop, and assert the commit is refused with the
+  rule named; a clean commit passes; the degradation path is exercised with an isolated PATH.
+  RED proven by stubbing the provisioning (8/10 fail without it).
+- **`anvil gate --staged` added** so the in-process gate and the provisioned hook judge the
+  same surface, and both now load project `guardian:rules` — user rules are enforcement, not
+  just advice, in the CLI lane too.
+
+### Guardian Toggle + Proof-Matrix Harness (Phase 26.3, 2026-09-21)
+
+- **The guardian can now be switched off — deliberately, and measurably.** `AgentOptions`
+  gains `guardian?: boolean` (default ON); an explicit `false` skips the turn interceptor
+  entirely (no scan, no block, no auto-fix). Sub-agents inherit the parent's choice through
+  `ToolSessionContext.guardian` → `runSubAgentLive`, so delegation cannot become a guardian
+  bypass. Pinned by `guardianToggle.test.ts` (RED proven: without the skip, the opt-out
+  session blocks and repairs exactly as before).
+- **The eval harness can run the delta matrix (26.3):** `evals/run.ts` gains `--guardian=on|off`
+  (env `ANVIL_EVAL_GUARDIAN`, default on; an invalid value is rejected with a non-zero exit),
+  the banner states the mode, `runAllEvalTasks` seeds every task session with the toggle, and
+  `EvalReport.guardian` records it (unset legacy reports render as ON — never a free "off").
+  `npm run eval -- --report` now prints a GUARDIAN DELTA section pairing the newest on/off runs
+  for the same model, or an honest "Delta unavailable" when a half is missing. The delta calls
+  "no delta" and "guardian hurts" by name — no manufactured wins.
+- **Free-tier pacing is a runner option:** `betweenTaskDelayMs` sleeps BETWEEN tasks (never
+  after the last one), defaulting from `EVAL_RATE_LIMIT_DELAY_MS` (env
+  `ANVIL_EVAL_RATE_LIMIT_DELAY_MS`, 2000ms) on live lanes only — mock runs stay instant.
+- Evidence: core 617/617 (84 files) green; core `tsc` 0; mock-lane smoke runs verified ON/OFF,
+  env var, invalid-value rejection, and the delta report. **The live delta runs (≥1 free + ≥1
+  frontier model) remain open** — the harness is ready; the operator's live runs are the next
+  step.
+
 ### Certifications Record Whether They Came From a Mock Run or a Live Probe (2026-09-21)
 
 - **The picker badge no longer calls a mock pass "live" (S6, follow-up).** `ModelInfo` gains

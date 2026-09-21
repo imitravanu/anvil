@@ -150,11 +150,12 @@ export async function* executeSession(
         model: ctx.model,
         projectRoot: ctx.projectRoot,
         permissionBroker: ctx.permissionBroker,
-        task: member.task,
-        signal,
-        maxInnerIterations: effectiveBudget,
-        tools: [...ctx.tools],
-      });
+      task: member.task,
+      signal,
+      maxInnerIterations: effectiveBudget,
+      tools: [...ctx.tools],
+      ...(ctx.guardian === undefined ? {} : { guardian: ctx.guardian }),
+    });
       let step = await gen.next();
       while (!step.done) {
         events.push(step.value);
@@ -265,6 +266,7 @@ export async function* executeSession(
     task,
     signal: ctx.signal,
     tools: [...ctx.tools],
+    ...(ctx.guardian === undefined ? {} : { guardian: ctx.guardian }),
   });
   let subStep = await subGen.next();
   while (!subStep.done) {

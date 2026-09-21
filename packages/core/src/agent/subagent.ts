@@ -72,6 +72,8 @@ export async function* runSubAgentLive(opts: {
   maxInnerIterations?: number;
   /** Parent tool list (incl. MCP tools) — delegate_task still filtered. */
   tools?: ToolDefinition[];
+  /** Guardian opt-out (26.3) — sub-agents inherit the parent's choice. */
+  guardian?: boolean;
 }): AsyncGenerator<SubAgentProgress, SubAgentRun> {
   const sub = new AgentSession(opts.provider, {
     systemPrompt: buildSystemPrompt(SUB_AGENT_SYSTEM_PROMPT, opts.projectRoot),
@@ -82,6 +84,9 @@ export async function* runSubAgentLive(opts: {
     tools: subAgentTools(opts.tools),
     allowDelegation: false,
     maxInnerIterations: opts.maxInnerIterations ?? SUB_AGENT_MAX_ITERATIONS,
+    // Undefined on the default (ON) path — no behavior change; an explicit
+    // parent opt-out propagates so delegation can't become a guardian bypass.
+    ...(opts.guardian === undefined ? {} : { guardian: opts.guardian }),
   });
 
   // The parent turn's AbortSignal covers the sub-run (no wall-clock

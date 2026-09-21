@@ -2,15 +2,133 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
-> **ACTIVE 2026-09-21 (this session — Cline, takeover):** owns the unfinished turnStream split:
-> `packages/core/src/agent/turnStream.ts` + `packages/core/src/agent/__tests__/turnStream.test.ts`
-> (NEW), `packages/core/src/agent/session.ts` (wiring only),
-> `packages/core/src/agent/goal/__tests__/awareness.test.ts`,
-> `packages/core/src/agent/goal/__tests__/goalEngine.test.ts`,
-> `packages/core/src/mcp/__tests__/clientUnit.test.ts`,
-> `packages/core/src/mcp/__tests__/clientReconnect.test.ts` (NEW),
-> `packages/core/src/lsp/__tests__/lspclientEdges.test.ts`,
-> `packages/core/src/lsp/__tests__/lspToolsLsp.test.ts` (NEW).
+> **ACTIVE 2026-09-21 (this session — Buffy, continuation):** owns the 26.3–26.5 work:
+> `packages/core/src/guardian/{init,hook,langRules,health}.ts` (hook/langRules/health NEW),
+> `packages/core/src/guardian/__tests__/{guardedInit,health}.test.ts` (NEW),
+> `guardian/__tests__/guardianToggle.test.ts` (NEW),
+> `packages/core/src/agent/types.ts`, `packages/core/src/agent/session.ts` (toggle only),
+> `packages/core/src/agent/subagent.ts`, `packages/core/src/tools/types.ts`,
+> `packages/core/src/tools/delegateTask.ts`, `packages/core/src/eval/*`
+> (types/runner/report/index/delta NEW + tests), `packages/core/src/config/constants.ts`,
+> `packages/cli/src/gate.ts` (scanStaged + telemetry + rules loading),
+> `packages/cli/src/index.tsx` (--staged/--health wiring + help), `packages/cli/src/health.ts`
+> (NEW), `evals/run.ts`, plus docs (roadmap S7 boxes, `docs/PHASE-26-PROGRESS.md`,
+> `CHANGELOG.md`).
+>
+> **ACTIVE 2026-09-21 (OpenCode session, gate-red fix):** owns
+> `packages/core/src/lsp/__tests__/lspclientEdges.test.ts` (test-only flake fix:
+> wait for both didChange) + this PROGRESS.md declaration. Disjoint from Buffy's
+> 26.3–26.5 list above; no shared file edited.
+
+## 2026-09-21 — Full-gate red → green: LSP didOpen/didChange flake (OpenCode)
+
+- Full `npm run gate` failed at Step 4: `lspclientEdges.test.ts` "sends didOpen
+  once, then didChange with a bumped version on re-sync" — expected 2 didChange,
+  got 1. Prod `lsp/client.ts:193-210` verified correct by reading (1 didOpen + 2
+  didChange, fire-and-forget `stdin.write`); the test waited only for the FIRST
+  didChange (`log.includes`, 500ms) then asserted two, so under full-suite load
+  the second notification lagged the read. Test-only race, disjoint from the
+  26.3–26.5 dirty tree (no lsp file in it).
+- Fix (test-only, existing `waitFor` helper reused): predicate waits for the full
+  `1 didOpen + 2 didChange` sequence, budget 500ms → 2000ms (matches the file's
+  existing timeouts). Isolated file 5/5 green; quick gate green; full
+  `npm run gate` green (Steps 0–5, 15/15 mock evals).
+- No protected artifact touched. Also corrected the `guardianToggle.test.ts`
+  path in Buffy's ownership block (lives under `agent/__tests__/`, not
+  `guardian/__tests__/`).
+
+## 2026-09-21 — 26.3 live delta attempt: one valid OFF lane, honest null (Buffy)
+
+- Ran the live matrix lanes. **OFF lane complete & valid:** cohere/north-mini-code:free
+  86.7% (13/15), 83k tokens. **ON lane impossible today:** OpenRouter `free-models-per-day`
+  cap hit (account-wide; nemotron probe same 429) + Gemini free tier 429 + no frontier keys.
+- Recorded as HONEST NULL in PHASE-26-PROGRESS; refused to publish "86.7% OFF vs 0% ON" —
+  the ON lane spent 0 tokens, the model was never reached.
+- **Pairing hardened against both live failure modes:** half-alive reports unpairsble
+  (fewer than half the tasks spent tokens) + same-task-set requirement for both halves.
+  Found via a stale-dist probe that paired the dead ON lane and printed "−86.7 pts —
+  guardian hurts" from an outage. guardianFlag.test.ts 14/14 (+3). Deepseek free model is
+  paid-only now; current free+tools catalog probed (19 models, 2 validated).
+
+## 2026-09-21 — Phase 26.5 codebase health telemetry (Buffy, continuation)
+
+- **`guardian/health.ts` (NEW):** per-project snapshot under `ANVIL_HOME/health/<12-char
+  SHA-256 of resolved root>.json`, written synchronously via `atomicWriteJson` at `0600`.
+  Schema: version, timestamp, resolved root, cumulative `scansRun`/`scannedLines`/
+  `cleanLines`/`blockedByRule`, allowlist `entries` + `allowlistHigh` (MAX ratchet).
+  Latest-only per project; corrupted snapshots discarded and rebuilt, never trusted;
+  recording is best-effort (read-only home warns, never fails the scan).
+- **Bug found by my own test run:** the first implementation used
+  `void atomicWriteText(...)` — fire-and-forget async — which raced the read-back and could
+  be lost at process exit. Fixed to synchronous `atomicWriteJson`.
+- **CLI:** every real `gate`/`gate --staged` scan records one observation; `--watch`
+  records ONCE at stop (per-rescan recording would inflate counters). `anvil health`
+  (NEW `packages/cli/src/health.ts` + dispatch + help line) renders freshness, cleanliness,
+  drain percent, top rules; honest empty states for both "no scans" and "no allowlist
+  history".
+- **End-to-end through the built CLI:** two `gate --staged` sessions on a throwaway repo →
+  "2 scan(s) recorded", cleanliness 50%→60%, `no-as-any: 2`. RED proven by stubbing the
+  recorder.
+- **Tests:** `guardian/__tests__/health.test.ts` (NEW, 11). **Evidence:** core **638/638**
+  green; core + cli `tsc` 0; full gate green at end of turn.
+
+## 2026-09-21 — Phase 26.4 guarded init for foreign agents (Buffy, continuation)
+
+- **`guardedInit` provisions a real gate now:** language-tailored AGENTS.md + `.anvil/rules`
+  starter block (per-language slop idioms in `guardian:rules` format) + executable
+  `.githooks/pre-commit` (dependency-free node/CJS script, git + node stdlib only) +
+  `core.hooksPath` in the repo git config. Existing files/hooksPath never clobbered.
+- **Hook design (embedded, not imported):** scans STAGED additions (`git diff --cached`,
+  node_modules/dist excluded); enforces the two universal rules + the project's own
+  `guardian:rules` block (same entry format as core's parser); exempts its own rule-source
+  files (hook/rules/AGENTS.md) from ALL matching — a file defining a rule never "uses" it
+  (S5.3 embedded); skips comment lines; allows empty commits; missing git → clear
+  `[anvil-guardian]` failure naming `--no-verify` as the bypass (the no-Anvil degradation
+  contract, sharpened: the hook needs NO Anvil install, so only git can be missing).
+- **Acceptance = real commits in throwaway non-Anvil repos:** planted `as any` blocked
+  (exit non-zero, `rev-list` 0, rule named on stderr), clean commit passes, `--allow-empty`
+  passes, Python bare-except blocked via project rules, 4-language matrix, no-overwrite,
+  isolated-PATH git-missing test. RED proven: hook provisioning stubbed → 8/10 fail.
+- **CLI parity:** `scanStaged` + `anvil gate --staged` (same staged pathspec); both gate
+  surfaces now load project `guardian:rules` (user rules are enforcement in the CLI lane).
+- **Honest deviation recorded in PHASE-26-PROGRESS:** the spec's degradation copy said the
+  hook should demand `@anvil/cli` in PATH; the embedded scanner is strictly stronger (works
+  on hosts that never installed Anvil) — degradation is now "git missing".
+- **Files:** `guardian/hook.ts` (NEW), `guardian/langRules.ts` (NEW), `guardian/init.ts`
+  (rewritten), `guardian/index.ts` (exports), `cli/gate.ts`, `cli/index.tsx`.
+- **Evidence:** core **627/627** green (was 617; +10, zero regressions); core `tsc` 0;
+  cli `tsc` 0. Full gate run at end of turn.
+
+## 2026-09-21 — S7 boxes ticked + Phase 26.3 harness (Buffy, continuation)
+
+- **S7 MCP/LSP/goal-engine boxes ticked** in `docs/STABILIZATION-ROADMAP-2026-09.md` with
+  evidence — the tests landed in the prior commit (`10faf88`); only the annotations were
+  missing. Verified live before ticking: focused run 119/119 across mcp/lsp/goal/turnStream/session.
+- **26.3 guardian toggle (harness half of the proof matrix):**
+  - `AgentOptions.guardian?: boolean` (default ON). `false` short-circuits
+    `guardianIntercept` — no scan, no block, no auto-fix. Sub-agents inherit through
+    `ToolSessionContext.guardian` → `runSubAgentLive` (both delegate paths), so delegation
+    cannot become a guardian bypass.
+  - RED proven by neutralizing the skip (`if (false && …)`): the two opt-out tests failed
+    (session blocked + auto-fixed as usual), the default-ON test kept passing. GREEN with the
+    real guard. `guardianToggle.test.ts` 3/3.
+  - **Eval wiring:** `evals/run.ts` `--guardian=on|off` + env `ANVIL_EVAL_GUARDIAN` (default on;
+    invalid value → exit 1); banner states the mode; `runAllEvalTasks` seeds every task session;
+    `EvalReport.guardian` records it (unset legacy → ON). `--report` prints the new
+    GUARDIAN DELTA section: `formatGuardianDelta` ("Delta unavailable" for a missing half,
+    "no delta" / "guardian hurts" named honestly) + `findGuardianDeltaPair` (newest on/off
+    pair, fieldless legacy reports excluded, optional provider/model filter).
+  - **Pacing:** `betweenTaskDelayMs` sleeps between tasks, never after the last one; default
+    from `EVAL_RATE_LIMIT_DELAY_MS` (env `ANVIL_EVAL_RATE_LIMIT_DELAY_MS`, 2000ms), live lanes
+    only — mock stays instant. Pinned by a timing test (exactly one inter-task gap).
+  - `guardianFlag.test.ts` 11/11 (report layer, pairing, seeding, pacing, end-to-end smoke).
+  - **Smoke-tested the real CLI lane:** `--mock` banner ON; `--guardian=off` and
+    `ANVIL_EVAL_GUARDIAN=off` both banner OFF; `--guardian=bogus` rejected; `--report` renders
+    the delta section.
+- **Evidence:** core **617/617 (84 files)** green (was 603; +14 new, zero regressions); core
+  `tsc` 0; **full `npm run gate` green** (0–5, evals 15/15). No protected artifact touched.
+
+## 2026-09-21 — turnStream split + S7 MCP/LSP/goal tests landed (this session — Cline, takeover)
 ## 2026-09-21 — turnStream split + S7 MCP/LSP/goal tests landed (this session — Cline, takeover)
 
 - Took over Buffy's half-done work (out of credit ~02:24): the `turnStream.ts` extraction was

@@ -45,6 +45,8 @@ export interface ToolSessionContext {
   signal: AbortSignal;
   mergeSubCheckpoints?: (checkpoints: Checkpoint[]) => Promise<void>;
   recordMutation?: () => void;
+  /** Guardian opt-out (26.3): false propagates to sub-agents. Default ON. */
+  guardian?: boolean;
   /** Called once when a `delegate_task` team run completes (Phase 25.2 introspection). */
   onTeamRunResult?: (result: TeamRunResult) => void;
 }

@@ -87,6 +87,8 @@ export class AgentSession {
   private readonly guardianRules: CustomGuardianRule[];
   /** Whether Anvil's own rule families apply to this project (see guardian/scope.ts). */
   private readonly guardianScope: GuardianScope;
+  /** Master switch for the guardian interceptor (26.3). Default true. */
+  private readonly guardianEnabled: boolean;
   /** Last completed delegate_task team run (Phase 25.2 introspection for /team status). */
   private lastTeamRun: TeamRunResult | null = null;
   readonly id: string;
@@ -108,6 +110,10 @@ export class AgentSession {
     this.toolDefs = options.tools ?? TOOL_DEFINITIONS;
     this.guardianRules = loadCustomGuardianRules(this.options.projectRoot);
     this.guardianScope = detectGuardianScope(this.options.projectRoot);
+    // Guardian opt-out (26.3): default ON. Sub-agents inherit the parent's
+    // choice via the toolSessionContext so the matrix toggles the whole
+    // stack, not just the top-level turn loop.
+    this.guardianEnabled = options.guardian ?? true;
     this.id = restore?.metadata.id ?? randomUUID();
     this.rewindRing = new RewindRing({
       projectRoot: this.options.projectRoot,
@@ -589,6 +595,7 @@ export class AgentSession {
   ): Promise<{ blocked: Set<string>; handled: Map<string, ToolExecutionResult>; event: AgentEvent | null }> {
     const blocked = new Set<string>();
     const handled = new Map<string, ToolExecutionResult>();
+    if (!this.guardianEnabled) return { blocked, handled, event: null };
     const fileWriteTools = new Set(["write_file", "edit_file"]);
     const pending: { call: PreparedCall; path: string; diff: string }[] = [];
     for (const p of prepared) {
@@ -745,6 +752,7 @@ export class AgentSession {
             onTeamRunResult: (result) => {
               this.lastTeamRun = result;
             },
+            guardian: this.guardianEnabled,
           },
           p.key
         );

@@ -35,6 +35,8 @@ export interface EvalReport {
   timestamp: number;
   model: string;
   provider: string;
+  /** Whether the guardian interceptor was ON for this run (26.3). */
+  guardian?: boolean;
   results: EvalResult[];
   passRate: number; // 0 to 1
   passedCount: number;
@@ -52,6 +54,17 @@ export interface EvalRunnerOptions {
   useMock?: boolean;
   providerId?: string;
   modelId?: string;
+  /**
+   * Guardian toggle for the proof matrix (26.3). Default ON — matches product
+   * behavior. An explicit false seeds every task's session with the guardian
+   * disabled, so the same task/seed measures the delta the interceptor makes.
+   */
+  guardian?: boolean;
+  /**
+   * 26.3 free-tier pacing: milliseconds to sleep BETWEEN tasks (never after
+   * the last one). 0/undefined keeps the run instant (mock/CI default).
+   */
+  betweenTaskDelayMs?: number;
   onTaskStart?: (task: EvalTask, index: number, total: number) => void;
   onTaskComplete?: (result: EvalResult, index: number, total: number) => void;
 }

@@ -4,16 +4,21 @@
  * Run benchmarks locally or in CI:
  *   npx tsx evals/run.ts [--mock] [--fast] [--filter <name>] [--report]
  *   npx tsx evals/run.ts --provider gemini --model gemini-2.0-flash
+ * Guardian proof matrix (26.3):
+ *   npx tsx evals/run.ts --provider openrouter --model X --guardian=off
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   runAllEvalTasks,
   formatEvalReport,
+  formatGuardianDelta,
   formatTrendComparison,
   loadRecentReports,
   resolveEvalsDir,
+  findGuardianDeltaPair,
 } from "../packages/core/src/eval/index.js";
+import { EVAL_RATE_LIMIT_DELAY_MS } from "../packages/core/src/config/constants.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TASKS_DIR = path.join(__dirname, "tasks");
@@ -25,6 +30,8 @@ async function main() {
   if (args.includes("--report")) {
     const reports = loadRecentReports(resolveEvalsDir(), 10);
     console.log(formatTrendComparison(reports));
+    const { on, off } = findGuardianDeltaPair(reports);
+    console.log(formatGuardianDelta(on, off));
     process.exit(0);
   }
 
@@ -54,9 +61,22 @@ async function main() {
     taskFilter = args[fIdx + 1];
   }
 
+  // 26.3: guardian toggle. Default ON (product behavior); `--guardian=off` or
+  // ANVIL_EVAL_GUARDIAN=off opts OUT so the delta matrix can measure the same
+  // tasks with only the interceptor disabled.
+  const guardianArg = args.find((a) => a.startsWith("--guardian="));
+  const guardianEnv = process.env.ANVIL_EVAL_GUARDIAN;
+  const guardianRaw = guardianArg ? guardianArg.slice("--guardian=".length) : guardianEnv;
+  if (guardianRaw !== undefined && guardianRaw !== "on" && guardianRaw !== "off") {
+    console.error(`[eval] Invalid --guardian value "${guardianRaw}" (expected "on" or "off").`);
+    process.exit(1);
+  }
+  const guardian = guardianRaw === undefined ? true : guardianRaw === "on";
+
   console.log("===============================================================================");
   console.log(" ANVIL EVALUATION HARNESS — Starting Task Run");
   console.log(` Provider: ${useMock ? "mock (offline deterministic)" : providerId} | Model: ${modelId || (useMock ? "eval-mock" : "default")}`);
+  console.log(` Guardian: ${guardian ? "ON" : "OFF"} (interceptor ${guardian ? "active" : "disabled for this run"})`);
   console.log(` Tasks Directory: ${TASKS_DIR}`);
   if (fastOnly) console.log(" Filter: fast tasks only");
   if (taskFilter) console.log(` Filter: matching "${taskFilter}"`);
@@ -72,6 +92,9 @@ async function main() {
   const timeoutOverride =
     Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : undefined;
 
+  // 26.3: free-tier rate-limit pacing is applied by the runner between tasks
+  // via `betweenTaskDelayMs` (below) — see runAllEvalTasks.
+
   const report = await runAllEvalTasks({
     tasksDir: TASKS_DIR,
     fastOnly,
@@ -79,7 +102,13 @@ async function main() {
     useMock,
     providerId,
     modelId,
+    guardian,
     timeoutMs: timeoutOverride,
+    // 26.3: free-tier rate-limit pacing. Back-to-back tasks on a capped
+    // provider (15–20 req/min) die on HTTP 429 before the model can work;
+    // the runner sleeps this long between tasks (never after the last one).
+    // 0 in mock/CI so offline runs stay instant.
+    betweenTaskDelayMs: !useMock && EVAL_RATE_LIMIT_DELAY_MS > 0 ? EVAL_RATE_LIMIT_DELAY_MS : 0,
     onTaskStart: (task, index, total) => {
       process.stdout.write(`[${index}/${total}] ${task.id} (${task.name})... `);
     },

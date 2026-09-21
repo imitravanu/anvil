@@ -32,6 +32,11 @@ export const MAX_VERIFY_REPAIRS = getEnvNumber("ANVIL_MAX_VERIFY_REPAIRS", 2);
 // raise it without a code change.
 export const EVAL_TASK_TIMEOUT_MS = getEnvNumber("ANVIL_EVAL_TIMEOUT_MS", 30_000);
 
+// Phase 26.3 — free-tier rate-limit pacing: delay inserted BETWEEN eval tasks on
+// live providers. Free tiers allow 15–20 req/min; back-to-back tasks die on
+// HTTP 429 before the model can work. Mock runs ignore it entirely (0).
+export const EVAL_RATE_LIMIT_DELAY_MS = getEnvNumber("ANVIL_EVAL_RATE_LIMIT_DELAY_MS", 2_000);
+
 // Checkpoint & History Retention Limits
 export const CHECKPOINT_KEEP = getEnvNumber("ANVIL_CHECKPOINT_KEEP", 5);
 

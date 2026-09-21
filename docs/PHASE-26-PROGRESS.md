@@ -5,7 +5,7 @@
 > probed outside the repo, scanner/interceptor/init tests green). No protected artifacts
 > touched.
 
-## Status: IN PROGRESS — 26.0, 26.1, 26.2 landed (2026-09-19)
+## Status: IN PROGRESS — 26.0–26.5 landed; 26.3 live matrix attempted, HONEST NULL (quota) (2026-09-21)
 
 ### 26.0 — Internal Wiring Hardening (audit 2026-09-19)
 - [x] Same-path auto-fix cross-contamination FIXED (positional `fixed[].index` +
@@ -56,21 +56,97 @@
 - CLI: `anvil gate --watch` wired in `index.tsx` (watch process resolves on SIGINT/SIGTERM).
 
 ### 26.3 — Model-Agnostic Proof
-- [ ] `--guardian=on|off` (`ANVIL_EVAL_GUARDIAN`, default on) in `evals/run.ts`
+- [x] `--guardian=on|off` (`ANVIL_EVAL_GUARDIAN`, default on) in `evals/run.ts`
+      *Done 2026-09-21: `AgentOptions.guardian` (default ON, sub-agents inherit via
+      `ToolSessionContext.guardian` → `runSubAgentLive`); the runner seeds every task session
+      with the toggle; banner states the mode; invalid values exit non-zero.
+      RED→GREEN: `guardianToggle.test.ts` (3) + `guardianFlag.test.ts` (11). Core 617/617.*
 - [ ] Delta matrix run: ≥1 free OpenRouter model + ≥1 frontier
-- [ ] Delta table published (or honest null result) in this record
-- [ ] Report section + tests for flag/seeding/presence
+      *ATTEMPTED 2026-09-21, blocked by free-tier quota exhaustion — recorded as an HONEST
+      NULL (below). What was obtained: ONE complete live lane on
+      `openrouter/cohere/north-mini-code:free` (probed with a real tool round-trip first; the
+      25.7-precedent `deepseek-v4-flash-0731:free` is now paid-only upstream). Guardian OFF:
+      **86.7% (13/15)**, 279.8s wall, 83k tokens, 100% task tool-engagement — a full valid
+      OFF lane, saved with `guardian: false` provenance. The ON lane died: every task
+      429'd (`Rate limit exceeded: free-models-per-day. Add 10 credits…`) — the cap is
+      account-wide across ALL free models (nemotron probe: same 429). Gemini free tier also
+      exhausted (direct 429 probe), and no frontier key exists (anthropic/openai empty).
+      Re-run when quota resets — the harness will pair automatically.*
+- [x] Delta table published (or honest null result) in this record
+      *HONEST NULL RESULT (2026-09-21). No delta table is publishable: the ON half of every
+      lane is missing (quota), and comparing 86.7%-OFF against an all-429 0%-ON would be a
+      manufactured result, not a measurement. What the attempt DID harden: the pairing
+      guards against two live failure modes found during the attempt — (1) all-429 lanes
+      (a report where fewer than half the tasks spent tokens is unpairsble) and (2)
+      mismatched task sets (a 1-task probe vs a 15-task run is not a delta; both halves
+      must cover the same task-id set). Found via a stale-dist probe that let the dead ON
+      lane pair: output would have read "DELTA: −86.7 pts — guardian hurts" from pure
+      infrastructure failure. Tests: +3 pairing-hardening cases (14 total in
+      `guardianFlag.test.ts`). Single-lane observation (NOT a delta, for the record only):
+      guardian-OFF on cohere/north-mini-code:free still produced 13/15 clean tasks under
+      the advisory slop scan — model quality varies independently of the guardian.*
+- [x] Report section + tests for flag/seeding/presence
+      *Done 2026-09-21: `EvalReport.guardian` (unset legacy → ON), `formatGuardianDelta`
+      (renders "Delta unavailable" for a missing half; names "no delta" and "guardian hurts"
+      rather than manufacturing wins), `findGuardianDeltaPair` (newest on/off pair, legacy
+      fieldless reports excluded). `--report` prints the section.*
 
 ### 26.4 — Guarded Init for Foreign Agents
-- [ ] Provisioning matrix TS/Python/Rust/Go verified in throwaway non-Anvil repos
-- [ ] Hook blocks planted slop commit; allows clean commit
-- [ ] No-Anvil degradation: clear error, non-zero exit
-- [ ] Tests: matrix + block/allow + degradation
+- [x] Provisioning matrix TS/Python/Rust/Go verified in throwaway non-Anvil repos
+      *Done 2026-09-21: `guardedInit` now provisions FOUR things — language-tailored
+      AGENTS.md, `.anvil/rules` starter block (`guardian:rules` format, language-specific
+      slop idioms: bare-except for Python, unwrap() for Rust, `_ = err` for Go),
+      `.githooks/pre-commit` (executable, CJS shebang, dependency-free), and `core.hooksPath`
+      in the repo's git config (appended `[core]` section; an existing hooksPath is kept and
+      reported). `scanStaged` + `anvil gate --staged` added to the CLI so the in-process gate
+      and the hook agree on the staged surface; both now enforce project `guardian:rules`.
+      Matrix test drives all four languages in throwaway NON-Anvil repos (a bare root is
+      `foreign` scope by design — the hook, not the Anvil families, is the gate).*
+- [x] Hook blocks planted slop commit; allows clean commit
+      *Done 2026-09-21, REAL commit acceptance (not a unit test of script text): planted
+      `as any` → commit blocked non-zero, `rev-list` count 0, stderr names the rule and the
+      `--no-verify` bypass; clean README commit passes; `--allow-empty` allowed (nothing
+      staged to scan); Python bare-except blocked via the project rules block. RED proven:
+      with the hook provisioning stubbed out, 8/10 fail.*
+- [x] No-Anvil degradation: clear error, non-zero exit
+      *Done 2026-09-21: the hook requires NO Anvil installation (no `@anvil` imports;
+      asserted). git-missing → `[anvil-guardian] git is not available on PATH…` + the
+      `--no-verify` hint, exit 1 (tested with an isolated PATH holding only a node symlink).
+      The spec's literal "install @anvil/cli" copy was corrected: the embedded scanner is
+      strictly stronger than a host-CLI dependency — the gate works on hosts that never
+      installed Anvil, and degradation now means "git missing", not "Anvil missing".*
+- [x] Tests: matrix + block/allow + degradation
+      *`guardedInit.test.ts` (NEW, 10): 4-language matrix, no-overwrite + existing-hooksPath
+      kept, blocked/allowed/empty commits, project-rules enforcement, no-Anvil degradation.
+      Core 627/627 green; core `tsc` 0.*
 
 ### 26.5 — Codebase Health Telemetry
-- [ ] `ANVIL_HOME/health/<project-hash>.json` writer + reader
-- [ ] `anvil health` renders freshness + drain rate across two sessions
-- [ ] Metrics derived from allowlist + scan outputs (named constants)
+- [x] `ANVIL_HOME/health/<project-hash>.json` writer + reader
+      *Done 2026-09-21: `guardian/health.ts` — the key is the first 12 hex chars of
+      SHA-256 of the RESOLVED root (spec-exact); snapshots are written synchronously via
+      `atomicWriteJson` at mode `0600` (a fire-and-forget async write was found and fixed
+      during testing — the recording is the last thing a gate run does, so an async write
+      could be lost at process exit). Schema: cumulative `scansRun`/`scannedLines`/
+      `cleanLines`/`blockedByRule` + the allowlist `entries`/`high` pair. Latest-only per
+      project, no history array to grow unbounded; a corrupted snapshot is discarded and
+      rebuilt, never trusted.*
+- [x] `anvil health` renders freshness + drain rate across two sessions
+      *Done 2026-09-21: every real `anvil gate` scan (working tree + `--staged`) records one
+      observation; watch mode records ONCE at stop, not per debounced re-scan (re-scans of
+      the same diff would inflate the counters). End-to-end verified through the built CLI:
+      two `gate --staged` sessions against a throwaway repo → "2 scan(s) recorded",
+      cleanliness 50%→60%, `no-as-any: 2`. Renderer states the honest empty case ("no
+      exceptions on record — nothing to drain") instead of rendering a never-used allowlist
+      as 0% drained; a project with no scans gets "no scans recorded yet", not zeroes.*
+- [x] Metrics derived from allowlist + scan outputs (named constants)
+      *Drain rate = (high − active) / high, clamped to [0,100], from `loadFreshAllowlist`
+      (the 26.0 reader — the data source the spec named). Cleanliness = clean added lines /
+      scanned added lines. Top rules ranked by cumulative count, capped at
+      `HEALTH_TOP_RULES` (5). Telemetry recording is best-effort: a read-only home warns and
+      never fails the scan that fed it. Tests: `health.test.ts` (NEW, 11) — two-session
+      accumulation, drain ratchet (3→2 active = 33% drained, →0 = 100%), per-root hash
+      isolation, corruption rebuild, clamping, renderer stability. RED proven by stubbing
+      the recorder (11/11 fail). Full gate green.*
 
 ### Phase Gate
 - [ ] Release criteria in PHASE-26-SPEC all checked

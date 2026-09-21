@@ -1,10 +1,8 @@
 # Anvil Stabilization Roadmap — 2026-09 (post-audit)
 
-> **Status:** PARTIALLY COMPLETE — S0, S1.1–S1.4, S2.1, S2.2, S3.1–S3.2, S4.1, S4.2, and S5.1/S5.2
-> are **done** (each landed test-first with the full `npm run gate` green; checkboxes annotated
-> in place — S3 in 2026-09-20, S4.1 in 2026-09-20, S4.2 in 2026-09-20, S5.1/S5.2 in 2026-09-20,
-> S1.3 in 2026-09-20, S2.3 in 2026-09-20).
-> Still open: S7 (test equity — coverage reporting added 2026-09-21; first CLI baseline 33.9%).
+> **Status:** COMPLETE except S7's two open boxes (MCP/LSP/goal-engine tests — landed 2026-09-21 —
+> and CLI's `index.tsx` entry harness). S0, S1.1–S1.4, S2.1–S2.3, S3.1–S3.2, S4.1–S4.2, S5.1–S5.3,
+> and S6 are done.
 > **Principle:** No new features until the chain **approved → executed → changed → verified → reported**
 > is provably consistent. Every finding below cites the inspected source location; none has
 > yet been reproduced with a regression test — Step 0 of each phase is to write that test first.
@@ -492,9 +490,23 @@ Fixes land in this phase.
 File-count gaps ≠ coverage gaps, but the subtlest async logic has the thinnest files:
 `mcp/__tests__` (3), `lsp/__tests__` (2), goal/team runners, CLI (6).
 
-- [ ] MCP: transport pump, line-splitter limits, SSE parser, reconnect paths.
-- [ ] LSP client: request timeouts, server death, fallback honesty.
-- [ ] Goal engine: budget exhaustion classification, milestone failure propagation.
+- [x] MCP: transport pump, line-splitter limits, SSE parser, reconnect paths.
+      *Done 2026-09-21 (commit `10faf88`): `mcp/clientUnit.test.ts` (NEW) — SSE parser frame
+      boundaries, line-splitter limits, pump caps and reconnect/state-machine branches against the
+      real client; `mcp/clientReconnect.test.ts` (NEW) — reconnect paths driven with a scripted
+      server. S3.1/S3.2's transport tests were already in place; these close the *client* side of
+      the item.*
+- [x] LSP client: request timeouts, server death, fallback honesty.
+      *Done 2026-09-21 (commit `10faf88`): `lsp/lspclientEdges.test.ts` (NEW) — request timeout
+      degrades to empty results (never throws), a crashed server is marked dead with in-flight
+      calls failed and never reused, with REAL child processes (not mocks); `lsp/lspToolsLsp.test.ts`
+      (NEW) — the LSP tool surface. Honesty is pinned by asserting the *reported* source on the
+      degradation path.*
+- [x] Goal engine: budget exhaustion classification, milestone failure propagation.
+      *Done 2026-09-21 (commit `10faf88`): `goal/awareness.test.ts` +33 cases, `goal/goalEngine.test.ts`
+      +125 cases including the verify-failed-then-repaired milestone case (the Agent C 2026-09-18
+      fix, now pinned). Budget-exhaustion classification and failure propagation are asserted
+      against the real engine.*
 - [x] Add `c8`/coverage reporting to `npm test` so future audits argue from data.
       *Done 2026-09-21, with one deliberate deviation: coverage is an opt-in `npm run coverage`
       (the v8 provider via `@vitest/coverage-v8`), NOT a step in `npm test`. Gating on an

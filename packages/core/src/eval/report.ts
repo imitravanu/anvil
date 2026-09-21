@@ -13,7 +13,8 @@ export function resolveEvalsDir(override?: string): string {
 export function createEvalReport(
   results: EvalResult[],
   model: string,
-  provider: string
+  provider: string,
+  guardian?: boolean
 ): EvalReport {
   const passedCount = results.filter((r) => r.passed).length;
   const totalTasks = results.length;
@@ -32,6 +33,9 @@ export function createEvalReport(
     timestamp: Date.now(),
     model,
     provider,
+    // Unset means the run predates the 26.3 flag (or used the default) —
+    // rendered as ON, since ON is the product default.
+    guardian: guardian ?? true,
     results,
     passRate,
     passedCount,
@@ -108,6 +112,45 @@ export function formatEvalReport(report: EvalReport): string {
   }
 
   lines.push("===============================================================================");
+  return lines.join("\n");
+}
+
+/**
+ * Guardian delta (26.3): same model/provider pair with the guardian ON vs OFF.
+ * A missing half renders as unavailable — a half-matrix is not a delta.
+ */
+export function formatGuardianDelta(on: EvalReport | undefined, off: EvalReport | undefined): string {
+  const lines: string[] = [];
+  lines.push("===============================================================================");
+  lines.push(" GUARDIAN DELTA — same tasks, same model, only the interceptor toggled");
+  lines.push("-------------------------------------------------------------------------------");
+  if (!on || !off) {
+    lines.push(" Delta unavailable: need one guardian=on run and one guardian=off run");
+    lines.push(`   on:  ${on ? `${on.provider}/${on.model} ${(on.passRate * 100).toFixed(1)}%` : "(missing)"}`);
+    lines.push(`   off: ${off ? `${off.provider}/${off.model} ${(off.passRate * 100).toFixed(1)}%` : "(missing)"}`);
+    lines.push("===============================================================================");
+    return lines.join("\n");
+  }
+  const taskIds = Array.from(new Set([...on.results, ...off.results].map((r) => r.taskId))).sort();
+  lines.push(` ON:  ${on.provider}/${on.model} — ${(on.passRate * 100).toFixed(1)}% (${on.passedCount}/${on.totalTasks})`);
+  lines.push(` OFF: ${off.provider}/${off.model} — ${(off.passRate * 100).toFixed(1)}% (${off.passedCount}/${off.totalTasks})`);
+  const delta = on.passRate - off.passRate;
+  const arrow = delta > 0 ? "guardian helps" : delta < 0 ? "guardian hurts" : "no delta";
+  lines.push(` DELTA: ${(delta * 100).toFixed(1)} pts — ${arrow}`);
+  lines.push("-------------------------------------------------------------------------------");
+  lines.push("| Task ID                        | ON         | OFF        | D          |");
+  lines.push("-------------------------------------------------------------------------------");
+  for (const id of taskIds) {
+    const rOn = on.results.find((r) => r.taskId === id);
+    const rOff = off.results.find((r) => r.taskId === id);
+    const mark = (r?: EvalResult) => (r ? (r.passed ? "PASS" : "fail") : "-");
+    const cell = (s: string) => s.padEnd(10);
+    lines.push(`| ${id.padEnd(30)} | ${cell(mark(rOn))} | ${cell(mark(rOff))} | ${cell(
+      rOn && rOff ? (rOn.passed === rOff.passed ? "=" : rOn.passed ? "+on" : "+off") : "n/a"
+    )} |`);
+  }
+  lines.push("===============================================================================");
+  lines.push("");
   return lines.join("\n");
 }
 

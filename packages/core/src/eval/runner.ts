@@ -10,7 +10,7 @@ import { AUTO_APPROVE_BROKER } from "../agent/types.js";
 import { ModelProvider } from "../providers/types.js";
 import { createProviders } from "../providers/index.js";
 import { loadCredentials } from "../config/index.js";
-import { getErrorMessage } from "../errors.js";
+import { getErrorMessage, sleepAbortable } from "../errors.js";
 import { scanTextForSlop } from "../guardian/scanner.js";
 import { EVAL_TASK_TIMEOUT_MS } from "../config/constants.js";
 
@@ -106,7 +106,8 @@ export async function runEvalTask(
       provider = chosen;
     }
 
-    // 3. Run AgentSession against tempDir
+    // 3. Run AgentSession against tempDir — seeded with the guardian toggle so
+    // the 26.3 matrix can measure the same task with only the interceptor off.
     const session = new AgentSession(provider, {
       projectRoot: tempDir,
       model: modelId,
@@ -114,6 +115,7 @@ export async function runEvalTask(
       systemPrompt: "You are Anvil, an expert coding agent. Fulfill the user request accurately.",
       permissionBroker: AUTO_APPROVE_BROKER,
       autoVerify: false,
+      ...(options.guardian === undefined ? {} : { guardian: options.guardian }),
     });
 
     const timeoutLimit = options.timeoutMs || task.timeoutMs || EVAL_TASK_TIMEOUT_MS;
@@ -256,12 +258,17 @@ export async function runAllEvalTasks(
     const result = await runEvalTask(task, options);
     results.push(result);
     options.onTaskComplete?.(result, i + 1, total);
+    // 26.3 free-tier pacing: sleep between tasks, never after the last one,
+    // so the report's wall clock is not extended by a trailing no-op wait.
+    if (options.betweenTaskDelayMs && options.betweenTaskDelayMs > 0 && i < total - 1) {
+      await sleepAbortable(options.betweenTaskDelayMs);
+    }
   }
 
   const providerName = options.useMock || !options.providerId ? "mock" : options.providerId;
   const modelName = options.modelId || (options.useMock ? "eval-mock" : "default");
 
-  const report = createEvalReport(results, modelName, providerName);
+  const report = createEvalReport(results, modelName, providerName, options.guardian);
   await saveEvalReport(report, options.outputDir);
   return report;
 }

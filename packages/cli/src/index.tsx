@@ -42,6 +42,7 @@ import { runHeadless, readStdin } from "./headless.js";
 import { runGoalHeadless } from "./goalRunner.js";
 import { runNativeGate, runNativeGateWatch } from "./gate.js";
 import { runGuardedInit } from "./initGuarded.js";
+import { runHealth } from "./health.js";
 import { enterAltScreen, exitAltScreen } from "./altScreen.js";
 
 // Detached MCP server children would outlive Anvil — SIGKILL them on exit.
@@ -132,7 +133,8 @@ Usage:
   anvil -p, --prompt <text> Run headless non-interactive turn (streams to stdout)
   anvil -g, --goal <text>   Run autonomous multi-step engineering mission
   anvil config              (Re)configure a provider API key
-  anvil gate [--full|--watch]  Guardian scan of working-tree diff (--watch: continuous)
+  anvil gate [--full|--watch|--staged]  Guardian scan of the working-tree diff (--watch: continuous, --staged: staged additions only)
+  anvil health              Show codebase health: freshness, cleanliness, allowlist drain
   anvil init --guarded      Provision AGENTS.md + .fresh-allowlist.json here
   anvil --version           Print the version and exit
   anvil --help              Show this help
@@ -517,11 +519,15 @@ if (first === "config") {
 } else if (first === "gate") {
   // Phase 25.6 — native guardian gate (fast scan; --full runs npm run gate).
   // Phase 26.2 — --watch continuously re-scans the dirty-file diff.
+  // Phase 26.4 — --staged scans staged additions only (pre-commit surface).
   if (argv.includes("--watch")) {
     void runNativeGateWatch({ cwd: process.cwd() }).then((code) => process.exit(code));
   } else {
-    process.exit(runNativeGate({ full: argv.includes("--full") }));
+    process.exit(runNativeGate({ full: argv.includes("--full"), staged: argv.includes("--staged") }));
   }
+} else if (first === "health") {
+  // Phase 26.5 — render the latest health snapshot for this project.
+  process.exit(runHealth({}));
 } else if (first === "init") {
   // Phase 25.6 — `anvil init --guarded [--lang <id>]` provisions repo gates.
   const langFlag = argv.indexOf("--lang");
