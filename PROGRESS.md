@@ -116,6 +116,34 @@ Read this before the chronological log below. The log is history; this is truth.
 
 ---
 
+## 2026-09-22 — Audit of the concurrent qwencloud integration (Buffy)
+
+The provider that landed mid-session (`faaa0bc`) is fresh production surface —
+audited it with the same method. **Verdict: clean, no change made.**
+
+All 11 touchpoints are consistent: `ProviderId` union → `PROVIDER_CERT_MODELS`
+→ `resolveCertificationCredentials` (accepts `QWENCLOUD_API_KEY` or
+`DASHSCOPE_API_KEY`) → `PROVIDER_ORDER` → `ProviderCredentials.qwencloudApiKey`
+→ `createProviders` → TUI `PROVIDER_LABELS`/`PROVIDER_META` (onboarding can
+configure it via the same `saveCredential(field, …)` path) → README row →
+`certify-provider.ts`. The parity guards earned their keep: docTruth's
+two-way table parity and env-var cross-check passed unmodified, and the TUI
+label map stayed compile-time total — the integration updated every place a
+guard points at, which is exactly what those guards were built to force.
+
+The adapter rides the shared `createChatCompletionsStyleProvider` — the same
+path where I fixed the `__parseError` sentinel — with a stub-server streaming
+test and an unconfigured-yields-error test. Its 22 registry rows are honestly
+`certified: "untested"` and `isFree: true`; it is not claimed as a free-model
+sync source (openrouter/orcarouter remain the only two). `scripts/audit-qwen.ts`
+is a live-probe harness (imports core src, never runs in the gate). Noted,
+not fixed: the README's "1M free tokens" claim is product copy no code guard
+can verify; it lives or dies by Alibaba's policy, not our tests.
+
+Tests at audit time: core 675 / tui 255 / cli 95 — 1,025 total, gate green.
+
+---
+
 ## 2026-09-22 — CLI coverage: S7 gap closed to 62% (Buffy)
 
 The last open thread from my own work: CLI coverage sat at 55.05% against the
