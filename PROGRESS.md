@@ -92,7 +92,15 @@ Read this before the chronological log below. The log is history; this is truth.
 - **Gate:** `npm run gate` green, Steps 0 → 5 (sensor, protected-artifact
   manifest, diff scan, full-tree residual drain, sequential build, typecheck,
   unit tests, 15/15 mock evals).
-- **Tests:** **1001** green — core 668 / tui 255 / cli 78.
+- **Tests:** **1013** green — core 669 / tui 255 / cli 84.
+- **CLI coverage:** 55% → 62.3% statements (the S7 target was 80%; remaining
+  gap is index.tsx's Ink/render paths, which need an interactive harness).
+- **Concurrent work detected (2026-09-22):** an in-flight `qwencloud` provider
+  (`packages/core/src/providers/qwencloud.ts` + `ProviderId` union change in
+  `types.ts`) is in the working tree, NOT from Buffy — left untouched per the
+  collision guard. It is mid-integration (core typecheck will fail until
+  `PROVIDER_CERT_MODELS`/registry learn the new id). If you are picking up
+  Anvil, coordinate there first.
 - **Docs-vs-code is now mechanical:** `packages/cli/src/__tests__/docTruth.test.ts`
   asserts the release badge == `CORE_VERSION`, provider count == the registry,
   tool count == `TOOL_DEFINITIONS`, the Node badge == `engines.node`, the roadmap
@@ -105,6 +113,38 @@ Read this before the chronological log below. The log is history; this is truth.
   read and audited (2026-09-22, three passes); `packages/cli/src/index.tsx` is
   still partly uncovered; Windows is second-class (bash + a Unix-only kill-tree);
   no cost estimation, no session search.
+
+---
+
+## 2026-09-22 — CLI coverage: S7 gap closed to 62% (Buffy)
+
+The last open thread from my own work: CLI coverage sat at 55.05% against the
+roadmap's 80% target. Closed what is closable without an interactive harness.
+
+**A real defect fell out of writing the tests** (`guardian/health.ts`): core's
+`readSnapshot` only validated `timestamp`, so a truncated-but-parseable snapshot
+was returned and crashed `deriveHealth`/`formatHealth` — `anvil health` dies on
+a hand-edited or half-written file instead of showing the honest empty state.
+Now the full schema is validated (pinned in core's suite, 12/12) and the CLI
+test initially FAILED against the stale dist, which was the RED proof.
+
+**New suites:** `health.test.ts` (0% → 80%; env-relocated ANVIL_HOME, real
+snapshots via core's own `recordHealthScan`, no mocks), `initGuarded.test.ts`
+(82% → 100%; hook-executable-bit pinned, throw path via ENOTDIR). `entry.test.ts`
+grew 2 → 9: help, health, init, gate-on-non-git, first-run non-TTY, run-path
+non-TTY guidance (hermetic via a readStdin stub), and the SIGTERM handler's
+cleanup-then-exit-143 contract. The harness now `chdir`s into the temp home —
+while writing these tests I found the `init` entry test had run against the
+repo cwd (it also would have appended hooksPath to .git/config in a fresh
+clone; here the key already existed).
+
+`goalRunner.test.ts` covers the SIGINT lifecycle with the REAL listener
+registry (listenerCount before/after; no `as never` casts — my first mock-
+based attempt fought TypeScript overloads and was replaced).
+
+**Final: 62.35% stmts / 59.81% branch (was 55.05/51.71). The remaining gap is
+`index.tsx`'s Ink-mounted paths (chat boot, headless/goal boots) — they need a
+render/exit harness, a deliberate build, not a drive-by.**
 
 ---
 

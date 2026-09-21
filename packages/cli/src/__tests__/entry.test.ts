@@ -152,11 +152,11 @@ describe("CLI entry dispatch", () => {
     // The module registers exit/SIGTERM/SIGHUP cleanup at import time. Drive
     // the SIGTERM handler directly: it must attempt cleanup, then exit 143.
     let sigtermHandler: (() => void) | undefined;
-    const onSpy = vi.spyOn(process, "on").mockImplementation((event: string, listener: (...args: unknown[]) => void) => {
+    const onSpy = vi.spyOn(process, "on").mockImplementation((event: string | symbol, listener: (...args: any[]) => void) => {
       if (event === "SIGTERM") sigtermHandler = listener as () => void;
       return process;
     });
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((code?: string | number | null | undefined): never => {
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((code?: string | number | null) => {
       throw new Error(`__exit__${code ?? 0}`);
     });
     try {
