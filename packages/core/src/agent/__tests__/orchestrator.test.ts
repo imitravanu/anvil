@@ -194,6 +194,25 @@ describe("ToolOrchestrator policy", () => {
     expect(detach).toHaveBeenCalledTimes(1);
   });
 
+  it("reports malformed tool-call JSON without prompting (pre-prompt guard)", async () => {
+    // Pins WHY the orchestrator keeps its own `__parseError` branch even though
+    // `executeTool` has one too: this branch sits BEFORE the mutating/permission
+    // branch, so a malformed mutating call is reported as malformed instead of
+    // raising a permission prompt for a mutation that cannot be described.
+    const b = broker(true);
+    const { o, ledger: l } = orch(b);
+    const call = runnable("write_file", { __parseError: true, rawInput: '{"path":' });
+    const { events, results } = await collect(
+      o.run([call]) as AsyncGenerator<AgentEvent, Map<string, unknown>>
+    );
+    expect(events.map((e) => e.type)).toEqual(["tool_finished"]);
+    expect(results.get(call.p.call.id)).toMatchObject({ isError: true });
+    expect(b.calls).toEqual([]);
+    expect(
+      l.entries.some((e) => e.eventType === "tool_finished" && e.outcome === "error")
+    ).toBe(true);
+  });
+
   it("a broken broker denies by default instead of hanging", async () => {
     const b: PermissionBroker = {
       async requestPermission() {

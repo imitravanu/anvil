@@ -887,3 +887,99 @@ fix: `editFile.test.ts` 8/8, plus `writeFile.test.ts` 7/7 for the shared cap con
 **Not a protected artifact** — no `AGENTS.md`/gate/manifest/allowlist/sentinel/CI path
 involved, so no manifest work is required.
 
+
+## 2026-09-22 — Post-review fixes (Buffy, chief-engineer pass)
+
+**Agent (this session)** — owns & changed (all non-protected; no protected
+artifact touched, so no manifest/sentinel change is required):
+- `packages/core/src/agent/session.ts` — `guardianIntercept` now reports
+  `count: blocked.size` (refused CALLS) instead of `blockedByPath.size`
+  (distinct PATHS). The event contract in `agent/types.ts` and both renderers
+  (`terminalRenderer.ts`, TUI turn report) say "calls blocked"; two refused
+  writes to one file used to report `count=1`.
+- `packages/core/src/agent/__tests__/guardianDispatch.test.ts` — +1 regression
+  case: two blocked `write_file` calls to the SAME path must report `count=2`.
+- `ANALYSIS_REPORT.md` — **removed.** Stale v0.8.0 (2026-09-11) deep dive whose
+  "critical" items were already re-verified FIXED in `docs/AUDIT-2026-09-14.md`;
+  leaving it at the repo root misleads the next agent (AGENTS.md §1.5).
+- `README.md` — release badge v1.0.0 → v1.1.0 (matches `version.ts`); the
+  architecture diagram said "Provider Adapters (10)" → 11.
+- `docs/STABILIZATION-ROADMAP-2026-09.md` — status header no longer claims S7
+  has open boxes; every S7 box is ticked in the body.
+- **NEW `packages/core/src/agent/guardianIntercept.ts`** + **NEW
+  `packages/core/src/agent/__tests__/guardianIntercept.test.ts`** — extracted the
+  session's 104-line `guardianIntercept` method into `guardianInterceptCalls`.
+  The guardian library stays pure (no agent/TUI types): the module lives in the
+  AGENT layer, shapes the `guardian_blocked` event and refusal results, and
+  RETURNS the repair prompt instead of pushing it (the session owns history).
+  Behavior-preserving: same scan surface, same positional auto-fix, same
+  `loop_refused` ledger entry, same event shape/order. `agent/session.ts` drops
+  ~100 lines and `guardianIntercept` is no longer `async` (it never awaited).
+  Tests: 6 new unit cases (disabled passthrough, block + refusal result + ledger
+  + prompt, non-mutating/no-path ignored, external-tool body scan, positional
+  same-path auto-fix, universal-vs-anvil scope) plus the existing 12 dispatch/
+  toggle integration tests, all green. Evidence: core typecheck 0; core suite
+  **659/659** (88 files); full `npm run gate` green (0–5, 15/15 mock evals).
+
+- `packages/core/src/agent/orchestrator.ts` + `__tests__/orchestrator.test.ts` —
+  the review flagged the `__parseError` check appearing in BOTH `executeTool`
+  and the orchestrator. Investigation showed the orchestrator's copy is NOT
+  redundant: it runs before the mutating/permission branch, so a malformed
+  mutating call is reported as malformed instead of prompting the user for a
+  mutation that cannot be described. Kept it, documented WHY inline, and pinned
+  it with a regression test (malformed mutating call → `tool_finished` error,
+  broker never invoked, ledger `error`). Orchestrator tests 8 → 9.
+
+- `packages/core/src/config/index.ts` + `__tests__/config.test.ts` —
+  `hasAnyConfiguredProvider` now inspects the real provider key fields
+  (derived from `PROVIDER_ORDER`) instead of "any non-empty string value". The
+  old shape worked only because every `ProviderCredentials` field happens to be
+  a key; a future non-secret field would have reported a configured install and
+  skipped first-run onboarding. +2 tests (empty, keyless, non-secret).
+
+**Bug hunt (no defect found, recorded):** reviewed `providers/freeModels.ts`
+(circuit breaker / consecutive-429 backoff / `pruneHealthForModels` key parsing)
+and the full `mcp/transport.ts` (pump retention caps, line splitter overflow,
+SSE frame parser CRLF holding, one-deadline connect, off-origin endpoint refusal,
+bounded response reads, redirect: error on both verbs). Both are clean — the S3
+hardening landed as described. No change made rather than manufacture one.
+
+- **NEW `packages/cli/src/args.ts`** + **NEW `__tests__/args.test.ts`** — moved
+  `parseFlags` out of the interactive entry (`index.tsx`) so the argument
+  contract is testable without Ink or a child process. Behavior unchanged
+  (same exits, same messages); `index.tsx` now imports it. 9 tests: both
+  spellings of prompt/goal, --provider/--model values, boolean switches, bare
+  words ignored, single-dash value accepted, missing value and unknown flag
+  both exit 1 with the right stderr, and a doubled dash reads as the next flag.
+  This is the recorded S7 gap ("index.tsx at 0%") attacked the only safe way:
+  real logic out of the entry point rather than an Ink harness around it.
+  Measured: `packages/cli` statements **44.02% → 49.14%** (258/525).
+  `index.tsx` itself remains untested — it is now smaller, and what remains
+  there is genuinely process/Ink wiring that needs a harness to cover.
+
+- `packages/cli/src/args.ts` + `__tests__/args.test.ts` — added
+  `resolveInvocation(argv, { hasConfiguredProvider })`, the whole dispatch
+  decision as a pure union (`version|help|setup|gate|health|init|
+  init-usage-error|run`). `index.tsx`'s top-level is now a thin switch over it,
+  and the default path moved into a named `runFromFlags()` instead of an inline
+  IIFE. +8 tests pin the mode matrix, including "--version beats every
+  subcommand" and "--help is honored anywhere".
+- `packages/core/src/agent/session.ts` — extracted `send()`'s tool-batch
+  settlement (snapshot → orchestrator → abort/partial checkpoint commit →
+  mutation accounting → history push) into `settleToolBatch`, returning
+  whether the batch was cancelled. Behavior-preserving; `send()` is now ~175
+  lines (was ~195), and the checkpoint/history bookkeeping has one home.
+  `takeRewindSnapshot`/`commitRewindSnapshot` now take readonly views.
+
+**Finding 6 (AgentSession DI) — disposition, stated rather than skipped:** the
+remedy applied is progressive EXTRACTION plus direct unit tests of the extracted
+units (`turnStream`, `turnVerifier.finishTurn`, `guardianInterceptCalls`,
+`ToolOrchestrator`, `SessionLedger`, `RewindRing`, `settleToolBatch`) — the
+repo's established idiom. Constructor DI of injected collaborators was
+deliberately NOT added: it would create optional production options with no
+production caller, which AGENTS.md §2.8 forbids, for no behavioral gain.
+
+**Evidence (this session):** core typecheck 0; cli typecheck 0; **662** core /
+**233** tui / **68** cli tests green; full `npm run gate` green (Steps 0–5,
+15/15 mock evals). No protected artifact touched — no manifest/sentinel change
+required.

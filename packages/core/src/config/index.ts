@@ -82,7 +82,15 @@ export {
 } from "../providers/index.js";
 
 export function hasAnyConfiguredProvider(creds: ProviderCredentials): boolean {
-  return Object.values(creds).some((v) => typeof v === "string" && v.length > 0);
+  // Only provider API-key fields count. "Any non-empty string field in the
+  // credentials file" works today only because every field happens to be a key;
+  // a future non-secret field (region, endpoint) would falsely report a
+  // configured install and skip first-run onboarding. Derived from
+  // PROVIDER_ORDER so adding a provider cannot silently go unconfigured.
+  return PROVIDER_ORDER.some((id) => {
+    const value = creds[`${id}ApiKey` as keyof ProviderCredentials];
+    return typeof value === "string" && value.length > 0;
+  });
 }
 
 const PROVIDER_ORDER: ProviderId[] = [

@@ -1,8 +1,9 @@
 # Anvil Stabilization Roadmap — 2026-09 (post-audit)
 
-> **Status:** COMPLETE except S7's two open boxes (MCP/LSP/goal-engine tests — landed 2026-09-21 —
-> and CLI's `index.tsx` entry harness). S0, S1.1–S1.4, S2.1–S2.3, S3.1–S3.2, S4.1–S4.2, S5.1–S5.3,
-> and S6 are done.
+> **Status:** COMPLETE — every S0–S7 box is ticked (MCP/LSP/goal-engine tests and coverage
+> reporting landed 2026-09-21). The one recorded open gap is CLI coverage's ceiling:
+> `packages/cli/src/index.tsx` sits at 0% because it needs an Ink/`process.exit` harness;
+> it is stated in S7, not hidden.
 > **Principle:** No new features until the chain **approved → executed → changed → verified → reported**
 > is provably consistent. Every finding below cites the inspected source location; none has
 > yet been reproduced with a regression test — Step 0 of each phase is to write that test first.

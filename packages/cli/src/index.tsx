@@ -44,6 +44,7 @@ import { runNativeGate, runNativeGateWatch } from "./gate.js";
 import { runGuardedInit } from "./initGuarded.js";
 import { runHealth } from "./health.js";
 import { enterAltScreen, exitAltScreen } from "./altScreen.js";
+import { parseFlags, resolveInvocation } from "./args.js";
 
 // Detached MCP server children would outlive Anvil — SIGKILL them on exit.
 // `exit` alone misses real signals (kill, terminal close), so hook those too.
@@ -80,51 +81,6 @@ process.on("SIGINT", () => {
 });
 
 const VERSION = CORE_VERSION;
-
-function parseFlags(argv: string[]): Record<string, string> {
-  const flags: Record<string, string> = {};
-  const nextValue = (i: number, flag: string): string => {
-    const v = argv[i + 1];
-    // A missing value or another flag means the user typo'd
-    // (`anvil -p` with no text). Fail loudly instead of silently ignoring it
-    // and falling through to chat/headless with an empty prompt. A single
-    // leading dash is a legitimate value ("anvil -p -42 is the answer") —
-    // only a doubled dash is treated as the next flag.
-    if (v === undefined || v.startsWith("--")) {
-      console.error(`Missing value for ${flag}. See \`anvil --help\`.`);
-      process.exit(1);
-    }
-    return v;
-  };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg === "--provider" || arg === "--model") {
-      flags[arg.slice(2)] = nextValue(i, arg);
-      i++;
-    } else if (arg === "--prompt" || arg === "-p") {
-      flags.prompt = nextValue(i, arg);
-      i++;
-    } else if (arg === "--goal" || arg === "-g") {
-      flags.goal = nextValue(i, arg);
-      i++;
-    } else if (arg === "--yes" || arg === "-y") {
-      flags.yes = "1";
-    } else if (arg === "--raw") {
-      flags.raw = "1";
-    } else if (arg === "--no-mcp") {
-      // Skip MCP server startup entirely (fast boot, no child processes).
-      flags["no-mcp"] = "1";
-    } else if (!arg.startsWith("-")) {
-      continue; // bare words are handled by the caller (subcommands)
-    } else {
-      // A typo'd flag used to be ignored silently — `anvil --promt x` opened
-      // plain chat. Fail with the closest-sounding known flag instead.
-      console.error(`Unknown flag: ${arg}. See \`anvil --help\`.`);
-      process.exit(1);
-    }
-  }
-  return flags;
-}
 
 const HELP = `Anvil — a terminal coding agent (v${VERSION})
 
@@ -493,83 +449,85 @@ function runSetup(thenChat: boolean): void {
   appInstance = instance;
 }
 
-// --- Argument dispatch, before any TUI rendering. ---
-const argv = process.argv.slice(2);
-const first = argv[0];
-
-// Honored anywhere — `anvil -y --help` used to open an interactive chat.
-if (argv.includes("--version") || argv.includes("-v")) {
-  const certDate = getLatestCertificationDate();
-  if (certDate) {
-    console.log(`anvil ${VERSION} (certified: ${certDate.slice(0, 10)})`);
-  } else {
-    console.log(`anvil ${VERSION}`);
+/**
+ * Default (no subcommand) path: a goal mission, a headless turn (from the
+ * --prompt flag or piped stdin), or the interactive chat. Extracted so the
+ * top-level dispatch stays a thin switch over the resolved invocation.
+ */
+async function runFromFlags(flags: Record<string, string>): Promise<void> {
+  if (flags.goal && flags.goal.trim()) {
+    await bootGoal(flags.goal.trim(), flags);
+    return;
   }
-  process.exit(0);
-}
 
-if (argv.includes("--help") || argv.includes("-h")) {
-  console.log(HELP);
-  process.exit(0);
-}
+  const stdinText = await readStdin();
+  const hasPromptFlag = Boolean(flags.prompt && flags.prompt.trim());
+  const hasStdin = Boolean(stdinText && stdinText.trim());
 
-if (first === "config") {
-  // Manual (re)configuration — works any time, not just first run.
-  runSetup(false);
-} else if (first === "gate") {
-  // Phase 25.6 — native guardian gate (fast scan; --full runs npm run gate).
-  // Phase 26.2 — --watch continuously re-scans the dirty-file diff.
-  // Phase 26.4 — --staged scans staged additions only (pre-commit surface).
-  if (argv.includes("--watch")) {
-    void runNativeGateWatch({ cwd: process.cwd() }).then((code) => process.exit(code));
-  } else {
-    process.exit(runNativeGate({ full: argv.includes("--full"), staged: argv.includes("--staged") }));
+  if (hasPromptFlag || hasStdin) {
+    let finalPrompt = flags.prompt ?? "";
+    if (hasStdin) {
+      finalPrompt = finalPrompt
+        ? `[Context from stdin]\n${stdinText.trim()}\n\n${finalPrompt}`
+        : stdinText.trim();
+    }
+    await bootHeadless(finalPrompt, flags);
+    return;
   }
-} else if (first === "health") {
-  // Phase 26.5 — render the latest health snapshot for this project.
-  process.exit(runHealth({}));
-} else if (first === "init") {
-  // Phase 25.6 — `anvil init --guarded [--lang <id>]` provisions repo gates.
-  const langFlag = argv.indexOf("--lang");
-  const lang = langFlag >= 0 ? argv[langFlag + 1] : undefined;
-  if (!argv.includes("--guarded")) {
-    console.error("Usage: anvil init --guarded [--lang <typescript|python|rust|go>]");
+
+  if (!process.stdin.isTTY) {
+    console.error(
+      "Anvil is running non-interactively (stdin is not a TTY).\n" +
+        "Provide a prompt with --prompt <text> or pipe input via stdin."
+    );
     process.exit(1);
   }
-  process.exit(runGuardedInit({ lang }));
-} else if (!hasAnyConfiguredProvider(loadCredentials())) {
-  // First run: no API keys at all — onboard instead of hard-failing.
-  runSetup(true);
-} else {
-  const flags = parseFlags(argv);
-  void (async () => {
-    if (flags.goal && flags.goal.trim()) {
-      await bootGoal(flags.goal.trim(), flags);
-      return;
-    }
+  void bootChat(flags);
+}
 
-    const stdinText = await readStdin();
-    const hasPromptFlag = Boolean(flags.prompt && flags.prompt.trim());
-    const hasStdin = Boolean(stdinText && stdinText.trim());
+// --- Argument dispatch, before any TUI rendering. The decision itself lives in
+// args.ts (unit-tested); this switch is only the side-effect wiring. ---
+const argv = process.argv.slice(2);
+const invocation = resolveInvocation(argv, {
+  hasConfiguredProvider: hasAnyConfiguredProvider(loadCredentials()),
+});
 
-    if (hasPromptFlag || hasStdin) {
-      let finalPrompt = flags.prompt ?? "";
-      if (hasStdin) {
-        finalPrompt = finalPrompt
-          ? `[Context from stdin]\n${stdinText.trim()}\n\n${finalPrompt}`
-          : stdinText.trim();
-      }
-      await bootHeadless(finalPrompt, flags);
-      return;
+switch (invocation.kind) {
+  case "version": {
+    const certDate = getLatestCertificationDate();
+    console.log(
+      certDate ? `anvil ${VERSION} (certified: ${certDate.slice(0, 10)})` : `anvil ${VERSION}`
+    );
+    process.exit(0);
+  }
+  case "help":
+    console.log(HELP);
+    process.exit(0);
+  case "setup":
+    // Manual (re)configuration, or first-run onboarding when nothing is
+    // configured — works any time, not just first run.
+    runSetup(invocation.thenChat);
+    break;
+  case "gate":
+    // Phase 25.6 — native guardian gate (fast scan; --full runs npm run gate).
+    // Phase 26.2 — --watch continuously re-scans the dirty-file diff.
+    // Phase 26.4 — --staged scans staged additions only (pre-commit surface).
+    if (invocation.watch) {
+      void runNativeGateWatch({ cwd: process.cwd() }).then((code) => process.exit(code));
+    } else {
+      process.exit(runNativeGate({ full: invocation.full, staged: invocation.staged }));
     }
-
-    if (!process.stdin.isTTY) {
-      console.error(
-        "Anvil is running non-interactively (stdin is not a TTY).\n" +
-          "Provide a prompt with --prompt <text> or pipe input via stdin."
-      );
-      process.exit(1);
-    }
-    void bootChat(flags);
-  })();
+    break;
+  case "health":
+    // Phase 26.5 — render the latest health snapshot for this project.
+    process.exit(runHealth({}));
+  case "init-usage-error":
+    console.error("Usage: anvil init --guarded [--lang <typescript|python|rust|go>]");
+    process.exit(1);
+  case "init":
+    // Phase 25.6 — `anvil init --guarded [--lang <id>]` provisions repo gates.
+    process.exit(runGuardedInit({ lang: invocation.lang }));
+  case "run":
+    void runFromFlags(parseFlags(argv));
+    break;
 }

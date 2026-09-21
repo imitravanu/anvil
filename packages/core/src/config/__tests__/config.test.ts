@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   ProviderSelectionError,
   anvilHome,
+  hasAnyConfiguredProvider,
   loadCredentials,
   loadSettings,
   resolveProviderSelection,
@@ -15,6 +16,22 @@ import type { ProviderCredentials } from "../../providers/index.js";
 
 const geminiOnly: ProviderCredentials = { geminiApiKey: "g-key" };
 const both: ProviderCredentials = { anthropicApiKey: "a-key", geminiApiKey: "g-key" };
+
+describe("hasAnyConfiguredProvider", () => {
+  it("counts only real provider API-key fields", () => {
+    expect(hasAnyConfiguredProvider({})).toBe(false);
+    expect(hasAnyConfiguredProvider(geminiOnly)).toBe(true);
+    // An empty key is not a configured provider.
+    expect(hasAnyConfiguredProvider({ geminiApiKey: "" })).toBe(false);
+  });
+
+  it("a non-secret field does not read as a configured install", () => {
+    // Guards the first-run gate: on "any non-empty string", an extra settings-ish
+    // field would report configured and skip onboarding on a fresh install.
+    const withExtraField: ProviderCredentials & { theme: string } = { theme: "dark" };
+    expect(hasAnyConfiguredProvider(withExtraField)).toBe(false);
+  });
+});
 
 describe("resolveProviderSelection", () => {
   it("flag level: --provider/--model beat everything", () => {

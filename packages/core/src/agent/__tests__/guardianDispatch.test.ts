@@ -120,6 +120,38 @@ describe("Guardian dispatch", () => {
     expect(started.map((e) => ("name" in e ? e.name : ""))).toEqual(["read_file"]);
   });
 
+  it("reports the number of blocked CALLS, not distinct paths", async () => {
+    // Two refused writes to the SAME file: the violation list is keyed by
+    // path, so a path-keyed count reported 1. The event contract (and the
+    // headless line `guardian_blocked count=N`) means refused calls.
+    const session = makeSession([
+      [
+        { type: "tool_call_start", id: "b0", name: "write_file" },
+        {
+          type: "tool_call_end",
+          id: "b0",
+          name: "write_file",
+          input: { path: "src/slop.ts", content: `${AS_ANY}\n// first\n` },
+        },
+        { type: "tool_call_start", id: "b1", name: "write_file" },
+        {
+          type: "tool_call_end",
+          id: "b1",
+          name: "write_file",
+          input: { path: "src/slop.ts", content: `${AS_ANY}\n// second\n` },
+        },
+        { type: "turn_end", stopReason: "tool_use" },
+      ],
+      textTurn("Fixing."),
+    ]);
+
+    const events = await collect(session.send("write the file twice"));
+    const blocked = events.find((e) => e.type === "guardian_blocked");
+    if (blocked?.type !== "guardian_blocked") throw new Error("expected guardian_blocked");
+    expect(blocked.count).toBe(2);
+    await expect(fs.access(path.join(root, "src/slop.ts"))).rejects.toThrow();
+  });
+
   it("still auto-fixes the raw-error family in place and lets the call run", async () => {
     const session = makeSession([
       [

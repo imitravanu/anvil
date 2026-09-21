@@ -77,6 +77,11 @@ export class ToolOrchestrator {
         runResults.set(call.id, result);
         continue;
       }
+      // Deliberately before the mutating/permission branch (and therefore
+      // before `describeToolInput`): a call whose JSON never parsed must be
+      // reported as malformed, NOT surfaced as a permission prompt for a
+      // mutation nobody can describe. `executeTool` carries the same guard for
+      // direct callers — do not "deduplicate" this one away.
       if (call.input && typeof call.input === "object" && "__parseError" in (call.input as Record<string, unknown>)) {
         const rawInput = (call.input as { rawInput?: string }).rawInput ?? "";
         const msg = `Malformed JSON in tool call input. Raw: ${rawInput}`;

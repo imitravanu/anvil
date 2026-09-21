@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/imitravanu/anvil/releases"><img src="https://img.shields.io/badge/Release-v1.0.0-ff6a00?style=flat-square" alt="Version"></a>
+  <a href="https://github.com/imitravanu/anvil/releases"><img src="https://img.shields.io/badge/Release-v1.1.0-ff6a00?style=flat-square" alt="Version"></a>
   <a href="https://github.com/imitravanu/anvil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/imitravanu/anvil/ci.yml?branch=master&style=flat-square&label=CI%20Build" alt="CI"></a>
   <a href="https://github.com/imitravanu/anvil/actions/workflows/visual-regression.yml"><img src="https://img.shields.io/github/actions/workflow/status/imitravanu/anvil/visual-regression.yml?branch=master&style=flat-square&label=Visual%20Gate" alt="Visual Gate"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node-%3E%3D20-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node"></a>
@@ -83,7 +83,7 @@
                            │
 ┌──────────────────────────▼─────────────────────────────┐
 │                   @anvil/core                          │
-│    Autonomous Agent Loop · Provider Adapters (10)      │
+│    Autonomous Agent Loop · Provider Adapters (11)      │
 │    15 Built-in Tools · LSP Client · Checkpoint Ring    │
 │    Context Compaction · Session Store · MCP Client     │
 └────────────────────────────────────────────────────────┘
