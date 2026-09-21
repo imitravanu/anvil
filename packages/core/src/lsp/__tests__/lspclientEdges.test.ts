@@ -145,10 +145,18 @@ describe("LspStdioClient edge behavior", () => {
     client!.ensureOpen(file, "typescript", "const a = 1;\n");
     client!.ensureOpen(file, "typescript", "const a = 2;\n");
     client!.ensureOpen(file, "typescript", "const a = 3;\n");
-    await waitFor(() => {
-      const log = fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8") : "";
-      return log.includes("textDocument/didChange");
-    }, 500);
+    // Wait for the FULL sequence: the three ensureOpen calls queue synchronously,
+    // but the child parses them across data events, so under full-suite load the
+    // second didChange can lag the first one observed.
+    const synced = await waitFor(() => {
+      if (!fs.existsSync(logPath)) return false;
+      const log = fs.readFileSync(logPath, "utf8");
+      return (
+        (log.match(/textDocument\/didOpen/g) ?? []).length === 1 &&
+        (log.match(/textDocument\/didChange/g) ?? []).length === 2
+      );
+    }, 2000);
+    expect(synced).toBe(true);
 
     const log = fs.readFileSync(logPath, "utf8");
     expect((log.match(/textDocument\/didOpen/g) ?? []).length).toBe(1);
