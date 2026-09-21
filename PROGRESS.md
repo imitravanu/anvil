@@ -2,6 +2,14 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **ACTIVE 2026-09-21 (OpenCode session, 26 release closeout):** owns
+> `packages/core/src/version.ts`, `packages/{core,tui,cli}/package.json`
+> (1.0.0 → 1.1.0), `CHANGELOG.md` ([Unreleased] → [1.1.0] heading),
+> `README.md` (Guardian surfaces section), `docs/PHASE-26-PROGRESS.md`
+> (phase-gate sign-off), `packages/tui/__visual-baselines__/empty-state.txt`
+> (v1.1.0 baseline regen via sanctioned VISUAL_UPDATE=1), plus this PROGRESS.md
+> entry. Docs + version strings only; no prod logic touched.
+>
 > **ACTIVE 2026-09-21 (this session — Buffy, continuation):** owns the 26.3–26.5 work:
 > `packages/core/src/guardian/{init,hook,langRules,health}.ts` (hook/langRules/health NEW),
 > `packages/core/src/guardian/__tests__/{guardedInit,health}.test.ts` (NEW),

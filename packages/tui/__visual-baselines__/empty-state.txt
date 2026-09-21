@@ -10,4 +10,4 @@
                              /session — resume a past conversation
                              /connect — add or update a provider API key
 
-                                               v1.0.0
+                                               v1.1.0

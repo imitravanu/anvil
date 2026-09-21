@@ -5,7 +5,7 @@
 > probed outside the repo, scanner/interceptor/init tests green). No protected artifacts
 > touched.
 
-## Status: IN PROGRESS — 26.0–26.5 landed; 26.3 live matrix attempted, HONEST NULL (quota) (2026-09-21)
+## Status: RELEASE-READY — 26.0–26.5 landed + v1.1.0 cut (2026-09-21)
 
 ### 26.0 — Internal Wiring Hardening (audit 2026-09-19)
 - [x] Same-path auto-fix cross-contamination FIXED (positional `fixed[].index` +
@@ -149,6 +149,12 @@
       the recorder (11/11 fail). Full gate green.*
 
 ### Phase Gate
-- [ ] Release criteria in PHASE-26-SPEC all checked
-- [ ] Full `npm run gate` green at final landing
-- [ ] CHANGELOG entry + README claim only as far as evidence supports
+- [x] Release criteria in PHASE-26-SPEC all checked (26.1 report + tests, `--watch`
+      debounce + banner tests, honest-null delta recorded instead of manufactured,
+      foreign provisioning with real-commit acceptance, `anvil health` two-session
+      render — each evidenced in its section above)
+- [x] Full `npm run gate` green at final landing (Steps 0–5, 15/15 mock evals;
+      one LSP sync-test load flake found red, fixed test-only, re-verified green)
+- [x] CHANGELOG entry + README claim only as far as evidence supports
+      (`## [1.1.0]` heading; README Guardian section documents surfaces, claims
+      no pass-rate delta — matrix tracked here pending quota)

@@ -208,6 +208,19 @@ Server tools are exposed as `mcp_<server>__<tool>` and undergo the same strict p
 
 ---
 
+## Guardian
+
+Anvil ships a built-in hygiene system against AI slop (type escapes, silent catches, raw error formatting, stray placeholders):
+
+- **Turn report:** after any turn with guardian activity, the TUI shows what was blocked, which rule fired, and what was auto-fixed. Headless mode prints a stable `guardian_blocked count=N fixed=M` stderr line.
+- **`anvil gate [--full|--watch|--staged]`:** scans the working-tree diff (`--watch` re-scans continuously, `--staged` scans staged additions only, `--full` runs the full `npm run gate` pipeline).
+- **`anvil health`:** per-project freshness, cleanliness, allowlist drain rate, and top blocked rules, tracked across sessions under `ANVIL_HOME/health/`.
+- **`anvil init --guarded [--lang <id>]`:** provisions `AGENTS.md`, `.anvil/rules`, and a dependency-free pre-commit hook into any repo (TypeScript, Python, Rust, Go), so other agents' edits are gated too. Bypass once with `git commit --no-verify`.
+
+Project-specific rules can be declared in a `guardian:rules` block. The model-agnostic proof matrix is tracked in `docs/PHASE-26-PROGRESS.md` — no pass-rate delta is claimed until a real paired live run exists.
+
+---
+
 ## 🛠️ Development & Quality Gates
 
 ```bash

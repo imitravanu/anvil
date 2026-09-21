@@ -2,7 +2,7 @@
 
 All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
-## [Unreleased]
+## [1.1.0] — 2026-09-21
 
 ### 26.3 Live Delta Matrix: One Valid Lane, Honest Null Delta (2026-09-21)
 
