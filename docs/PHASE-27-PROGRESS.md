@@ -49,6 +49,17 @@
 - *Boundary note: `18`–`20` require `python3` (present on ubuntu-latest CI and on
   the dev machine). The check reports a clear message and exits 1 if it is
   missing, so a missing interpreter fails loudly instead of silently skipping.*
+- *Guard added (NEW `eval/__tests__/fixtureIntegrity.test.ts`, 3 tests): the
+  two-direction verification above is now mechanical. Gate Step 5 only proves a
+  fixture goes GREEN with its reference fix; mock mode is green by construction,
+  so a fixture that already passes on its pristine `setup/` would inflate the
+  pass rate forever and nothing would notice. The guard re-runs every
+  `assertions/check.sh` against a throwaway copy of that same `setup/` (mirroring
+  `runEvalTask`'s sandbox env and 10s cap) and fails if any fixture exits 0. It
+  also pins the suite size, the JSON shape `loadEvalTasks` needs, and a non-empty
+  `assertions/expected/`. Verified by planting a deliberately vacuous probe task,
+  which the guard rejected by name (`expected [ '99-vacuous-probe' ] to deeply
+  equal []`) before the probe was removed.*
 
 ### 27.3 — Failure Diff Snapshots
 - [x] Add `failureDiff?: string` to `EvalResult` in `packages/core/src/eval/types.ts`
@@ -119,4 +130,5 @@
 | :--- | :---: | :---: | :--- |
 | 2026-09-19 | Phase Inception | Ready | Spec and progress tracker drafted; Phase 26 protected from changes. |
 | 2026-09-23 | 27.2 / 27.4 fixtures | PASS | Fixture suite 15 → 25 (5 TS/Python + 5 diagnostics), all green in `--fast --mock` (25/25, 3.3s). Each fixture additionally confirmed to FAIL on its pristine `setup/`. |
+| 2026-09-23 | 27.2 fixture-integrity guard | PASS | NEW `eval/__tests__/fixtureIntegrity.test.ts` (3 tests, ~3.5s) fails any fixture that passes on its untouched `setup/`; proven by a planted vacuous probe. |
 | 2026-09-23 | 27.6 CI hardening | PASS (local) | `ANVIL_HOME` + workspace-relative artifact path; manifest hash regenerated. The CI job itself can only be observed on a real workflow run (acceptance criterion E5). |

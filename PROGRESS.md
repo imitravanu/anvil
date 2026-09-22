@@ -2,6 +2,10 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-23 (Buffy, eval fixture-integrity guard):** owns NEW
+> `packages/core/src/eval/__tests__/fixtureIntegrity.test.ts`; edits to
+> `docs/PHASE-27-PROGRESS.md` and `CHANGELOG.md`. No protected artifact touched.
+>
 > **DONE 2026-09-23 (Buffy, Phase 27.2/27.4/27.6 — eval harness 2.0):** owns NEW
 > `evals/tasks/16-feature-ts-generics/**`, `17-bugfix-ts-narrowing/**`,
 > `18-bugfix-py-off-by-one/**`, `19-feature-py-lru-cache/**`,

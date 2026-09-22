@@ -23,6 +23,13 @@ All notable changes to Anvil are documented here. The format follows
   circular-require initialization order, a leaked internal array, concurrent vs
   sequential async scheduling, a base-10 parser mangling decimal/hex literals,
   and a cross-module contract mismatch pinned from both sides.
+- **The two-direction check is now mechanical.** NEW
+  `eval/__tests__/fixtureIntegrity.test.ts` re-runs every fixture's
+  `assertions/check.sh` against a throwaway copy of its own pristine `setup/` and
+  fails if the fixture passes anyway. Mock mode is green by construction, so
+  without this a task that already passed on its broken code would inflate every
+  run's pass rate and nothing would notice — the guard was validated by planting
+  a deliberately vacuous fixture and watching it get rejected by name.
 - Mock smoke: `npm run eval -- --fast --mock` → **25/25 in 3.3s**.
 
 ### CI Live Eval Artifact Fix (Phase 27.6, 2026-09-23)
