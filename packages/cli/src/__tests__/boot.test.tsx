@@ -176,6 +176,35 @@ describe("boot paths", () => {
     expect(exit).toEqual([3]);
   });
 
+  it("--verbose sets ANVIL_LOG=info before any runner boots", async () => {
+    writeCreds({ anthropicApiKey: "sk-test" });
+    delete process.env.ANVIL_LOG;
+    const saved = process.env.ANVIL_LOG;
+    try {
+      await runEntry(["-p", "hi", "--verbose"]);
+      expect(headlessCalls).toHaveLength(1);
+      // The dispatch must have flipped the env BEFORE bootHeadless ran — the
+      // logger reads ANVIL_LOG lazily, so this gates all subsequent output.
+      expect(process.env.ANVIL_LOG).toBe("info");
+    } finally {
+      if (saved === undefined) delete process.env.ANVIL_LOG;
+      else process.env.ANVIL_LOG = saved;
+    }
+  });
+
+  it("--verbose respects an explicit ANVIL_LOG (no downgrade)", async () => {
+    writeCreds({ anthropicApiKey: "sk-test" });
+    const saved = process.env.ANVIL_LOG;
+    process.env.ANVIL_LOG = "debug";
+    try {
+      await runEntry(["-p", "hi", "--verbose"]);
+      expect(process.env.ANVIL_LOG).toBe("debug");
+    } finally {
+      if (saved === undefined) delete process.env.ANVIL_LOG;
+      else process.env.ANVIL_LOG = saved;
+    }
+  });
+
   it("bootChat mounts App with the resolved provider, broker, and MCP reconnect wiring", async () => {
     writeCreds({ anthropicApiKey: "sk-test" });
     writeSettings({ theme: "dark" });

@@ -94,6 +94,9 @@ export function parseFlags(argv: string[]): Record<string, string> {
     } else if (arg === "--no-mcp") {
       // Skip MCP server startup entirely (fast boot, no child processes).
       flags["no-mcp"] = "1";
+    } else if (arg === "--verbose") {
+      // Operational diagnostics (info-level log lines) on stderr.
+      flags.verbose = "1";
     } else if (!arg.startsWith("-")) {
       continue; // bare words are handled by the caller (subcommands)
     } else {

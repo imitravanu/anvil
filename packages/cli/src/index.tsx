@@ -103,6 +103,7 @@ Options:
   --provider <id>           Override the provider for this run
   --model <id>              Override the model for this run
   --no-mcp                  Skip MCP server startup (fast boot)
+  --verbose                 Info-level diagnostics on stderr (ANVIL_LOG=info)
   --watch                   (gate) continuously re-scan the working-tree diff
 
 Environment:
@@ -488,6 +489,12 @@ async function runFromFlags(flags: Record<string, string>): Promise<void> {
 // --- Argument dispatch, before any TUI rendering. The decision itself lives in
 // args.ts (unit-tested); this switch is only the side-effect wiring. ---
 const argv = process.argv.slice(2);
+// --verbose applies to EVERY mode (chat/headless/goal/gate), so it is applied
+// before the dispatch, not inside runFromFlags. The logger reads ANVIL_LOG
+// lazily per call, so setting the env here gates all subsequent output.
+if (argv.includes("--verbose")) {
+  process.env.ANVIL_LOG = process.env.ANVIL_LOG ?? "info";
+}
 const invocation = resolveInvocation(argv, {
   hasConfiguredProvider: hasAnyConfiguredProvider(loadCredentials()),
 });
