@@ -122,6 +122,21 @@ export function parseMilestones(rawText: string, goal: string): GoalMilestone[] 
   ];
 }
 
+/**
+ * Whether an adversarial milestone review's verdict counts as satisfied.
+ *
+ * Any response starting with YES is accepted, but a hedge is not: "Yes, but the
+ * criteria were not met" is a NO wearing a YES, and reading it as satisfaction
+ * is how a mission marks itself complete on criteria it never met. Pure, so the
+ * verdict rule is testable without driving a whole mission through the engine.
+ */
+export function isSatisfiedVerdict(verdict: string): boolean {
+  const trimmed = verdict.trim();
+  const startsYes = /^YES\b/i.test(trimmed);
+  const isHedge = /^YES\s*[,]\s*(but|however|although|except|unfortunately)/i.test(trimmed);
+  return startsYes && !isHedge;
+}
+
 export interface GoalEngineOptions {
   provider: ModelProvider;
   model: string;
@@ -268,10 +283,7 @@ export async function* runGoalMission(
       milestone
     );
     const reviewVerdict = review.text.trim();
-    // Accept any response starting with YES, rejecting hedges like "Yes, but..."
-    const startsYes = /^YES\b/i.test(reviewVerdict);
-    const isHedge = /^YES\s*[,]\s*(but|however|although|except|unfortunately)/i.test(reviewVerdict);
-    const satisfied = startsYes && !isHedge;
+    const satisfied = isSatisfiedVerdict(review.text);
     totalTurns += 1;
 
     if (review.cancelled) {

@@ -2,11 +2,17 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
-> **DONE 2026-09-23 (Buffy, PHASE-21-25 roadmap reconciliation):** owns
-> `docs/PHASE-21-25-ROADMAP.md` (status banner only — no code, no protected
-> artifact: that file is **not** in the manifest; `docs/PHASE-21-25-AUDIT.md` is,
-> and it is untouched). Records the phases as complete and points readers at the
-> audit as the authority.
+> **DONE 2026-09-23 (Buffy, PHASE-21-25 roadmap reconciliation + two missing tests):**
+> owns `docs/PHASE-21-25-ROADMAP.md` (status banner **replaced** by a verified
+> per-item status table — no code, no protected artifact: that file is **not** in
+> the manifest; `docs/PHASE-21-25-AUDIT.md` is, and it is untouched),
+> `packages/core/src/agent/goal/goalEngine.ts` (extracted the existing verdict rule
+> into the pure `isSatisfiedVerdict`; no behaviour change),
+> `packages/core/src/agent/goal/__tests__/goalEngine.test.ts`,
+> `packages/core/src/config/__tests__/config.test.ts` (keyless-provider cases),
+> `CHANGELOG.md`. Found and closed two items whose code was correct but whose
+> acceptance claim had **no test** (22.5 hedge, 22.7 keyless Ollama). Corrected an
+> overstatement in my own earlier banner: 23.9/23.11/23.14/23.15 are still open.
 >
 > **DONE 2026-09-23 (Buffy, Windows process-tree kill):** owns
 > `packages/core/src/tools/bash.ts` (new pure `planTreeKill` + the `killTree`

@@ -14,21 +14,49 @@
 >
 > [`PHASE-21-25-AUDIT.md`](PHASE-21-25-AUDIT.md) is the authority — itself a protected
 > artifact, re-verified against the live tree **by symbol** rather than by line number
-> (re-audited 2026-09-20). It reports the whole matrix **all-green**, with two honest
-> exceptions that must be read before acting: **23.4 is PARTIAL** (only `MessageView`
-> is memoized, the rest of the hot-component list was never audited) and **22.13 is
-> BY-DESIGN and must not be "fixed"** (demoting the free-model registry on an empty
-> response would wipe it during an outage). Each phase's own `PHASE-2x-PROGRESS.md`
-> records the executed work and its evidence.
+> (re-audited 2026-09-20). Each phase's own `PHASE-2x-PROGRESS.md` records the executed
+> work and its evidence.
 >
-> **Why the boxes below were not mass-ticked:** doing so would assert that ~90 separate
-> acceptance assertions still hold, and only a subset of them is phase-annotated in the
-> test suites — the rest would be unverified bookkeeping that swaps one unreliable
-> signal for another. The audit's per-item, symbol-anchored verification is the record
-> to trust instead. Genuinely open work lives in
-> [`STABILIZATION-ROADMAP-2026-09.md`](STABILIZATION-ROADMAP-2026-09.md) and the
-> `PHASE-26`/`PHASE-27` progress docs (both now landed — see
-> `docs/PHASE-27-PROGRESS.md`).
+> **Item status — re-verified 2026-09-23.** Where a test carries the claim, it is named.
+> Two things to read before acting: **22.13 is BY-DESIGN and must not be "fixed"**
+> (demoting the free-model registry on an empty response would wipe it during an
+> outage), and the Phase 23 ruling below re-scoped **23.8–23.15 as features** — four of
+> those are still genuinely open, so this list is **not** uniformly "done".
+>
+> | Item | Status | Evidence |
+> |---|---|---|
+> | 21.1 quote bypass | ✅ done | `tools/__tests__/bash.test.ts:214-249` |
+> | 21.2 root-wipe paths | ✅ done | `bash.test.ts:169-171` + the blocked-path table |
+> | 21.3 flag injection | ✅ done | `tools/__tests__/verifyTests.test.ts:264-270` |
+> | 21.4 / 22.18 phase gates | ✅ done | `PHASE-21/22-PROGRESS.md`; `CHANGELOG` [0.9.0]/[0.9.1] |
+> | 22.1 cancel before `send()` | ✅ done | `agent/__tests__/cancelHistory.test.ts:91` |
+> | 22.2 malformed tool JSON | ✅ done | `agent/__tests__/phase22.test.ts:23`; `providers/__tests__/streaming.test.ts:97` |
+> | 22.3 Gemini `unknown_tool` | ✅ done | `agent/__tests__/phase22.test.ts` |
+> | 22.4 free pricing | ✅ done | `providers/__tests__/freeModels.test.ts:206-226` |
+> | 22.5 goal verdict | ✅ done | `isSatisfiedVerdict` + `agent/goal/__tests__/goalEngine.test.ts` |
+> | 22.6 binary `read_file` | ✅ done | `tools/readFile.ts:60`; `tools/__tests__/readFile.test.ts` |
+> | 22.7 keyless Ollama | ✅ done | `config/index.ts:152`; `config/__tests__/config.test.ts` |
+> | 22.8 vision gate | ✅ done | `agent/__tests__/phase22.test.ts` |
+> | 22.12 session rename | ✅ done | `commands/handlers/session.ts:86`; `commands/__tests__/registry.test.ts:144` |
+> | 22.13 demote-on-empty | 🟣 by-design | Do **not** fix — the audit explains why |
+> | 22.14 abort in orchestrator | ✅ done | `agent/__tests__/orchestrator.test.ts:166,178` |
+> | 22.15 subagent checkpoints | ✅ done | `agent/__tests__/subagentProgress.test.ts:62,97` |
+> | 22.16 eval socket stall | ✅ done | `eval/runner.ts` timeout → `session.cancel()` |
+> | 22.17 MCP boot notices | ✅ done | `components/__tests__/app.test.tsx:18` |
+> | 23.1–23.7 stability | ✅ done | `PHASE-23-PROGRESS.md` |
+> | 23.4 memoization | 🟡 partial | only `MessageView` is memoized |
+> | 23.10 alt screen | ✅ shipped | as DW-4.7. Its "no tearing on resize" boxes are experiential — CI has no PTY to judge them |
+> | 23.12 notifications | ✅ shipped | as DW-4.9 (OSC 777/9 + `settings.json` toggle). The permission-prompt alert was **deliberately declined** — it would page the user on every tool call |
+> | 23.13 OSC 52 clipboard | ✅ shipped | as DW-4.11 (`/copy`, DiffModal `c`) |
+> | 23.9 · 23.11 · 23.14 · 23.15 | ❌ **OPEN** | focus coordinator · SGR-1006 mouse · truecolor · pane navigation. See `DW-4-PROGRESS.md` §Deferred; mouse is additionally blocked because Ink 5.1's `measureElement` exposes no x/y for hit-testing |
+> | 25.7 v1.0.0 criteria | ✅ shipped | v1.0.0 released 2026-09-14, v1.1.0 2026-09-21 (`CHANGELOG`). Individual criteria are recorded there rather than re-verified here |
+>
+> **Why the boxes below were not mass-ticked:** ticking them asserts that ~90 separate
+> acceptance assertions still hold. Only a subset is phase-annotated in the suites, and
+> this pass itself found two items (**22.5**, **22.7**) whose code was correct but whose
+> claim had no test — both now do. The table above is the verified replacement for the
+> checkboxes; genuinely open work is 23.9/23.11/23.14/23.15 plus
+> [`STABILIZATION-ROADMAP-2026-09.md`](STABILIZATION-ROADMAP-2026-09.md).
 
 ---
 

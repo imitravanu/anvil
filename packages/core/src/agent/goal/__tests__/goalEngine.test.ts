@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { GoalEngine, parseMilestones } from "../goalEngine.js";
+import { GoalEngine, isSatisfiedVerdict, parseMilestones } from "../goalEngine.js";
 import { FakeProvider, ScriptEntry, stalledStream } from "../../__tests__/fakeProvider.js";
 import { StreamEvent } from "../../../providers/types.js";
 
@@ -10,6 +10,33 @@ const textTurn = (text: string): StreamEvent[] => [
   { type: "text_delta", text },
   { type: "turn_end", stopReason: "end_turn" },
 ];
+
+// Phase 22.5 — the review verdict rule, exercised directly. A hedged YES is the
+// failure mode that matters: it must not mark a milestone complete.
+describe("isSatisfiedVerdict (Phase 22.5)", () => {
+  it("accepts any response that starts with YES", () => {
+    for (const verdict of ["YES", "YES.", "YES — criteria met", "YES\n- all good", "yes — done"]) {
+      expect(isSatisfiedVerdict(verdict), verdict).toBe(true);
+    }
+  });
+
+  it("rejects a hedged yes instead of reading it as satisfied", () => {
+    for (const verdict of [
+      "YES, but the criteria were not met",
+      "YES, however only the first file was touched",
+      "Yes, although the tests still fail",
+      "YES, unfortunately only partially complete",
+      "YES, except the report is missing",
+    ]) {
+      expect(isSatisfiedVerdict(verdict), verdict).toBe(false);
+    }
+  });
+
+  it("rejects a plain no, and tolerates surrounding whitespace", () => {
+    expect(isSatisfiedVerdict("NO — criteria not met")).toBe(false);
+    expect(isSatisfiedVerdict("  YES — done  ")).toBe(true);
+  });
+});
 
 describe("Autonomous Goal Engine", () => {
   let tmpDir: string;

@@ -4,6 +4,25 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Two untested hardening claims now have tests (2026-09-23)
+
+- **The goal engine's review-verdict rule is a pure predicate with tests.**
+  `isSatisfiedVerdict` was extracted from `runGoalMission` (same regexes, same
+  behaviour) so the rule is exercisable without driving a whole mission. The case
+  that matters is the hedge: "YES, but the criteria were not met" is a NO wearing
+  a YES, and reading it as satisfied is how a mission marks itself complete on
+  criteria it never met. That hedge is now asserted, along with the accepted
+  forms and the bare no.
+- **Keyless-provider selection is asserted.** `resolveProviderSelection`
+  exempts `ollama` from the API-key filter; nothing covered that, so a regression
+  would have silently made Ollama unselectable on a fresh install. Tests now pin
+  both directions: a keyless provider resolves (and gets a real registry model),
+  while a keyed provider with no key still throws `ProviderSelectionError`.
+- Also replaced the Phase 21–25 roadmap's stale per-item checkboxes with a
+  verified status table (the audit's matrix, cross-checked against the tests that
+  carry each claim), which corrects an overstatement in the previous note: the
+  re-scoped items **23.9, 23.11, 23.14 and 23.15 are still open**.
+
 ### Cross-platform command-tree kill (2026-09-23)
 
 - **Aborting or timing out a command on Windows now kills the whole tree.**

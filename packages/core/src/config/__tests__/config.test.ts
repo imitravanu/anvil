@@ -45,6 +45,21 @@ describe("resolveProviderSelection", () => {
     expect(sel).toEqual({ providerId: "anthropic", model: "claude-sonnet-5" });
   });
 
+  // Phase 22.7 — a keyless provider must survive the API-key filter, or Ollama
+  // can never be selected on a fresh install.
+  it("selects a keyless provider (Ollama) with no API key configured", () => {
+    const sel = resolveProviderSelection({ flagProvider: "ollama", creds: {} });
+    expect(sel?.providerId).toBe("ollama");
+    // Falls back to the registry's model for the provider, not the placeholder.
+    expect(sel?.model).not.toBe("unknown-model");
+  });
+
+  it("still refuses a keyed provider that has no API key", () => {
+    expect(() => resolveProviderSelection({ flagProvider: "anthropic", creds: {} })).toThrow(
+      ProviderSelectionError
+    );
+  });
+
   it("env level: ANVIL_PROVIDER/ANVIL_MODEL beat settings.json", () => {
     const sel = resolveProviderSelection({
       envProvider: "anthropic",
