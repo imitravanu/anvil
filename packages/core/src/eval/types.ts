@@ -28,6 +28,11 @@ export interface EvalResult {
   tokensUsed: { input: number; output: number };
   toolCalls: number;
   error?: string;
+  /**
+   * USD cost of this task's tokens (27.5), or undefined when the model's price
+   * is unknown — never 0 as a stand-in for unknown.
+   */
+  estimatedCostUsd?: number;
 }
 
 export interface EvalReport {
@@ -43,6 +48,13 @@ export interface EvalReport {
   totalTasks: number;
   totalWallClockMs: number;
   totalTokens: { input: number; output: number };
+  /**
+   * Total USD cost (27.5). Undefined when ANY task's model price was unknown,
+   * so a partial sum is never presented as the run total. `unpricedTasks`
+   * counts those tasks for display.
+   */
+  estimatedCostUsd?: number;
+  unpricedTasks?: number;
 }
 
 export interface EvalRunnerOptions {

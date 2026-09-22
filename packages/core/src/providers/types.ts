@@ -208,5 +208,15 @@ export interface ModelInfo {
    * masquerade as proof the real API works.
    */
   certifiedMode?: "mock" | "live";
+  /**
+   * USD price per 1,000 tokens, for cost estimation (Phase 27.5). Optional and
+   * deliberately sparse: several ids here are forward-looking, and an invented
+   * price is worse than no price — a wrong number in a spend report is a silent
+   * lie. ABSENT MEANS UNKNOWN: consumers must render it as unavailable, never as
+   * $0. A model with `isFree: true` is $0 by definition (see `pricingForModel`),
+   * so free rows need no explicit entry.
+   */
+  costPer1kInputTokens?: number;
+  costPer1kOutputTokens?: number;
 }
 

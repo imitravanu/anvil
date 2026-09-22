@@ -3,6 +3,8 @@ import path from "node:path";
 import os from "node:os";
 import { EvalReport, EvalResult } from "./types.js";
 import { atomicWriteText } from "../atomicWrite.js";
+import { getModel } from "../providers/registry.js";
+import { estimateCostUsd, formatCost, pricingForModel } from "./cost.js";
 
 export function resolveEvalsDir(override?: string): string {
   if (override) return override;
@@ -28,6 +30,20 @@ export function createEvalReport(
     { input: 0, output: 0 }
   );
 
+  // 27.5: price the run from the model's registry row. Unknown pricing leaves
+  // its tasks unpriced and the run total undefined — a partial sum is never
+  // presented as the complete cost.
+  const pricing = pricingForModel(getModel(model, provider));
+  const pricedResults = results.map((r) => {
+    const cost = estimateCostUsd(r.tokensUsed, pricing);
+    return cost === undefined ? r : { ...r, estimatedCostUsd: cost };
+  });
+  const unpricedTasks = pricedResults.filter((r) => r.estimatedCostUsd === undefined).length;
+  const estimatedCostUsd =
+    totalTasks > 0 && unpricedTasks === 0
+      ? pricedResults.reduce((sum, r) => sum + (r.estimatedCostUsd ?? 0), 0)
+      : undefined;
+
   return {
     date: new Date().toISOString(),
     timestamp: Date.now(),
@@ -36,12 +52,14 @@ export function createEvalReport(
     // Unset means the run predates the 26.3 flag (or used the default) —
     // rendered as ON, since ON is the product default.
     guardian: guardian ?? true,
-    results,
+    results: pricedResults,
     passRate,
     passedCount,
     totalTasks,
     totalWallClockMs,
     totalTokens,
+    ...(estimatedCostUsd !== undefined ? { estimatedCostUsd } : {}),
+    unpricedTasks,
   };
 }
 
@@ -88,15 +106,19 @@ export function loadRecentReports(evalsDir?: string, limit = 5): EvalReport[] {
   return reports;
 }
 
+const REPORT_RULE_WIDTH = 96;
+const reportRule = (ch: string): string => ch.repeat(REPORT_RULE_WIDTH);
+
 export function formatEvalReport(report: EvalReport): string {
   const lines: string[] = [];
-  lines.push("===============================================================================");
+  lines.push(reportRule("="));
   lines.push(` ANVIL EVALUATION REPORT — ${report.provider} / ${report.model}`);
   lines.push(` Date: ${report.date} | Pass Rate: ${(report.passRate * 100).toFixed(1)}% (${report.passedCount}/${report.totalTasks})`);
   lines.push(` Total Time: ${(report.totalWallClockMs / 1000).toFixed(1)}s | Total Tokens: in ${report.totalTokens.input.toLocaleString()} · out ${report.totalTokens.output.toLocaleString()}`);
-  lines.push("-------------------------------------------------------------------------------");
-  lines.push("| Task ID                        | Category   | Status | Time    | Tools | Tokens  |");
-  lines.push("-------------------------------------------------------------------------------");
+  lines.push(` Total Cost: ${formatCost(report.estimatedCostUsd, report.unpricedTasks ?? 0)}`);
+  lines.push(reportRule("-"));
+  lines.push("| Task ID                        | Category   | Status | Time    | Tools | Tokens  | Cost      |");
+  lines.push(reportRule("-"));
 
   for (const res of report.results) {
     const id = res.taskId.padEnd(30);
@@ -105,13 +127,14 @@ export function formatEvalReport(report: EvalReport): string {
     const time = `${(res.wallClockMs / 1000).toFixed(1)}s`.padStart(7);
     const tools = String(res.toolCalls).padStart(5);
     const tokens = `${res.tokensUsed.input + res.tokensUsed.output}`.padStart(7);
-    lines.push(`| ${id} | ${cat} | ${status.padEnd(6)} | ${time} | ${tools} | ${tokens} |`);
+    const cost = (res.estimatedCostUsd === undefined ? "n/a" : `$${res.estimatedCostUsd.toFixed(4)}`).padEnd(9);
+    lines.push(`| ${id} | ${cat} | ${status.padEnd(6)} | ${time} | ${tools} | ${tokens} | ${cost} |`);
     if (res.error && !res.passed) {
       lines.push(`|   ↳ Error: ${res.error.slice(0, 68).padEnd(68)} |`);
     }
   }
 
-  lines.push("===============================================================================");
+  lines.push(reportRule("="));
   return lines.join("\n");
 }
 

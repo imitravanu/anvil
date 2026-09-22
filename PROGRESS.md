@@ -2,6 +2,12 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-23 (Buffy, Phase 27.5 cost estimation):** owns
+> `packages/core/src/providers/types.ts` (pricing fields on `ModelInfo`), NEW
+> `packages/core/src/eval/cost.ts`, `packages/core/src/eval/{types,report,index}.ts`,
+> NEW `packages/core/src/eval/__tests__/cost.test.ts`, `docs/PHASE-27-PROGRESS.md`
+> (27.5 boxes), `CHANGELOG.md` (Unreleased entry). No protected artifact touched.
+>
 > **DONE 2026-09-23 (Buffy, audit-followup sweep):** owns
 > `packages/core/src/providers/types.ts` (classifyProviderError ordering),
 > `packages/core/src/providers/registry.ts` (qwencloud provenance restored to the
@@ -126,6 +132,28 @@ Read this before the chronological log below. The log is history; this is truth.
   read and audited (2026-09-22, three passes); `packages/cli/src/index.tsx` is
   still partly uncovered; Windows is second-class (bash + a Unix-only kill-tree);
   no cost estimation, no session search.
+
+---
+
+## 2026-09-23 — Phase 27.5: eval dollar-cost estimation (Buffy)
+
+Completed the remaining spec'd roadmap item with concrete acceptance criteria
+(E4). `eval/cost.ts` + pricing in `createEvalReport` + a `Total Cost:` line and
+per-task `Cost` column in `formatEvalReport`; 14 new tests.
+
+**Deliberate honesty choice:** the spec assumed a real pricing table, but these
+model ids are forward-looking and their prices cannot be verified from here — so
+none were invented (a wrong number in a spend report is a silent lie). `isFree`
+⇒ exactly $0; a model without recorded pricing is **unknown**, and a run with
+any unpriced task reports `n/a (N unpriced)` rather than a partial total. Real
+prices land later as `costPer1kInputTokens`/`costPer1kOutputTokens` fields.
+
+Also root-caused and fixed the flaky `bash.test.ts` abort test (it asserted a
+200ms reap deadline; now it polls the property) — reproduced under forced
+parallel load, then green 8/8 under 10 CPU spinners.
+
+**Still open in Phase 27:** 27.2 (multi-language fixtures), 27.3 (failure
+diffs), 27.4 (multi-turn diagnostics), 27.6 (CI live-eval hardening).
 
 ---
 

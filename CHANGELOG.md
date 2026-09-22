@@ -4,6 +4,19 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Eval Dollar-Cost Estimation (Phase 27.5, 2026-09-23)
+
+- **Eval reports now show what a run cost.** `createEvalReport` prices each
+  task and the whole run from the model's registry row; `formatEvalReport`
+  gained a `Total Cost:` line and a per-task `Cost` column.
+- **Unknown pricing is reported as unknown, never $0.** These model ids are
+  forward-looking and their real prices cannot be verified from here, so only
+  `isFree` models are priced (at exactly $0). A model without recorded
+  `costPer1k*` pricing is `n/a`, and a run with any such task reports
+  `n/a (N unpriced)` instead of a partial sum. Maintainers fill real prices by
+  adding `costPer1kInputTokens`/`costPer1kOutputTokens` to a registry row.
+- New pure helpers in `eval/cost.ts`; covered by 14 tests.
+
 ### Parallel Eval Execution — `--concurrency` (Phase 27.1, 2026-09-21)
 
 - **Live eval lanes no longer run one task at a time.** `evals/run.ts` takes

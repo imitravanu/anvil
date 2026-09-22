@@ -45,10 +45,19 @@
 - [ ] Verify mock provider handles multi-turn sequence properly
 
 ### 27.5 — Real-Time Dollar Cost Estimation
-- [ ] Add token pricing constants to model registry (`registry.ts`)
-- [ ] Add `estimatedCostUsd?: number` to `EvalReport` and `EvalResult`
-- [ ] Format cost display in `formatEvalReport()`
-- [ ] Unit test for cost calculation logic
+- [x] Add token pricing fields to model definitions (`providers/types.ts`)
+- [x] Add `estimatedCostUsd?: number` to `EvalReport` and `EvalResult`
+- [x] Format cost display in `formatEvalReport()` (total line + per-task column)
+- [x] Unit test for cost calculation logic (`eval/__tests__/cost.test.ts`, 14)
+- *Done 2026-09-23: `eval/cost.ts` (`pricingForModel` / `estimateCostUsd` /
+  `formatCost`); `createEvalReport` prices each task and aggregates.
+  **Honest pricing policy (deliberate):** these model ids are forward-looking, so
+  real prices cannot be verified from here — an invented price would be a silent
+  lie in a spend report. `isFree` models are priced at exactly $0; every model
+  without recorded `costPer1k*` pricing is reported **unknown**, never $0, and a
+  run with any unknown task reports `n/a (N unpriced)` rather than a partial sum.
+  Maintainers record real prices by adding `costPer1kInputTokens` /
+  `costPer1kOutputTokens` to a registry row.
 
 ### 27.6 — CI Live Eval Hardening
 - [ ] Set `ANVIL_HOME: ${{ github.workspace }}/.anvil` in `.github/workflows/live-eval.yml`
