@@ -2,6 +2,18 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-23 (Buffy, session search):** owns NEW
+> `packages/core/src/session/search.ts` (+ `session/index.ts` barrel export),
+> `packages/core/src/config/constants.ts` (4 `SESSION_SEARCH_*` bounds),
+> NEW `packages/core/src/session/__tests__/search.test.ts`,
+> `packages/tui/src/commands/handlers/session.ts` (`handleSessionSearch`),
+> `packages/tui/src/commands/{types,registry}.ts` (ctx + `/session search`
+> subcommand), NEW `packages/tui/src/commands/handlers/__tests__/sessionSearch.test.ts`,
+> `CHANGELOG.md`, this file. No protected artifact touched. No CLI subcommand
+> added on purpose: session management is in-app only (`/session list|resume`
+> already live there), so a parallel `anvil sessions` surface would be a second
+> entry point to keep in sync.
+>
 > **DONE 2026-09-23 (Buffy, cli entry-point failure paths):** owns NEW
 > `packages/cli/src/__tests__/bootFailures.test.ts` (fatal crash guard, SIGINT
 > listener-count guard, unusable-provider run path), `CHANGELOG.md`, this file.

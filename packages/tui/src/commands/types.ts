@@ -19,6 +19,8 @@ export interface CommandContext {
   sessionNew: () => void;
   sessionResume: (id?: string) => void; // no id → open the SessionPicker overlay
   sessionRename: (title: string) => void;
+  // /session search <text> — full-text transcript search across saved sessions
+  sessionSearch: (query: string) => void;
   // /theme: switch + persist; handler validates the name. No name → open
   // the interactive picker.
   setTheme: (name: string) => void;

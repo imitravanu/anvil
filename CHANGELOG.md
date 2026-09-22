@@ -4,6 +4,26 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Session search: find the session you worked on X in (2026-09-23)
+
+- **`/session search <text>` searches saved transcripts.** Session titles default
+  to a truncated first message, so they are a poor index; file-level search just
+  duplicates `git log`. This matches the conversation itself, case-insensitively
+  and across line breaks, most recently updated first, and prints each hit's short
+  id (`/session resume <id>` opens it), title, and a role-tagged excerpt.
+- **It searches message TEXT only — not tool results.** A `tool_result` is a
+  verbatim file/command dump, so matching it would return every session that ever
+  read a file for any query naming that file. That exclusion is the design
+  decision here, and it is asserted in both directions.
+- Bounds live in `config/constants.ts` (no magic numbers): 2-character minimum,
+  20 sessions, 3 excerpts each, 80-character excerpt window. A too-short query is
+  explained rather than silently returning nothing.
+- One corrupt session file cannot break a search — the scan reuses the
+  shape-checked loader and skips unreadable files, exactly like `listSessions`.
+- New: `packages/core/src/session/search.ts` (12 tests),
+  `packages/tui/src/commands/handlers/__tests__/sessionSearch.test.ts` (6 tests,
+  including that a multi-word query is joined rather than truncated).
+
 ### The CLI's own failure paths are now tested (2026-09-23)
 
 - **`index.tsx`'s crash guard and SIGINT guard had no tests — the two paths that

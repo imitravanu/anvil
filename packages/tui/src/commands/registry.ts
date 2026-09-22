@@ -7,6 +7,7 @@ import {
   handleSessionNew,
   handleSessionResume,
   handleSessionRename,
+  handleSessionSearch,
   handleRetryLast,
 } from "./handlers/session.js";
 import { handleShowDiff, handleCreatePr } from "./handlers/diff.js";
@@ -36,6 +37,7 @@ export const COMMANDS: Command[] = [
         model: "e.g. /model — Enter switches, Esc cancels",
         rewind: "e.g. /rewind 2 — restore checkpoint #2 (plain /rewind lists them)",
         session: "e.g. /session resume — with no id it opens the picker",
+        "session search": "e.g. /session search retry budget — searches saved transcripts",
         sync: "e.g. /sync — force a free-model refresh now",
         theme: "e.g. /theme — arrow through with live preview, Enter applies",
       };
@@ -64,7 +66,7 @@ export const COMMANDS: Command[] = [
   },
   {
     name: "session",
-    description: "Sessions: list | new | resume [id] | rename <title>",
+    description: "Sessions: list | new | resume [id] | rename <title> | search <text>",
     run: (args, ctx) => {
       const [sub, ...rest] = args;
       switch (sub) {
@@ -87,9 +89,12 @@ export const COMMANDS: Command[] = [
           ctx.sessionRename(title);
           break;
         }
+        case "search":
+          ctx.sessionSearch(rest.join(" "));
+          break;
         default:
           ctx.printSystemMessage(
-            `Unknown /session subcommand: ${sub}. Try /session list | new | resume [id] | rename <title>.`
+            `Unknown /session subcommand: ${sub}. Try /session list | new | resume [id] | rename <title> | search <text>.`
           );
       }
     },
@@ -204,6 +209,7 @@ export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
     sessionNew: () => handleSessionNew(deps),
     sessionResume: (id?: string) => handleSessionResume(deps, id),
     sessionRename: (title: string) => handleSessionRename(deps, title),
+    sessionSearch: (query: string) => handleSessionSearch(deps, query),
     setTheme: applyTheme,
     openThemePicker: () => {
       if (isBusy) {

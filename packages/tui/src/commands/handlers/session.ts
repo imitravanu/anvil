@@ -3,6 +3,8 @@ import {
   listSessions,
   loadSession,
   renameSession,
+  searchSessions,
+  SESSION_SEARCH_MIN_QUERY_CHARS,
 } from "@anvil/core";
 import type { CommandHandlerDeps } from "../types.js";
 import { curtail, relativeTime } from "../../util/format.js";
@@ -39,6 +41,40 @@ export function handleSessionList(deps: CommandHandlerDeps): void {
           `${m.id.slice(0, 8)}  ${curtail(m.title, SESSION_TITLE_MAX)}  ·  ${m.model}  ·  ${relativeTime(m.updatedAt)}`
       )
       .join("\n")
+  );
+}
+
+/**
+ * `/session search <text>` — full-text search of saved transcripts. Titles are
+ * unreliable (they default to a truncated first message) and file-level search
+ * duplicates `git log`, so this matches the conversation itself.
+ */
+export function handleSessionSearch(deps: CommandHandlerDeps, query: string): void {
+  const { printSystemMessage } = deps;
+  const trimmed = query.trim();
+  if (!trimmed) {
+    printSystemMessage("Usage: /session search <text>");
+    return;
+  }
+  if (trimmed.length < SESSION_SEARCH_MIN_QUERY_CHARS) {
+    printSystemMessage(
+      `Search needs at least ${SESSION_SEARCH_MIN_QUERY_CHARS} characters — one letter matches every session.`
+    );
+    return;
+  }
+  const matches = searchSessions(trimmed);
+  if (matches.length === 0) {
+    printSystemMessage(`No saved session mentions "${trimmed}".`);
+    return;
+  }
+  const blocks = matches.map((m) => {
+    const titleHit = m.matchedTitle ? " (title)" : "";
+    const head = `${m.metadata.id.slice(0, 8)}  ${curtail(m.metadata.title, SESSION_TITLE_MAX)}  ·  ${relativeTime(m.metadata.updatedAt)}  ·  ${m.matchCount} message(s)${titleHit}`;
+    const body = m.snippets.map((s) => `    ${s.role}: ${s.text}`);
+    return [head, ...body].join("\n");
+  });
+  printSystemMessage(
+    `${matches.length} session(s) mention "${trimmed}" — /session resume <id> to open one:\n${blocks.join("\n")}`
   );
 }
 

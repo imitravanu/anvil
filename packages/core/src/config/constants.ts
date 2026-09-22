@@ -96,6 +96,15 @@ export const RATE_LIMIT_MAX_DELAY_MS = 30_000;
 export const MAX_SUBAGENT_DEPTH = 3;
 export const MAX_CONCURRENT_SUBAGENTS = 5;
 
+// Session search (`/session search <text>`): matches message TEXT only — a
+// tool_result is a file/command dump, so matching it would make every session
+// that ever read a file hit any filename query. Both the result and snippet
+// counts are capped so an explicit search stays cheap on a large sessions dir.
+export const SESSION_SEARCH_MIN_QUERY_CHARS = 2;
+export const SESSION_SEARCH_MAX_RESULTS = 20;
+export const SESSION_SEARCH_MAX_SNIPPETS = 3;
+export const SESSION_SEARCH_SNIPPET_CHARS = 80;
+
 // Session Review Baseline Bounds
 export const BASELINE_MAX_PATHS = 200;
 export const BASELINE_MAX_BYTES = 8 * 1024 * 1024; // 8 MB total snapshot bytes
