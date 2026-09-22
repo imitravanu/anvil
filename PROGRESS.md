@@ -2,6 +2,15 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-23 (Buffy, roadmap 23.4 memoisation audit):** owns NEW
+> `packages/tui/src/components/__tests__/renderMemo.test.tsx` (render-count
+> tests), `docs/PHASE-21-25-ROADMAP.md` (23.4 row), `CHANGELOG.md`. No production
+> file changed — the audit found the existing `React.memo` correct and asserted
+> it instead of memoising more. **No protected artifact touched:**
+> `docs/PHASE-21-25-AUDIT.md` still says 23.4 is partially audited, and that
+> remains true — this verified the roadmap's stated scope (MessageView +
+> MessageList), not a broader hot-component list.
+>
 > **DONE 2026-09-23 (Buffy, PHASE-21-25 roadmap reconciliation + two missing tests):**
 > owns `docs/PHASE-21-25-ROADMAP.md` (status banner **replaced** by a verified
 > per-item status table — no code, no protected artifact: that file is **not** in

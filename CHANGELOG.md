@@ -4,6 +4,21 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Transcript memoisation claim is now asserted (roadmap 23.4, 2026-09-23)
+
+- **The transcript really does skip re-rendering settled messages while a turn
+  streams — and that is now tested.** `React.memo` on `MessageView` was in place
+  but unasserted, and it is not self-evident: it holds only while the controller
+  keeps untouched messages' identity stable (`prev.map((m) => m.id === assistantId
+  ? fn(m) : m)`) and the parent passes no fresh objects. New render-count tests in
+  `components/__tests__/renderMemo.test.tsx` pin it for both triggers (a streaming
+  chunk and an appended message), with a control that proves the counter would
+  notice the regression.
+- A harness finding worth knowing: ink-testing-library's `rerender` **replaces the
+  root element**, so it re-renders everything and can never observe a memo
+  bail-out. These tests drive updates through React state instead — the re-render
+  the controller actually triggers.
+
 ### Two untested hardening claims now have tests (2026-09-23)
 
 - **The goal engine's review-verdict rule is a pure predicate with tests.**

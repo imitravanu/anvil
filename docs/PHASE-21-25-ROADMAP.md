@@ -44,7 +44,7 @@
 > | 22.16 eval socket stall | ✅ done | `eval/runner.ts` timeout → `session.cancel()` |
 > | 22.17 MCP boot notices | ✅ done | `components/__tests__/app.test.tsx:18` |
 > | 23.1–23.7 stability | ✅ done | `PHASE-23-PROGRESS.md` |
-> | 23.4 memoization | 🟡 partial | only `MessageView` is memoized |
+> | 23.4 memoization | ✅ done (its stated scope) | `MessageView` is memoised and the claim — "prevents entire message history re-rendering on every streaming chunk" — is now asserted by render-count tests (`components/__tests__/renderMemo.test.tsx`). The audit's separate note stands: a **broader** hot-component list was never enumerated, so nothing beyond `MessageView`/`MessageList` is claimed |
 > | 23.10 alt screen | ✅ shipped | as DW-4.7. Its "no tearing on resize" boxes are experiential — CI has no PTY to judge them |
 > | 23.12 notifications | ✅ shipped | as DW-4.9 (OSC 777/9 + `settings.json` toggle). The permission-prompt alert was **deliberately declined** — it would page the user on every tool call |
 > | 23.13 OSC 52 clipboard | ✅ shipped | as DW-4.11 (`/copy`, DiffModal `c`) |
