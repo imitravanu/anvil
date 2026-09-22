@@ -2,6 +2,13 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-23 (Buffy, Phase 27.3 failure diffs):** owns
+> `packages/core/src/eval/{types,runner,report}.ts`, NEW
+> `packages/core/src/eval/failureDiff.ts`, NEW
+> `packages/core/src/eval/__tests__/failureDiff.test.ts`,
+> `packages/core/src/config/constants.ts` (`EVAL_FAILURE_DIFF_MAX_CHARS`),
+> `docs/PHASE-27-PROGRESS.md` (27.3 boxes), `CHANGELOG.md`. No protected artifact touched.
+>
 > **DONE 2026-09-23 (Buffy, Phase 27.5 cost estimation):** owns
 > `packages/core/src/providers/types.ts` (pricing fields on `ModelInfo`), NEW
 > `packages/core/src/eval/cost.ts`, `packages/core/src/eval/{types,report,index}.ts`,
@@ -132,6 +139,28 @@ Read this before the chronological log below. The log is history; this is truth.
   read and audited (2026-09-22, three passes); `packages/cli/src/index.tsx` is
   still partly uncovered; Windows is second-class (bash + a Unix-only kill-tree);
   no cost estimation, no session search.
+
+---
+
+## 2026-09-23 — Phase 27.3: failure diff snapshots (Buffy)
+
+Failed eval tasks now record WHAT the model wrote. A failed task previously left
+only `exit code 1` + raw stderr; the edits lived in the temp sandbox and were
+deleted before anyone could look.
+
+- NEW `eval/failureDiff.ts` — `captureFailureDiff(setupDir, workDir)` compares
+  the pristine task `setup/` against the post-run workspace via a file-tree walk
+  (no git dependency) and returns one unified diff covering edits, creations, and
+  deletions, capped by `EVAL_FAILURE_DIFF_MAX_CHARS` (8k, env-overridable).
+- `runEvalTask` captures it in `finally` BEFORE removing the sandbox —
+  failure-only and best-effort (a capture error can never change pass/fail).
+- `saveEvalReport` persists `<run>/failures/<task-id>.diff`; `formatEvalReport`
+  prints the first 10 lines of a failed task's diff.
+- Evidence: `eval/__tests__/failureDiff.test.ts` (6) — modified/created/deleted,
+  empty-when-unchanged, cap, persistence, and report rendering.
+
+**Still open in Phase 27:** 27.2 (multi-language fixtures), 27.4 (multi-turn
+diagnostics), 27.6 (CI live-eval hardening — touches a protected workflow file).
 
 ---
 

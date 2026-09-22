@@ -4,6 +4,15 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Eval Failure Diff Snapshots (Phase 27.3, 2026-09-23)
+
+- **A failed eval task now records what the model actually wrote.** The diff
+  between the pristine task `setup/` and the post-run workspace is captured
+  before the temp sandbox is deleted, surfaced in the report, and persisted to
+  `~/.anvil/evals/<run>/failures/<task-id>.diff`. A file-tree comparison is used
+  (no git dependency); the diff is capped and captured best-effort.
+- New `eval/failureDiff.ts`; `EvalResult.failureDiff`; 6 tests.
+
 ### Eval Dollar-Cost Estimation (Phase 27.5, 2026-09-23)
 
 - **Eval reports now show what a run cost.** `createEvalReport` prices each

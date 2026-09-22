@@ -4,6 +4,7 @@ import os from "node:os";
 import { execFileSync, spawnSync } from "node:child_process";
 import { EvalTask, EvalResult, EvalReport, EvalRunnerOptions } from "./types.js";
 import { createEvalReport, saveEvalReport } from "./report.js";
+import { captureFailureDiff } from "./failureDiff.js";
 import { createEvalMockProvider } from "./mockProvider.js";
 import { AgentSession } from "../agent/session.js";
 import { AUTO_APPROVE_BROKER } from "../agent/types.js";
@@ -124,6 +125,7 @@ export async function runEvalTask(
   let tokensUsed = { input: 0, output: 0 };
   let passed = false;
   let errorMsg: string | undefined;
+  let failureDiff: string | undefined;
 
   try {
     // 1. Prepare isolated workspace
@@ -249,6 +251,18 @@ export async function runEvalTask(
     passed = false;
     errorMsg = getErrorMessage(err);
   } finally {
+    // 27.3: capture WHAT the model wrote BEFORE the sandbox is destroyed — the
+    // diff is the diagnostic, and it is discarded with the temp dir otherwise.
+    // Failure-only (a passing task's diff is noise). Best-effort: a capture
+    // error must never change the task's pass/fail.
+    if (!passed) {
+      try {
+        const diff = captureFailureDiff(task.setupDir, tempDir);
+        if (diff) failureDiff = diff;
+      } catch {
+        // intentional: capture is diagnostic; its failure is not a task failure
+      }
+    }
     // Cleanup workspace
     try {
       fs.rmSync(tempDir, { recursive: true, force: true });
@@ -268,6 +282,7 @@ export async function runEvalTask(
     tokensUsed,
     toolCalls,
     error: errorMsg,
+    ...(failureDiff ? { failureDiff } : {}),
   };
 }
 

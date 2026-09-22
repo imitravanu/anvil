@@ -32,6 +32,10 @@ export const MAX_VERIFY_REPAIRS = getEnvNumber("ANVIL_MAX_VERIFY_REPAIRS", 2);
 // raise it without a code change.
 export const EVAL_TASK_TIMEOUT_MS = getEnvNumber("ANVIL_EVAL_TIMEOUT_MS", 30_000);
 
+// Phase 27.3 — failure diff capture: a failed task's unified diff is model-authored
+// and bounded so a runaway write cannot bloat the report or the persisted .diff.
+export const EVAL_FAILURE_DIFF_MAX_CHARS = getEnvNumber("ANVIL_EVAL_FAILURE_DIFF_CHARS", 8_000);
+
 // Phase 26.3 — free-tier rate-limit pacing: delay inserted BETWEEN eval tasks on
 // live providers. Free tiers allow 15–20 req/min; back-to-back tasks die on
 // HTTP 429 before the model can work. Mock runs ignore it entirely (0).

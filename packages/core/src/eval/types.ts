@@ -33,6 +33,11 @@ export interface EvalResult {
    * is unknown — never 0 as a stand-in for unknown.
    */
   estimatedCostUsd?: number;
+  /**
+   * Unified diff of what the model changed on a FAILED task (27.3), capped.
+   * Absent when the task passed or the workspace was left unchanged.
+   */
+  failureDiff?: string;
 }
 
 export interface EvalReport {

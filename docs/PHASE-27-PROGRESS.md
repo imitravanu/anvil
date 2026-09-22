@@ -34,11 +34,18 @@
 - [ ] Ensure all new fixtures include `assertions/expected/` for offline mock mode
 
 ### 27.3 — Failure Diff Snapshots
-- [ ] Add `failureDiff?: string` to `EvalResult` in `packages/core/src/eval/types.ts`
-- [ ] Capture workspace diff before sandbox deletion in `runner.ts`
-- [ ] Persist `.diff` files in `saveEvalReport()`
-- [ ] Render diff summary for failed tasks in `report.ts`
-- [ ] Tests for diff capture and persistence
+- [x] Add `failureDiff?: string` to `EvalResult` in `packages/core/src/eval/types.ts`
+- [x] Capture workspace diff before sandbox deletion in `runner.ts`
+- [x] Persist `.diff` files in `saveEvalReport()`
+- [x] Render diff summary for failed tasks in `report.ts`
+- [x] Tests for diff capture and persistence (`eval/__tests__/failureDiff.test.ts`, 6)
+- *Done 2026-09-23: NEW `eval/failureDiff.ts` (`captureFailureDiff`) — a
+  file-tree comparison (no git dependency) of the pristine `setup/` against the
+  post-run workspace, covering edits + creations + deletions, capped by
+  `EVAL_FAILURE_DIFF_MAX_CHARS`. Captured in `runEvalTask`'s `finally` BEFORE
+  the sandbox is removed, failure-only and best-effort. `saveEvalReport` writes
+  `<run>/failures/<task-id>.diff`; `formatEvalReport` prints the first 10 lines
+  for a failed task.*
 
 ### 27.4 — Multi-Turn Diagnostic Tasks
 - [ ] Design diagnostic tasks requiring `verify_tests` and multi-turn iterative repair

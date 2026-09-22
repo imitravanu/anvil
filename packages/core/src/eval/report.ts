@@ -74,6 +74,18 @@ export async function saveEvalReport(
 
   const reportPath = path.join(targetDir, "report.json");
   await atomicWriteText(reportPath, JSON.stringify(report, null, 2), { mode: 0o600 });
+
+  // 27.3: persist each failed task's diff beside the report, so "what did the
+  // model write" survives the temp sandbox without re-running the task.
+  let failuresDir: string | null = null;
+  for (const r of report.results) {
+    if (r.passed || !r.failureDiff) continue;
+    if (failuresDir === null) {
+      failuresDir = path.join(targetDir, "failures");
+      fs.mkdirSync(failuresDir, { recursive: true });
+    }
+    await atomicWriteText(path.join(failuresDir, `${r.taskId}.diff`), r.failureDiff, { mode: 0o600 });
+  }
   return reportPath;
 }
 
@@ -131,6 +143,13 @@ export function formatEvalReport(report: EvalReport): string {
     lines.push(`| ${id} | ${cat} | ${status.padEnd(6)} | ${time} | ${tools} | ${tokens} | ${cost} |`);
     if (res.error && !res.passed) {
       lines.push(`|   ↳ Error: ${res.error.slice(0, 68).padEnd(68)} |`);
+    }
+    // 27.3: on failure, show what the model actually wrote (first lines; the
+    // full unified diff is persisted under the run's failures/ directory).
+    if (!res.passed && res.failureDiff) {
+      const diffLines = res.failureDiff.split("\n");
+      for (const line of diffLines.slice(0, 10)) lines.push(`|   ${line.slice(0, 92)}`);
+      if (diffLines.length > 10) lines.push("|   … (full diff in the run's failures/ directory)");
     }
   }
 
