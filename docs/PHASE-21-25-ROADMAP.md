@@ -6,11 +6,29 @@
 > **Origin:** Deep codebase audit of all 213 source files across `@anvil/core`, `@anvil/tui`, `@anvil/cli`  
 > **Purpose:** This document is the **actionable build guide** for any agent working on Anvil. Every task has exact file paths, line numbers, broken code, fix instructions, and acceptance criteria. Phases are sequenced — **do not skip ahead**.
 >
-> **⚠️ 2026-09-13 pre-execution audit:** read [`PHASE-21-25-AUDIT.md`](PHASE-21-25-AUDIT.md)
-> before executing any item. Three items are **already fixed** (22.15, 22.16) or
-> **resolved by design — do not "fix"** (22.13); line numbers have drifted slightly in
-> places; the Phase 23 scope ruling (23.8–23.15) lives there. Verify reality per §1.3
-> of `AGENTS.md` regardless.
+> **✅ STATUS — Phases 21–25 are COMPLETE (reconciled 2026-09-23).** This file is
+> retained as the historical *build guide* for v0.8.0 → v1.0.0. Its `- [ ]` lists are
+> the acceptance criteria as written **before** the work was done, and they are
+> **deliberately not maintained**: an unticked box here means "planned in September",
+> **not** "open work". Do not open work from this file.
+>
+> [`PHASE-21-25-AUDIT.md`](PHASE-21-25-AUDIT.md) is the authority — itself a protected
+> artifact, re-verified against the live tree **by symbol** rather than by line number
+> (re-audited 2026-09-20). It reports the whole matrix **all-green**, with two honest
+> exceptions that must be read before acting: **23.4 is PARTIAL** (only `MessageView`
+> is memoized, the rest of the hot-component list was never audited) and **22.13 is
+> BY-DESIGN and must not be "fixed"** (demoting the free-model registry on an empty
+> response would wipe it during an outage). Each phase's own `PHASE-2x-PROGRESS.md`
+> records the executed work and its evidence.
+>
+> **Why the boxes below were not mass-ticked:** doing so would assert that ~90 separate
+> acceptance assertions still hold, and only a subset of them is phase-annotated in the
+> test suites — the rest would be unverified bookkeeping that swaps one unreliable
+> signal for another. The audit's per-item, symbol-anchored verification is the record
+> to trust instead. Genuinely open work lives in
+> [`STABILIZATION-ROADMAP-2026-09.md`](STABILIZATION-ROADMAP-2026-09.md) and the
+> `PHASE-26`/`PHASE-27` progress docs (both now landed — see
+> `docs/PHASE-27-PROGRESS.md`).
 
 ---
 

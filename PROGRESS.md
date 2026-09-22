@@ -2,6 +2,12 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-23 (Buffy, PHASE-21-25 roadmap reconciliation):** owns
+> `docs/PHASE-21-25-ROADMAP.md` (status banner only — no code, no protected
+> artifact: that file is **not** in the manifest; `docs/PHASE-21-25-AUDIT.md` is,
+> and it is untouched). Records the phases as complete and points readers at the
+> audit as the authority.
+>
 > **DONE 2026-09-23 (Buffy, Windows process-tree kill):** owns
 > `packages/core/src/tools/bash.ts` (new pure `planTreeKill` + the `killTree`
 > branches) and `packages/core/src/tools/__tests__/bash.test.ts` (import + the
