@@ -2,6 +2,20 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-23 (Buffy, Phase 27.2/27.4/27.6 — eval harness 2.0):** owns NEW
+> `evals/tasks/16-feature-ts-generics/**`, `17-bugfix-ts-narrowing/**`,
+> `18-bugfix-py-off-by-one/**`, `19-feature-py-lru-cache/**`,
+> `20-refactor-py-dataclass/**`, `21-diagnose-circular-require/**`,
+> `22-diagnose-shared-mutable-state/**`, `23-diagnose-async-ordering/**`,
+> `24-diagnose-numeric-parsing/**`, `25-diagnose-multifile-contract/**` (fixture
+> suite 15 → 25 tasks); `docs/PHASE-27-PROGRESS.md` (27.2/27.4/27.6 boxes),
+> `CHANGELOG.md`. **PROTECTED:** `.github/workflows/live-eval.yml` (pins
+> `ANVIL_HOME`; artifact path made workspace-relative) + `scripts/gate-manifest.json`
+> (that workflow's SHA-256 regenerated) — declared per AGENTS.md §3.4(a), manifest
+> regenerated in the same working set per §3.4(b), review recorded below per
+> §3.4(c). No file under `packages/` is touched, so the gate, allowlist, sentinel,
+> audit doc, and the other three workflows stay byte-identical.
+>
 > **DONE 2026-09-23 (Buffy, Phase 27.3 failure diffs):** owns
 > `packages/core/src/eval/{types,runner,report}.ts`, NEW
 > `packages/core/src/eval/failureDiff.ts`, NEW
@@ -244,6 +258,38 @@ change touches a protected artifact:
   full `npm run gate --ack-protected-change` green (Steps 0–5).
 - **Residual human sign-off:** the operator acknowledged the change. Technical
   diligence above is complete; the diff is prose + a single recomputed hash.
+
+### Protected-diff review record (2026-09-23, §3.4(c) — live-eval workflow)
+
+Engineering review of the protected-path diff for Phase 27.6:
+
+- `.github/workflows/live-eval.yml` — three edits, all inside the `live-eval` job:
+  a three-line comment + `ANVIL_HOME: ${{ github.workspace }}/.anvil` added to the
+  job `env:` block; the report upload path changed from `~/.anvil/evals/` to
+  `.anvil/evals/`; and one step label corrected from "all 15 tasks" to "all 25
+  tasks". **Motivation verified against the runtime, not assumed:**
+  `resolveEvalsDir()` reads `process.env.ANVIL_HOME || ~/.anvil`
+  (`packages/core/src/eval/report.ts:11`), so the env var genuinely relocates the
+  report tree; and `actions/upload-artifact` does not expand `~`, which means the
+  previous path silently uploaded an empty artifact — the exact defect this task
+  exists to fix. No trigger, permission, secret, or job dependency changed, so no
+  gate/security property of the workflow is altered.
+- `scripts/gate-manifest.json` — only `.github/workflows/live-eval.yml`'s SHA-256
+  changed (`f7609c2d…` → `b5c090ad…`, recomputed from the edited file). No path
+  added or removed, so the sentinel's exact-coverage assertion still holds.
+- Untouched: `scripts/verify-gate.mjs`, `AGENTS.md`, `.fresh-allowlist.json`,
+  `docs/PHASE-21-25-AUDIT.md`, `gate.sentinel.test.ts`, `.githooks/pre-commit`, and
+  the other three workflows (their manifest hashes were left exactly as committed).
+- **Verification limits stated honestly:** acceptance criterion E5 ("artifact
+  upload succeeds on a real run") can only be observed in GitHub Actions; it is
+  **not** verified here and is recorded as pending in the phase progress doc. What
+  was verified locally is the mechanism (env var → report path → upload path) and
+  the manifest's integrity via gate Step 0.5.
+- Gate Step 0.5 re-verified all protected hashes against the regenerated manifest;
+  full `npm run gate` green (Steps 0–5).
+- **Residual human sign-off:** §3.4(c) requires explicit human review of this
+  diff. The operator has delegated the mechanical judgment; the diff is a comment,
+  one env line, one upload path, one label, and one recomputed hash.
 
 ---
 

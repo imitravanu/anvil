@@ -1,0 +1,8 @@
+{
+  "name": "Implement a type-safe generic event emitter",
+  "category": "feature",
+  "prompt": "In src/emitter.ts, implement EventEmitter<Events extends Record<string, unknown>> with on(event, listener), off(event, listener), once(event, listener), and emit(event, payload). Payload types must be derived from the event map, so emitting a payload of the wrong type must not compile. once(event, listener) must fire at most once, and off(event, listener) must unsubscribe an existing listener. Assertions type-check the project and then run test.ts.",
+  "timeoutMs": 60000,
+  "maxTokens": 4096,
+  "fast": true
+}

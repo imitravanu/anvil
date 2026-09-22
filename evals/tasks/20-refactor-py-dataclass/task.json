@@ -1,0 +1,8 @@
+{
+  "name": "Migrate raw dictionary config to a typed dataclass in Python",
+  "category": "migration",
+  "prompt": "Refactor src/config.py: load_config(raw) must return a frozen @dataclass Config (fields host: str, port: int, debug: bool) instead of a plain dict. Defaults are host \"localhost\", port 8080, debug False. Add a Config.from_mapping(raw) classmethod that coerces port with int() and raises ValueError when the port cannot be parsed as an integer or is not positive. Assertions run `python3 -m unittest test_config.py`.",
+  "timeoutMs": 30000,
+  "maxTokens": 4096,
+  "fast": true
+}

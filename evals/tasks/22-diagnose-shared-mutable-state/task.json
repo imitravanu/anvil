@@ -1,0 +1,8 @@
+{
+  "name": "Diagnose a leaked internal array in a registry module",
+  "category": "regression",
+  "prompt": "Run the project's tests, diagnose the failure across src/, fix the implementation, and verify that all tests pass. src/registry.js exposes a list() accessor, but a snapshot it returns keeps changing after later registrations, because callers receive the registry's own internal array instead of a value. Fix src/registry.js so list() returns a snapshot that callers cannot use to mutate registry internals, while add() and clear() keep working as before.",
+  "timeoutMs": 60000,
+  "maxTokens": 8192,
+  "fast": true
+}

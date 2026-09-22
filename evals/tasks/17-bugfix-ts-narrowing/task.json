@@ -1,0 +1,8 @@
+{
+  "name": "Fix discriminated-union narrowing in an API client",
+  "category": "bugfix",
+  "prompt": "src/client.ts does not compile: unwrap() narrows only the \"error\" variant and then reads `data`, which the \"pending\" variant does not have. Fix unwrap() so it handles every variant of ApiResponse<T>: return `data` for \"success\", throw new Error(res.message) for \"error\", and throw new Error(\"response is pending\") for \"pending\". Do not widen the types or use escape-hatch casts. Assertions type-check the project and then run test.ts.",
+  "timeoutMs": 60000,
+  "maxTokens": 4096,
+  "fast": true
+}

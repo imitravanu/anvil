@@ -4,6 +4,39 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Eval Benchmark Fixtures: TypeScript, Python & Multi-Turn Diagnosticians (Phase 27.2 / 27.4, 2026-09-23)
+
+- **The benchmark suite grows from 15 to 25 tasks across three new stacks.**
+  Five language fixtures — a type-safe generic event emitter and a
+  discriminated-union narrowing fix in TypeScript, plus slice bounds, a bounded
+  LRU decorator cache, and a raw-dict → frozen `@dataclass` migration in Python
+  — and five multi-turn diagnostic tasks whose prompts exercise the iterative
+  loop: run the tests, diagnose across the codebase, fix, verify.
+- **TypeScript tasks are checked without depending on a toolchain being
+  installed.** `check.sh` compiles with the workspace's own `tsc`, resolved
+  relative to `$0` instead of the sandbox cwd, so no network install is
+  attempted. `16` additionally asserts type-safety at the type level: a
+  `@ts-expect-error` directive fails the build if the emitter ever degrades to
+  a permissive type.
+- **Every new fixture was validated in both directions** — green in mock mode,
+  and red on its pristine `setup/` with the intended symptom. Diagnostics span
+  circular-require initialization order, a leaked internal array, concurrent vs
+  sequential async scheduling, a base-10 parser mangling decimal/hex literals,
+  and a cross-module contract mismatch pinned from both sides.
+- Mock smoke: `npm run eval -- --fast --mock` → **25/25 in 3.3s**.
+
+### CI Live Eval Artifact Fix (Phase 27.6, 2026-09-23)
+
+- **The weekly live-eval lane no longer uploads an empty artifact.**
+  `actions/upload-artifact` does not expand `~`, so `path: ~/.anvil/evals/`
+  produced a literal `~` directory and a path warning. The job now pins
+  `ANVIL_HOME: ${{ github.workspace }}/.anvil` — the documented data-dir
+  relocation read by `resolveEvalsDir()` — and uploads the workspace-relative
+  `.anvil/evals/`.
+- Protected artifact (§3.4): the workflow change is declared in
+  `docs/PHASE-27-PROGRESS.md` and `scripts/gate-manifest.json` was regenerated
+  in the same change.
+
 ### Eval Failure Diff Snapshots (Phase 27.3, 2026-09-23)
 
 - **A failed eval task now records what the model actually wrote.** The diff

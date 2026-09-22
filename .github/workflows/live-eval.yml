@@ -47,6 +47,10 @@ jobs:
     if: needs.check-opt-in.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     env:
+      # Pin Anvil's data dir into the workspace. actions/upload-artifact does
+      # NOT expand `~`, so uploading `~/.anvil/evals/` silently produces an
+      # empty artifact — ANVIL_HOME makes the report path a plain workspace path.
+      ANVIL_HOME: ${{ github.workspace }}/.anvil
       ANVIL_PROVIDER: ${{ secrets.ANVIL_PROVIDER }}
       ANVIL_MODEL: ${{ secrets.ANVIL_MODEL }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -73,7 +77,7 @@ jobs:
       - name: Build monorepo
         run: npm run build
 
-      - name: Full live eval (non-mock, all 15 tasks)
+      - name: Full live eval (non-mock, all 25 tasks)
         # provider/model resolve from ANVIL_PROVIDER/ANVIL_MODEL env when
         # dispatch inputs are empty.
         run: |
@@ -91,7 +95,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: live-eval-reports
-          path: ~/.anvil/evals/
+          path: .anvil/evals/
 
       - name: Upload certification matrix
         if: always()

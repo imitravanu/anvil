@@ -1,0 +1,8 @@
+{
+  "name": "Diagnose an async queue that runs its handlers concurrently",
+  "category": "regression",
+  "prompt": "Run the project's tests, diagnose the failure across src/, fix the implementation, and verify that all tests pass. src/queue.js processAll() starts every handler at once, so the work interleaves instead of running in task order and the start/end log comes out wrong. Rewrite processAll() so handlers run one at a time, in task order, and resolved values are returned in that same order.",
+  "timeoutMs": 60000,
+  "maxTokens": 8192,
+  "fast": true
+}

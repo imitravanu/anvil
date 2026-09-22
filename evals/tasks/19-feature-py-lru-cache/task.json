@@ -1,0 +1,8 @@
+{
+  "name": "Implement a bounded LRU decorator cache in Python",
+  "category": "feature",
+  "prompt": "In src/cache.py, implement bounded_cache(maxsize=128) as a decorator that memoizes results in an LRU cache holding at most `maxsize` entries, evicting the least recently used entry when full. A cache hit must not call the wrapped function again, and a hit must refresh that entry's recency. Raise ValueError for a non-positive maxsize, and preserve the wrapped function's __name__ and __doc__. Assertions run `python3 -m unittest test_cache.py`.",
+  "timeoutMs": 30000,
+  "maxTokens": 4096,
+  "fast": true
+}

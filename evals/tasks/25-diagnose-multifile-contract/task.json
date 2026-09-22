@@ -1,0 +1,8 @@
+{
+  "name": "Diagnose a contract mismatch across a pricing pipeline",
+  "category": "multifile",
+  "prompt": "Run the project's tests, diagnose the failure across src/, fix the implementation, and verify that all tests pass. The invoice total comes out as NaN: src/pricing.js and src/invoice.js disagree about the shape they exchange. Make priceItems(items) return { totalCents } where totalCents is the integer sum of item.unitCents * item.quantity, and make invoiceTotal(items, taxRate) read that property and return the integer cents total including tax (rounded).",
+  "timeoutMs": 60000,
+  "maxTokens": 8192,
+  "fast": true
+}
