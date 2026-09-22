@@ -61,7 +61,8 @@ export function RewindModal({ session, onSelect, onClose }: RewindModalProps) {
     <Box
       flexDirection="column"
       borderStyle="round"
-      borderColor={theme.colors.accent}
+      // DW-3.3 focus signal: owns keystrokes while mounted.
+      borderColor={theme.colors.borderFocus}
       paddingX={2}
       paddingY={1}
       flexShrink={0}

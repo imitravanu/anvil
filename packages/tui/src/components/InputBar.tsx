@@ -165,9 +165,9 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [], mruComm
       )}
       <Box
         borderStyle={theme.borders.panel}
-        // Bright (accent) while ready for input, dimmed while a turn streams
-        // (the box is non-interactive then) — state you can see without text.
-        borderColor={isBusy ? theme.colors.dim : theme.colors.accent}
+        // DW-3.3 focus signal: bright (focus border) while ready for input,
+        // dimmed while a turn streams (the box is non-interactive then).
+        borderColor={isBusy ? theme.colors.dim : theme.colors.borderFocus}
         paddingX={theme.spacing.panelPaddingX}
       >
         <Text color={theme.colors.brand}>{"❯ "}</Text>

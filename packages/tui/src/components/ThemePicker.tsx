@@ -46,7 +46,14 @@ export function ThemePicker({
   });
 
   return (
-    <Box flexDirection="column" flexShrink={0} borderStyle="round" borderColor={theme.colors.primary} paddingX={1}>
+    <Box
+      flexDirection="column"
+      flexShrink={0}
+      borderStyle="round"
+      // DW-3.3 focus signal: owns keystrokes while mounted.
+      borderColor={theme.colors.borderFocus}
+      paddingX={1}
+    >
       <Text color={theme.colors.primary}>
         Select a theme — move to preview live, Enter to apply, Esc to keep the current one
       </Text>

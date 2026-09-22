@@ -220,7 +220,8 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
     <Box
       flexDirection="column"
       borderStyle="round"
-      borderColor={theme.colors.primary}
+      // DW-3.3 focus signal: the viewer owns keystrokes while mounted.
+      borderColor={theme.colors.borderFocus}
       paddingX={1}
       height={height}
       overflow="hidden"

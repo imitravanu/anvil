@@ -698,34 +698,43 @@ Toggle via `/diff --side` or automatic on wide terminals.
 
 ## Acceptance Criteria (Per Wave)
 
+> **Status note (2026-09-23):** DW-1–DW-3 are complete per their progress
+> records (`docs/DW-1..3-PROGRESS.md`) and were re-verified against the working
+> tree while ticking the boxes below. DW-4 shipped its **platform slice** only:
+> the five boxes ticked there have code + tests in the tree, while the four left
+> open are deferred with reasons in `docs/DW-4-PROGRESS.md` §Deferred (4.1
+> dashboard / 4.13 panes need a focus tree and live team state; 4.6 floating
+> modals tear Ink's scrollback; 4.8 mouse is its own mini-project). An open box
+> here now means "not built", not "built but untickked".
+
 ### DW-1 Acceptance
-- [ ] All 5 built-in themes render correctly
-- [ ] Old custom themes auto-migrate with no errors
-- [ ] `useTerminalSize()` returns correct breakpoints
-- [ ] Visual regression baselines updated and approved
+- [x] All 5 built-in themes render correctly
+- [x] Old custom themes auto-migrate with no errors
+- [x] `useTerminalSize()` returns correct breakpoints
+- [x] Visual regression baselines updated and approved
 
 ### DW-2 Acceptance
-- [ ] All components use theme tokens (zero hardcoded colors)
-- [ ] Responsive layout shifts work at 60, 80, 120, 160 col widths
-- [ ] Visual regression captures all new component states
-- [ ] Existing keyboard interactions unchanged
+- [x] All components use theme tokens (zero hardcoded colors)
+- [x] Responsive layout shifts work at 60, 80, 120, 160 col widths
+- [x] Visual regression captures all new component states
+- [x] Existing keyboard interactions unchanged
 
 ### DW-3 Acceptance
-- [ ] Command palette opens on `/`, filters, and runs commands
-- [ ] Focus indicators visible on all interactive elements
-- [ ] Streaming cursor blinks during response generation
-- [ ] Spinner styles match their contexts
+- [x] Command palette opens on `/`, filters, and runs commands
+- [x] Focus indicators visible on all interactive elements
+- [x] Streaming cursor blinks during response generation
+- [x] Spinner styles match their contexts
 
 ### DW-4 Acceptance
-- [ ] Alternate screen buffer activates on start and cleanly restores terminal on exit
+- [x] Alternate screen buffer activates on start and cleanly restores terminal on exit
 - [ ] Modals float centered with backdrop dimming instead of replacing InputBar
 - [ ] Mouse clicks on `[ Allow ]` / `[ Deny ]` and scroll wheel work reliably
-- [ ] Long turns fire OSC 777 desktop notification on completion
+- [x] Long turns fire OSC 777 desktop notification on completion
 - [ ] Mission dashboard renders on 120+ width
 - [ ] Collapses to single-column on < 80
-- [ ] Context gauge updates in real-time during streaming
-- [ ] Braille sparklines render token history accurately
-- [ ] OSC 52 copies code/diffs directly to clipboard over SSH
+- [x] Context gauge updates in real-time during streaming
+- [x] Braille sparklines render token history accurately
+- [x] OSC 52 copies code/diffs directly to clipboard over SSH
 
 ---
 

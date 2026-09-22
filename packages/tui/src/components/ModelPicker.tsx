@@ -253,7 +253,14 @@ export function ModelPicker({
   }
 
   return (
-    <Box flexDirection="column" flexShrink={0} borderStyle={theme.borders.panel} borderColor={theme.colors.primary} paddingX={1}>
+    <Box
+      flexDirection="column"
+      flexShrink={0}
+      borderStyle={theme.borders.panel}
+      // DW-3.3 focus signal: owns keystrokes while mounted.
+      borderColor={theme.colors.borderFocus}
+      paddingX={1}
+    >
       <Text color={theme.colors.primary}>
         {ordered.length > 0
           ? `Select a model (${selected + 1}/${ordered.length}) — type to filter, Enter to switch, Esc to cancel`

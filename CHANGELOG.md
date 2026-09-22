@@ -4,6 +4,28 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Consistent focus border on every input-owning surface (DW-3.3, 2026-09-23)
+
+- **The panel that owns your keystrokes now looks like it.** Every surface that
+  takes over input — the diff inspector, rewind modal, model/session/theme
+  pickers, and the input bar — renders its frame with the theme's `borderFocus`
+  token, which all five built-in themes already defined brighter than the
+  structural border. Previously only the command palette used it, so a panel that
+  owned input was indistinguishable from a static one.
+- **Two deliberate exceptions.** The permission prompt keeps its `warning` frame
+  (that border is the danger signal for a mutating tool call, and danger outranks
+  focus; the selected action button shows the focus position). Esc-only empty
+  states keep the structural border, since they present nothing focusable.
+- Fixed a doc defect found on the way: the UI/UX roadmap and DW-4 acceptance
+  lists still showed completed work as open. Boxes are now ticked where the code
+  and tests exist, and the four genuinely deferred DW-4 items stay open with
+  reasons — an open box there now means "not built" rather than "built but
+  untickked".
+- Note on verification: colors are unobservable in this harness (non-TTY stdout,
+  ANSI-stripped visual baselines), so the change is backed by zero visual-frame
+  drift plus a new `focusContract.test.ts` asserting every theme's focus border
+  differs from its structural border.
+
 ### Eval Benchmark Fixtures: TypeScript, Python & Multi-Turn Diagnosticians (Phase 27.2 / 27.4, 2026-09-23)
 
 - **The benchmark suite grows from 15 to 25 tasks across three new stacks.**

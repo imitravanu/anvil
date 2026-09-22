@@ -2,6 +2,15 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-23 (Buffy, DW-3.3 focus indicators):** owns
+> `packages/tui/src/components/{DiffModal,RewindModal,ModelPicker,SessionPicker,ThemePicker,InputBar}.tsx`
+> (focus-border token only; semantic/banner colors and all layout untouched),
+> NEW `packages/tui/src/theme/__tests__/focusContract.test.ts`,
+> `docs/DW-3-PROGRESS.md` (3.3 → DONE), `docs/UI-UX-EVOLUTION-ROADMAP.md`
+> (stale acceptance boxes reconciled), `CHANGELOG.md`. No protected artifact
+> touched. `PermissionPrompt` deliberately unchanged (its `warning` frame is the
+> danger signal).
+>
 > **DONE 2026-09-23 (Buffy, eval fixture-integrity guard):** owns NEW
 > `packages/core/src/eval/__tests__/fixtureIntegrity.test.ts`; edits to
 > `docs/PHASE-27-PROGRESS.md` and `CHANGELOG.md`. No protected artifact touched.
