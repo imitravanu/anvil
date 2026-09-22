@@ -4,6 +4,29 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### The CLI's own failure paths are now tested (2026-09-23)
+
+- **`index.tsx`'s crash guard and SIGINT guard had no tests — the two paths that
+  decide whether your terminal survives.** The guard is the last line of defence:
+  it unmounts Ink, leaves the alt screen, drops raw mode, and only then prints the
+  detail. New `packages/cli/src/__tests__/bootFailures.test.ts` pins it, including
+  the two fallbacks that would otherwise make a crash print a bare header with no
+  cause — an `Error` carrying no `stack`, and a non-`Error` throw.
+- **SIGINT now yields to a runner that owns cancellation.** A session registers
+  its own SIGINT handler to cancel gracefully instead of dying mid-tool-call; the
+  CLI exits 130 only when nothing else is listening. Both directions are asserted,
+  since exiting under a runner aborts work it was about to finish cleanly.
+- **An unusable `--provider` fails before any turn runs:** the selection error
+  names the provider, and `runHeadless` is asserted never to have been called.
+- Coverage for `src/index.tsx`: 70.8% → **80.35%** statements, 67.0% → **72.5%**
+  branches, 62.5% → **70.8%** functions. The tests were mutation-checked (dropping
+  the detail fallback and inverting the SIGINT guard fail exactly the tests that
+  should fail).
+- **Not covered on purpose:** `resolveSelectionOrExit`'s "No provider is
+  configured" branch cannot be reached from the run path, because
+  `resolveInvocation` only returns `run` when a provider is configured. It stays
+  as a belt-and-braces guard; asserting it would have meant testing dead code.
+
 ### Transcript memoisation claim is now asserted (roadmap 23.4, 2026-09-23)
 
 - **The transcript really does skip re-rendering settled messages while a turn

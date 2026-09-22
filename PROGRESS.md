@@ -2,6 +2,18 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-23 (Buffy, cli entry-point failure paths):** owns NEW
+> `packages/cli/src/__tests__/bootFailures.test.ts` (fatal crash guard, SIGINT
+> listener-count guard, unusable-provider run path), `CHANGELOG.md`, this file.
+> **No production file changed** — `packages/cli/src/index.tsx` is byte-identical
+> to HEAD, verified with `git status`/`git diff` after a deliberate mutation
+> check. No protected artifact touched. Coverage: `packages/cli/src/index.tsx`
+> 70.8% → **80.35%** statements, 67.0% → **72.5%** branches, 62.5% → **70.8%**
+> functions. Deliberately NOT covered, and recorded as such:
+> `resolveSelectionOrExit`'s "No provider is configured" branch is unreachable
+> from the run path (`resolveInvocation` only returns `run` when a provider IS
+> configured), so asserting it would test dead behaviour.
+>
 > **DONE 2026-09-23 (Buffy, roadmap 23.4 memoisation audit):** owns NEW
 > `packages/tui/src/components/__tests__/renderMemo.test.tsx` (render-count
 > tests), `docs/PHASE-21-25-ROADMAP.md` (23.4 row), `CHANGELOG.md`. No production
