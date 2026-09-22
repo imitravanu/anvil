@@ -27,6 +27,22 @@ function sleep30Running(): boolean {
   }
 }
 
+/**
+ * Poll `predicate` until it is true or the budget elapses. The abort test
+ * asserts a PROCESS-DEATH property, and SIGKILL/reap timing is not
+ * deterministic under CPU contention — a fixed 200ms window flaked under
+ * parallel test load. Polling with a real budget still fails a genuine
+ * "never killed" regression while tolerating a slow-but-correct reap.
+ */
+async function waitFor(predicate: () => boolean, timeoutMs: number, stepMs = 50): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (predicate()) return true;
+    if (Date.now() >= deadline) return false;
+    await new Promise((r) => setTimeout(r, stepMs));
+  }
+}
+
 describe("run_command", () => {
   it("captures stdout and a zero exit code", async () => {
     const result = await executeTool("run_command", { command: "echo hello-anvil" }, ctx);
@@ -50,14 +66,17 @@ describe("run_command", () => {
     const controller = new AbortController();
     const abortingCtx: ToolContext = { projectRoot: root, signal: controller.signal };
     const pending = executeTool("run_command", { command: "sleep 30" }, abortingCtx);
-    await new Promise((r) => setTimeout(r, 300)); // let the child actually start
+    // Wait until the child is actually running before aborting — a fixed delay
+    // races the child's own startup under load.
+    expect(await waitFor(sleep30Running, 5_000)).toBe(true);
     controller.abort();
     const result = await pending;
     expect((result.output as { aborted: boolean }).aborted).toBe(true);
-    // give the OS a beat to reap the process, then verify it is really gone
-    await new Promise((r) => setTimeout(r, 200));
-    expect(sleep30Running()).toBe(false);
-  }, 15000);
+    // Assert the PROPERTY (the child is eventually reaped), not a fixed
+    // deadline: SIGKILL/reap lags under CPU contention (this flaked in the
+    // full gate at ~1/8 before the poll was added).
+    expect(await waitFor(() => !sleep30Running(), 8_000)).toBe(true);
+  }, 20_000);
 
   it("refuses nothing about content but still routes cwd through the project root", async () => {
     const result = await executeTool("run_command", { command: "pwd" }, ctx);
