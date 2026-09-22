@@ -2,6 +2,12 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-23 (Buffy, Windows process-tree kill):** owns
+> `packages/core/src/tools/bash.ts` (new pure `planTreeKill` + the `killTree`
+> branches) and `packages/core/src/tools/__tests__/bash.test.ts` (import + the
+> `planTreeKill` block). `CHANGELOG.md`, `PROGRESS.md`. No protected artifact
+> touched.
+>
 > **DONE 2026-09-23 (Buffy, DW-3.3 focus indicators):** owns
 > `packages/tui/src/components/{DiffModal,RewindModal,ModelPicker,SessionPicker,ThemePicker,InputBar}.tsx`
 > (focus-border token only; semantic/banner colors and all layout untouched),
@@ -164,8 +170,10 @@ Read this before the chronological log below. The log is history; this is truth.
 - **Remote:** `origin` is reachable; whether to push is a human decision.
 - **Known open (features/gaps, NOT defects):** every TUI production file has been
   read and audited (2026-09-22, three passes); `packages/cli/src/index.tsx` is
-  still partly uncovered; Windows is second-class (bash + a Unix-only kill-tree);
-  no cost estimation, no session search.
+  still partly uncovered; Windows still requires a bash-compatible shell (Git
+  Bash/WSL) — **the kill-tree gap is closed as of 2026-09-23** (`taskkill /T`,
+  see the entry below); no session search. (Eval cost estimation landed in
+  Phase 27.5.)
 
 ---
 

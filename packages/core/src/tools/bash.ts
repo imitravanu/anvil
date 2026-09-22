@@ -1,12 +1,36 @@
-import { spawn, execSync } from "node:child_process";
+import { spawn, spawnSync, execSync } from "node:child_process";
 import * as path from "node:path";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
+import { log } from "../logger.js";
 import {
   MAX_STREAM_BYTES,
   RUN_COMMAND_TIMEOUT_MS,
   MIN_COMMAND_TIMEOUT_MS,
   MAX_COMMAND_TIMEOUT_MS,
 } from "../config/constants.js";
+
+/**
+ * How to reach a whole command tree, decided as a pure function so both
+ * platforms are covered by tests that run on any host: the Windows branch
+ * cannot be executed here, but the exact invocation it issues can.
+ *
+ * POSIX: the child is spawned detached, so it leads its own process group and a
+ * negative-pid signal reaches the grandchildren that a `bash -c` wrapper hides.
+ *
+ * Windows: there is no signalable process group, and `child.kill()` reaches only
+ * the direct child — so the interesting process (a grandchild) survives a plain
+ * kill. `taskkill /T` walks the tree by parent pid instead.
+ */
+export type TreeKillPlan =
+  | { strategy: "process-group"; pid: number }
+  | { strategy: "taskkill"; command: "taskkill"; args: string[] };
+
+export function planTreeKill(pid: number, platform: NodeJS.Platform): TreeKillPlan {
+  if (platform === "win32") {
+    return { strategy: "taskkill", command: "taskkill", args: ["/pid", String(pid), "/T", "/F"] };
+  }
+  return { strategy: "process-group", pid };
+}
 
 /**
  * Check if the current system environment supports running bash commands.
@@ -307,19 +331,28 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
       // Kill the whole tree — bash -c wrappers mean the interesting process is
       // often a grandchild; killing bash alone can leave it running.
       if (child.pid == null) return;
-      if (process.platform === "win32") {
+      const plan = planTreeKill(child.pid, process.platform);
+      if (plan.strategy === "taskkill") {
+        // Must run while the parent is alive: taskkill walks the tree by parent
+        // pid, so killing the parent first would orphan the grandchildren.
+        const result = spawnSync(plan.command, plan.args, { stdio: "ignore" });
+        if (result.error) {
+          log.warn(
+            `[run_command] taskkill unavailable (${result.error.message}); killed only the direct child.`
+          );
+        }
         try {
           child.kill("SIGKILL");
         } catch {
           // child already exited
         }
-      } else {
-        try {
-          process.kill(-child.pid, "SIGKILL");
-        } catch {
-          // ESRCH — child already exited; expected race
-          child.kill("SIGKILL");
-        }
+        return;
+      }
+      try {
+        process.kill(-plan.pid, "SIGKILL");
+      } catch {
+        // ESRCH — child already exited; expected race
+        child.kill("SIGKILL");
       }
     };
     let timedOut = false;

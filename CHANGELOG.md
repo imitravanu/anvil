@@ -4,6 +4,20 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Cross-platform command-tree kill (2026-09-23)
+
+- **Aborting or timing out a command on Windows now kills the whole tree.**
+  Windows has no signalable process group, and `child.kill()` reaches only the
+  direct child — so the process that actually held the command (a grandchild
+  behind the `bash -c` wrapper) survived a timeout or an abort. The Windows path
+  now issues `taskkill /pid <pid> /T /F` while the parent is still alive (it
+  walks the tree by parent pid), falling back to the direct child kill and
+  warning when `taskkill` is unavailable. POSIX behaviour (negative-pid group
+  signal) is unchanged.
+- The decision is a pure `planTreeKill(pid, platform)` so both branches are
+  covered by tests that run on any host; the Windows invocation is asserted, not
+  the OS behaviour it produces.
+
 ### Consistent focus border on every input-owning surface (DW-3.3, 2026-09-23)
 
 - **The panel that owns your keystrokes now looks like it.** Every surface that

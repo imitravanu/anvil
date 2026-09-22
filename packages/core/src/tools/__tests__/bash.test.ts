@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { executeTool } from "../index.js";
-import { isBlockedCommand, runCommandTimeoutMs } from "../bash.js";
+import { isBlockedCommand, planTreeKill, runCommandTimeoutMs } from "../bash.js";
 import type { ToolContext } from "../types.js";
 
 let root: string;
@@ -88,6 +88,28 @@ describe("run_command", () => {
     const result = await executeTool("run_command", { command: "printf '%s' \"$ANVIL_TEST_SECRET\"" }, ctx);
     expect((result.output as { stdout: string }).stdout).toBe("");
     delete process.env.ANVIL_TEST_SECRET;
+  });
+});
+
+/**
+ * Windows has no signalable process group, and `child.kill()` there reaches only
+ * the direct child — so a `bash -c` grandchild (the process actually holding the
+ * command) survives. The plan is a pure function precisely because the Windows
+ * branch cannot be executed from a POSIX host; the invocation it issues is what
+ * is asserted here, not the OS behaviour it produces.
+ */
+describe("planTreeKill (cross-platform tree kill)", () => {
+  it("signals the whole process group on POSIX", () => {
+    expect(planTreeKill(4242, "linux")).toEqual({ strategy: "process-group", pid: 4242 });
+    expect(planTreeKill(4242, "darwin")).toEqual({ strategy: "process-group", pid: 4242 });
+  });
+
+  it("walks the tree with taskkill on Windows instead of signalling the child", () => {
+    expect(planTreeKill(4242, "win32")).toEqual({
+      strategy: "taskkill",
+      command: "taskkill",
+      args: ["/pid", "4242", "/T", "/F"],
+    });
   });
 });
 
