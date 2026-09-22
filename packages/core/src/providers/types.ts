@@ -76,6 +76,15 @@ export type StreamEvent =
     };
 
 /**
+ * Context-window exhaustion signals. Providers surface these as HTTP 400, so
+ * they must be judged by MESSAGE and before the generic 400 return — otherwise
+ * the CONTEXT_OVERFLOW branch is unreachable in the common case and a caller
+ * that wants to compact/truncate instead of failing can never tell the two apart.
+ */
+const CONTEXT_OVERFLOW_PATTERN =
+  /context_length_exceeded|maximum context length|prompt is too long|context overflow|too many tokens/i;
+
+/**
  * Classifies vendor errors into a shared taxonomy for backoff and retry systems.
  */
 export function classifyProviderError(err: unknown): {
@@ -108,6 +117,10 @@ export function classifyProviderError(err: unknown): {
   if (status === 404) {
     return { code: "MODEL_NOT_FOUND", isRetryable: false, httpStatus: 404 };
   }
+  // Judge the overflow message BEFORE the generic 400 return (see the pattern note).
+  if (CONTEXT_OVERFLOW_PATTERN.test(msg)) {
+    return { code: "CONTEXT_OVERFLOW", isRetryable: false, httpStatus: status ?? 400 };
+  }
   if (status === 400) {
     return { code: "INVALID_REQUEST", isRetryable: false, httpStatus: 400 };
   }
@@ -126,9 +139,6 @@ export function classifyProviderError(err: unknown): {
   }
   if (/404|model not found|does not exist|unknown model/i.test(msg)) {
     return { code: "MODEL_NOT_FOUND", isRetryable: false, httpStatus: status ?? 404 };
-  }
-  if (/context_length_exceeded|maximum context length|prompt is too long|context overflow|too many tokens/i.test(msg)) {
-    return { code: "CONTEXT_OVERFLOW", isRetryable: false, httpStatus: status ?? 400 };
   }
   if (/400|invalid_request|invalid argument/i.test(msg)) {
     return { code: "INVALID_REQUEST", isRetryable: false, httpStatus: status ?? 400 };
@@ -167,6 +177,15 @@ export interface ModelProvider {
   streamCompletion(request: CompletionRequest): AsyncGenerator<StreamEvent>;
 }
 
+/**
+ * How a model is judged to WORK — a verdict, not a provenance record.
+ *  - "live"     : verified working (NOT "verified against the live API" — that
+ *                 is `ModelInfo.certifiedMode`).
+ *  - "broken"   : a recorded observation that the id no longer works.
+ *  - "untested" : no observation at all (the default; carries no certifiedAt).
+ * Read this together with `certifiedMode`; neither field alone tells the whole
+ * story, which is why the registry integrity test asserts them as a pair.
+ */
 export type CertificationStatus = "live" | "broken" | "untested";
 
 export interface ModelInfo {
@@ -177,6 +196,9 @@ export interface ModelInfo {
   supportsTools: boolean;
   supportsVision: boolean;
   isFree?: boolean;
+  /** Verdict that the model works — see CertificationStatus. Provenance is
+   *  `certifiedMode`, so `certified: "live"` + `certifiedMode: "mock"` is a
+   *  coherent pair (a passing mock run), not a contradiction. */
   certified?: CertificationStatus;
   certifiedAt?: string; // ISO timestamp
   /**

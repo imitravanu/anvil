@@ -737,6 +737,9 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
+    // Audit 2026-09-23: HTTP 403 "free quota exhausted" — could not be
+    // verified against this key, so it stays honestly untested (not
+    // "broken": the id may work once quota resets).
     certified: "untested",
   },
   {
@@ -759,7 +762,9 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
-    certified: "untested",
+    certified: "live",
+    certifiedAt: "2026-09-23T00:00:00.000Z",
+    certifiedMode: "live",
   },
   {
     id: "glm-5.3",
@@ -793,7 +798,9 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
-    certified: "untested",
+    certified: "live",
+    certifiedAt: "2026-09-23T00:00:00.000Z",
+    certifiedMode: "live",
   },
   {
     id: "qwen3.7-max",
@@ -803,7 +810,9 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
-    certified: "untested",
+    certified: "live",
+    certifiedAt: "2026-09-23T00:00:00.000Z",
+    certifiedMode: "live",
   },
   {
     id: "qwen3.7-plus",
@@ -813,7 +822,9 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
-    certified: "untested",
+    certified: "live",
+    certifiedAt: "2026-09-23T00:00:00.000Z",
+    certifiedMode: "live",
   },
   {
     id: "qwen-max",
@@ -823,7 +834,9 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
-    certified: "untested",
+    certified: "live",
+    certifiedAt: "2026-09-23T00:00:00.000Z",
+    certifiedMode: "live",
   },
   {
     id: "qwen-plus",
@@ -833,7 +846,9 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
-    certified: "untested",
+    certified: "live",
+    certifiedAt: "2026-09-23T00:00:00.000Z",
+    certifiedMode: "live",
   },
   {
     id: "qwen-turbo",
@@ -843,17 +858,24 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
-    certified: "untested",
+    certified: "live",
+    certifiedAt: "2026-09-23T00:00:00.000Z",
+    certifiedMode: "live",
   },
   {
     id: "qwen-vl-max",
     providerId: "qwencloud",
     displayName: "Qwen VL Max",
     contextWindow: 128_000,
-    supportsTools: true,
+    // Audit 2026-09-23: streams cleanly, but the text-completions path answers
+    // a direct tool prompt in prose (no tool_call events) — keep default picks
+    // away until tool use is verified (vision path unprobed).
+    supportsTools: false,
     supportsVision: true,
     isFree: true,
-    certified: "untested",
+    certified: "live",
+    certifiedAt: "2026-09-23T00:00:00.000Z",
+    certifiedMode: "live",
   },
   {
     id: "qwen3-vl-plus",
@@ -863,7 +885,9 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
-    certified: "untested",
+    certified: "live",
+    certifiedAt: "2026-09-23T00:00:00.000Z",
+    certifiedMode: "live",
   },
   {
     id: "qwen3-vl-flash",
@@ -873,7 +897,9 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
-    certified: "untested",
+    certified: "live",
+    certifiedAt: "2026-09-23T00:00:00.000Z",
+    certifiedMode: "live",
   },
   {
     id: "qwen-flash",
@@ -883,7 +909,9 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
-    certified: "untested",
+    certified: "live",
+    certifiedAt: "2026-09-23T00:00:00.000Z",
+    certifiedMode: "live",
   },
   {
     id: "glm-5.2",
@@ -893,7 +921,9 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: false,
     isFree: true,
-    certified: "untested",
+    certified: "live",
+    certifiedAt: "2026-09-23T00:00:00.000Z",
+    certifiedMode: "live",
   },
 ];
 
@@ -901,7 +931,12 @@ export function getModelsForProvider(providerId: string): ModelInfo[] {
   return MODEL_REGISTRY.filter((m) => m.providerId === providerId);
 }
 
-export function registerModel(model: ModelInfo): void {
+/**
+ * Insert-or-replace WITHOUT rebuilding the indexes. Batched callers use this
+ * and reindex once at the end; the per-model path (`registerModel`) keeps the
+ * single-item contract. The indexes are only consistent AFTER `_reindex()`.
+ */
+function upsertModel(model: ModelInfo): void {
   // Replace only the SAME provider's entry for that id — a cross-provider id
   // collision must not overwrite the other provider's row.
   const idx = MODEL_REGISTRY.findIndex(
@@ -909,22 +944,26 @@ export function registerModel(model: ModelInfo): void {
   );
   if (idx >= 0) {
     MODEL_REGISTRY[idx] = model;
-  } else {
-    // Insert after the last free model of the provider if it's free
-    let lastFreeIdx = -1;
-    for (let i = MODEL_REGISTRY.length - 1; i >= 0; i--) {
-      const m = MODEL_REGISTRY[i];
-      if (m.providerId === model.providerId && m.isFree) {
-        lastFreeIdx = i;
-        break;
-      }
-    }
-    if (model.isFree && lastFreeIdx !== -1) {
-      MODEL_REGISTRY.splice(lastFreeIdx + 1, 0, model);
-    } else {
-      MODEL_REGISTRY.push(model);
+    return;
+  }
+  // Insert after the last free model of the provider if it's free
+  let lastFreeIdx = -1;
+  for (let i = MODEL_REGISTRY.length - 1; i >= 0; i--) {
+    const m = MODEL_REGISTRY[i];
+    if (m.providerId === model.providerId && m.isFree) {
+      lastFreeIdx = i;
+      break;
     }
   }
+  if (model.isFree && lastFreeIdx !== -1) {
+    MODEL_REGISTRY.splice(lastFreeIdx + 1, 0, model);
+  } else {
+    MODEL_REGISTRY.push(model);
+  }
+}
+
+export function registerModel(model: ModelInfo): void {
+  upsertModel(model);
   _reindex();
 }
 
@@ -940,9 +979,11 @@ export function getModel(id: string, providerId?: string): ModelInfo | undefined
 }
 
 export function registerModels(models: ModelInfo[]): void {
-  for (const m of models) {
-    registerModel(m);
-  }
+  if (models.length === 0) return;
+  for (const m of models) upsertModel(m);
+  // One reindex for the whole batch: delegating to registerModel() rebuilt both
+  // indexes on every row (O(n²) on a large live free-model sync).
+  _reindex();
 }
 
 /**

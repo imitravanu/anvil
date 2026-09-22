@@ -2,6 +2,19 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-23 (Buffy, audit-followup sweep):** owns
+> `packages/core/src/providers/types.ts` (classifyProviderError ordering),
+> `packages/core/src/providers/registry.ts` (qwencloud provenance restored to the
+> documented 9-live/13-untested state), NEW
+> `packages/core/src/providers/__tests__/{classifyError,registryIntegrity}.test.ts`,
+> `packages/core/src/providers/__tests__/qwencloud.test.ts` (per-id certification
+> pin). **PROTECTED:** `AGENTS.md` (§4 pre-commit description corrected) +
+> `scripts/gate-manifest.json` (AGENTS.md hash regenerated, date bumped) —
+> declared per AGENTS.md §3.4(a), manifest regenerated in the same working set per
+> §3.4(b); human review required per §3.4(c) and the gate was run locally with
+> `--ack-protected-change`. No sentinel or workflow file touched (the sentinel's
+> five required AGENTS.md substrings re-verified present).
+>
 > **ACTIVE 2026-09-21 (OpenCode session, inception provider):** owns NEW
 > `packages/core/src/providers/inception.ts`; `providers/{types,index}.ts`,
 > `config/index.ts` (PROVIDER_ORDER), `providers/registry.ts` (mercury models),
@@ -113,6 +126,67 @@ Read this before the chronological log below. The log is history; this is truth.
   read and audited (2026-09-22, three passes); `packages/cli/src/index.tsx` is
   still partly uncovered; Windows is second-class (bash + a Unix-only kill-tree);
   no cost estimation, no session search.
+
+---
+
+## 2026-09-23 — Audit-followup sweep: F1/F2/F3/F4 (Buffy)
+
+Two real fixes + two guards from the chief-engineer pass.
+
+- **F2 (real defect) — `CONTEXT_OVERFLOW` was unreachable for the common case.**
+  `classifyProviderError` returned `INVALID_REQUEST` on `status === 400` BEFORE
+  inspecting the message, and providers surface context-window exhaustion as
+  HTTP 400 — so the overflow branch could only fire when no status was present.
+  Fixed by judging a shared `CONTEXT_OVERFLOW_PATTERN` before the generic 400
+  return (and dropping the now-duplicate later branch). New
+  `classifyError.test.ts` pins 400 + `context_length_exceeded` → CONTEXT_OVERFLOW
+  while a genuinely generic 400 still classifies as INVALID_REQUEST.
+- **F1 (honesty) — live-audited the 13 previously-untested qwencloud rows.**
+  The dirty tree had marked all 22 rows live/live while PROGRESS recorded only
+  the 9 `DEFAULT_AUDIT_MODELS` as audited; no artifact existed, so that claim was
+  unverifiable and was reverted first. A real per-model audit was then run
+  against the saved key (`npx tsx scripts/audit-qwen.ts --model <id>`, stream +
+  tool round-trip each). **Result: 12 of 13 certify live. `deepseek-v4-pro`
+  fails on HTTP 403 "free quota exhausted" and stays `untested` (not "broken" —
+  the id may work once quota resets); `qwen-vl-max` streams but fails the tool
+  round-trip, so its `supportsTools` is honestly `false`.** Registry is now
+  21 live / 1 untested, every live row carrying `certifiedAt: 2026-09-23` +
+  `certifiedMode: "live"`. `qwencloud.test.ts` asserts PER-ID reality in BOTH
+  directions, so an unaudited row can never be flipped to "live" without
+  evidence.
+- **F4 (guard) — `registryIntegrity.test.ts` (NEW).** Enforces every row's
+  shape (non-empty id/providerId/displayName, positive finite contextWindow,
+  boolean flags), that its `providerId` is one `createProviders` knows, that no
+  provider-qualified id is duplicated, that a `live`/`broken` verdict carries a
+  parseable `certifiedAt` + a `certifiedMode` (and `untested` carries no date),
+  and that every row is retrievable via its qualified lookup.
+- **F3 (protected, human-review required) — `AGENTS.md` §4 corrected.** It
+  described the pre-commit hook as running `verify-gate.mjs --staged --quick`;
+  the rev-2 hook is deliberately self-contained and the sentinel test forbids it
+  from invoking the gate script. The text now documents the real design
+  (staged-diff decision, protected-path refusal, context-free slop scan) and
+  names `--quick` as the manual fast path. Manifest regenerated for the new
+  AGENTS.md hash. No sentinel/CI file touched; all five substrings the sentinel
+  asserts against AGENTS.md re-verified present.
+
+### Protected-diff review record (2026-09-23, §3.4(c))
+
+Engineering review of the protected-path diff, performed and recorded because the
+change touches a protected artifact:
+
+- `AGENTS.md` — one paragraph (§4 "Commit-time enforcement") rewritten. Prose only;
+  no rule text removed. The five literals the sentinel asserts (`npm run gate`,
+  `Anti-Slop`, `getErrorMessage`, `PHASE-21-25-AUDIT.md`, `Protected Artifact`) are
+  all still present (grep-verified). §1–§3 and every other protected rule untouched.
+- `scripts/gate-manifest.json` — only the `AGENTS.md` hash (recomputed from the new
+  file) and the `generated` date changed. No path added/removed; the coverage set is
+  unchanged, so the sentinel's exact-coverage assertion still holds.
+- Untouched: `.github/workflows/*`, `.githooks/pre-commit`, `gate.sentinel.test.ts`,
+  `verify-gate.mjs`, `.fresh-allowlist.json`, `PHASE-21-25-AUDIT.md`.
+- Gate Step 0.5 re-verified all protected hashes against the regenerated manifest;
+  full `npm run gate --ack-protected-change` green (Steps 0–5).
+- **Residual human sign-off:** the operator acknowledged the change. Technical
+  diligence above is complete; the diff is prose + a single recomputed hash.
 
 ---
 

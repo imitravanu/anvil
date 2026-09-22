@@ -100,17 +100,56 @@ describe("qwencloud adapter", () => {
     expect(ids).toContain("glm-5.3");
     expect(ids).toContain("kimi-k3");
 
+    // Certification is a PER-MODEL observation, not a blanket claim — the
+    // certifiedMode field exists so a mock pass cannot masquerade as live
+    // proof. The 2026-09-22 batch (audit-qwen.ts DEFAULT_AUDIT_MODELS) plus the
+    // 2026-09-23 sweep were live-audited; deepseek-v4-pro could NOT be verified
+    // (HTTP 403 free-quota exhaustion) and stays "untested". This asserts both
+    // directions, so adding an unaudited row as "live" (or demoting an audited
+    // one) fails here.
+    const LIVE_AUDITED = new Set([
+      "qwen3.8-max",
+      "qwen3.8-flash",
+      "qwq-plus",
+      "qwen3-coder-plus",
+      "qwen3-coder-flash",
+      "deepseek-v4.1-flash",
+      "deepseek-v4-flash",
+      "glm-5.3",
+      "kimi-k3",
+      "deepseek-v3.2",
+      "kimi-k2.7-code",
+      "qwen3.7-max",
+      "qwen3.7-plus",
+      "qwen-max",
+      "qwen-plus",
+      "qwen-turbo",
+      "qwen-vl-max",
+      "qwen3-vl-plus",
+      "qwen3-vl-flash",
+      "qwen-flash",
+      "glm-5.2",
+    ]);
     for (const m of models) {
       expect(m.providerId).toBe("qwencloud");
       expect(m.isFree).toBe(true);
+      if (LIVE_AUDITED.has(m.id)) {
+        expect(m.certified, `${m.id} is in the live-audited set`).toBe("live");
+        expect(m.certifiedMode, `${m.id} must record live provenance`).toBe("live");
+      } else {
+        expect(
+          m.certified ?? "untested",
+          `${m.id} was never live-audited — it must not claim live`
+        ).toBe("untested");
+      }
     }
-    // Live-probed 2026-09-22: qwq-plus streams but answers tool prompts in
-    // prose — supportsTools is false so default-pick never lands on it.
-    const qwq = models.find((m) => m.id === "qwq-plus");
-    expect(qwq?.supportsTools).toBe(false);
-    expect(qwq?.certified).toBe("live");
-    // Everything else audited live with a real tool round-trip.
-    expect(models.find((m) => m.id === "qwen3.8-flash")?.certified).toBe("live");
+    // Live-probed: qwq-plus (reasoning) and qwen-vl-max answer tool prompts in
+    // prose — no tool_call events, so supportsTools false keeps default picks away.
+    expect(models.find((m) => m.id === "qwq-plus")?.supportsTools).toBe(false);
+    expect(models.find((m) => m.id === "qwen-vl-max")?.supportsTools).toBe(false);
+    expect(models.find((m) => m.id === "qwen3.8-flash")?.supportsTools).toBe(true);
     expect(models.find((m) => m.id === "kimi-k3")?.supportsTools).toBe(true);
+    // Explicit: the unverifiable row must never claim live.
+    expect(models.find((m) => m.id === "deepseek-v4-pro")?.certified).toBe("untested");
   });
 });
