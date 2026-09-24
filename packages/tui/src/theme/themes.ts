@@ -152,7 +152,7 @@ function makeTheme(
   };
 }
 
-export type ThemeName = "dark" | "light" | "highContrast" | "midnight" | "hacker";
+export type ThemeName = "dark" | "light" | "highContrast" | "midnight" | "hacker" | "forge";
 
 export const THEMES: Record<ThemeName, Theme> = {
   dark: makeTheme(
@@ -273,6 +273,41 @@ export const THEMES: Record<ThemeName, Theme> = {
       info: "#00ff41",
       borderFocus: "greenBright",
       separator: "#003b00",
+    }
+  ),
+  // Phase 28.1: single-accent ember palette. The four text tiers are
+  // deliberate — textPrimary is body text, textSecondary/textMuted stay
+  // readable when quieted, and dim is decoration only (never readable text).
+  forge: makeTheme(
+    {
+      primary: "#ff7a1f",
+      userText: "#e4e6ea",
+      assistantText: "#e4e6ea",
+      toolName: "#e4e6ea",
+      toolRunning: "#ff7a1f",
+      toolDone: "#6fd08c",
+      toolError: "#ff6b6b",
+      dim: "#565c66",
+      border: "#3a3f47",
+      accent: "#ff7a1f",
+      surface: "#2a2e33",
+    },
+    {
+      brand: "#ff7a1f",
+      brandDim: "#a35b1a",
+      surfaceElevated: "#33373d",
+      surfaceActive: "#3d4249",
+      textPrimary: "#e4e6ea",
+      textSecondary: "#a3aab4",
+      textMuted: "#6b7280",
+      textUser: "#e4e6ea",
+      textAssistant: "#e4e6ea",
+      success: "#6fd08c",
+      warning: "#ffb347",
+      error: "#ff6b6b",
+      info: "#6cb4ff",
+      borderFocus: "#ff7a1f",
+      separator: "#3a3f47",
     }
   ),
 };

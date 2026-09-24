@@ -165,7 +165,7 @@ Type `/` at any prompt to open the autocomplete menu:
 | `/goal <prompt>` | Launch an autonomous multi-step mission (Plan → Execute → Verify) |
 | `/mcp` | Check status, tools, and health of connected MCP servers |
 | `/mcp reconnect` | Refresh connections and hot-load new tools from MCP servers |
-| `/theme <name>` | Switch theme (`dark`, `light`, `midnight`, `hacker`, or custom) |
+| `/theme <name>` | Switch theme (`dark`, `light`, `highContrast`, `midnight`, `hacker`, `forge`, or custom) |
 | `/ledger` | Review session token spending, tools executed, and status |
 | `/session list` | View, resume, or rename saved conversation sessions |
 | `/context` | Inspect token budget breakdown and compaction forecasts |

@@ -25,10 +25,21 @@ describe("theme registry consistency", () => {
     }
   });
 
-  it("all five built-in themes exist", () => {
+  it("all six built-in themes exist", () => {
     expect(Object.keys(THEMES).sort()).toEqual(
-      ["dark", "hacker", "highContrast", "light", "midnight"].sort()
+      ["dark", "forge", "hacker", "highContrast", "light", "midnight"].sort()
     );
+  });
+
+  it("forge keeps four distinct text tiers so dim never carries readable text", () => {
+    const tiers = [
+      THEMES.forge.colors.textPrimary,
+      THEMES.forge.colors.textSecondary,
+      THEMES.forge.colors.textMuted,
+      THEMES.forge.colors.dim,
+    ];
+    expect(new Set(tiers).size).toBe(tiers.length);
+    expect(THEMES.forge.colors.brand).toBe("#ff7a1f");
   });
 });
 
@@ -135,6 +146,7 @@ describe("custom themes", () => {
       JSON.stringify({
         ok: { colors: COLORS, spacing: { panelPaddingX: 2, panelPaddingY: 1 } },
         dark: { colors: COLORS },
+        forge: { colors: COLORS },
         "Bad Name!": { colors: COLORS },
         nocols: {},
         partial: { colors: { primary: "red" } },
@@ -151,9 +163,11 @@ describe("custom themes", () => {
       sectionGap: 1,
     });
     expect(problems.map((p) => p.name).sort()).toEqual(
-      ["Bad Name!", "badspace", "dark", "nocols", "partial"].sort()
+      ["Bad Name!", "badspace", "dark", "forge", "nocols", "partial"].sort()
     );
-    expect(problems.find((p) => p.name === "dark")!.error).toContain("shadows built-in");
+    for (const builtin of ["dark", "forge"]) {
+      expect(problems.find((p) => p.name === builtin)!.error).toContain("shadows built-in");
+    }
     expect(problems.find((p) => p.name === "partial")!.error).toContain("userText");
   });
 
