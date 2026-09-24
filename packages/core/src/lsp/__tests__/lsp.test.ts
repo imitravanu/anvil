@@ -70,7 +70,12 @@ describe("LSP tools fallback", () => {
     const r = await getDiagnosticsExec({ path: "src/a.ts" }, ctx());
     expect(r.isError).toBe(false);
     expect(typeof (r.output as { source: string }).source).toBe("string");
-  }, 20_000);
+    // 60s, not 20s: the fallback typechecks the WHOLE package through a real
+    // `npx --no-install tsc --noEmit` subprocess. Measured 1.2s in isolation
+    // but >20s under the gate's 95-file parallel load, which made the gate
+    // flaky (first 28.1 run timed out, re-run passed). This timeout is a hang
+    // guard, not an assertion, so 3x the worst observed run keeps it honest.
+  }, 60_000);
 
   it("tools refuse paths escaping the root", async () => {
     const r = await gotoDefinitionExec({ path: "../outside.ts", line: 1 }, ctx());
