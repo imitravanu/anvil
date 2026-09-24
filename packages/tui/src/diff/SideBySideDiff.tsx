@@ -37,6 +37,14 @@ export function SideBySideDiff({
     return undefined;
   };
 
+  // Phase 28.2: per-cell tint, so the added/deleted column reads as a lane
+  // even when the paired row has a different tone on each side.
+  const cellBg = (tone: string): string | undefined => {
+    if (tone === "add") return theme.colors.diffAddBg;
+    if (tone === "del") return theme.colors.diffDelBg;
+    return undefined;
+  };
+
   return (
     <Box flexDirection="column">
       <Box flexShrink={0}>
@@ -65,16 +73,20 @@ export function SideBySideDiff({
         }
         const leftNo = row.left.lineNo === null ? "    " : String(row.left.lineNo).padStart(4, " ");
         const rightNo = row.right.lineNo === null ? "    " : String(row.right.lineNo).padStart(4, " ");
+        // Ink's Box takes no backgroundColor (only Text does), so the tint rides
+        // each cell's own glyphs: line number + code. Context rows stay untinted.
+        const leftBg = cellBg(row.left.tone);
+        const rightBg = cellBg(row.right.tone);
         return (
           <Box key={key} flexShrink={0}>
             <Box width={colWidth} flexShrink={0}>
-              <Text dimColor>{leftNo} </Text>
-              <Text color={cellColor(row.left.tone)}>{curtail(row.left.text, textWidth)}</Text>
+              <Text dimColor backgroundColor={leftBg}>{leftNo} </Text>
+              <Text color={cellColor(row.left.tone)} backgroundColor={leftBg}>{curtail(row.left.text, textWidth)}</Text>
             </Box>
             <Text color={theme.colors.separator}> │ </Text>
             <Box width={colWidth} flexShrink={0}>
-              <Text dimColor>{rightNo} </Text>
-              <Text color={cellColor(row.right.tone)}>{curtail(row.right.text, textWidth)}</Text>
+              <Text dimColor backgroundColor={rightBg}>{rightNo} </Text>
+              <Text color={cellColor(row.right.tone)} backgroundColor={rightBg}>{curtail(row.right.text, textWidth)}</Text>
             </Box>
           </Box>
         );

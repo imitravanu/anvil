@@ -18,7 +18,8 @@ export type SemanticColorKey =
   | "surfaceElevated" | "surfaceActive"
   | "textPrimary" | "textSecondary" | "textMuted" | "textUser" | "textAssistant"
   | "success" | "warning" | "error" | "info"
-  | "borderFocus" | "separator";
+  | "borderFocus" | "separator"
+  | "diffAddBg" | "diffDelBg";
 
 export type AnyColorKey = LegacyColorKey | SemanticColorKey;
 
@@ -39,6 +40,8 @@ export const SEMANTIC_DERIVATION: Record<SemanticColorKey, LegacyColorKey> = {
   info: "primary",
   borderFocus: "border",
   separator: "dim",
+  diffAddBg: "toolDone",
+  diffDelBg: "toolError",
 };
 
 export const SEMANTIC_COLOR_KEYS: readonly SemanticColorKey[] = [
@@ -47,6 +50,7 @@ export const SEMANTIC_COLOR_KEYS: readonly SemanticColorKey[] = [
   "textPrimary", "textSecondary", "textMuted", "textUser", "textAssistant",
   "success", "warning", "error", "info",
   "borderFocus", "separator",
+  "diffAddBg", "diffDelBg",
 ];
 
 export interface ThemeTypography {
@@ -177,6 +181,8 @@ export const THEMES: Record<ThemeName, Theme> = {
       info: "cyan",
       borderFocus: "cyanBright",
       separator: "gray",
+      diffAddBg: "#1b3322",
+      diffDelBg: "#331b1b",
     }
   ),
   light: makeTheme(
@@ -199,6 +205,8 @@ export const THEMES: Record<ThemeName, Theme> = {
       info: "blue",
       borderFocus: "blueBright",
       separator: "gray",
+      diffAddBg: "#d4edda",
+      diffDelBg: "#f8d7da",
     }
   ),
   highContrast: makeTheme(
@@ -221,6 +229,10 @@ export const THEMES: Record<ThemeName, Theme> = {
       info: "cyanBright",
       borderFocus: "whiteBright",
       separator: "gray",
+      // Minimum visible tint: this theme exists for legibility, so the tint
+      // must never eat into the text/background contrast contract.
+      diffAddBg: "#14331c",
+      diffDelBg: "#331414",
     }
   ),
   midnight: makeTheme(
@@ -247,6 +259,8 @@ export const THEMES: Record<ThemeName, Theme> = {
       info: "#7b68ee",
       borderFocus: "#9d8fff",
       separator: "#3a3a5c",
+      diffAddBg: "#153029",
+      diffDelBg: "#341522",
     }
   ),
   hacker: makeTheme(
@@ -273,6 +287,8 @@ export const THEMES: Record<ThemeName, Theme> = {
       info: "#00ff41",
       borderFocus: "greenBright",
       separator: "#003b00",
+      diffAddBg: "#0a2e12",
+      diffDelBg: "#2e0a0a",
     }
   ),
   // Phase 28.1: single-accent ember palette. The four text tiers are
@@ -308,6 +324,8 @@ export const THEMES: Record<ThemeName, Theme> = {
       info: "#6cb4ff",
       borderFocus: "#ff7a1f",
       separator: "#3a3f47",
+      diffAddBg: "#1b3322",
+      diffDelBg: "#331b1b",
     }
   ),
 };

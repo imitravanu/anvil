@@ -31,6 +31,17 @@ describe("theme registry consistency", () => {
     );
   });
 
+  it("diff tints differ per side and never collide with surface or diff text", () => {
+    for (const [name, theme] of Object.entries(THEMES)) {
+      const { diffAddBg, diffDelBg, toolDone, toolError, surface } = theme.colors;
+      expect(diffAddBg, `${name}: add and del tints must differ`).not.toBe(diffDelBg);
+      expect(diffAddBg, `${name}: add tint must not equal the surface`).not.toBe(surface);
+      expect(diffDelBg, `${name}: del tint must not equal the surface`).not.toBe(surface);
+      expect(diffAddBg, `${name}: add tint must not equal the add text colour`).not.toBe(toolDone);
+      expect(diffDelBg, `${name}: del tint must not equal the del text colour`).not.toBe(toolError);
+    }
+  });
+
   it("forge keeps four distinct text tiers so dim never carries readable text", () => {
     const tiers = [
       THEMES.forge.colors.textPrimary,
@@ -89,6 +100,8 @@ describe("custom themes", () => {
     expect(themes.solar.colors.brand).toBe("cyan");
     expect(themes.solar.colors.success).toBe("green");
     expect(themes.solar.colors.separator).toBe("gray");
+    expect(themes.solar.colors.diffAddBg).toBe("green"); // derived from toolDone
+    expect(themes.solar.colors.diffDelBg).toBe("red"); // derived from toolError
     expect(themes.solar.spacing).toEqual({
       panelPaddingX: 1,
       panelPaddingY: 0,
@@ -105,7 +118,7 @@ describe("custom themes", () => {
     writeThemes(
       JSON.stringify({
         neon: {
-          colors: { ...COLORS, brand: "#00ff00", error: "#ff0000" },
+          colors: { ...COLORS, brand: "#00ff00", error: "#ff0000", diffAddBg: "#0b1f12" },
           spacing: { cardPaddingX: 4 },
           typography: { brandIcon: "◆" },
           borders: { panel: "double" },
@@ -118,6 +131,8 @@ describe("custom themes", () => {
     expect(themes.neon.colors.brand).toBe("#00ff00");
     expect(themes.neon.colors.error).toBe("#ff0000");
     expect(themes.neon.colors.success).toBe("green");
+    expect(themes.neon.colors.diffAddBg).toBe("#0b1f12"); // override honoured
+    expect(themes.neon.colors.diffDelBg).toBe("red"); // untouched key still derives
     expect(themes.neon.spacing.cardPaddingX).toBe(4);
     expect(themes.neon.spacing.panelPaddingX).toBe(1);
     expect(themes.neon.typography.brandIcon).toBe("◆");

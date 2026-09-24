@@ -73,6 +73,8 @@ export function ColorizedDiff({
   const words = React.useMemo(() => pairRows(visible, (r) => r.text), [visible]);
   const addColor = theme.colors.toolDone;
   const delColor = theme.colors.toolError;
+  const addBg = theme.colors.diffAddBg;
+  const delBg = theme.colors.diffDelBg;
   const hunkColor = theme.colors.accent;
 
   return (
@@ -110,13 +112,16 @@ export function ColorizedDiff({
         }
         const sign = row.kind === "add" ? "+" : "-";
         const base = row.kind === "add" ? addColor : delColor;
+        // Phase 28.2: the row, not just its glyphs, carries the tint so hunks
+        // read as lanes. Theme-derived — never a literal colour here.
+        const bg = row.kind === "add" ? addBg : delBg;
         const segs = words.get(i);
         // Word highlights are dropped for overlong lines: a curtailed line
         // can't keep segment alignment, and overflow is the worse failure.
         const plain = segs ? segs.map((s) => s.text).join("") : row.text;
         const useWords = segs !== undefined && Array.from(plain).length <= maxText;
         return (
-          <Text key={key}>
+          <Text key={key} backgroundColor={bg}>
             <Text color={base} bold>
               {sign}
             </Text>
