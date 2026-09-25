@@ -2,7 +2,7 @@
 
 > **Origin:** Chief-engineer code-by-code deep dive of the full source tree (2026-09-26). Findings graded F-1…F-9 in the review; this file converts the P1/P2 set into sequenced, executable tasks. A new latent defect (**N-1**, history role alternation) was confirmed empirically during work preparation and is included as **T5**.
 >
-> **Status:** COMPLETE (2026-09-26) — T1–T6 and T8 shipped; T7 verified already-implemented; T9's index shipped with its physical move deferred; T10/N-2 fixed. Full gate green: 1,136 tests, 25/25 mock evals, exit 0. Post-review fixes are recorded in `PROGRESS.md` (T8 now declares the SDKs it externalizes; the IFS normalization covers every expansion spelling).
+> **Status:** COMPLETE (2026-09-26) — T1–T6 and T8 shipped; T7 verified already-implemented; T9's index shipped with its physical move deferred; T10/N-2 fixed. Full gate green: 1,136 tests, 25/25 mock evals, exit 0. Post-review fixes are recorded in `PROGRESS.md` (T8's SDK externalization was reverted after re-measurement showed no startup gain; the IFS normalization covers every expansion spelling).
 >
 > **Entry protocol (AGENTS.md §1):** before touching any file, declare ownership in `PROGRESS.md`; run `npm run gate` before and after every task; verify anchors against the live tree (line numbers drift).
 
@@ -171,6 +171,8 @@ Rationale: T2 is docs-only (zero runtime surface, exercises the gate); T5 is a c
 
 **Acceptance:** script runs via `npm run measure:startup`; no CLI behavior change; `npm run gate` green.
 
+**Outcome (2026-09-26, re-measured independently by review):** the SDK-externalization experiment was applied and then **REVERTED**. It did not improve startup — 5 runs externalized gave 485–739 ms, 4 runs bundled gave 474–594 ms, so the run-to-run spread exceeds the difference. It failed this card's own "keep only if startup improves measurably" criterion and only shrank the bundle (~42%). `packages/cli/src/__tests__/bundleDeps.test.ts` now enforces the self-contained bundle, so the failure mode (an `import` a clean install cannot resolve, hidden by the hoisted monorepo) cannot come back unnoticed.
+
 ---
 
 ### T9 — Docs archive pass
@@ -215,5 +217,5 @@ Rationale: T2 is docs-only (zero runtime surface, exercises the gate); T5 is a c
 | 5 — mock evals | ✅ 25/25 tasks |
 | **Overall** | **🎉 GUARDIAN GATE PASSED (exit 0)** |
 
-**Plan complete (2026-09-26).** Shipped: T1, T2, T3, T4, T5+T6, T8, T9 (index). Verified already-implemented: T7. Deferred with recorded reasons: T9's physical `docs/archive/` move, T8's lazy-provider-loading follow-up, and the CI live-certification slice (protected artifact → human-owned). Last full gate: 1,136 tests, 25/25 evals, exit 0. Post-review (see `PROGRESS.md`): T8's bundle now declares the SDKs it externalizes, the IFS normalization covers every expansion spelling, and the three status lines in this file now agree.
+**Plan complete (2026-09-26).** Shipped: T1, T2, T3, T4, T5+T6, T8, T9 (index). Verified already-implemented: T7. Deferred with recorded reasons: T9's physical `docs/archive/` move, T8's lazy-provider-loading follow-up, and the CI live-certification slice (protected artifact → human-owned). Last full gate: 1,136 tests, 25/25 evals, exit 0. Post-review (see `PROGRESS.md`): T8's externalization was reverted — it showed no measurable startup gain — the IFS normalization covers every expansion spelling, and the three status lines in this file now agree.
 

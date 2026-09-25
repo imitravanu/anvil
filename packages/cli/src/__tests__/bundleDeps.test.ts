@@ -4,17 +4,23 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * PACKAGING GUARD
+ * PACKAGING GUARD — the CLI ships ONE self-contained bundle.
  *
- * `esbuild --external:<pkg>` leaves a real `import "<pkg>"` at the top of
- * dist/index.js, so the published CLI resolves that package from node_modules
- * when it loads. If the package is not declared in THIS package's
- * `dependencies`, a clean install has no copy of it and `anvil` dies on its
- * first import — before it can even print a version. The in-repo gate
- * structurally cannot catch that: the monorepo hoists node_modules, so every
- * build and test resolves the package anyway. Deriving the expectation from the
- * build script makes the class mechanical — externalize a package without
- * declaring it and this fails.
+ * `esbuild --bundle` inlines every dependency into `dist/index.js`, so the
+ * published package declares no runtime `dependencies` and a clean install needs
+ * nothing beyond the tarball.
+ *
+ * `esbuild --external:<pkg>` breaks that silently: it leaves a real
+ * `import "<pkg>"` at the top of the bundle, which a clean install cannot
+ * resolve because the package is not installed. The monorepo hoists
+ * node_modules, so every build and test still passes here and NO gate step
+ * notices — this exact defect shipped once (the three provider SDKs).
+ *
+ * The externalized build was also measured, not assumed: it did NOT improve
+ * startup (485–739 ms vs 474–594 ms bundled — the run-to-run spread exceeds the
+ * difference) and only shrank the bundle ~42%. So self-containment is the
+ * decision. Re-adding an `--external` flag is a deliberate change: add the
+ * package to `dependencies` AND update this guard in the same commit.
  */
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../");
@@ -24,10 +30,7 @@ interface Pkg {
   dependencies?: Record<string, string>;
 }
 
-const readPkg = (rel: string): Pkg => JSON.parse(fs.readFileSync(path.join(ROOT, rel), "utf-8"));
-
-const CLI = readPkg("packages/cli/package.json");
-const CORE = readPkg("packages/core/package.json");
+const CLI: Pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "packages/cli/package.json"), "utf-8"));
 
 /** Every `--external:` package named in the CLI build script, in flag order. */
 function externals(): string[] {
@@ -35,20 +38,17 @@ function externals(): string[] {
 }
 
 describe("cli bundle packaging", () => {
-  it("declares every externalized package as a runtime dependency", () => {
-    const flags = externals();
-    // A guard that silently checks nothing is worse than no guard.
-    expect(flags.length).toBeGreaterThan(0);
-    for (const name of flags) {
-      expect(CLI.dependencies?.[name], `${name} is --external but not a dependency`).toBeDefined();
-    }
+  it("externalizes nothing — the bundle stays self-contained", () => {
+    expect(
+      externals(),
+      "an --external package is imported at runtime by a clean install that never installed it; declare it in dependencies and update this guard"
+    ).toEqual([]);
   });
 
-  it("keeps an externalized version in step with @anvil/core (one runtime copy)", () => {
-    for (const name of externals()) {
-      expect(CLI.dependencies?.[name], `${name} version has drifted from @anvil/core`).toBe(
-        CORE.dependencies?.[name]
-      );
-    }
+  it("declares no runtime dependencies, matching a bundle that inlines them all", () => {
+    // Keep the two in step: a dependency with no `--external` flag would be dead
+    // weight in the manifest (it is bundled anyway), and an `--external` flag
+    // with no dependency is the unresolved-import defect.
+    expect(Object.keys(CLI.dependencies ?? {})).toEqual([]);
   });
 });

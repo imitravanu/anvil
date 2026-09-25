@@ -2031,3 +2031,31 @@ unconditionally.
 **Evidence:** full `npm run gate` green — Steps 0/0.5/1/1.5/2/3 PASSED; suites **cli 115, core
 757, tui 272 (1,144 total)**, 25/25 mock evals, exit 0.
 
+---
+
+## 2026-09-26 (4) — T8 SDK externalization reverted (Buffy, per operator decision)
+
+**Files owned (declared before editing):** `packages/cli/package.json`,
+`packages/cli/src/__tests__/bundleDeps.test.ts`, `docs/HARDENING-PLAN-2026-09-26.md`, this file.
+**No protected artifact touched.**
+
+**The decision and the measurement behind it.** Re-measured both variants here: 5 runs
+externalized (485–739 ms) vs 4 runs bundled (474–594 ms). The run-to-run spread exceeds the
+difference, so externalization did **not** improve startup — it failed T8's own "kept only if the
+gate stays green and startup improves measurably" criterion, and its only real win was bundle
+size (~42%). The operator chose the self-contained bundle, so the three `--external:` flags and
+the `dependencies` block added in the earlier review are gone.
+
+**The guard was CONVERTED, not deleted.** `bundleDeps.test.ts` now asserts the inverse invariant:
+the build script externalizes nothing and the manifest declares no runtime dependencies. Deleting
+it would have removed the only thing standing between a future `--external` flag and a re-run of
+the original P1 — a bundle importing a package a clean install never installs, which the gate
+cannot see because it builds inside a hoisted monorepo. It failed once; it should not be able to
+fail silently twice.
+
+**Verified:** the rebuilt `dist/index.js` has NO non-`node:` bare imports — every provider SDK is
+inlined again, so the tarball needs nothing beyond itself. Full `npm run gate` green: Steps
+0/0.5/1/1.5/2/3 PASSED, 1,144 tests, 25/25 mock evals, exit 0. `docs/HARDENING-PLAN-2026-09-26.md`
+T8 now records the revert and its reason, replacing the "measured 37% win" claim that independent
+re-measurement could not reproduce.
+
