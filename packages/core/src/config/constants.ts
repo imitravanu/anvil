@@ -22,6 +22,27 @@ export const COMPACTION_THRESHOLD = Number(process.env.ANVIL_COMPACTION_THRESHOL
 export const KEEP_RECENT_MESSAGES = getEnvNumber("ANVIL_KEEP_RECENT_MESSAGES", 6);
 export const DEFAULT_MAX_TOKENS = 4096;
 
+// Token estimation. ~4 chars/token is right for ASCII source and prose, but a
+// wide-script character (CJK/Kana/Hangul) costs roughly a token BY ITSELF, so a
+// flat chars/4 under-counts those histories by ~4x and compaction fires far too
+// late — the turn then dies on the provider's context limit instead.
+export const ASCII_CHARS_PER_TOKEN = 4;
+export const CJK_TOKENS_PER_CHAR = 1;
+/** Fixed cost per attached image (a full-bleed vision image is ≥ ~1.5k). */
+export const IMAGE_TOKEN_ESTIMATE = 2_000;
+
+// Context-relevance scoring weights (selectiveKeep keeps the highest scorers).
+export const SCORE_WEIGHT_KEYWORD = 0.5;
+export const SCORE_WEIGHT_RECENCY = 0.3;
+export const SCORE_WEIGHT_FILE = 0.2;
+
+// Session token calibration: a session learns measured/estimated from the
+// provider's own usage events and applies the factor to later estimates. Clamped
+// so one odd provider response cannot make compaction fire (or never fire).
+export const TOKEN_CALIBRATION_MIN = 0.5;
+export const TOKEN_CALIBRATION_MAX = 2;
+export const TOKEN_CALIBRATION_SMOOTHING = 0.5;
+
 // Agent Iteration & Verification Budgets
 export const DEFAULT_MAX_INNER_ITERATIONS = getEnvNumber("ANVIL_MAX_INNER_ITERATIONS", 20);
 export const MAX_VERIFY_REPAIRS = getEnvNumber("ANVIL_MAX_VERIFY_REPAIRS", 2);
@@ -128,6 +149,8 @@ export const TEAM_DEFAULT_ITERATIONS = getEnvNumber("ANVIL_TEAM_ITERATIONS", 12)
 export const LSP_REQUEST_TIMEOUT_MS = getEnvNumber("ANVIL_LSP_TIMEOUT_MS", 15_000);
 export const LSP_MAX_DIAGNOSTICS = getEnvNumber("ANVIL_LSP_MAX_DIAGNOSTICS", 100);
 export const PLUGIN_MAX_TOOLS = getEnvNumber("ANVIL_PLUGIN_MAX_TOOLS", 20);
+/** Per-tool argv length in the shell-free plugin form. */
+export const PLUGIN_MAX_ARGS = getEnvNumber("ANVIL_PLUGIN_MAX_ARGS", 16);
 export const CONTEXT_WARN_THRESHOLD = Number(process.env.ANVIL_CONTEXT_WARN_THRESHOLD) || 0.6;
 export const GUARDIAN_MAX_AUTO_FIXES = getEnvNumber("ANVIL_GUARDIAN_MAX_FIXES", 10);
 

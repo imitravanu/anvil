@@ -104,7 +104,7 @@ export function dropCollidingMcpTools(
  * Permission-prompt preview for MCP calls: formatted parameters breakdown.
  * Formats top-level arguments with bullet points for readability instead of a raw JSON blob.
  */
-export function describeMcpInput(input: unknown): Promise<string> {
+export function describeMcpInput(_toolName: string, input: unknown): Promise<string> {
   if (input === null || input === undefined) {
     return Promise.resolve("Parameters: (none)");
   }

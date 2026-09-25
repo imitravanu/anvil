@@ -1,5 +1,6 @@
 import { ConversationMessage, ModelProvider } from "../providers/types.js";
-import { selectiveKeep } from "./context/scoring.js";
+import { selectiveKeep, estimateTextTokens } from "./context/scoring.js";
+import { IMAGE_TOKEN_ESTIMATE } from "../config/constants.js";
 
 export interface CompactionResult {
   compacted: boolean;
@@ -101,25 +102,24 @@ function closeToolPairs(
  * prose and code alike — good enough to decide "this history is dangerously
  * large, compact BEFORE the first request", which the reactive path cannot
  * see because it only acts on measured counts from a completed stream.
- * Images carry no text, so each counts as a fixed token floor (a
- * full-bleed vision image costs ≥ ~1.5k tokens on every provider we ship);
- * without this, an image-heavy resumed history under-seeds and the first
+ * Wide-script characters are counted at their real cost (~1 token each) and
+ * images carry no text, so each counts as a fixed token floor (a full-bleed
+ * vision image costs ≥ ~1.5k tokens on every provider we ship); without the
+ * image floor, an image-heavy resumed history under-seeds and the first
  * request dies on the provider's context limit.
  */
-const IMAGE_TOKEN_FLOOR = 2000;
-
 export function estimateTokens(messages: ConversationMessage[]): number {
-  let chars = 0;
+  let tokens = 0;
   let images = 0;
   for (const m of messages) {
     for (const c of m.content) {
-      if (c.type === "text") chars += c.text.length;
+      if (c.type === "text") tokens += estimateTextTokens(c.text);
       else if (c.type === "image") images += 1;
-      else if (c.type === "tool_call") chars += JSON.stringify(c.call.input ?? {}).length;
-      else if (c.type === "tool_result") chars += c.result.content.length;
+      else if (c.type === "tool_call") tokens += estimateTextTokens(JSON.stringify(c.call.input ?? {}));
+      else if (c.type === "tool_result") tokens += estimateTextTokens(c.result.content);
     }
   }
-  return Math.ceil(chars / 4) + images * IMAGE_TOKEN_FLOOR;
+  return tokens + images * IMAGE_TOKEN_ESTIMATE;
 }
 
 export function findCleanCompactionCut(

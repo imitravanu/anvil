@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { loadPlugins, pluginSystemPrompts } from "../loader.js";
-import { pluginToolDefinitions, renderCommand } from "../registry.js";
+import { pluginToolDefinitions, renderCommand, buildArgv, registerPluginExecutors } from "../registry.js";
+import { executeTool, describeToolInput } from "../../tools/index.js";
 
 function makePluginsDir(entries: Record<string, unknown>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-plugins-"));
@@ -91,5 +92,80 @@ describe("renderCommand", () => {
     expect(rendered).toContain("$&");
     expect(rendered).toContain("${HOME}");
     expect(rendered).not.toContain("{input}");
+  });
+});
+
+describe("buildArgv", () => {
+  it("fills every {input} placeholder and keeps the payload in ONE argv element", () => {
+    const tool = { name: "t", description: "d", command: "node", args: ["-e", "{input}", "--flag={input}"] };
+    const argv = buildArgv(tool, { x: "; rm -rf ~" });
+    expect(argv[0]).toBe("-e");
+    // The whole JSON lands in element 1, metacharacters and all — there is no
+    // shell between here and the process, so they can never be re-parsed.
+    expect(argv[1]).toBe('{"x":"; rm -rf ~"}');
+    expect(argv[2]).toBe('--flag={"x":"; rm -rf ~"}');
+  });
+});
+
+describe("plugin argv execution", () => {
+  let dir = "";
+  let root = "";
+  afterEach(() => {
+    if (dir) fs.rmSync(dir, { recursive: true, force: true });
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+    dir = "";
+    root = "";
+  });
+
+  it("rejects malformed args as a loader problem, never as a runnable tool", () => {
+    dir = makePluginsDir({
+      badargs: {
+        name: "badargs",
+        version: "1.0.0",
+        tools: [{ name: "t", description: "d", command: "node", args: ["ok", 42] }],
+      },
+    });
+    const { plugins, problems } = loadPlugins(dir);
+    expect(plugins).toEqual([]);
+    expect(problems[0].error).toMatch(/args/i);
+  });
+
+  it("passes model-controlled input to the process as data, not as shell", async () => {
+    dir = makePluginsDir({
+      pwn: {
+        name: "pwn",
+        version: "1.0.0",
+        tools: [
+          {
+            name: "echo",
+            description: "Echo the JSON payload",
+            command: "node",
+            // -e evaluates the SCRIPT (a constant), then writes argv[1] — the
+            // model payload — back. If anything re-parsed it as a shell string,
+            // the `touch` below would run and the marker file would appear.
+            args: ["-e", "process.stdout.write(process.argv[1])", "{input}"],
+          },
+        ],
+      },
+    });
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-plugin-root-"));
+    const marker = path.join(root, "pwned.txt");
+    const { plugins, problems } = loadPlugins(dir);
+    expect(problems).toEqual([]);
+    registerPluginExecutors(plugins);
+
+    const payload = { x: "; touch " + marker };
+    const ctx = { projectRoot: root, signal: new AbortController().signal };
+    // The permission prompt shows the REAL command for the argv form, so
+    // consent is informed — not a bare JSON blob.
+    const preview = await describeToolInput("plugin_pwn__echo", payload, ctx);
+    expect(preview.startsWith("node -e ")).toBe(true);
+    expect(preview).toContain(JSON.stringify(payload));
+    const result = await executeTool("plugin_pwn__echo", payload, ctx);
+    expect(result.isError).toBe(false);
+    // The payload came back verbatim as DATA...
+    expect((result.output as { stdout: string }).stdout).toBe(JSON.stringify(payload));
+    // ...and nothing executed it.
+    expect(fs.existsSync(marker)).toBe(false);
   });
 });

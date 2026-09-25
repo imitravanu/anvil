@@ -28,7 +28,7 @@
   - **Code Intelligence (LSP)**: `get_outline`, `goto_definition`, `find_references`, `get_hover`, `get_diagnostics`.
   - **Execution & Memory**: `run_command`, `verify_tests`, `update_plan`, `delegate_task` (sub-agent), `update_memory`.
 - **Interactive Unified Diff Permissions**: Every mutating tool shows the exact diff or command before execution (`Allow once` / `Always allow this session` / `Deny` / `Esc`). Safe read-only commands (`ls`, `cat`, `git status`) run automatically.
-- **Model Picker with Live Search**: Filter through 49 built-in models plus live-synced OpenRouter free models mid-session via `/model`.
+- **Model Picker with Live Search**: Filter through 61 free-visible models (73 registered) plus live-synced OpenRouter/Orcarouter free models mid-session via `/model`.
 - **Session Checkpoints & Rewind**: Automatic pre-mutation snapshots allow full file rollbacks via `/rewind <n>`.
 - **Context Compaction**: Summarizes older conversation regions when nearing model context windows without breaking tool-call continuity.
 - **Extensible Architecture**: Native MCP (Model Context Protocol) support over `stdio` and `SSE`, sub-agent delegation, and custom themes.

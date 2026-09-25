@@ -7,8 +7,18 @@
 export interface PluginToolDef {
   name: string;
   description: string;
-  /** Shell command template run in the project root; {input} is JSON. */
+  /**
+   * Shell command template run in the project root; {input} is JSON. Spliced
+   * into `bash -c`, so an UNQUOTED {input} exposes model-controlled
+   * metacharacters to the shell — prefer `args` below.
+   */
   command: string;
+  /**
+   * Argv form (preferred): the tool runs `command` directly, with NO shell, and
+   * these arguments — each optionally containing `{input}`. The input JSON
+   * fills in as one argv element, so it can never be re-parsed as shell syntax.
+   */
+  args?: string[];
 }
 
 export interface PluginManifest {

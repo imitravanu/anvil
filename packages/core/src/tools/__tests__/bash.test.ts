@@ -159,6 +159,25 @@ describe("run_command destructive-command guard", () => {
       "rm --recursive --force /",
       "npm run build && rm -rf ~",
       "echo hi; rm -rf /",
+      // $IFS expands to whitespace INSIDE the shell: these target system
+      // paths while a textual matcher sees no whitespace boundary.
+      "rm -rf$IFS/",
+      "rm -rf${IFS}/",
+      "rm -rf$IFS~",
+      "rm -rf$IFS /usr",
+      // IFS has more than one SPELLING: `${IFS:0:1}` and `${IFS/ / }` expand to
+      // the same whitespace (verified against bash), so normalizing only the
+      // literal two left this class bypassable.
+      "rm -rf ${IFS:0:1}/",
+      "rm -rf${IFS:0:1}/",
+      "rm -rf${IFS/ / }/",
+      "rm -rf ${IFS:0:1}~",
+      // Same blind spot with the TARGET fused to the flag cluster: no
+      // separator exists for a whitespace-boundary matcher to see.
+      "rm -rf$HOME",
+      "rm -rf~",
+      "rm -fr/",
+      "rm -rf/etc",
     ]) {
       expect(isBlockedCommand(cmd), cmd).not.toBeNull();
     }
@@ -181,6 +200,13 @@ describe("run_command destructive-command guard", () => {
       "rm file.txt",
       "grep -r foo .",
       "dd if=input of=output bs=1M",
+      // A variable target is not enumerable by pattern matching: the refusal is
+      // best-effort, and the permission prompt remains the real gate here.
+      "rm -rf $BUILD_DIR",
+      "rm -rf$BUILD_DIR",
+      // The word boundary keeps a DIFFERENT variable intact: IFS itself is
+      // normalized, not every name that merely starts with it.
+      "rm -rf $IFSX",
     ]) {
       expect(isBlockedCommand(cmd), cmd).toBeNull();
     }

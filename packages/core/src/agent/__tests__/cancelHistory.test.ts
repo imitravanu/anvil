@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { AgentSession, type AgentEvent, type AgentOptions } from "../index.js";
 import { FakeProvider, type ScriptEntry } from "./fakeProvider.js";
+import { UNANSWERED_TURN_NOTICE } from "../historyStore.js";
 import type { StreamEvent } from "../../providers/types.js";
 
 let root: string;
@@ -85,7 +86,14 @@ describe("cancellation mid-tool-batch repairs history", () => {
     // "continue" user message — the repaired pair must be in the replay.
     // (getHistory() returns a copy, so re-snapshot after the second turn.)
     const after = session.getHistory();
-    expect(replayed).toEqual(after.slice(0, 4));
+    // A cancelled batch leaves the history ON a user message, so the turn is
+    // closed with the marker before the next user turn can create same-role
+    // adjacency (N-1). The marker is part of the replay, by design.
+    expect(after[3]).toEqual({
+      role: "assistant",
+      content: [{ type: "text", text: UNANSWERED_TURN_NOTICE }],
+    });
+    expect(replayed).toEqual(after.slice(0, 5));
   });
 
   it("handles cancellation called before send() (Phase 22.1)", async () => {

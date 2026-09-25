@@ -132,15 +132,29 @@ function segments(command: string): string[] {
   return command.split(/[|;&\n]+/);
 }
 
+/**
+ * Strip the shell shapes a textual matcher cannot see, so the patterns below
+ * see what bash would actually act on: quotes group targets (`rm -rf "$HOME"`),
+ * `$(…)` / backticks hide a command that runs when the segment executes
+ * (`echo $(rm -rf ~)`), and IFS expands to whitespace INSIDE the shell — so
+ * `rm -rf$IFS/` targets `/` while a whitespace-boundary matcher sees no boundary
+ * at all. EVERY spelling of IFS must go, not just the literal two:
+ * `${IFS:0:1}` and `${IFS/ / }` yield that same whitespace (verified against
+ * bash), so a matcher that knew only `$IFS`/`${IFS}` was bypassable. Idempotent;
+ * applied once per segment by isBlockedCommand.
+ */
+function deshell(rawSegment: string): string {
+  return rawSegment
+    .replace(/["'`]/g, " ")
+    .replace(/\$\(|\)/g, " ")
+    .replace(/\$\{IFS\b[^}]*\}?|\$IFS\b/g, " ");
+}
+
 // rm with recursive+force flags whose target is the filesystem root, a
 // top-level glob, or the user's home dir. Plain `rm -rf ./build` inside the
 // project stays allowed — the permission prompt remains the gate for those.
-function isRootWipe(rawSegment: string): boolean {
-  // De-shell the segment first: quotes group targets (`rm -rf "$HOME"`),
-  // and $(…) / `…` hide commands that run when the segment executes
-  // (`echo $(rm -rf ~)`). After stripping, the patterns below see exactly
-  // what bash would act on.
-  const segment = rawSegment.replace(/["'`]/g, " ").replace(/\$\(|\)/g, " ");
+// `segment` arrives de-shelled from isBlockedCommand.
+function isRootWipe(segment: string): boolean {
   const m = segment.match(/\brm\b(.*)$/);
   if (!m) return false;
   const rest = m[1];
@@ -152,10 +166,18 @@ function isRootWipe(rawSegment: string): boolean {
     longFlags.some((f) => f.startsWith("recursive"));
   const force = shortFlags.includes("f") || longFlags.some((f) => f.startsWith("force"));
   if (!(recursive && force)) return false;
+  // The path patterns below need a separator before the target, and a fused
+  // target (`rm -rf$HOME`, `rm -fr/`, `rm -rf/etc`) has none — the same blind
+  // spot `$IFS` had. Normalize the flag/target boundary so the cluster and the
+  // target are space-separated before matching. The lookahead excludes letters
+  // so a long option is never split mid-word (`--recursive` must stay one
+  // token, or the flag parse above would miss it), and a cluster with nothing
+  // after it is left alone.
+  const spaced = rest.replace(/(-[a-zA-Z-]+)(?=[^a-zA-Z-\s])/g, "-$1 ");
   // Block: bare root (/), root glob (/*), home (~, $HOME), AND any top-level
   // system directory. A project-local `rm -rf ./build` stays allowed.
   const SYSTEM_PATHS = /(?:^|\s)(?:\/(?:\s|$|\*)|~|\$HOME|\$\{HOME\}|\/(?:usr|etc|var|dev|boot|lib|lib64|bin|sbin|opt|proc|sys|run|srv|tmp|root|mnt|media)(?:\s|\/|$))/;
-  return SYSTEM_PATHS.test(rest);
+  return SYSTEM_PATHS.test(spaced);
 }
 
 const WHOLE_COMMAND_CHECKS: { test: (cmd: string) => boolean; reason: string }[] = [
@@ -175,7 +197,11 @@ export function isBlockedCommand(command: string): string | null {
   for (const { test, reason } of WHOLE_COMMAND_CHECKS) {
     if (test(command)) return reason;
   }
-  for (const seg of segments(command)) {
+  for (const raw of segments(command)) {
+    // De-shell before the segment checks: an expansion like $IFS must not hide
+    // a target boundary (see deshell). The whole-command checks above keep the
+    // raw string, because the segment splitter would shred a fork bomb.
+    const seg = deshell(raw);
     for (const { test, reason } of SEGMENT_CHECKS) {
       if (test(seg)) return reason;
     }

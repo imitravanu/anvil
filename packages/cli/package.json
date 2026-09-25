@@ -16,12 +16,17 @@
     "bin"
   ],
   "scripts": {
-    "build": "tsc -p . --noEmit && esbuild src/index.tsx --bundle --platform=node --format=esm --outfile=dist/index.js --alias:react-devtools-core=./src/devtools-shim.js --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
+    "build": "tsc -p . --noEmit && esbuild src/index.tsx --bundle --platform=node --format=esm --outfile=dist/index.js --alias:react-devtools-core=./src/devtools-shim.js --external:@anthropic-ai/sdk --external:openai --external:@google/genai --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
     "dev": "tsx src/index.tsx",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "typecheck": "tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.122.0",
+    "@google/genai": "^2.19.0",
+    "openai": "^7.8.0"
   },
   "devDependencies": {
     "@anvil/core": "*",

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { getErrorMessage } from "../errors.js";
 import { anvilHome } from "../atomicWrite.js";
-import { PLUGIN_MAX_TOOLS } from "../config/constants.js";
+import { PLUGIN_MAX_ARGS, PLUGIN_MAX_TOOLS } from "../config/constants.js";
 import type { LoadedPlugin, PluginManifest, PluginProblem } from "./types.js";
 
 const PLUGIN_NAME_RE = /^[a-z0-9-_]{1,40}$/;
@@ -46,7 +46,23 @@ function validateManifest(raw: unknown): { manifest?: PluginManifest; error?: st
     if (typeof command !== "string" || command.length === 0) {
       return { error: `tool ${toolName} needs a command template` };
     }
-    tools.push({ name: toolName, description, command });
+    // Optional argv form: validated strictly, because an argv element is passed
+    // straight to the process — a non-string or a null byte must never be coerced.
+    let args: string[] | undefined;
+    if (entry.args !== undefined) {
+      const argsRaw = entry.args;
+      if (!Array.isArray(argsRaw) || !argsRaw.every((a) => typeof a === "string")) {
+        return { error: `tool ${toolName} "args" must be an array of strings` };
+      }
+      if (argsRaw.length > PLUGIN_MAX_ARGS) {
+        return { error: `tool ${toolName} has too many args (max ${PLUGIN_MAX_ARGS})` };
+      }
+      if (argsRaw.some((a) => a.indexOf(String.fromCharCode(0)) !== -1)) {
+        return { error: `tool ${toolName} "args" must not contain null bytes` };
+      }
+      args = argsRaw as string[];
+    }
+    tools.push({ name: toolName, description, command, ...(args ? { args } : {}) });
   }
   const manifest: PluginManifest = {
     name,

@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { getErrorMessage } from "../errors.js";
 import { registerExternalExecutor } from "../tools/index.js";
 import type { ToolDefinition } from "../tools/types.js";
-import type { LoadedPlugin } from "./types.js";
+import type { LoadedPlugin, PluginToolDef } from "./types.js";
 
 export const PLUGIN_TOOL_PREFIX = "plugin_";
 
@@ -31,9 +31,26 @@ export function renderCommand(template: string, input: unknown): string {
 }
 
 /**
- * Register one plugin's tools as external executors. Each tool runs its
- * command template in the project root with {input} replaced by JSON.
- * Unknown external tools gate through the normal permission prompt.
+ * Build the argv for an argv-mode plugin tool: the input JSON fills every
+ * `{input}` element and stays ONE argv element, so no shell can re-parse it.
+ * Pure — unit-tested without spawning anything.
+ */
+export function buildArgv(tool: PluginToolDef, input: unknown): string[] {
+  const json = JSON.stringify(input ?? {});
+  return (tool.args ?? []).map((a) => a.replaceAll("{input}", () => json));
+}
+
+/** True when a tool declares the shell-free argv form. */
+function usesArgv(tool: PluginToolDef): boolean {
+  return Array.isArray(tool.args) && tool.args.length > 0;
+}
+
+/**
+ * Register one plugin's tools as external executors. Each tool runs in the
+ * project root: argv-mode tools spawn `command` directly with NO shell, and
+ * legacy `command` templates keep the `bash -c` splice. Unknown external tools
+ * gate through the normal permission prompt, whose preview shows the real
+ * command in both forms.
  */
 export function pluginToolDefinitions(plugin: LoadedPlugin): ToolDefinition[] {
   if (!plugin.enabled) return [];
@@ -67,12 +84,21 @@ export function registerPluginExecutors(plugins: LoadedPlugin[]): ToolDefinition
         const tool = byName.get(name);
         if (!tool) return { claimed: false };
         const rendered = renderCommand(tool.command, input);
-        const child = spawnSync("bash", ["-c", rendered], {
-          cwd: ctx.projectRoot,
-          timeout: 60_000,
-          encoding: "utf8",
-          maxBuffer: 512 * 1024,
-        });
+        // argv form: no shell, so model-controlled metacharacters stay inert
+        // data in their own argv element. legacy form: the documented splice.
+        const child = usesArgv(tool)
+          ? spawnSync(tool.command, buildArgv(tool, input), {
+              cwd: ctx.projectRoot,
+              timeout: 60_000,
+              encoding: "utf8",
+              maxBuffer: 512 * 1024,
+            })
+          : spawnSync("bash", ["-c", rendered], {
+              cwd: ctx.projectRoot,
+              timeout: 60_000,
+              encoding: "utf8",
+              maxBuffer: 512 * 1024,
+            });
         if (child.error) {
           return {
             claimed: true,
@@ -95,7 +121,17 @@ export function registerPluginExecutors(plugins: LoadedPlugin[]): ToolDefinition
           },
         };
       },
-      async (input) => `${JSON.stringify(input).slice(0, 200)}`
+      async (toolName, input) => {
+        // Show the user what will actually run: the argv form has no shell, and
+        // the legacy form's splice is exactly the string the shell will see.
+        // The tool is resolved by name here (the executor is registered once per
+        // PLUGIN, not per tool), so the preview is per-call, not stale.
+        const tool = byName.get(toolName);
+        if (!tool) return `bash -c ${renderCommand(prefix, input)}`;
+        return usesArgv(tool)
+          ? [tool.command, ...buildArgv(tool, input)].join(" ")
+          : `bash -c ${renderCommand(tool.command, input)}`;
+      }
     );
   }
   return defs;

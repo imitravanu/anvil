@@ -6,6 +6,7 @@ import { TOOL_DEFINITIONS, getSessionToolHandler } from "../tools/index.js";
 import type { ToolExecutionResult, ToolDefinition } from "../tools/types.js";
 import { finishTurn } from "./turnVerifier.js";
 import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded, estimateTokens } from "./compaction.js";
+import { nextCalibration } from "./context/scoring.js";
 import { FALLBACK_CONTEXT_WINDOW, MAX_VERIFY_REPAIRS } from "../config/constants.js";
 export { MAX_VERIFY_REPAIRS };
 import { SessionMetadata, StoredSession } from "../session/types.js";
@@ -45,6 +46,14 @@ export class AgentSession {
   private options: AgentOptions;
   // The previous turn's input token count — compaction uses it reactively.
   private lastInputTokens = 0;
+  /**
+   * Learned measured/estimated ratio for this session's provider, applied to
+   * later estimates so a model whose tokens cost more than chars/4 (or less)
+   * does not fire compaction at the wrong point. Starts at 1 (uncalibrated) and
+   * is only ever updated from a provider-reported usage event. Surfaced
+   * read-only as `tokenCalibration`.
+   */
+  private calibration = 1;
   // durable-loop state.
   readonly maxInnerIterations: number;
   /** Current plan, set by the update_plan tool; persists on save. */
@@ -105,7 +114,7 @@ export class AgentSession {
       // so the reactive loop-top check would sail past an oversized history
       // and the first request would die on the provider's context limit.
       // The estimate is a floor; the first real usage event replaces it.
-      this.lastInputTokens = estimateTokens(restore.history);
+      this.lastInputTokens = this.estimateBudgetTokens();
     }
   }
 
@@ -118,6 +127,23 @@ export class AgentSession {
   get contextWindow(): number {
     const modelInfo = getModel(this.options.model, this.provider.id);
     return modelInfo?.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
+  }
+
+  /**
+   * The session's learned token calibration factor (1 = uncalibrated). Exposed
+   * so /context reports the same numbers the compaction loop acts on.
+   */
+  get tokenCalibration(): number {
+    return this.calibration;
+  }
+
+  /**
+   * Estimated input tokens for the current history with calibration applied.
+   * Used where no provider-reported usage exists (resume seed, and turns whose
+   * stream never reported usage).
+   */
+  private estimateBudgetTokens(): number {
+    return Math.ceil(estimateTokens(this.history.snapshot()) * this.calibration);
   }
 
   /**
@@ -403,7 +429,7 @@ export class AgentSession {
         this.history.pushAssistant(textParts, toolCalls);
 
         if (!sawUsage) {
-          this.lastInputTokens = estimateTokens(this.history.snapshot());
+          this.lastInputTokens = this.estimateBudgetTokens();
         }
 
         if (stopReason !== "tool_use") {
@@ -488,6 +514,14 @@ export class AgentSession {
       }
       yield { type: "error", message: getErrorMessage(err) };
     } finally {
+      // Close a turn that ends on a USER message (empty model turn,
+      // cancellation, an interrupted batch) so the NEXT user turn cannot create
+      // same-role adjacency (N-1). Idempotent, so it is safe on every exit path.
+      // It is NOT a general repair: a consumer that breaks out of the generator
+      // mid-batch leaves the assistant tool_calls unanswered and the history
+      // therefore ends on that assistant message, where this is a no-op — that
+      // shape is closed by repairUnclosedToolCalls in the catch above, not here.
+      this.history.closeOpenTurn();
       if (this.currentController === controller) this.currentController = null;
       this.isSending = false;
     }
@@ -632,16 +666,22 @@ export class AgentSession {
     controller: AbortController,
     turn: TurnState
   ): AsyncGenerator<AgentEvent, TurnStreamResult | null> {
+    const messages = this.history.snapshot();
+    // Calibrate against the estimate for THIS request's history — apples to
+    // apples, or the factor would chase the assistant's own reply instead of
+    // learning how the provider actually counts our input.
+    const estimatedInput = estimateTokens(messages) * this.calibration;
     return streamAssistantTurn({
       provider: this.provider,
       model: this.options.model,
       systemPrompt: this.options.systemPrompt,
-      messages: this.history.snapshot(),
+      messages,
       tools: this.toolDefs,
       maxTokens: this.options.maxTokens,
       controller,
       turn,
       onUsage: (usage) => {
+        this.calibration = nextCalibration(this.calibration, usage.inputTokens, estimatedInput);
         this.lastInputTokens = usage.inputTokens;
         this.lastUsage = usage;
       },

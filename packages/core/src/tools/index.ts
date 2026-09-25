@@ -72,7 +72,11 @@ export type ExternalToolExecutor = (
   ctx: ToolContext
 ) => Promise<ExternalToolResult>;
 
-export type ExternalToolDescribe = (input: unknown, ctx: ToolContext) => Promise<string>;
+export type ExternalToolDescribe = (
+  toolName: string,
+  input: unknown,
+  ctx: ToolContext
+) => Promise<string>;
 
 const externalExecutors: { prefix: string; exec: ExternalToolExecutor; describe?: ExternalToolDescribe }[] = [];
 
@@ -144,7 +148,7 @@ export async function describeToolInput(
   const tool = REGISTRY.find((t) => t.definition.name === name);
   if (tool?.describe) return tool.describe(input, ctx);
   for (const ext of externalExecutors) {
-    if (name.startsWith(ext.prefix) && ext.describe) return ext.describe(input, ctx);
+    if (name.startsWith(ext.prefix) && ext.describe) return ext.describe(name, input, ctx);
   }
   return `${name}(${JSON.stringify(input).slice(0, 200)})`;
 }

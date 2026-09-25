@@ -1,8 +1,8 @@
 # Anvil — Complete Roadmap & Agent Build Guide
 
-> **Version:** 0.8.0 (current)
-> **Last Updated:** 2026-09-11
-> **Purpose:** This document is the **single source of truth** for all remaining Anvil development. It contains everything an agent needs to understand the project, what's been built, and what to build next — with full specifications, file lists, acceptance criteria, and sequencing constraints.
+> **Status:** ⚠️ SUPERSEDED (2026-09-26) — retained for historical reference only; this document is **not** the source of truth for current work.
+> **Active guides:** [`docs/PHASE-28-ROADMAP.md`](PHASE-28-ROADMAP.md) (current phase) and [`PROGRESS.md`](../PROGRESS.md) (live engineering record).
+> **Last Updated:** 2026-09-11 (frozen)
 
 ---
 

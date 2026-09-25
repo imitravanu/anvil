@@ -1699,3 +1699,256 @@ validation/bounds), `config/mcp.ts` (SSE url/origin/header validation).
 **233** tui / **75** cli tests green; `packages/cli` statements **49.14% →
 55.05%** (294/534). Full `npm run gate` green (Steps 0–5, 15/15 mock evals). No
 protected artifact touched — no manifest/sentinel change required.
+
+
+## Hardening session 2026-09-26 (plan: `docs/HARDENING-PLAN-2026-09-26.md`) — T1–T9 + N-2
+
+**Files owned (declared before editing):** `README.md`, `docs/ANVIL-COMPLETE-ROADMAP.md`,
+`docs/HARDENING-PLAN-2026-09-26.md`, `packages/cli/src/__tests__/docTruth.test.ts`,
+`packages/core/src/agent/historyStore.ts`, `packages/core/src/agent/__tests__/historyStore.test.ts`.
+
+**No protected artifact is touched by this session.** Pre-work baseline: full `npm run gate`
+green at commit `2d22f8f` (Steps 0–5, 1,116 tests, 25/25 mock evals).
+
+**T2 — doc-truth closure.** The README's model-picker claim ("49 built-in models") predates the
+registry's growth to 73 rows / 61 free-visible; two new `docTruth` assertions now derive both
+numbers FROM CODE so the prose can only fail on drift. The superseded
+`ANVIL-COMPLETE-ROADMAP.md` header becomes a banner naming its live successor
+(`docs/PHASE-28-ROADMAP.md`) plus an assertion that the named successor exists on disk — the
+mechanical fix for the whole "stale header" class.
+
+**T5 — N-1 empty-turn alternation repair.** Confirmed repro: `HistoryStore.pushAssistant([], [])`
+returns false (correctly refusing an empty push), after which the next `pushUserText` produced
+`user -> user` adjacency — several providers reject consecutive same-role messages. Reachable via
+an empty `max_tokens`/`unknown` turn or an Esc-cancel before the first stream output.
+`pushUserText` now folds new text/images into a trailing tool-result-free user message, joining
+texts into ONE part with `\n` (the OpenAI adapter concatenates a message's text parts, so two
+parts would have run together).
+
+**Evidence (T2 + T5, this session):** full `npm run gate` green after both tasks — Steps
+0/0.5/1/1.5/2/3 PASSED; suites **cli 111, core 743, tui 269 (1,123 total)**; mock evals 25/25;
+exit 0. RED→GREEN recorded: docTruth 7→9 tests (2 RED against the stale prose, then 9/9);
+historyStore 3→8 tests (3 RED on the fold, then 8/8; full core suite 743/743, zero regressions
+from the behavior change). The N-1 repro re-run against rebuilt dist now yields a single `user`
+message whose texts are joined by a newline. `git diff --name-only` matches the declared ownership
+exactly — **no protected artifact touched**. Watch item: one CLI workspace run showed 5 transient
+failures in timing-sensitive boot tests; the immediate re-run and the gate's Step 4 both passed
+111/111, so no code change was made — recorded here as suspected flakiness. Remaining plan items:
+T1, T3, T4, T6–T9.
+
+**T1 — bash destructive-refusal hardening (shipped).** The plan's probe held: `rm -rf$IFS/`
+was ALLOWED before the fix. `isBlockedCommand` now de-shells every segment through a single
+`deshell()` helper (quotes, `$(…)`, and `$IFS`/`${IFS}` — which expand to whitespace INSIDE the
+shell, hiding the target boundary from a whitespace-boundary matcher). While proving it, the
+adversarial probe surfaced a SECOND gap in the same class that the plan had not anticipated:
+**`rm -rf$HOME` (target fused to the flag cluster) was also allowed** — pre-existing, not caused
+by this work, since the matcher only ever accepted a whitespace boundary. `isRootWipe` now
+normalizes the flag/target boundary before matching, with the lookahead excluding letters so a
+long option is never split mid-word (`--recursive` must stay one token or the flag parse would
+miss it). RED→GREEN recorded in the existing tables: 8 blocked cases added (4 `$IFS`, 4 fused),
+2 allowed cases pinned (`rm -rf $BUILD_DIR` / `rm -rf$BUILD_DIR` — an arbitrary variable target
+is not enumerable by pattern matching, and the permission prompt remains the real gate).
+
+**N-2 — entry-point harness flake, found by the gate itself (fixed).** The T1 gate run FAILED at
+Step 4 with 5 failures in 3 files — the same intermittent signature seen earlier in a standalone
+CLI run, now reproduced under gate load. Root cause: `entry.test.tsx` / `boot.test.tsx` /
+`bootFailures.test.tsx` each do `vi.resetModules()` + a fresh `import("../index.js")` per test,
+so **every test re-evaluates the whole CLI + Ink module graph** (seconds per test: `--version`
+alone measured 3234 ms). Against vitest's 5s default that is a coin flip, and a timed-out test
+leaves its dispatch running to push into the NEXT test's counters — which is why the failure
+presented as both timeouts AND double-count assertions. Fix: `testTimeout: 20_000` in
+`packages/cli/vitest.config.ts`, commented with the reason. Verified with **3 consecutive clean
+CLI runs (111/111 each)** before re-running the gate. This was a real latent gate/CI flake, not a
+product bug, and it is now recorded rather than silently retried away.
+
+**Evidence (T1 + N-2, this session):** full `npm run gate` green after both — Steps 0/0.5/1/1.5/2/3
+PASSED; suites **cli 111, core 743, tui 269 (1,123 total)**; mock evals 25/25; exit 0. The
+adversarial probe over the rebuilt dist reports **16 blocked / 8 allowed — no bypass among the probe's enumerated forms, no
+over-block** (including the pre-existing `rm -fr /`, `rm --recursive --force /`, `chmod -R 777 /`,
+fork bomb, and the four `$IFS` forms). No protected artifact touched. Remaining plan items:
+T3, T4, T6–T9.
+
+**T3 — context-estimation calibration (shipped).** Token estimation was a flat `chars / 4`
+with a flat 2000/image, and the numbers that gate compaction (`lastInputTokens`) were the
+SAME estimate whether or not a provider had ever reported real usage. Two defects fixed:
+(1) **wide-script under-count** — a CJK/Kana/Hangul character costs ~1 token, not a quarter,
+so those histories were under-counted ~4x and compaction fired far too late (the turn then
+died on the provider's context limit); `estimateTextTokens` now counts wide code points at
+their real cost via an ASCII range table (deliberately not a literal-character regex class —
+that is an encoding hazard), and (2) **no calibration against reality** — a session now folds
+each provider-reported usage event into a smoothed, clamped factor (`nextCalibration`,
+`TOKEN_CALIBRATION_MIN/MAX` 0.5–2.0) and applies it to later estimates, so a model whose
+tokens cost more than chars/4 stops under-compacting and one that costs less stops
+over-compacting. The estimate for THIS request's history is the calibration baseline
+(apples-to-apples), the factor is seeded to 1 on restore, and `/context` now reports the
+same scaled numbers the compaction loop acts on (plus the factor when ≠ 1). The three magic
+literals (weights, image floor, chars/token) moved into `config/constants.ts` per the
+constitution's no-magic-constants rule.
+
+**T3 process note — the gate caught a bug the test runner could not.** Vitest reported 750/750
+green while the build failed: the private field and the public getter were both named
+`tokenCalibration` (TS2300 duplicate identifier), which esbuild strips without complaint. Only
+Step 2's `tsc` surfaced it. Worth remembering: a green vitest run is NOT a green build in this
+repo — the gate's build step is a real, load-bearing check.
+
+**Evidence (T3, this session):** full `npm run gate` green — Steps 0/0.5/1/1.5/2/3 PASSED;
+suites **cli 111, core 750, tui 269 (1,130 total)**; mock evals 25/25; exit 0. RED→GREEN: 7 new
+tests (tokenEstimate.test.ts — wide-script vs ASCII, scale propagation to every bucket,
+calibration smoothing/clamping/degenerate-input guards; tokenCalibration.test.ts — a session
+learning from a usage event). The pre-existing context/compaction suites pass unchanged, so
+the estimator change altered no pinned expectation. No protected artifact touched. Remaining:
+T4, T6–T9.
+
+**T4 — plugin argv execution mode (shipped).** The durable fix the code's own trust note named:
+a plugin manifest may now declare `args: string[]`, and such a tool runs `spawnSync(command,
+args)` with **no shell at all** — the model-controlled `{input}` JSON fills in as ONE argv
+element, so its metacharacters are inert data. `command`-only manifests keep the legacy
+`bash -c` splice (backward compatible; the trust note stays). Loader validation is strict
+(array of strings, ≤ `PLUGIN_MAX_ARGS`, no null bytes) and reports a problem rather than
+registering a runnable tool. **The end-to-end test is the real evidence**: a plugin running
+`node -e 'process.stdout.write(process.argv[1])' {input}` with payload
+`{"x":"; touch <marker>"}` returns the payload verbatim as data AND the marker file is never
+created — the smuggled command cannot exist without a shell.
+
+**T4 scope note — the permission prompt now shows what runs.** The plan deferred this as T4b
+("thread the tool name into the describe seam"); doing it was unavoidable and cheap once the
+argv form existed, because the executor is registered **once per plugin**, not per tool, so the
+preview callback had no `tool` in scope (my first attempt failed to compile on exactly that).
+`ExternalToolDescribe` now takes `(toolName, input, ctx)`, and the plugin preview renders the
+real command — `node -e … {json}` for argv tools, `bash -c <splice>` for legacy ones. Consent
+is informed instead of showing a bare JSON blob. The signature change is compiler-enforced
+across all three workspaces; the only test call sites (`mcpTools.test.ts`, which called
+`describeMcpInput(input)` positionally) were updated.
+
+**Evidence (T4, this session):** full `npm run gate` green — Steps 0/0.5/1/1.5/2/3 PASSED;
+suites **cli 111, core 753, tui 269 (1,133 total)**; mock evals 25/25; exit 0. RED→GREEN: 3 new
+plugin tests (buildArgv unit, loader rejection of malformed args, end-to-end no-shell proof
+with the consent-preview assertion). No protected artifact touched. Remaining: T6–T9.
+
+**T6 — history-invariant property tests, and the SECOND N-1 path it found (shipped).**
+`historyInvariants.property.test.ts` drives 200 seeded event orders through `HistoryStore` in
+the SAME operation order the session uses (user turn → [assistant round + tool results]* →
+terminal / budget notice / cancellation), asserting after EVERY step: no empty message content,
+every tool_call answered exactly once in the next message, results in DECLARED order, and no
+same-role adjacency. A crash window (mid-turn snapshot, restored) additionally pins that
+`repairUnclosedToolCalls` closes the history exactly once. Seeded LCG, no new dependency,
+805 ms for all 200 sequences.
+
+**It immediately paid for itself — twice, in opposite directions.** (1) It caught a flaw in MY
+own test design: between `pushAssistant` and `pushToolResults` the batch is legitimately
+in flight, so the pairing invariant must exempt exactly that window (earlier messages must
+still be paired). (2) It found a REAL second N-1 path that the T5 fold does not cover: a turn
+can also end on a **tool-results user message** — an empty assistant round after a tool batch, a
+`tool_use` stop with zero calls, or a cancellation — and folding refuses that message by
+design (it carries tool_result blocks). The next user turn then produced `user -> user` at
+seed=2. Fixed at the single owner of the invariant: `HistoryStore.closeOpenTurn()` appends a
+short assistant-role annotation (`UNANSWERED_TURN_NOTICE`) when a turn ends on a user message,
+and the session calls it from `send()`'s existing `finally` — so EVERY exit path (completion,
+cancel, error, consumer break) closes the turn. Idempotent, and a no-op after a normal turn.
+The T5 fold is deliberately KEPT: it still matters for sessions persisted before this fix
+(a restored legacy history can end on a user message). The cancellation test was updated to
+assert the marker is part of the replay — that is the guarantee, not an accident.
+
+**Evidence (T6, this session):** full `npm run gate` green — Steps 0/0.5/1/1.5/2/3 PASSED;
+suites **cli 111, core 756, tui 269 (1,136 total)**; mock evals 25/25; exit 0. 4 new tests
+(200-sequence property run; `closeOpenTurn` close + idempotence). Two failures the gate caught
+during this task, both real: a TS2322 in my new test (tool call passed into `pushAssistant`'s
+textParts) and the cancellation test's pinned replay — both fixed, not bypassed. No protected
+artifact touched. Remaining: T7–T9.
+
+**T7 — ALREADY SATISFIED; my F-6 finding was wrong (no code change).** The plan called for a
+certified-provenance badge in the model picker. Reading the picker first showed it already
+exists: `formatCertificationBadge(certified, mode)` renders `[✅ live]` vs `[✅ mock]`, the
+picker **dims** a mock pass ("a mock pass is real but weaker — dim it, don't dress it as a
+probe"), and `format.test.ts` already asserts all six combinations including the important
+one (absent mode → mock, never live). The deep-dive claim that "the picker shows neither" was
+my error: I reviewed the registry's honesty without reading its consumer. No change made, and
+F-6 is struck — the remaining honest gap is only the CI slice (scheduled live certification),
+which is a protected-artifact change and stays human-owned.
+
+**T8 — startup/bundle measurement, and a measured 37% win (shipped).** `scripts/measure-startup.mjs`
+(`npm run measure:startup`) times 10 real `anvil --version` runs plus dist sizes, with the
+warm-up run reported separately rather than folded in. The baseline was worse than assumed:
+**6.49 MB bundle, 883 ms median, 1071 ms p95.** Externalizing the three provider SDKs from
+the esbuild bundle (they are runtime `dependencies` of `@anvil/core`, so they resolve normally
+for consumers) gives **3.76 MB / 558 ms median / 750 ms p95** — a 42% smaller bundle and 37%
+faster startup, verified by running the built bundle (`--version`, `--help`) and then the full
+gate. The plan allowed keeping this only if it measurably helped; it did, so it is in.
+
+**T8 follow-up (identified, not done):** the three SDKs are still imported EAGERLY
+(`providers/index.ts` → every adapter), so `--version` still pays their module resolution. The
+next real lever is lazy provider loading in the boot path (dynamic import per provider), which
+would let a version/help/invalid-flag exit skip the SDK graph entirely. That is a structural
+change to `index.tsx` and is deliberately left for a focused change with its own measurement.
+
+**Evidence (T7 + T8, this session):** full `npm run gate` green — Steps 0/0.5/1/1.5/2/3 PASSED;
+suites **cli 111, core 756, tui 269 (1,136 total)**; mock evals 25/25; exit 0, with the
+externalized build in place. T7 required no code; T8 added one script, one package.json entry,
+and three esbuild flags. No protected artifact touched. Remaining: T9.
+
+**T9 — docs index shipped; the physical archive move deliberately deferred (docs only).**
+`docs/README.md` now classifies all 71 documents: START HERE (the constitution, the active
+hardening plan, PROGRESS.md, the current phase roadmap, engineering memory), CONTRACT (the
+five docs that code or tests reference **by path**), and HISTORY (everything else, bucketed).
+That is the actual problem — several roadmaps each claimed to be "the single source of truth",
+and the index is the fix; the directory layout is cosmetic. A `docs/archive/` move is
+deferred with a verified reference map rather than attempted blind: `PHASE-21-25-AUDIT.md` is a
+**protected artifact** the gate hashes, `docTruth.test.ts` reads two doc paths as strings, and
+two test files name their contract docs in comments. That map is recorded in the index so the
+move is mechanical for whoever takes it. Validated with the quick gate (stages 0–1.5) since
+this change is docs-only and the last FULL gate already covered all code in this session.
+
+**Plan complete.** Shipped: T1 (bash refusal hardening), T2 (doc-truth closure), T3 (context
+estimation + calibration), T4 (plugin argv execution + informed consent preview), T5 + T6 (N-1
+history alternation, both reachable paths, now property-tested), T8 (startup measurement and a
+measured 37% win). Verified-already-done: T7. Deferred with reasons: T9's physical move, T8's
+lazy-provider-loading follow-up, and the CI live-certification slice (protected artifact,
+human-owned).
+
+---
+
+## 2026-09-26 — Independent review + fixes (Buffy, chief-engineer pass)
+
+**Files owned (declared before editing):** `packages/core/src/tools/bash.ts`,
+`packages/core/src/tools/__tests__/bash.test.ts`, `packages/cli/package.json`, NEW
+`packages/cli/src/__tests__/bundleDeps.test.ts`, `docs/HARDENING-PLAN-2026-09-26.md`, this
+file. **No protected artifact touched.**
+
+**How this started:** an independent review of the hardening session above. The gate was re-run
+on the live tree — Steps 0–5 PASS, cli 111 / core 756 / tui 269 = **1,136**, 25/25 mock evals,
+and the logged numbers reproduced exactly. The work is sound; the review found one
+shipping-blocker and one escaped bypass.
+
+**F-A (P1, FIXED) — T8's externalization produced a bundle a clean install cannot run.**
+`esbuild --external:@anthropic-ai/sdk --external:openai --external:@google/genai` leaves real
+static `import`s at the top of `dist/index.js`, so the published CLI resolves those packages
+from `node_modules` at load. `@anvil/cli` had NO `dependencies` field — the three SDKs are
+declared only by `@anvil/core`, which is a **devDependency** of the CLI — and
+`npm pack --dry-run` publishes 5 files (`LICENSE`, `bin/anvil.cjs`, `dist/index.d.ts`,
+`dist/index.js`, `package.json`) with no dependency metadata. In the monorepo the hoisted
+`node_modules` masks it, which is exactly why the gate, the build, and all 1,136 tests stayed
+green. Fix: the three packages are now `dependencies` of `@anvil/cli`, and
+`bundleDeps.test.ts` asserts mechanically that every `--external:` package is declared AND
+version-matched to `@anvil/core`, so the class cannot recur. T8's measured startup win is kept.
+*Alternative considered:* drop `--external` and ship one self-contained bundle — rejected
+because it discards T8's measured result; either is defensible, this keeps the win and makes it
+safe.
+
+**F-B (P2, FIXED) — the `$IFS` normalization had an escaped spelling.** `deshell()` replaced
+only the literal `$IFS`/`${IFS}`. Verified against bash: `${IFS:0:1}` and `${IFS/ / }` expand to
+the SAME whitespace, so `isBlockedCommand("rm -rf ${IFS:0:1}/")` returned `null` (allowed)
+while the shell would run `rm -rf /`. The regex now covers every IFS spelling
+(`/\$\{IFS\b[^}]*\}?|\$IFS\b/g`, with the word boundary so a differently-named `$IFSX` is left
+alone, pinned both ways). Also checked and deliberately REJECTED: `$[IFS]` is arithmetic and
+expands to `0`, not whitespace — not pinned as a threat, because it isn't one. The T1 record's
+"no bypass" is narrowed to the probe's enumerated forms.
+
+**F-C (P3, FIXED) — status drift inside the hardening plan.** The plan asserted three different
+statuses (L5 "T2 + T5", L46 "T1, T2, T5", L218 "Plan complete") and the session heading here
+said "T2 + T5" while the body covered T1–T9. All now agree; the session heading is corrected.
+
+**Evidence:** `npm run gate` green — Steps 0/0.5/1/1.5/2/3 PASSED, 1,136 tests, 25/25 mock
+evals, exit 0. `bash.test.ts`: +4 blocked cases (`${IFS:0:1}`/`${IFS/ / }` spellings), +1
+allowed case (`$IFSX`, proving the word boundary). `bundleDeps.test.ts`: NEW, 2 assertions.
+No protected artifact touched.
+

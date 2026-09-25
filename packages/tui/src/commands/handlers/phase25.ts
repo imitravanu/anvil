@@ -16,11 +16,17 @@ export function handleContext(deps: CommandHandlerDeps): void {
     // reported utilization matches what the compaction loop actually compares
     // against (session.ts uses modelInfo?.contextWindow ?? FALLBACK_CONTEXT_WINDOW).
     const window = deps.session.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
-    const breakdown = contextBreakdown(history, window, CONTEXT_WARN_THRESHOLD);
+    // Report the same numbers the compaction loop acts on: the breakdown is
+    // scaled by the session's learned calibration factor.
+    const calibration = deps.session.tokenCalibration;
+    const breakdown = contextBreakdown(history, window, CONTEXT_WARN_THRESHOLD, calibration);
     const pct = (breakdown.utilization * 100).toFixed(1);
     const lines = [
       `Context: ${breakdown.totalTokens} tokens / ~${window} (${pct}%) across ${breakdown.messageCount} message(s)`,
-      `  user: ${breakdown.byRole.user} · assistant: ${breakdown.byRole.assistant} · tools: ${breakdown.toolTokens} · text: ${breakdown.textTokens}`,
+      `  user: ${breakdown.byRole.user} · assistant: ${breakdown.byRole.assistant} · tools: ${breakdown.toolTokens} · text: ${breakdown.textTokens}` +
+        (calibration !== 1
+          ? ` · calibration: x${calibration.toFixed(2)} (learned from provider usage)`
+          : ""),
       breakdown.shouldWarn
         ? "Near budget — compaction will summarize older history soon."
         : "Budget healthy.",

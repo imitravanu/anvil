@@ -1,4 +1,62 @@
 import type { ConversationMessage } from "../../providers/types.js";
+import {
+  ASCII_CHARS_PER_TOKEN,
+  CJK_TOKENS_PER_CHAR,
+  IMAGE_TOKEN_ESTIMATE,
+  SCORE_WEIGHT_FILE,
+  SCORE_WEIGHT_KEYWORD,
+  SCORE_WEIGHT_RECENCY,
+  TOKEN_CALIBRATION_MAX,
+  TOKEN_CALIBRATION_MIN,
+  TOKEN_CALIBRATION_SMOOTHING,
+} from "../../config/constants.js";
+
+/**
+ * Wide-script ranges that cost ~1 token per character. ASCII on purpose: a
+ * literal-character class in source is an encoding hazard (an editor or a
+ * mojibake re-encode silently changes which code points match).
+ */
+function isWideCodePoint(cp: number): boolean {
+  return (
+    (cp >= 0x1100 && cp <= 0x11ff) || // Hangul Jamo
+    (cp >= 0x2e80 && cp <= 0x303e) || // CJK radicals + punctuation
+    (cp >= 0x3041 && cp <= 0x33ff) || // Kana + CJK compatibility
+    (cp >= 0x3400 && cp <= 0x4dbf) || // CJK Unified Ext A
+    (cp >= 0x4e00 && cp <= 0x9fff) || // CJK Unified Ideographs
+    (cp >= 0xa000 && cp <= 0xa4cf) || // Yi
+    (cp >= 0xac00 && cp <= 0xd7a3) || // Hangul syllables
+    (cp >= 0xf900 && cp <= 0xfaff) || // CJK compatibility ideographs
+    (cp >= 0xff00 && cp <= 0xff60) // Fullwidth forms
+  );
+}
+
+/**
+ * Estimate tokens for a text payload, counting wide-script characters at their
+ * real cost instead of a flat chars/4. Pure and unit-tested without a provider.
+ */
+export function estimateTextTokens(text: string): number {
+  if (!text) return 0;
+  let wide = 0;
+  for (const ch of text) {
+    if (isWideCodePoint(ch.codePointAt(0) ?? 0)) wide += 1;
+  }
+  const narrow = text.length - wide;
+  return Math.ceil(narrow / ASCII_CHARS_PER_TOKEN + wide * CJK_TOKENS_PER_CHAR);
+}
+
+/**
+ * Fold one measured-vs-estimated observation into a session's calibration
+ * factor. Smoothed so a single odd usage report cannot swing it, and clamped so
+ * the factor stays a correction rather than a runaway multiplier. A degenerate
+ * measurement (no usage reported, or an empty history) leaves it unchanged.
+ */
+export function nextCalibration(previous: number, measured: number, estimated: number): number {
+  if (!(measured > 0) || !(estimated > 0)) return previous;
+  const ratio = measured / estimated;
+  const smoothed =
+    TOKEN_CALIBRATION_SMOOTHING * previous + (1 - TOKEN_CALIBRATION_SMOOTHING) * ratio;
+  return Math.min(TOKEN_CALIBRATION_MAX, Math.max(TOKEN_CALIBRATION_MIN, smoothed));
+}
 
 /**
  * Phase 25.5 — Intelligent Context Management.
@@ -30,7 +88,7 @@ function messageText(message: ConversationMessage): string {
 }
 
 function estimateMessageTokens(message: ConversationMessage): number {
-  return Math.ceil(messageText(message).length / 4);
+  return estimateTextTokens(messageText(message));
 }
 
 /**
@@ -56,7 +114,10 @@ export function scoreMessages(
     const recencyScore = total <= 1 ? 1 : index / (total - 1);
     const lower = text.toLowerCase();
     const fileScore = recentLower.length === 0 ? 0 : recentLower.some((f) => lower.includes(f)) ? 1 : 0;
-    const score = 0.5 * keywordScore + 0.3 * recencyScore + 0.2 * fileScore;
+    const score =
+      SCORE_WEIGHT_KEYWORD * keywordScore +
+      SCORE_WEIGHT_RECENCY * recencyScore +
+      SCORE_WEIGHT_FILE * fileScore;
     return { index, score, tokens: estimateMessageTokens(message) };
   });
 }
@@ -76,7 +137,9 @@ export interface ContextBreakdown {
 export function contextBreakdown(
   messages: readonly ConversationMessage[],
   contextWindow: number,
-  warnThreshold: number
+  warnThreshold: number,
+  /** The session's learned calibration factor; applied to every bucket. */
+  scale = 1
 ): ContextBreakdown {
   let user = 0;
   let assistant = 0;
@@ -86,31 +149,36 @@ export function contextBreakdown(
     let messageTokens = 0;
     for (const c of message.content) {
       if (c.type === "text") {
-        const tokens = Math.ceil(c.text.length / 4);
+        const tokens = estimateTextTokens(c.text);
         textTokens += tokens;
         messageTokens += tokens;
       } else if (c.type === "tool_call") {
-        const tokens = Math.ceil(JSON.stringify(c.call.input ?? {}).length / 4);
+        const tokens = estimateTextTokens(JSON.stringify(c.call.input ?? {}));
         toolTokens += tokens;
         messageTokens += tokens;
       } else if (c.type === "tool_result") {
-        const tokens = Math.ceil(c.result.content.length / 4);
+        const tokens = estimateTextTokens(c.result.content);
         toolTokens += tokens;
         messageTokens += tokens;
       } else if (c.type === "image") {
-        messageTokens += 2000;
+        messageTokens += IMAGE_TOKEN_ESTIMATE;
       }
     }
     if (message.role === "user") user += messageTokens;
     else assistant += messageTokens;
   }
-  const totalTokens = user + assistant;
+  // Scale every bucket by the same factor so the byRole line still sums to the
+  // total the user is shown.
+  const factor = scale > 0 ? scale : 1;
+  const scaledUser = Math.round(user * factor);
+  const scaledAssistant = Math.round(assistant * factor);
+  const totalTokens = scaledUser + scaledAssistant;
   const utilization = contextWindow > 0 ? totalTokens / contextWindow : 0;
   return {
     totalTokens,
-    byRole: { user, assistant },
-    toolTokens,
-    textTokens,
+    byRole: { user: scaledUser, assistant: scaledAssistant },
+    toolTokens: Math.round(toolTokens * factor),
+    textTokens: Math.round(textTokens * factor),
     messageCount: messages.length,
     utilization,
     shouldWarn: utilization >= warnThreshold,

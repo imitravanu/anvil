@@ -108,16 +108,16 @@ describe("mcp tool adapter", () => {
   });
 
   it("describe previews parameters list with bullet points", async () => {
-    const res = await describeMcpInput({ query: "SELECT * FROM users", limit: 10 });
+    const res = await describeMcpInput("mcp_db__query", { query: "SELECT * FROM users", limit: 10 });
     expect(res).toContain("Parameters:\n");
     expect(res).toContain("  • query: \"SELECT * FROM users\"");
     expect(res).toContain("  • limit: 10");
   });
 
   it("describe handles empty objects, primitives, and truncates long values", async () => {
-    expect(await describeMcpInput({})).toBe("Parameters: (none)");
-    expect(await describeMcpInput(null)).toBe("Parameters: (none)");
-    const long = await describeMcpInput({ q: "x".repeat(500) });
+    expect(await describeMcpInput("mcp_db__query", {})).toBe("Parameters: (none)");
+    expect(await describeMcpInput("mcp_db__query", null)).toBe("Parameters: (none)");
+    const long = await describeMcpInput("mcp_db__query", { q: "x".repeat(500) });
     expect(long).toContain("Parameters:\n  • q: ");
     expect(long).toContain("…");
     expect(long.length).toBeLessThan(300);

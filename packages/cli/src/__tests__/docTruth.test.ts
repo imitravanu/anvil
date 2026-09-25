@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CORE_VERSION, TOOL_DEFINITIONS, createProviders } from "@anvil/core";
+import { CORE_VERSION, TOOL_DEFINITIONS, createProviders, MODEL_REGISTRY, visibleModels } from "@anvil/core";
 
 /**
  * DOC TRUTH GUARD
@@ -121,5 +121,23 @@ describe("doc truth", () => {
     // Bidirectional guard: claiming COMPLETE while a box is open, or leaving the
     // "COMPLETE" claim off after the last box is ticked, both fail here.
     expect(header.includes("COMPLETE")).toBe(unchecked === 0);
+  });
+
+  it("README model-picker count matches the free-visible registry", () => {
+    const readme = read("README.md");
+    // Both numbers are derived from code, so the README's picker description
+    // can only fail this when the registry grows and the prose is not updated.
+    expect(readme).toContain(`${visibleModels().length} free-visible models`);
+    expect(readme).toContain(`${MODEL_REGISTRY.length} registered`);
+  });
+
+  it("the superseded complete-roadmap header names a live successor", () => {
+    const header = read("docs/ANVIL-COMPLETE-ROADMAP.md").split(/^---$/m)[0] ?? "";
+    // A frozen guide must SAY it is frozen and point at the guide that is not.
+    expect(header).toMatch(/SUPERSEDED/);
+    // First docs/ path in the banner is the successor it points readers to.
+    const successor = header.split("docs/")[1]?.split(/[^A-Za-z0-9_.-]/)[0];
+    expect(successor, "the banner must name a successor doc under docs/").toBeDefined();
+    expect(fs.existsSync(path.join(ROOT, "docs", successor!))).toBe(true);
   });
 });

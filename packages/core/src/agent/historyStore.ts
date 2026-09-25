@@ -4,6 +4,14 @@ import { mergeSummaryIntoHistory } from "./compaction.js";
 import type { AccumulatedToolCall, PreparedCall } from "./loopGuard.js";
 
 /**
+ * Assistant-role annotation appended by closeOpenTurn. Kept short: it is
+ * replayed to the provider on every later turn, and it must read as a
+ * transcript annotation rather than something the model said.
+ */
+export const UNANSWERED_TURN_NOTICE =
+  "[No assistant response was recorded for the previous turn.]";
+
+/**
  * Sole writer of the conversation history array. Owns the append invariants:
  * no empty pushes, no `system` role (the model has none), provider-replay
  * order (declared call order, turn notes leading as user text).
@@ -62,14 +70,38 @@ export class HistoryStore {
     return this.messages.length;
   }
 
+  /**
+   * Append a user turn. When the history ENDS with a tool-result-free user
+   * message, the new text/images fold INTO it instead of pushing a second
+   * user message: an empty assistant turn (pushAssistant refuses to record
+   * nothing) or a pre-stream cancel leaves the history user-terminated, and
+   * the next message would otherwise create `user -> user` adjacency, which
+   * several providers reject. Texts join into ONE part with a newline — the
+   * OpenAI adapter concatenates a message's text parts without a separator,
+   * so two parts would run the two messages together.
+   */
   pushUserText(text: string, images: { mediaType: string; data: string }[] = []): void {
+    const newImages = images.map((img) => ({
+      type: "image" as const,
+      mediaType: img.mediaType,
+      data: img.data,
+    }));
+    const last = this.messages.at(-1);
+    if (last && last.role === "user" && !last.content.some((c) => c.type === "tool_result")) {
+      const existingImages = last.content.filter(
+        (c): c is { type: "image"; mediaType: string; data: string } => c.type === "image"
+      );
+      const existingTexts = last.content
+        .filter((c): c is { type: "text"; text: string } => c.type === "text")
+        .map((c) => c.text);
+      const combined = [...existingTexts, text].filter((t) => t.length > 0).join("\n");
+      last.content = [...existingImages, ...newImages, { type: "text", text: combined }];
+      return;
+    }
     this.userTurnIndices.push(this.messages.length);
     this.messages.push({
       role: "user",
-      content: [
-        ...images.map((img) => ({ type: "image" as const, mediaType: img.mediaType, data: img.data })),
-        { type: "text", text },
-      ],
+      content: [...newImages, { type: "text", text }],
     });
   }
 
@@ -87,6 +119,24 @@ export class HistoryStore {
         },
       ],
     });
+  }
+
+  /**
+   * Close a turn whose last recorded message is a USER message: an empty model
+   * turn, a cancellation, or a batch interrupted before its results landed. The
+   * history model has no `system` role, so the only way to keep role alternation
+   * valid for the NEXT user turn is an assistant-role annotation. Idempotent — a
+   * no-op whenever the history already ends with an assistant message, so it is
+   * safe to call on every turn exit.
+   */
+  closeOpenTurn(): void {
+    const last = this.messages.at(-1);
+    if (last && last.role === "user") {
+      this.messages.push({
+        role: "assistant",
+        content: [{ type: "text", text: UNANSWERED_TURN_NOTICE }],
+      });
+    }
   }
 
   /**
