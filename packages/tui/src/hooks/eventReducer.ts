@@ -15,6 +15,8 @@ export interface DisplayToolCall {
   summary?: string;
   /** Full tool result output, retained capped (see OUTPUT_RETAIN_MAX) for /expand. */
   output?: unknown;
+  /** Execution time reported by core's `tool_finished`; absent when nothing ran. */
+  durationMs?: number;
 }
 
 /** Cap retained output so long sessions can't bloat React state. */
@@ -151,6 +153,7 @@ export function applyEvent(
                 status: (event.result.isError ? "error" : "done") as DisplayToolCall["status"],
                 summary: event.result.summary,
                 output: retainOutput(event.result.output),
+                durationMs: event.durationMs,
               }
             : t
         ),

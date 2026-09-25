@@ -2,7 +2,7 @@ import { Box, Text, useStdout } from "ink";
 import type { DisplayToolCall } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { TOOL_SUMMARY_MAX } from "../util/displayLimits.js";
-import { curtail } from "../util/format.js";
+import { curtail, formatDuration } from "../util/format.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
 import { formatToolOutput } from "../util/toolOutput.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
@@ -40,10 +40,20 @@ export function ToolCallView({ call, expanded }: { call: DisplayToolCall; expand
   // The composed one-liner must fit one terminal row — it is a card title, and
   // wrapping it adds transcript rows the scrollback estimator never counts.
   const line = `${symbol} ${call.name} ${describeCall(call)}`;
+  // Duration only for a SETTLED call: a running tool has no measurement yet, so
+  // rendering one would be a fabricated number (and status "cancelled" never ran
+  // to completion, so it has none either).
+  const duration =
+    call.status === "done" || call.status === "error" ? formatDuration(call.durationMs) : "";
+  const budget = Math.max(20, (stdout?.columns ?? 80) - 4);
+  // Reserve the suffix's cells (plus its separating space) BEFORE curtailing, so
+  // the composed row still fits one line instead of wrapping.
+  const body = duration ? curtail(line, Math.max(8, budget - duration.length - 1)) : curtail(line, budget);
   return (
     <Box flexDirection="column">
       <Box paddingLeft={3}>
-        <Text color={color}>{curtail(line, Math.max(20, (stdout?.columns ?? 80) - 4))}</Text>
+        <Text color={color}>{body}</Text>
+        {duration ? <Text color={theme.colors.dim}>{` ${duration}`}</Text> : null}
       </Box>
       {expanded && call.status !== "running" && (
         <ExpandedLines lines={formatToolOutput(call.output)} />

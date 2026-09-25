@@ -174,6 +174,8 @@ describe("Phase 8 (A) — durable loop", () => {
     expect(finished.length).toBe(3);
     const lastExecuted = finished[finished.length - 1];
     expect(finishedMsg(lastExecuted)).not.toContain("loop guard");
+    // Every EXECUTED call carries a numeric execution duration (Phase 28.3).
+    for (const e of finished) expect(typeof e.durationMs).toBe("number");
 
     const lastUser = [...session.getHistory()].reverse().find((m) => m.role === "user")!;
     const userContent = Array.isArray(lastUser.content) ? lastUser.content : [];
@@ -268,6 +270,9 @@ describe("Phase 8 (A) — durable loop", () => {
     const finished = events.filter((e) => e.type === "tool_finished");
     expect(finished.map((e) => e.id)).toEqual(["r0", "x0"]);
     expect(finished[1].result.isError).toBe(true);
+    // Nothing ran for the unknown tool, so it reports NO duration — a `0ms`
+    // would claim an execution that never happened (Phase 28.3).
+    expect(finished[1].durationMs).toBeUndefined();
     expect(JSON.stringify(finished[1].result.output)).toContain("Unknown tool");
     expect(
       session.getRunLedger().some((e) => e.eventType === "tool_finished" && e.tool === "mystery_tool" && e.outcome === "error")

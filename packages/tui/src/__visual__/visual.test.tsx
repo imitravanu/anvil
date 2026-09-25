@@ -123,8 +123,9 @@ const CHAT_MESSAGES: DisplayMessage[] = [
     role: "assistant",
     text: "Let me look around first.",
     toolCalls: [
-      { id: "t1", name: "list_files", input: { path: "." }, status: "done", summary: "Listed 10 files under ." },
-      { id: "t2", name: "grep", input: { pattern: "boot", path: "src" }, status: "done", summary: 'grep "boot": 12 matches' },
+      // durationMs covers BOTH rendered forms: seconds, then sub-second ms (Phase 28.3).
+      { id: "t1", name: "list_files", input: { path: "." }, status: "done", summary: "Listed 10 files under .", durationMs: 1450 },
+      { id: "t2", name: "grep", input: { pattern: "boot", path: "src" }, status: "done", summary: 'grep "boot": 12 matches', durationMs: 234 },
     ],
   }),
   msg({ role: "system", text: "Checkpoint #1: 1 file snapshotted — /rewind 1 to undo." }),

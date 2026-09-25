@@ -3,6 +3,7 @@ import { ToolCallView } from "../ToolCallView.js";
 import { SubAgentView } from "../SubAgentView.js";
 import type { DisplayToolCall, DisplaySubAgent } from "../../hooks/useAgentController.js";
 import { frameText, renderThemed } from "../../test-utils/testRender.js";
+import { displayWidth } from "../../util/format.js";
 
 const doneCall: DisplayToolCall = {
   id: "c1",
@@ -58,6 +59,45 @@ describe("ToolCallView", () => {
       <ToolCallView call={{ ...doneCall, status: "running", output: { x: 1 } }} expanded />
     );
     expect(frameText(lastFrame)).not.toContain('"x"');
+    unmount();
+  });
+
+  it("shows execution duration on a settled call, and nothing while running (28.3)", () => {
+    const ms = renderThemed(<ToolCallView call={{ ...doneCall, durationMs: 234 }} />);
+    expect(frameText(ms.lastFrame)).toContain("234ms");
+    ms.unmount();
+
+    const secs = renderThemed(<ToolCallView call={{ ...doneCall, durationMs: 1234 }} />);
+    expect(frameText(secs.lastFrame)).toContain("1.2s");
+    secs.unmount();
+
+    // Running and cancelled calls have no measurement, so even a stray value on
+    // the DTO must not be rendered as if the tool had finished.
+    const running = renderThemed(
+      <ToolCallView call={{ ...doneCall, status: "running", durationMs: 5000 }} />
+    );
+    expect(frameText(running.lastFrame)).not.toContain("5.0s");
+    running.unmount();
+
+    const cancelled = renderThemed(
+      <ToolCallView call={{ ...doneCall, status: "cancelled", durationMs: 5000 }} />
+    );
+    expect(frameText(cancelled.lastFrame)).not.toContain("5.0s");
+    cancelled.unmount();
+  });
+
+  it("reserves the duration's cells so the row still fits one line (28.3)", () => {
+    // Test stdout is not a TTY, so the component's 80-column fallback applies.
+    // The suffix must be reserved out of the curtail budget: appending it to an
+    // already-full line is exactly how this wraps and adds a phantom row.
+    const { lastFrame, unmount } = renderThemed(
+      <ToolCallView call={{ ...doneCall, summary: "x".repeat(400), durationMs: 1234 }} />
+    );
+    const text = frameText(lastFrame);
+    expect(text).toContain("1.2s");
+    for (const line of text.split("\n")) {
+      expect(displayWidth(line)).toBeLessThanOrEqual(80);
+    }
     unmount();
   });
 

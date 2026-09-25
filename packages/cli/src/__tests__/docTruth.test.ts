@@ -140,4 +140,37 @@ describe("doc truth", () => {
     expect(successor, "the banner must name a successor doc under docs/").toBeDefined();
     expect(fs.existsSync(path.join(ROOT, "docs", successor!))).toBe(true);
   });
+
+  it("the docs index links only to files that exist on disk", () => {
+    const index = read("docs/README.md");
+    // In-docs links only: the ../ entries point at the repo root, not this folder.
+    const links = [...index.matchAll(/\]\((?!\.\.\/|https?:)([^)#]+)\)/g)].map((m) => m[1]!);
+    expect(links.length).toBeGreaterThan(0);
+    for (const rel of links) {
+      expect(
+        fs.existsSync(path.join(ROOT, "docs", rel)),
+        `docs index links a missing file: ${rel}`
+      ).toBe(true);
+    }
+  });
+
+  it("never calls a finished doc 'Current work' in the docs index", () => {
+    // The index is the first thing an agent reads, so a stale "Current work"
+    // pointer sends it to re-open completed work — the drift this guard exists
+    // to stop (it happened: the completed hardening plan was still labelled
+    // current while Phase 28 was the actual active phase).
+    const currentRows = read("docs/README.md")
+      .split("\n")
+      .filter((line) => line.includes("**Current work**"));
+    expect(currentRows.length).toBeGreaterThan(0);
+    for (const row of currentRows) {
+      const rel = /\]\(([^)#]+)\)/.exec(row)?.[1];
+      expect(rel, `a Current-work row has no link: ${row}`).toBeDefined();
+      const body = read(path.join("docs", rel!));
+      expect(
+        /\*\*Status:\*\*\s*COMPLETE/.test(body),
+        `${rel} is called Current work but reports COMPLETE`
+      ).toBe(false);
+    }
+  });
 });

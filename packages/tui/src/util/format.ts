@@ -34,6 +34,16 @@ export function formatPricingTag(isFree: boolean | undefined): string {
 }
 
 /**
+ * Tool duration in the shortest honest unit: sub-second as `234ms`, a second or
+ * more as `1.2s`. Returns "" when there is no measurement, so a caller renders
+ * nothing rather than a fabricated `0ms`.
+ */
+export function formatDuration(ms: number | undefined): string {
+  if (ms === undefined || !Number.isFinite(ms) || ms < 0) return "";
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
+}
+
+/**
  * Certification badge. A "live" status is labeled by HOW it was earned: a real
  * probe renders " [✅ live]", the mock suite renders " [✅ mock]". An unrecorded
  * mode defaults to "mock" — the conservative label, since an absent mode is not

@@ -1952,3 +1952,55 @@ evals, exit 0. `bash.test.ts`: +4 blocked cases (`${IFS:0:1}`/`${IFS/ / }` spell
 allowed case (`$IFSX`, proving the word boundary). `bundleDeps.test.ts`: NEW, 2 assertions.
 No protected artifact touched.
 
+---
+
+## 2026-09-26 (2) — Phase 28 routing repair + 28.3 tool call timing (Buffy)
+
+**Files owned (declared before editing):** `docs/PHASE-28-ROADMAP.md`, `docs/README.md`,
+`packages/cli/src/__tests__/docTruth.test.ts`, `packages/core/src/agent/types.ts`,
+`packages/core/src/agent/orchestrator.ts`, `packages/core/src/agent/__tests__/phase8.test.ts`,
+`packages/tui/src/hooks/eventReducer.ts`, `packages/tui/src/hooks/__tests__/eventReducer.test.ts`,
+`packages/tui/src/util/format.ts`, `packages/tui/src/util/__tests__/format.test.ts`,
+`packages/tui/src/components/ToolCallView.tsx`,
+`packages/tui/src/components/__tests__/calls.test.tsx`,
+`packages/tui/src/__visual__/visual.test.tsx`,
+`packages/tui/__visual-baselines__/chat-exchange.txt`, this file.
+**No protected artifact touched.**
+
+**Routing repair first.** `docs/README.md` still labelled the *completed* hardening plan as
+"**Current work**" while Phase 28 was the live phase, and `PHASE-28-ROADMAP.md` reported 0 of 54
+boxes ticked even though 28.1 and 28.2 were committed — so an agent following the index was sent
+to finished work. Both fixed, and the class is now mechanical: `docTruth.test.ts` asserts (a)
+every in-docs link in the index resolves on disk and (b) a doc the index calls "Current work" must
+not itself report `**Status:** COMPLETE`. RED-proved by restoring the stale label (clear failure,
+then green). The 28.1/28.2 boxes were ticked only after confirming each criterion in the live
+TREE — forge in the built-in name list, the custom-theme shadow rejection, the `diffAddBg`/
+`diffDelBg` derivations, `PermissionPrompt` rendering `ColorizedDiff`, and the generic
+persistence path in `useThemeManager`.
+
+**28.3 — tool call timing. The card's premise was false.** It said the data "already exists in
+core's `tool_finished` events — it's just not rendered". Verified first: the event is
+`{ id, name, result }`, and the orchestrator computes elapsed *only for the ledger*. So this
+needed a core contract addition: an optional, execution-only `durationMs` on `tool_finished`. It
+is deliberately NOT the ledger's `elapsedMs`, which is stamped at **classification** and so
+includes the permission-prompt wait — reusing it would render a slow user decision as a slow
+tool, and interactive prompts are a headline feature here. Unknown-tool and unparsed-input
+results carry NO duration (nothing executed). TUI: `DisplayToolCall.durationMs` →
+`formatDuration()` (ms below a second, `1.2s` above, `""` when unmeasured) rendered on the theme's
+`dim` token, with the suffix's cells reserved out of the `curtail` budget so the row still
+occupies exactly one terminal line.
+
+**Verification that matters:** `npm run visual` 11/11 green, with `chat-exchange.txt` regenerated
+via the sanctioned `VISUAL_UPDATE=1`; the baseline diff is exactly the two expected rows
+(`1.4s`, `234ms`) and nothing else in `__visual-baselines__/` changed. Typecheck 0 across all
+workspaces — after rebuilding core first, because the TUI compiles against core's `dist/`, so a
+core type change with no core build fails the TUI typecheck (the sacred build order earning its
+keep).
+
+**Evidence:** full `npm run gate` green — Steps 0/0.5/1/1.5/2/3 PASSED; suites **cli 115, core
+756, tui 272 (1,143 total)**, 25/25 mock evals, exit 0. New coverage: `formatDuration` (5 cases,
+including the no-measurement guard), `durationMs` propagation through `eventReducer`, ToolCallView
+duration + running/cancelled hiding + the width budget, a visual fixture with both rendered
+forms, and two core assertions (an executed call reports a number; an unknown tool reports none).
+`docs/PHASE-28-ROADMAP.md` progress line now reads 28.1–28.3 done, **next 28.4**.
+

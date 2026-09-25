@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collapsePlan, curtail, displayModelLabel, formatCertificationBadge, formatTime, providerLabel, providerOfModel } from "../format.js";
+import { collapsePlan, curtail, displayModelLabel, formatCertificationBadge, formatDuration, formatTime, providerLabel, providerOfModel } from "../format.js";
 
 describe("format helpers", () => {
   it("displayModelLabel resolves a known registry model and falls back to the id", () => {
@@ -15,6 +15,19 @@ describe("format helpers", () => {
 
   it("providerOfModel returns the provider id of a known model", () => {
     expect(providerOfModel("gemini-3.6-flash")).toBe("gemini");
+  });
+
+  it("formatDuration switches unit at a second and renders nothing when unmeasured", () => {
+    expect(formatDuration(234)).toBe("234ms");
+    expect(formatDuration(0)).toBe("0ms");
+    expect(formatDuration(999)).toBe("999ms");
+    expect(formatDuration(1000)).toBe("1.0s");
+    expect(formatDuration(1234)).toBe("1.2s");
+    // No measurement, or a value that cannot be one, renders NOTHING — never a
+    // fabricated `0ms` for a tool whose duration core did not report.
+    expect(formatDuration(undefined)).toBe("");
+    expect(formatDuration(Number.NaN)).toBe("");
+    expect(formatDuration(-5)).toBe("");
   });
 
   it("curtail truncates long text with an ellipsis and keeps short text", () => {

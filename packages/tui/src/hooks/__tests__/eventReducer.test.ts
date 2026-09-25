@@ -56,6 +56,7 @@ describe("eventReducer", () => {
         id: "call-1",
         name: "read_file",
         result: { output: { content: "hello" }, isError: false, summary: "Read foo.txt" },
+        durationMs: 250,
       },
       update,
       setUsage,
@@ -65,6 +66,8 @@ describe("eventReducer", () => {
     expect(assistant.toolCalls[0].status).toBe("done");
     expect(assistant.toolCalls[0].summary).toBe("Read foo.txt");
     expect(assistant.toolCalls[0].output).toEqual({ content: "hello" });
+    // Execution timing rides the event through to the display DTO (Phase 28.3).
+    expect(assistant.toolCalls[0].durationMs).toBe(250);
   });
 
   it("applyEvent attaches a structured guardian report on guardian_blocked", () => {

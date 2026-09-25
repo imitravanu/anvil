@@ -5,6 +5,7 @@
 > **Author:** Chief Engineer Audit  
 > **Origin:** Deep analysis of the full TUI codebase (73 source files in `@anvil/tui`), the `anvil-ui-demo` forge prototype (`/home/mitravanu/anvil-ui-demo/demo.mjs`), completed DW-1→DW-4 design waves, and current UI/UX gaps identified during a full-stack review.  
 > **Purpose:** This document is the **actionable build guide** for any agent working on Anvil's visual identity and UX refinement. Every task has exact file paths, modification instructions, watchouts, and acceptance criteria. Tasks are sequenced — **do not skip ahead**.
+> **Progress (2026-09-26) — verified against code & tests:** 28.1 ✅ forge theme (`a2088ca`), 28.2 ✅ diff tints (`2d22f8f`), 28.3 ✅ tool call timing. **Next: 28.4 — Thinking Elapsed Indicator.** A box is ticked only once its criterion is confirmed in the live tree; 28.4–28.12 remain.
 
 ---
 
@@ -114,10 +115,10 @@ Update the `ThemeName` union type to include `"forge"`.
 - Run visual regression to capture baselines.
 
 ### Acceptance Criteria
-- [ ] `forge` appears in `/theme` picker and renders all component states correctly
-- [ ] `/theme forge` persists across restarts
-- [ ] Custom themes named `forge` are rejected with a clear error
-- [ ] `npm run gate` green
+- [x] `forge` appears in `/theme` picker and renders all component states correctly
+- [x] `/theme forge` persists across restarts
+- [x] Custom themes named `forge` are rejected with a clear error
+- [x] `npm run gate` green
 
 ---
 
@@ -163,12 +164,12 @@ diffDelBg: "toolError",   // derived from error red
 - Visual regression captures showing tinted diffs.
 
 ### Acceptance Criteria
-- [ ] `+` lines have a subtle green-tinted background in DiffModal
-- [ ] `-` lines have a subtle red-tinted background in DiffModal
-- [ ] Permission prompt diff preview shows the tints
-- [ ] Tints are theme-derived, not hardcoded (gate-enforced)
-- [ ] Custom themes without the new keys get sensible derivations
-- [ ] `npm run gate` green
+- [x] `+` lines have a subtle green-tinted background in DiffModal
+- [x] `-` lines have a subtle red-tinted background in DiffModal
+- [x] Permission prompt diff preview shows the tints
+- [x] Tints are theme-derived, not hardcoded (gate-enforced)
+- [x] Custom themes without the new keys get sensible derivations
+- [x] `npm run gate` green
 
 ---
 
@@ -178,7 +179,7 @@ diffDelBg: "toolError",   // derived from error red
 Display execution duration on completed tool calls: `✓ edit_file src/auth.ts 0.4s`.
 
 ### Design Rationale
-Users want to know which tools are slow. The data already exists in core's `tool_finished` events — it's just not rendered.
+Users want to know which tools are slow. **Correction (verified 2026-09-26):** the elapsed time was already *computed* in core's orchestrator, but only for the **ledger** — the `tool_finished` event carried no timing, so 28.3 added an execution-only `durationMs` to the event. It is deliberately not the ledger's `elapsedMs`, which starts at classification and so includes the permission-prompt wait (see the `AgentEvent` comment).
 
 ### Files to Modify
 
@@ -213,10 +214,10 @@ const durationText = call.durationMs !== undefined
 - Visual test showing timing on completed tools.
 
 ### Acceptance Criteria
-- [ ] Completed tool calls show duration in dim text (e.g. `0.4s`, `1.2s`, `234ms`)
-- [ ] Running tools show no duration
-- [ ] Duration fits within the terminal width budget (no line wrapping)
-- [ ] `npm run gate` green
+- [x] Completed tool calls show duration in dim text (e.g. `0.4s`, `1.2s`, `234ms`)
+- [x] Running tools show no duration
+- [x] Duration fits within the terminal width budget (no line wrapping)
+- [x] `npm run gate` green
 
 ---
 

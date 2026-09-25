@@ -28,7 +28,7 @@
 
  anvil ──────────────────────────────────────────────────────────────────────────────────────────
  Let me look around first.
-    ✓ list_files Listed 10 files under .
-    ✓ grep grep "boot": 12 matches
+    ✓ list_files Listed 10 files under . 1.4s
+    ✓ grep grep "boot": 12 matches 234ms
 
  ℹ Checkpoint #1: 1 file snapshotted — /rewind 1 to undo.

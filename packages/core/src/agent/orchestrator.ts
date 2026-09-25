@@ -25,7 +25,9 @@ export interface OrchestratorDeps {
  * races; all-read-only batches run concurrently with results re-ordered).
  * Owns only execution — no history, no TurnState, no checkpoints.
  * `startedAt` timestamps are borrowed from the caller (stamped at
- * classification); re-stamping here would corrupt ledger elapsedMs.
+ * classification); re-stamping here would corrupt ledger elapsedMs. The
+ * `durationMs` on `tool_finished` is a SEPARATE, execution-only clock (see the
+ * AgentEvent comment): the two answer different questions on purpose.
  */
 export class ToolOrchestrator {
   constructor(private readonly deps: OrchestratorDeps) {}
@@ -103,6 +105,7 @@ export class ToolOrchestrator {
             this.deps.recordLedger({ eventType: "tool_auto_allowed", tool: call.name, inputHash: t.p.key, outcome: "ok", elapsedMs: 0 });
             yield { type: "tool_started", id: call.id, name: call.name, input: call.input };
             this.deps.recordLedger({ eventType: "tool_started", tool: call.name, inputHash: t.p.key, outcome: "ok", elapsedMs: 0 });
+            const execStartedAt = Date.now();
             let autoResult: ToolExecutionResult;
             try {
               autoResult = await executeTool(call.name, call.input, { projectRoot, signal });
@@ -114,7 +117,7 @@ export class ToolOrchestrator {
               const msg = getErrorMessage(err);
               autoResult = { output: { error: `Tool execution failed: ${msg}` }, isError: true, summary: `Error: ${msg}` };
             }
-            yield { type: "tool_finished", id: call.id, name: call.name, result: autoResult };
+            yield { type: "tool_finished", id: call.id, name: call.name, result: autoResult, durationMs: Date.now() - execStartedAt };
             this.deps.recordLedger({ eventType: "tool_finished", tool: call.name, inputHash: t.p.key, outcome: autoResult.isError ? "error" : "ok", elapsedMs: Date.now() - t.startedAt });
             runResults.set(call.id, autoResult);
             continue;
@@ -171,6 +174,7 @@ export class ToolOrchestrator {
       }
       yield { type: "tool_started", id: call.id, name: call.name, input: call.input };
       this.deps.recordLedger({ eventType: "tool_started", tool: call.name, inputHash: t.p.key, outcome: "ok", elapsedMs: 0 });
+      const execStartedAt = Date.now();
       let result: ToolExecutionResult;
       try {
         result = await executeTool(call.name, call.input, {
@@ -185,7 +189,7 @@ export class ToolOrchestrator {
         const msg = getErrorMessage(err);
         result = { output: { error: `Tool execution failed: ${msg}` }, isError: true, summary: `Error: ${msg}` };
       }
-      yield { type: "tool_finished", id: call.id, name: call.name, result };
+      yield { type: "tool_finished", id: call.id, name: call.name, result, durationMs: Date.now() - execStartedAt };
       this.deps.recordLedger({ eventType: "tool_finished", tool: call.name, inputHash: t.p.key, outcome: result.isError ? "error" : "ok", elapsedMs: Date.now() - t.startedAt });
       runResults.set(call.id, result);
     }
@@ -209,17 +213,27 @@ export class ToolOrchestrator {
     }
     const outputs = await Promise.all(
       toRun.map(async (t) => {
+        // Per-call execution clock: the batch shares one wall-clock window, but
+        // each call's own duration is that call's start -> result.
+        const execStartedAt = Date.now();
         try {
-          return await executeTool(t.p.call.name, t.p.call.input, {
+          const result = await executeTool(t.p.call.name, t.p.call.input, {
             projectRoot,
             signal,
           });
+          return { result, durationMs: Date.now() - execStartedAt };
         } catch (err: unknown) {
           if (signal.aborted || (err instanceof Error && err.name === "AbortError")) {
-            return { output: { error: "Operation aborted" }, isError: true, summary: "Operation aborted" };
+            return {
+              result: { output: { error: "Operation aborted" }, isError: true, summary: "Operation aborted" },
+              durationMs: Date.now() - execStartedAt,
+            };
           }
           const msg = getErrorMessage(err);
-          return { output: { error: `Tool execution failed: ${msg}` }, isError: true, summary: `Error: ${msg}` };
+          return {
+            result: { output: { error: `Tool execution failed: ${msg}` }, isError: true, summary: `Error: ${msg}` },
+            durationMs: Date.now() - execStartedAt,
+          };
         }
       })
     );
@@ -234,8 +248,8 @@ export class ToolOrchestrator {
     }
     for (let i = 0; i < toRun.length; i++) {
       const t = toRun[i];
-      const result = outputs[i];
-      yield { type: "tool_finished", id: t.p.call.id, name: t.p.call.name, result };
+      const { result, durationMs } = outputs[i];
+      yield { type: "tool_finished", id: t.p.call.id, name: t.p.call.name, result, durationMs };
       this.deps.recordLedger({ eventType: "tool_finished", tool: t.p.call.name, inputHash: t.p.key, outcome: result.isError ? "error" : "ok", elapsedMs: Date.now() - t.startedAt });
       runResults.set(t.p.call.id, result);
     }

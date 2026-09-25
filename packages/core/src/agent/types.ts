@@ -24,7 +24,13 @@ export type AgentEvent =
   | { type: "text_delta"; text: string }
   | { type: "tool_started"; id: string; name: string; input: unknown }
   | { type: "tool_permission_denied"; id: string; name: string }
-  | { type: "tool_finished"; id: string; name: string; result: ToolExecutionResult }
+  // `durationMs` is EXECUTION time — stamped just before the call runs, so it
+  // excludes however long the user sat at the permission prompt. It is
+  // deliberately NOT the ledger's `elapsedMs`, which starts at classification
+  // and therefore includes that wait; conflating them would make a slow
+  // decision read as a slow tool. Absent when nothing ran (an unknown tool or
+  // unparsed input is reported without an execution).
+  | { type: "tool_finished"; id: string; name: string; result: ToolExecutionResult; durationMs?: number }
   | { type: "usage"; inputTokens: number; outputTokens: number }
   | { type: "compacted"; summary: string }
   | { type: "turn_complete" }
