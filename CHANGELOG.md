@@ -4,7 +4,7 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
-### Phase 28 visual identity, wave 1: thinking timer, animated wordmark, theme-selectable meters (2026-09-26)
+### Phase 28 visual identity, wave 1: thinking timer, animated wordmark, theme-selectable meters, compact permission bar (2026-09-26)
 
 - **A blank turn now answers "is it working?" with a clock.** The static
   `thinking…` is replaced by `✻ thinking 4s` (Phase 28.4): the timer starts at
@@ -27,12 +27,23 @@ All notable changes to Anvil are documented here. The format follows
   block, custom themes may override (validated; absent means default so old
   themes load unchanged), and the width-budgeting `gaugeDisplayText` goes
   through the same `styledMeter` dispatch so text and pixels never disagree.
+- **Routine permissions are now one row, not a modal** (Phase 28.7):
+  `run_command` and MCP tools render a single-line `y allow · a always · n
+  deny` bar — the command summary stays visible above it and the
+  external-server warning survives — while file edits keep the full modal,
+  because the diff preview is the point. Esc still denies everywhere, in
+  both modes, and that is asserted.
 - **Adopted work, honestly labelled.** This wave was found uncommitted after
   its session stopped mid-phase without declaring ownership; it was verified
   green against the full gate, completed per the roadmap protocol, and its
-  provenance is recorded in `PROGRESS.md` (2026-09-26). 28.8's
+  provenance is recorded in `PROGRESS.md` (2026-09-26). The session's task
+  order was correct (28.4→28.7, then 28.8 started); the adopting engineer's
+  first claim that "28.7 is untouched" was wrong — `PermissionPrompt.tsx`
+  contained a complete, test-proven 28.7 — and was corrected the same day in
+  a visible follow-up commit rather than by rewriting history. 28.8's
   readable-text refinement has partial traces in this diff and **remains
-  open**; 28.7 is next per the sequencing rule.
+  open** (`ModelPicker.tsx` and `DiffModal.tsx` untouched); completing 28.8
+  is next per the sequencing rule.
 - New tests: `thinkingTimer.test.tsx` (5, incl. timer-drops-when-text-arrives
   and pulse-vs-timer), `wordmark.test.tsx` (9, incl. all five fallback modes,
   settle-exactly-once, six-theme ramp distinctness, resume-never-animates),

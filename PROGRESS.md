@@ -2,6 +2,18 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **ACTIVE 2026-09-26 (OpenCode chief-engineer session, Phase 28.8–28.12
+> completion):** owns the remaining Phase 28 tasks, in roadmap order: 28.8
+> (finish the muted-vs-dim pass across all components), 28.9 (header session
+> title + turn counter), 28.10 (per-turn token annotations under `/expand`),
+> 28.11 (code-block line numbers), 28.12 (visual baseline refresh, LAST).
+> Candidate files: `packages/tui/src/components/{DiffModal,ModelPicker,ToolCallView,Header,StatusBar,MessageView,MissionDeck,ExpandedLines,App}.tsx`,
+> `packages/tui/src/markdown/MarkdownView.tsx`, `packages/tui/src/hooks/useAgentController.ts`,
+> `packages/core/src/config/constants.ts` (new bounds only), matching
+> `__tests__` updates, `docs/PHASE-28-ROADMAP.md`, `CHANGELOG.md`, and this
+> file. Full gate green required after each task, before its commit. No
+> protected artifact touched.
+>
 > **DONE 2026-09-26 (OpenCode chief-engineer session, Phase 28.4–28.6 adoption):**
 > owns the adopted orphaned working set of a prior session that stopped
 > mid-phase before ever declaring ownership (verified: no other agent process
@@ -22,8 +34,16 @@
 > plus `docs/PHASE-28-ROADMAP.md` (progress banner + verified acceptance
 > boxes), `CHANGELOG.md` (Unreleased entry), and this PROGRESS.md entry.
 > Full `npm run gate` green at adoption time AND re-run green after these doc
-> edits before commit. 28.7 untouched; 28.8 remains OPEN (partial traces
-> only); next per the sequencing rule is 28.7. No protected artifact touched.
+> edits before commit. **Correction (same day, second commit):** 28.7 IS part
+> of the adopted set — `PermissionPrompt.tsx` (+69) and
+> `permission.test.tsx` (+84) implement the compact inline `y/a/n` bar, keep
+> the full modal for diff tools, preserve the MCP server warning, and assert
+> Esc = Deny in both modes; all five 28.7 criteria are test-proven. The dead
+> session's sequencing was in order (28.4→28.5→28.6→28.7, then 28.8
+> started); the first landing commit's "28.7 untouched" message was wrong
+> and this correction is the visible record. 28.8 remains OPEN (partial
+> traces; `ModelPicker.tsx` and `DiffModal.tsx` untouched); next is completing
+> 28.8. No protected artifact touched.
 > The untracked `docs/AUDIT-2026-09-26.md` belongs to a separate review
 > session and is deliberately NOT committed here.
 >
