@@ -1,6 +1,6 @@
 import { Text } from "ink";
 import { useTheme } from "../theme/theme.js";
-import { meter } from "../util/chrome.js";
+import { styledMeter, type MeterStyle } from "../util/chrome.js";
 import { useBlink } from "../util/useSpinner.js";
 
 /**
@@ -31,13 +31,14 @@ function formatCount(n: number): string {
 export function gaugeDisplayText(
   inputTokens: number,
   contextWindow: number | undefined,
-  width: number
+  width: number,
+  meterStyle: MeterStyle = "block"
 ): string | null {
   if (!contextWindow || contextWindow <= 0) return null;
   const fraction = Math.max(0, Math.min(1, inputTokens / contextWindow));
   const pct = `${Math.round(fraction * 100)}%`;
   const variant = gaugeVariantForWidth(width);
-  const bar = meter(fraction, variant === "wide" ? 10 : 6);
+  const bar = styledMeter(meterStyle, fraction, variant === "wide" ? 10 : 6);
   if (variant === "wide") {
     return `${bar} ${pct} (${formatCount(inputTokens)} / ${formatCount(contextWindow)})`;
   }
@@ -71,6 +72,6 @@ export function ContextGauge({
       : fraction >= 0.5
         ? theme.colors.warning
         : theme.colors.success;
-  const text = gaugeDisplayText(inputTokens, contextWindow, width) ?? pct;
+  const text = gaugeDisplayText(inputTokens, contextWindow, width, theme.chrome.meterStyle) ?? pct;
   return <Text color={color}>{text}</Text>;
 }

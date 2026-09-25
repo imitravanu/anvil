@@ -2,6 +2,31 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-26 (OpenCode chief-engineer session, Phase 28.4–28.6 adoption):**
+> owns the adopted orphaned working set of a prior session that stopped
+> mid-phase before ever declaring ownership (verified: no other agent process
+> running; no entry in this file for it). Files: NEW
+> `packages/tui/src/components/{ThinkingTimer,Wordmark}.tsx`, NEW
+> `packages/tui/src/components/__tests__/{thinkingTimer,wordmark}.test.tsx`,
+> `packages/core/src/config/constants.ts` (THINKING_TIMER_TICK_MS + WORDMARK_*
+> timing constants only), `packages/tui/src/util/chrome.ts` (`MeterStyle`,
+> `thinMeter`, `styledMeter`), `packages/tui/src/theme/{themes,custom}.ts`
+> (`ThemeChrome`, `DEFAULT_CHROME`, forge `thin` override, custom-theme
+> validation), `packages/tui/src/components/{ContextGauge,ExpandedLines,Header,MessageList,MessageView,MissionDeck,PermissionPrompt,StatusBar,ToolCallView}.tsx`
+> (28.4–28.6 wiring; several also carry the first readable-text
+> `textSecondary`-for-`dim` swaps of the still-open 28.8),
+> `packages/tui/src/components/__tests__/{gauge,permission}.test.tsx`,
+> `packages/tui/src/theme/__tests__/custom.test.ts`,
+> `packages/tui/src/__visual__/visual.test.tsx`,
+> `packages/tui/__visual-baselines__/{empty-state.txt,wordmark-settled.txt}`,
+> plus `docs/PHASE-28-ROADMAP.md` (progress banner + verified acceptance
+> boxes), `CHANGELOG.md` (Unreleased entry), and this PROGRESS.md entry.
+> Full `npm run gate` green at adoption time AND re-run green after these doc
+> edits before commit. 28.7 untouched; 28.8 remains OPEN (partial traces
+> only); next per the sequencing rule is 28.7. No protected artifact touched.
+> The untracked `docs/AUDIT-2026-09-26.md` belongs to a separate review
+> session and is deliberately NOT committed here.
+>
 > **DONE 2026-09-23 (Buffy, session search):** owns NEW
 > `packages/core/src/session/search.ts` (+ `session/index.ts` barrel export),
 > `packages/core/src/config/constants.ts` (4 `SESSION_SEARCH_*` bounds),

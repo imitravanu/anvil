@@ -9,6 +9,7 @@ import { sanitizeTerminalText } from "../util/sanitize.js";
 import { useBlink, useSpinnerFrame } from "../util/useSpinner.js";
 import { ToolCallView } from "./ToolCallView.js";
 import { SubAgentView } from "./SubAgentView.js";
+import { ThinkingTimer } from "./ThinkingTimer.js";
 import { VerificationCard } from "./VerificationCard.js";
 import { GuardianReportCard } from "./GuardianReportCard.js";
 
@@ -29,7 +30,7 @@ export const MessageView = React.memo(function MessageView({ message, expandTool
       <Text color={color} bold={bold}>
         {label} {rule(ruleRoom(label))}
       </Text>
-      {timeText && <Text dimColor>{timeText}</Text>}
+      {timeText && <Text color={theme.colors.textMuted}>{timeText}</Text>}
     </Box>
   );
   // DW-3.1 pulse = streaming wakefulness; DW-3.4 block cursor on live text.
@@ -41,7 +42,7 @@ export const MessageView = React.memo(function MessageView({ message, expandTool
       <Box flexDirection="column">
         {cardHeader(theme.typography.userPrefix, theme.colors.textSecondary)}
         {message.images?.map((img) => (
-          <Text key={img.path} color={theme.colors.dim}>
+          <Text key={img.path} color={theme.colors.textSecondary}>
             {"  🖼 "}
             {img.path}
           </Text>
@@ -77,11 +78,13 @@ export const MessageView = React.memo(function MessageView({ message, expandTool
       {safeText ? `${safeText} ` : ""}
       {safeText ? (
         <Text color={theme.colors.accent}>{cursorOn ? "█" : " "}</Text>
+      ) : message.toolCalls.length === 0 ? (
+        // No text and no tool calls yet — the model is thinking. The ✻ glyph
+        // replaces the pulse spinner for THIS state, and the timer answers the
+        // question a user staring at a blank turn actually has: how long?
+        <ThinkingTimer />
       ) : (
-        <>
-          <Text color={theme.colors.accent}>{pulse}</Text>
-          {message.toolCalls.length === 0 && <Text dimColor> thinking…</Text>}
-        </>
+        <Text color={theme.colors.accent}>{pulse}</Text>
       )}
     </Text>
   ) : (

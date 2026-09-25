@@ -5,7 +5,7 @@
 > **Author:** Chief Engineer Audit  
 > **Origin:** Deep analysis of the full TUI codebase (73 source files in `@anvil/tui`), the `anvil-ui-demo` forge prototype (`/home/mitravanu/anvil-ui-demo/demo.mjs`), completed DW-1→DW-4 design waves, and current UI/UX gaps identified during a full-stack review.  
 > **Purpose:** This document is the **actionable build guide** for any agent working on Anvil's visual identity and UX refinement. Every task has exact file paths, modification instructions, watchouts, and acceptance criteria. Tasks are sequenced — **do not skip ahead**.
-> **Progress (2026-09-26) — verified against code & tests:** 28.1 ✅ forge theme (`a2088ca`), 28.2 ✅ diff tints (`2d22f8f`), 28.3 ✅ tool call timing. **Next: 28.4 — Thinking Elapsed Indicator.** A box is ticked only once its criterion is confirmed in the live tree; 28.4–28.12 remain.
+> **Progress (2026-09-26) — verified against code & tests:** 28.1 ✅ forge theme (`a2088ca`), 28.2 ✅ diff tints (`2d22f8f`), 28.3 ✅ tool call timing, 28.4 ✅ thinking elapsed indicator, 28.5 ✅ animated wordmark, 28.6 ✅ thin/theme-selectable meters. 28.4–28.6 were **adopted from a session that stopped mid-phase** (it never declared ownership in `PROGRESS.md`; its uncommitted work was verified green against the full gate, completed, and landed — see `PROGRESS.md` 2026-09-26). **Next: 28.7 — Compact Permission Prompt.** 28.8 carries partial `dim`→`textSecondary` traces from the adopted diff and **remains OPEN** — it is not done. A box is ticked only once its criterion is confirmed in the live tree; criteria that need a real interactive terminal (28.4's `✻` on glass, 28.5's live keypress-skip) are deliberately left unticked until a human pass confirms them; 28.7–28.12 remain.
 
 ---
 
@@ -274,10 +274,10 @@ The `✻` replaces the pulse spinner character for this specific state:
 - Integration test: `MessageView` renders the timer when `streaming && !text && !toolCalls`.
 
 ### Acceptance Criteria
-- [ ] Streaming messages with no text show `✻ thinking 3s` (timer counts up)
-- [ ] Timer resets when text starts arriving
-- [ ] `✻` renders correctly on iTerm2, WezTerm, Kitty, and xterm
-- [ ] `npm run gate` green
+- [x] Streaming messages with no text show `✻ thinking 3s` (timer counts up)
+- [x] Timer resets when text starts arriving
+- [ ] `✻` renders correctly on iTerm2, WezTerm, Kitty, and xterm *(pending: needs a real-terminal pass; vitest cannot assert this. `ANVIL_ASCII=1` fallback exists and is documented)*
+- [x] `npm run gate` green
 
 ---
 
@@ -334,15 +334,15 @@ export const WORDMARK_COOL_DURATION_MS = 700;
 - Visual regression: capture settled wordmark state for all 6 themes.
 
 ### Acceptance Criteria
-- [ ] Boot shows animated wordmark radiating from the dot of the "i"
-- [ ] Animation settles in ~1.8s and shows command hints below
-- [ ] Any keypress skips the animation instantly
-- [ ] `NO_COLOR=1` → plain text "anvil" with version
-- [ ] `ANVIL_NO_ANIM=1` → settled wordmark immediately (no animation)
-- [ ] Terminal < 34 cols or < 16 rows → text fallback
-- [ ] Each theme produces a visually distinct heat ramp
-- [ ] Session resume (messages > 0) never shows the animation
-- [ ] `npm run gate` green
+- [x] Boot shows animated wordmark radiating from the dot of the "i"
+- [x] Animation settles in ~1.8s and shows command hints below
+- [ ] Any keypress skips the animation instantly *(pending: `useInput` needs a real TTY; the `skipAnimation` static path IS tested, the live keypress path is not)*
+- [x] `NO_COLOR=1` → plain text "anvil" with version
+- [x] `ANVIL_NO_ANIM=1` → settled wordmark immediately (no animation)
+- [x] Terminal < 34 cols or < 16 rows → text fallback
+- [x] Each theme produces a visually distinct heat ramp
+- [x] Session resume (messages > 0) never shows the animation
+- [x] `npm run gate` green
 
 ---
 
@@ -380,10 +380,10 @@ Add `chrome: ThemeChrome` to `Theme`. Default: `{ meterStyle: "block" }`. Overri
 - **`gaugeDisplayText()` is a pure function used for width budgeting** — it must use the same meter function as the render path. Pass `meterStyle` as an argument.
 
 ### Acceptance Criteria
-- [ ] `forge` theme uses thin meter (`━──────────`)
-- [ ] Other themes use block meter (`██████░░░░`) by default
-- [ ] Custom themes can override `chrome.meterStyle`
-- [ ] `npm run gate` green
+- [x] `forge` theme uses thin meter (`━──────────`)
+- [x] Other themes use block meter (`██████░░░░`) by default
+- [x] Custom themes can override `chrome.meterStyle`
+- [x] `npm run gate` green
 
 ---
 

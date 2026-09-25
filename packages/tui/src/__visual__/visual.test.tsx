@@ -10,6 +10,7 @@ import { AgentSession } from "@anvil/core";
 import { Header } from "../components/Header.js";
 import { MessageList } from "../components/MessageList.js";
 import { MessageView } from "../components/MessageView.js";
+import { WordmarkAnimation } from "../components/Wordmark.js";
 import { MissionDeck } from "../components/MissionDeck.js";
 import { PermissionPrompt } from "../components/PermissionPrompt.js";
 import { RewindModal } from "../components/RewindModal.js";
@@ -165,6 +166,16 @@ const normalizeTimes = (frame: string): string => frame.replace(/\d{1,2}:\d{2}:\
 describe("visual regression — TUI frames", () => {
   it("empty state", () => {
     expectVisual(renderFrame(<MessageList messages={[]} model="qwen2.5-coder:latest" />, DEFAULT_COLUMNS, DEFAULT_ROWS), "empty-state");
+    // The settled wordmark, captured directly (the empty state above falls back
+    // to plain text — this harness is non-TTY by design). Colour is NOT captured:
+    // the harness is deliberately ANSI-free, so a per-theme capture here would be
+    // six byte-identical files. The baseline therefore pins the SHAPE and its
+    // dimensions, while the theme-derived heat ramp is pinned by unit tests
+    // (see wordmark.test.tsx).
+    expectVisual(
+      renderFrame(<WordmarkAnimation skipAnimation onSettled={() => {}} />, DEFAULT_COLUMNS, DEFAULT_ROWS),
+      "wordmark-settled"
+    );
   });
 
   it("chat exchange — markdown, tool cards, checkpoint", () => {

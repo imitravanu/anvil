@@ -53,7 +53,7 @@ export function ToolCallView({ call, expanded }: { call: DisplayToolCall; expand
     <Box flexDirection="column">
       <Box paddingLeft={3}>
         <Text color={color}>{body}</Text>
-        {duration ? <Text color={theme.colors.dim}>{` ${duration}`}</Text> : null}
+        {duration ? <Text color={theme.colors.textMuted}>{` ${duration}`}</Text> : null}
       </Box>
       {expanded && call.status !== "running" && (
         <ExpandedLines lines={formatToolOutput(call.output)} />

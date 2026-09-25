@@ -42,6 +42,14 @@ describe("theme registry consistency", () => {
     }
   });
 
+  it("forge selects the thin meter while every other built-in keeps the block meter", () => {
+    expect(THEMES.forge.chrome.meterStyle).toBe("thin");
+    for (const [name, theme] of Object.entries(THEMES)) {
+      if (name === "forge") continue;
+      expect(theme.chrome.meterStyle, name).toBe("block");
+    }
+  });
+
   it("forge keeps four distinct text tiers so dim never carries readable text", () => {
     const tiers = [
       THEMES.forge.colors.textPrimary,
@@ -112,6 +120,23 @@ describe("custom themes", () => {
     expect(themes.solar.typography.brandIcon).toBe("▲");
     expect(themes.solar.borders.panel).toBe("round");
     expect(themes.solar.responsive.normalWidth).toBe(120);
+    // Phase 28.6: absent chrome section defaults to the block meter.
+    expect(themes.solar.chrome).toEqual({ meterStyle: "block" });
+  });
+
+  it("honors a custom chrome.meterStyle override", () => {
+    writeThemes(JSON.stringify({ quiet: { colors: COLORS, chrome: { meterStyle: "thin" } } }));
+    const { themes, problems } = loadCustomThemes();
+    expect(problems).toEqual([]);
+    expect(themes.quiet.chrome).toEqual({ meterStyle: "thin" });
+  });
+
+  it("rejects an invalid chrome.meterStyle", () => {
+    writeThemes(JSON.stringify({ badmeter: { colors: COLORS, chrome: { meterStyle: "wiggle" } } }));
+    const { themes, problems } = loadCustomThemes();
+    expect(themes).toEqual({});
+    expect(problems).toHaveLength(1);
+    expect(problems[0].error).toContain("meterStyle");
   });
 
   it("honors semantic color overrides and custom sections", () => {

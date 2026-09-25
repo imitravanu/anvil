@@ -13,6 +13,12 @@ describe("gaugeDisplayText", () => {
     expect(gaugeDisplayText(100, undefined, 100)).toBeNull();
     expect(gaugeDisplayText(100, 0, 100)).toBeNull();
   });
+
+  it("draws the theme-selected meter (block default, thin override)", () => {
+    expect(gaugeDisplayText(16000, 32000, 100)).toBe("███░░░ 50%");
+    expect(gaugeDisplayText(16000, 32000, 100, "thin")).toBe("━━━─── 50%");
+    expect(gaugeDisplayText(16000, 32000, 130, "thin")).toBe("━━━━━───── 50% (16.0k / 32.0k)");
+  });
 });
 
 describe("ContextGauge render", () => {

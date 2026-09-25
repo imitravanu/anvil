@@ -48,7 +48,7 @@ export function StatusBar({
 
   // DW-4.2 context gauge (adaptive component) + DW-4.3 token-growth
   // sparkline on wide terminals. Both measured verbatim for the budget.
-  const gaugeText = gaugeDisplayText(usage.inputTokens, info?.contextWindow, width);
+  const gaugeText = gaugeDisplayText(usage.inputTokens, info?.contextWindow, width, theme.chrome.meterStyle);
   const gaugePlain = gaugeText ? ` │ ${gaugeText}` : "";
   const spark = width >= 120 && tokenHistory.length >= 2 ? brailleSparkline(tokenHistory) : "";
   const sparkPlain = spark ? ` ${spark}` : "";
@@ -77,28 +77,34 @@ export function StatusBar({
   // DW-2.4 segmented frame. Compact terminals (<80) stack two lines so the
   // gauge and hints survive instead of being curtailed away.
   const compact = breakpointForWidth(width, theme.responsive) === "compact";
+  // Readable segments ride textSecondary; only the `│` separators and the
+  // sparkline stay dim (decorative — phase 28.8). Mixing them in one Text and
+  // relying on `dimColor` made the labels and separators indistinguishable.
+  const sep = <Text color={theme.colors.dim}> │ </Text>;
   const left = (
-    <Text dimColor>
-      {curtail(modelLabel, 40)} │ {state}
+    <Text color={theme.colors.textSecondary}>
+      {curtail(modelLabel, 40)}
+      {sep}
+      {state}
       {checkpointCount !== undefined && checkpointCount > 0 && (
-        <Text dimColor>
-          {" │ "}⎌ {checkpointCount}
+        <Text>
+          {sep}⎌ {checkpointCount}
         </Text>
       )}
       {testStatus && (
         <Text>
-          {" │ "}
+          {sep}
           <Text color={testColor}>🧪 {testStatus}</Text>
         </Text>
       )}
       {gaugeText && (
         <Text>
-          {" │ "}
+          {sep}
           <ContextGauge inputTokens={usage.inputTokens} contextWindow={info?.contextWindow} width={width} />
-          {spark && <Text dimColor>{sparkPlain}</Text>}
+          {spark && <Text color={theme.colors.dim}>{sparkPlain}</Text>}
         </Text>
       )}{" "}
-      │ {tokensShown}
+      <Text color={theme.colors.dim}>│</Text> {tokensShown}
     </Text>
   );
 
@@ -117,22 +123,22 @@ export function StatusBar({
       {compact ? (
         <>
           <Box justifyContent="space-between" flexShrink={0}>
-            <Text dimColor>
-              {curtail(modelLabel, 24)} │ {state}
+            <Text color={theme.colors.textSecondary}>
+              {curtail(modelLabel, 24)} <Text color={theme.colors.dim}>│</Text> {state}
             </Text>
             {gaugeText && (
               <ContextGauge inputTokens={usage.inputTokens} contextWindow={info?.contextWindow} width={width} />
             )}
           </Box>
           <Box justifyContent="space-between" flexShrink={0}>
-            <Text dimColor>{tokensShown}</Text>
-            <Text dimColor>{hints}</Text>
+            <Text color={theme.colors.textSecondary}>{tokensShown}</Text>
+            <Text color={theme.colors.textSecondary}>{hints}</Text>
           </Box>
         </>
       ) : (
         <Box justifyContent="space-between" flexShrink={0}>
           {left}
-          {budget >= hints.length ? <Text dimColor>{hints}</Text> : null}
+          {budget >= hints.length ? <Text color={theme.colors.textSecondary}>{hints}</Text> : null}
         </Box>
       )}
     </Box>

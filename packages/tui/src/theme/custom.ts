@@ -3,6 +3,7 @@ import path from "node:path";
 import { anvilHome } from "@anvil/core";
 import {
   DEFAULT_BORDERS,
+  DEFAULT_CHROME,
   DEFAULT_RESPONSIVE,
   DEFAULT_SPACING,
   DEFAULT_TYPOGRAPHY,
@@ -17,6 +18,7 @@ import {
   type SemanticColorKey,
   type Theme,
 } from "./themes.js";
+import type { MeterStyle } from "../util/chrome.js";
 
 // ---------------------------------------------------------------------------
 // custom user themes (~/.anvil/themes.json, ANVIL_HOME-honoring).
@@ -48,6 +50,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 const PANEL_BORDERS: readonly string[] = ["round", "single", "double", "bold"];
 const CARD_BORDERS: readonly string[] = ["round", "single", "none"];
 const MODAL_BORDERS: readonly string[] = ["round", "double"];
+const METER_STYLES: readonly string[] = ["block", "thin"];
 
 function isNonEmptyString(v: unknown): v is string {
   return typeof v === "string" && v.length > 0;
@@ -179,6 +182,15 @@ export function loadCustomThemes(): { themes: Record<string, Theme>; problems: C
       continue;
     }
 
+    // Phase 28.6: meter style is optional — absent means the default block
+    // meter, so old custom themes keep loading unchanged.
+    const chrome = isRecord(entry.chrome) ? (entry.chrome as Record<string, unknown>) : {};
+    const meterStyle = (chrome.meterStyle ?? DEFAULT_CHROME.meterStyle) as string;
+    if (!METER_STYLES.includes(meterStyle)) {
+      problem('chrome.meterStyle must be "block" or "thin"');
+      continue;
+    }
+
     themes[name] = {
       colors,
       typography: { brandIcon, brandName, userPrefix, assistantPrefix, sectionDivider },
@@ -189,6 +201,7 @@ export function loadCustomThemes(): { themes: Record<string, Theme>; problems: C
         modal: modal as ModalBorderStyle,
       },
       responsive: { compactWidth, normalWidth, wideWidth },
+      chrome: { meterStyle: meterStyle as MeterStyle },
     };
   }
   return { themes, problems };

@@ -61,7 +61,7 @@ export function Header({ model, isBusy, context }: HeaderProps) {
     return frame(
       <Box justifyContent="space-between" flexShrink={0} flexGrow={1}>
         <Text bold color={theme.colors.brand}>▲ ANVIL</Text>
-        <Text dimColor>{fitTag(Math.max(12, width - 24))}</Text>
+        <Text color={theme.colors.textMuted}>{fitTag(Math.max(12, width - 24))}</Text>
       </Box>
     );
   }
@@ -124,21 +124,21 @@ export function Header({ model, isBusy, context }: HeaderProps) {
         <Text bold color={theme.colors.brand}>▲ ANVIL</Text>
         <Text color={theme.colors.separator}>│</Text>
         <Text>
-          <Text dimColor>repo: </Text>
+          <Text color={theme.colors.textSecondary}>repo: </Text>
           <Text bold>{nameV}</Text>
-          <Text dimColor> (</Text>
+          <Text color={theme.colors.textSecondary}> (</Text>
           {/* DW-2.1 status dot: ● green = clean, yellow = dirty. */}
           <Text color={gitClean ? theme.colors.success : theme.colors.warning}>● </Text>
           <Text color={gitClean ? theme.colors.success : theme.colors.warning}>
             {branchV}
           </Text>
-          <Text dimColor>)</Text>
+          <Text color={theme.colors.textSecondary}>)</Text>
         </Text>
         {showEnv && (
           <>
             <Text dimColor>│</Text>
             <Text>
-              <Text dimColor>env: </Text>
+              <Text color={theme.colors.textSecondary}>env: </Text>
               <Text>{ecoV}</Text>
             </Text>
           </>
@@ -147,7 +147,7 @@ export function Header({ model, isBusy, context }: HeaderProps) {
           <>
             <Text dimColor>│</Text>
             <Text>
-              <Text dimColor>tests: </Text>
+              <Text color={theme.colors.textSecondary}>tests: </Text>
               <Text>{testsV}</Text>
             </Text>
           </>
@@ -156,7 +156,7 @@ export function Header({ model, isBusy, context }: HeaderProps) {
           <>
             <Text dimColor>│</Text>
             <Text>
-              <Text dimColor>rules: </Text>
+              <Text color={theme.colors.textSecondary}>rules: </Text>
               <Text color={theme.colors.accent}>{rulesV}</Text>
             </Text>
           </>
@@ -165,7 +165,7 @@ export function Header({ model, isBusy, context }: HeaderProps) {
       {/* Shrink-proof + budgeted to the exact remainder: the left column can
           never be squeezed and the tag degrades gracefully on narrow widths. */}
       <Box flexShrink={0}>
-        <Text dimColor>{fitTag(Math.max(16, width - leftWidth() - rightReserve))}</Text>
+        <Text color={theme.colors.textMuted}>{fitTag(Math.max(16, width - leftWidth() - rightReserve))}</Text>
       </Box>
     </Box>
   );

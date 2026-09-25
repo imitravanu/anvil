@@ -60,12 +60,25 @@ export function PermissionPrompt({
   }, [request]);
   const options = optionsFor(request.toolName);
   const isDiff = DIFF_TOOLS.has(request.toolName);
+  // Phase 28.7: file edits keep the full modal because the diff preview is
+  // the point; everything else (shell, MCP) gets a single-line y/a/n bar so a
+  // routine command doesn't cost three navigation keys.
+  const compact = !isDiff;
 
-  useInput((_input, key) => {
+  useInput((input, key) => {
     if (key.escape) {
       // Esc = Deny: the overlay must always be escapable with one key,
       // matching every other overlay's Esc-to-dismiss contract.
       request.resolve(false);
+      return;
+    }
+    if (compact) {
+      const k = input.toLowerCase();
+      if (k === "y") request.resolve(true);
+      else if (k === "a") {
+        broker.approveAlwaysForSession(request.toolName);
+        request.resolve(true);
+      } else if (k === "n") request.resolve(false);
       return;
     }
     if (key.upArrow) setSelected((s) => Math.max(0, s - 1));
@@ -108,7 +121,9 @@ export function PermissionPrompt({
         <Text color={theme.colors.userText}>{label}</Text>
       </Text>
       {mcp && (
-        <Text dimColor>External process — anything sent (file contents included) is visible to that server.</Text>
+        <Text color={theme.colors.textSecondary}>
+          External process — anything sent (file contents included) is visible to that server.
+        </Text>
       )}
       <Box marginTop={0} marginBottom={1}>
         {isDiff ? (
@@ -117,22 +132,52 @@ export function PermissionPrompt({
           <Text color={theme.colors.assistantText}>{curtail(request.summary, maxText * 3)}</Text>
         )}
       </Box>
-      {/* DW-2.3 action buttons: full-width boxes, selected raised in brand. */}
-      {options.map((option, i) => (
+      {compact ? (
+        // Phase 28.7 inline bar — the summary above is the command line; here
+        // the three answers sit on one row so y/a/n need no navigation.
         <Box
-          key={option}
           flexShrink={0}
-          borderStyle="round"
-          borderColor={i === selected ? theme.colors.brand : theme.colors.separator}
+          borderStyle={theme.borders.panel}
+          borderColor={theme.colors.warning}
           paddingX={1}
         >
-          <Text color={i === selected ? theme.colors.brand : theme.colors.textSecondary} bold={i === selected}>
-            {i === selected ? "▸ " : "  "}
-            {option}
+          <Text>
+            <Text color={theme.colors.accent}>❯ </Text>
+            <Text color={theme.colors.textPrimary}>{label}? </Text>
+            <Text color={theme.colors.textPrimary} bold>
+              y
+            </Text>
+            <Text color={theme.colors.textSecondary}> allow · </Text>
+            <Text color={theme.colors.textPrimary} bold>
+              a
+            </Text>
+            <Text color={theme.colors.textSecondary}> always · </Text>
+            <Text color={theme.colors.textPrimary} bold>
+              n
+            </Text>
+            <Text color={theme.colors.textSecondary}> deny</Text>
           </Text>
         </Box>
-      ))}
-      <Text dimColor> ↑/↓ to move · Enter to confirm · Esc to deny</Text>
+      ) : (
+        <>
+          {/* DW-2.3 action buttons: full-width boxes, selected raised in brand. */}
+          {options.map((option, i) => (
+            <Box
+              key={option}
+              flexShrink={0}
+              borderStyle="round"
+              borderColor={i === selected ? theme.colors.brand : theme.colors.separator}
+              paddingX={1}
+            >
+              <Text color={i === selected ? theme.colors.brand : theme.colors.textSecondary} bold={i === selected}>
+                {i === selected ? "▸ " : "  "}
+                {option}
+              </Text>
+            </Box>
+          ))}
+          <Text color={theme.colors.textSecondary}> ↑/↓ to move · Enter to confirm · Esc to deny</Text>
+        </>
+      )}
     </Box>
   );
 }

@@ -51,13 +51,13 @@ export function MissionDeck({ goal, plan, isBusy = false }: MissionDeckProps) {
             </Text>
             <Text bold>{curtail(goal.title, Math.max(12, width - 35))}</Text>
           </Box>
-          <Text dimColor>
+          <Text color={theme.colors.textSecondary}>
             [{completedCount}/{totalCount}] · Turn {goal.currentTurn}/{goal.maxTurns}
           </Text>
         </Box>
 
         {hiddenBefore > 0 && (
-          <Text dimColor>  … {hiddenBefore} earlier milestone{hiddenBefore === 1 ? "" : "s"}</Text>
+          <Text color={theme.colors.textSecondary}>  … {hiddenBefore} earlier milestone{hiddenBefore === 1 ? "" : "s"}</Text>
         )}
         {deckRows.map((m) => {
           const isDone = m.status === "completed";
@@ -76,11 +76,11 @@ export function MissionDeck({ goal, plan, isBusy = false }: MissionDeckProps) {
           return (
             <Box key={m.id} paddingLeft={1} gap={1}>
               <Text color={glyphColor}>{glyph}</Text>
-              <Text bold={isRunning} dimColor={!isRunning && !isDone}>
+              <Text bold={isRunning} color={!isRunning && !isDone ? theme.colors.textSecondary : undefined}>
                 {m.id}. {curtail(m.title, Math.max(10, width - 25))}
               </Text>
               {m.detail && isRunning && (
-                <Text color={theme.colors.accent} dimColor>
+                <Text color={theme.colors.textSecondary}>
                   ({curtail(m.detail, 30)})
                 </Text>
               )}
@@ -88,7 +88,7 @@ export function MissionDeck({ goal, plan, isBusy = false }: MissionDeckProps) {
           );
         })}
         {hiddenAfter > 0 && (
-          <Text dimColor>  … {hiddenAfter} more milestone{hiddenAfter === 1 ? "" : "s"}</Text>
+          <Text color={theme.colors.textSecondary}>  … {hiddenAfter} more milestone{hiddenAfter === 1 ? "" : "s"}</Text>
         )}
       </Box>
     );
@@ -109,9 +109,9 @@ export function MissionDeck({ goal, plan, isBusy = false }: MissionDeckProps) {
             ) : (
               <Text>        </Text>
             )}
-            <Text dimColor>{line}</Text>
+            <Text color={theme.colors.textSecondary}>{line}</Text>
             {i === lines.length - 1 && hidden > 0 ? (
-              <Text dimColor>
+              <Text color={theme.colors.textSecondary}>
                 {" "}
                 … +{hidden} more line{hidden === 1 ? "" : "s"}
               </Text>

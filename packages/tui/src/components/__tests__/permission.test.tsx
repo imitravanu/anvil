@@ -69,10 +69,11 @@ describe("PermissionPrompt", () => {
     const broker = brokerStub();
     const app = renderThemed(<PermissionPrompt request={first.request} broker={broker} />);
     await tick();
-    // Move highlight down to "Always allow", then swap in the next request.
+    // Move highlight down to "Always allow", then swap in the next request
+    // (another full-modal file tool, since the highlight only exists there).
     app.stdin.write(DOWN);
     await tick();
-    const second = makeRequest("run_command", "Run command: rm -rf ./build");
+    const second = makeRequest("write_file", "--- a/b.ts\n+++ b/b.ts\n@@ -1 +1 @@\n-old\n+new");
     app.rerender(<PermissionPrompt request={second.request} broker={broker} />);
     await tick();
     // Fast Enter must hit "Allow once" (row 0), not the stale "Always allow".
@@ -113,6 +114,85 @@ describe("PermissionPrompt", () => {
     expect(out).toContain("Parameters:");
     expect(out).toContain("• query: \"anvil\"");
     expect(out).toContain("• limit: 5");
+    app.unmount();
+  });
+
+  it("compact bar renders for run_command and keeps the command text visible", async () => {
+    const { request } = makeRequest("run_command", "Run command: npm test");
+    const app = renderThemed(<PermissionPrompt request={request} broker={brokerStub()} />);
+    await tick();
+    const out = frameText(app.lastFrame);
+    expect(out).toContain("Run command: npm test");
+    expect(out).toContain("allow");
+    expect(out).toContain("always");
+    expect(out).toContain("deny");
+    // The multi-row action buttons must be gone in compact mode.
+    expect(out).not.toContain("Allow once");
+    app.unmount();
+  });
+
+  it("keeps the full modal (no compact bar) for edit_file", async () => {
+    const { request } = makeRequest("edit_file", DIFF);
+    const app = renderThemed(<PermissionPrompt request={request} broker={brokerStub()} />);
+    await tick();
+    const out = frameText(app.lastFrame);
+    expect(out).toContain("Allow once");
+    expect(out).toContain("↑/↓ to move");
+    app.unmount();
+  });
+
+  it("compact y allows once, n denies, a always-allows", async () => {
+    const yes = makeRequest("run_command", "Run command: npm test");
+    const broker = brokerStub();
+    const app1 = renderThemed(<PermissionPrompt request={yes.request} broker={broker} />);
+    await tick();
+    app1.stdin.write("y");
+    await expect(yes.decided).resolves.toBe(true);
+    expect(broker.approveAlwaysForSession).not.toHaveBeenCalled();
+    app1.unmount();
+
+    const no = makeRequest("run_command", "Run command: rm -rf ./build");
+    const app2 = renderThemed(<PermissionPrompt request={no.request} broker={brokerStub()} />);
+    await tick();
+    app2.stdin.write("n");
+    await expect(no.decided).resolves.toBe(false);
+    app2.unmount();
+
+    const always = makeRequest("run_command", "Run command: npm test");
+    const broker3 = brokerStub();
+    const app3 = renderThemed(<PermissionPrompt request={always.request} broker={broker3} />);
+    await tick();
+    app3.stdin.write("a");
+    await expect(always.decided).resolves.toBe(true);
+    expect(broker3.approveAlwaysForSession).toHaveBeenCalledWith("run_command");
+    app3.unmount();
+  });
+
+  it("Esc denies in compact and full modes", async () => {
+    const compact = makeRequest("run_command", "Run command: npm test");
+    const app1 = renderThemed(<PermissionPrompt request={compact.request} broker={brokerStub()} />);
+    await tick();
+    app1.stdin.write("\u001B");
+    await expect(compact.decided).resolves.toBe(false);
+    app1.unmount();
+
+    const full = makeRequest("edit_file", DIFF);
+    const app2 = renderThemed(<PermissionPrompt request={full.request} broker={brokerStub()} />);
+    await tick();
+    app2.stdin.write("\u001B");
+    await expect(full.decided).resolves.toBe(false);
+    app2.unmount();
+  });
+
+  it("compact MCP prompt still names the server and warns about external visibility", async () => {
+    const { request } = makeRequest("mcp_docs__fetch", "Parameters:\n  • query: \"anvil\"");
+    const app = renderThemed(<PermissionPrompt request={request} broker={brokerStub()} />);
+    await tick();
+    const out = frameText(app.lastFrame);
+    expect(out).toContain("[mcp:docs] fetch");
+    expect(out).toContain("visible to that server");
+    expect(out).toContain("allow");
+    expect(out).not.toContain("Allow once");
     app.unmount();
   });
 

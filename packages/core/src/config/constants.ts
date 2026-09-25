@@ -22,6 +22,25 @@ export const COMPACTION_THRESHOLD = Number(process.env.ANVIL_COMPACTION_THRESHOL
 export const KEEP_RECENT_MESSAGES = getEnvNumber("ANVIL_KEEP_RECENT_MESSAGES", 6);
 export const DEFAULT_MAX_TOKENS = 4096;
 
+// Streaming "thinking" indicator tick (Phase 28.4). One second is the smallest
+// interval that reads as a clock rather than a jitter, and it bounds the
+// re-render rate for a message that has no text yet.
+export const THINKING_TIMER_TICK_MS = 1000;
+
+// Animated wordmark (Phase 28.5) — boot-animation timing, ported from the
+// anvil-ui-demo prototype's literals, now named and centralised.
+export const WORDMARK_ANIM_DURATION_MS = 1800;
+/** Frame interval of the boot animation (20 fps for ~1.8s, then it stops). */
+export const WORDMARK_ANIM_FRAME_MS = 50;
+/** Delay before the dot of the "i" starts flashing. */
+export const WORDMARK_SPARK_DELAY_MS = 80;
+/** Delay before the letters begin to ignite, after the spark. */
+export const WORDMARK_LETTER_START_MS = 250;
+/** How long a pixel takes to cool from hottest to the ramp's base. */
+export const WORDMARK_COOL_DURATION_MS = 700;
+/** Per-cell radial delay — the ignition wave spreads this many ms per cell. */
+export const WORDMARK_RADIAL_CELL_MS = 30;
+
 // Token estimation. ~4 chars/token is right for ASCII source and prose, but a
 // wide-script character (CJK/Kana/Hangul) costs roughly a token BY ITSELF, so a
 // flat chars/4 under-counts those histories by ~4x and compaction fires far too

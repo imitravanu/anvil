@@ -4,6 +4,43 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Phase 28 visual identity, wave 1: thinking timer, animated wordmark, theme-selectable meters (2026-09-26)
+
+- **A blank turn now answers "is it working?" with a clock.** The static
+  `thinking…` is replaced by `✻ thinking 4s` (Phase 28.4): the timer starts at
+  mount and resets when text arrives *because the component unmounts* — the
+  structural guarantee is the test, not a reset branch. The `✻` (U+273B) falls
+  back to `*` under `ANVIL_ASCII=1`, and the 1s tick lives in
+  `config/constants.ts`, not in the component.
+- **The boot empty state is now an animated pixel wordmark** (Phase 28.5),
+  ported from the `anvil-ui-demo` prototype with one deliberate change: the
+  heat ramp is built from the *active theme's* tokens, so each of the six
+  themes ignites differently and the no-hardcoded-colours rule holds by
+  construction. Falls back to plain `anvil` under `NO_COLOR`, non-TTY, or
+  terminals below 34×16; `ANVIL_NO_ANIM=1` shows the settled wordmark at once;
+  resuming a session never animates; onboarding hints appear the moment the
+  wordmark settles. The ramp blend degrades to a flat step (never a crash) for
+  custom themes with named colours.
+- **Meters are theme-chrome, not a global constant** (Phase 28.6): a `thin`
+  rule-meter (`━━━───`) joins the block meter, selected via
+  `theme.chrome.meterStyle` — `forge` opts in, every other theme defaults to
+  block, custom themes may override (validated; absent means default so old
+  themes load unchanged), and the width-budgeting `gaugeDisplayText` goes
+  through the same `styledMeter` dispatch so text and pixels never disagree.
+- **Adopted work, honestly labelled.** This wave was found uncommitted after
+  its session stopped mid-phase without declaring ownership; it was verified
+  green against the full gate, completed per the roadmap protocol, and its
+  provenance is recorded in `PROGRESS.md` (2026-09-26). 28.8's
+  readable-text refinement has partial traces in this diff and **remains
+  open**; 28.7 is next per the sequencing rule.
+- New tests: `thinkingTimer.test.tsx` (5, incl. timer-drops-when-text-arrives
+  and pulse-vs-timer), `wordmark.test.tsx` (9, incl. all five fallback modes,
+  settle-exactly-once, six-theme ramp distinctness, resume-never-animates),
+  plus updated `gauge`/`permission`/`custom-theme`/visual suites. New visual
+  baseline `wordmark-settled.txt` pins the SHAPE — the harness is ANSI-free,
+  so the per-theme colour ramps are pinned by unit tests instead, which is why
+  one baseline serves all six themes.
+
 ### Session search: find the session you worked on X in (2026-09-23)
 
 - **`/session search <text>` searches saved transcripts.** Session titles default

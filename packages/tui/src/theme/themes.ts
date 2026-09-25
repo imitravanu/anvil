@@ -6,6 +6,8 @@
 // derived from them. Custom themes may override any semantic key, plus the
 // typography / spacing / borders / responsive sections (all defaulted).
 
+import type { MeterStyle } from "../util/chrome.js";
+
 export type LegacyColorKey =
   | "primary" | "userText" | "assistantText" | "toolName" | "toolRunning"
   | "toolDone" | "toolError" | "dim" | "border" | "accent" | "surface";
@@ -92,6 +94,7 @@ export interface Theme {
   spacing: ThemeSpacing;
   borders: ThemeBorders;
   responsive: ThemeResponsive;
+  chrome: ThemeChrome;
 }
 
 export const REQUIRED_COLOR_KEYS: readonly LegacyColorKey[] = [
@@ -128,6 +131,16 @@ export const DEFAULT_RESPONSIVE: ThemeResponsive = {
 };
 
 /**
+ * Meter/chrome preference. `MeterStyle` lives with the meter functions in
+ * util/chrome.ts; the theme only selects one.
+ */
+export interface ThemeChrome {
+  meterStyle: MeterStyle;
+}
+
+export const DEFAULT_CHROME: ThemeChrome = { meterStyle: "block" };
+
+/**
  * Build the full color record from legacy keys + optional semantic overrides.
  * Pure — the migration seam for old custom themes.
  */
@@ -145,7 +158,8 @@ export function resolveThemeColors(
 
 function makeTheme(
   legacy: Record<LegacyColorKey, string>,
-  overrides: Partial<Record<SemanticColorKey, string>> = {}
+  overrides: Partial<Record<SemanticColorKey, string>> = {},
+  chrome: ThemeChrome = DEFAULT_CHROME
 ): Theme {
   return {
     colors: resolveThemeColors(legacy, overrides),
@@ -153,6 +167,7 @@ function makeTheme(
     spacing: { ...DEFAULT_SPACING },
     borders: { ...DEFAULT_BORDERS },
     responsive: { ...DEFAULT_RESPONSIVE },
+    chrome: { ...chrome },
   };
 }
 
@@ -326,7 +341,9 @@ export const THEMES: Record<ThemeName, Theme> = {
       separator: "#3a3f47",
       diffAddBg: "#1b3322",
       diffDelBg: "#331b1b",
-    }
+    },
+    // forge prefers the quiet rule-meter to the blocky one.
+    { meterStyle: "thin" }
   ),
 };
 

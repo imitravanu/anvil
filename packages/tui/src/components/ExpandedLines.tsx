@@ -1,9 +1,11 @@
 import { Box, Text, useStdout } from "ink";
+import { useTheme } from "../theme/theme.js";
 import { curtail } from "../util/format.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
 
 /** Expanded body block shared by ToolCallView/SubAgentView. */
 export function ExpandedLines({ lines }: { lines: string[] }) {
+  const theme = useTheme();
   const { stdout } = useStdout();
   // A single 10 KB minified/JSON line counts as 1 capped line but renders as
   // ~125 visual rows and blows the fixed frame (the stacking-overlap bug).
@@ -13,7 +15,7 @@ export function ExpandedLines({ lines }: { lines: string[] }) {
   return (
     <Box paddingLeft={5} flexDirection="column">
       {lines.map((line, i) => (
-        <Text key={i} dimColor wrap="wrap">
+        <Text key={i} color={theme.colors.textSecondary} wrap="wrap">
           {curtail(sanitizeTerminalText(line), maxLen)}
         </Text>
       ))}

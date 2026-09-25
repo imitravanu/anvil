@@ -1,35 +1,59 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Box, Text, useStdout } from "ink";
 import { CORE_VERSION } from "@anvil/core";
 import type { DisplayMessage } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { MessageView } from "./MessageView.js";
+import { WordmarkAnimation, wordmarkMode } from "./Wordmark.js";
 import { displayModelLabel, providerLabel, providerOfModel } from "../util/format.js";
 import { hiddenMessageCount, applyTranscriptPin } from "../util/transcriptWindow.js";
 
 function EmptyState({ model }: { model: string }) {
   const theme = useTheme();
   const provider = providerOfModel(model);
+  const { stdout } = useStdout();
+  const [settled, setSettled] = useState(false);
+  // The mode decision is a pure function (see Wordmark.tsx) so every branch is
+  // testable without a TTY. Hooks stay above it: the order never varies.
+  const mode = wordmarkMode({
+    cols: stdout?.columns ?? 80,
+    rows: stdout?.rows ?? 24,
+    isTTY: stdout?.isTTY,
+    noColor: Boolean(process.env.NO_COLOR),
+    noAnim: process.env.ANVIL_NO_ANIM === "1",
+  });
+  // The hints ARE the onboarding contract, so they are never held back longer
+  // than the animation: a plain fallback shows them at once, and the animated
+  // path reveals them the moment the wordmark settles.
+  const showHints = mode !== "animate" || settled;
   return (
     <Box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1}>
-      <Text color={theme.colors.primary} bold>▲ ANVIL</Text>
-      <Text color={theme.colors.dim}>Terminal coding agent</Text>
-      <Text color={theme.colors.dim}>
-        {provider ? providerLabel(provider) : "Anvil"} · {displayModelLabel(model)}
-      </Text>
-      <Box marginTop={1} flexDirection="column">
-        <Text color={theme.colors.userText}>Just type a task — I can read, edit, and run code in this project.</Text>
-      </Box>
-      <Box marginTop={1} flexDirection="column">
-        <Text color={theme.colors.dim}>Try:</Text>
-        <Text><Text color={theme.colors.primary}>/help</Text><Text color={theme.colors.dim}> — list commands</Text></Text>
-        <Text><Text color={theme.colors.primary}>/model</Text><Text color={theme.colors.dim}> — switch model or provider</Text></Text>
-        <Text><Text color={theme.colors.primary}>/session</Text><Text color={theme.colors.dim}> — resume a past conversation</Text></Text>
-        <Text><Text color={theme.colors.primary}>/connect</Text><Text color={theme.colors.dim}> — add or update a provider API key</Text></Text>
-      </Box>
-      <Box marginTop={1}>
-        <Text color={theme.colors.dim}>v{CORE_VERSION}</Text>
-      </Box>
+      {mode === "plain" ? (
+        <Text color={theme.colors.primary} bold>anvil</Text>
+      ) : (
+        <WordmarkAnimation skipAnimation={mode === "static"} onSettled={() => setSettled(true)} />
+      )}
+      {showHints && (
+        <>
+          <Text color={theme.colors.textSecondary}>Terminal coding agent</Text>
+          <Text color={theme.colors.textSecondary}>
+            {provider ? providerLabel(provider) : "Anvil"} · {displayModelLabel(model)}
+          </Text>
+          <Box marginTop={1} flexDirection="column">
+            <Text color={theme.colors.userText}>Just type a task — I can read, edit, and run code in this project.</Text>
+          </Box>
+          <Box marginTop={1} flexDirection="column">
+            <Text color={theme.colors.textSecondary}>Try:</Text>
+            <Text><Text color={theme.colors.primary}>/help</Text><Text color={theme.colors.textSecondary}> — list commands</Text></Text>
+            <Text><Text color={theme.colors.primary}>/model</Text><Text color={theme.colors.textSecondary}> — switch model or provider</Text></Text>
+            <Text><Text color={theme.colors.primary}>/session</Text><Text color={theme.colors.textSecondary}> — resume a past conversation</Text></Text>
+            <Text><Text color={theme.colors.primary}>/connect</Text><Text color={theme.colors.textSecondary}> — add or update a provider API key</Text></Text>
+          </Box>
+          <Box marginTop={1}>
+            <Text color={theme.colors.textSecondary}>v{CORE_VERSION}</Text>
+          </Box>
+        </>
+      )}
     </Box>
   );
 }
@@ -85,7 +109,7 @@ export function MessageList({ messages, model, expandTools, pinnedBack }: { mess
     <Box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden" paddingX={1}>
       {hidden > 0 && start > 0 && (
         <Box flexShrink={0}>
-          <Text color={theme.colors.dim}>
+          <Text color={theme.colors.textSecondary}>
             … {start} earlier message{start === 1 ? "" : "s"} above — full history in the session file
           </Text>
         </Box>
@@ -106,7 +130,7 @@ export function MessageList({ messages, model, expandTools, pinnedBack }: { mess
       </Box>
       {pinned > 0 && (
         <Box flexShrink={0}>
-          <Text color={theme.colors.dim}>
+          <Text color={theme.colors.textSecondary}>
             ↓ {pinned} newer below — PgDn to follow
           </Text>
         </Box>
