@@ -2004,3 +2004,30 @@ duration + running/cancelled hiding + the width budget, a visual fixture with bo
 forms, and two core assertions (an executed call reports a number; an unknown tool reports none).
 `docs/PHASE-28-ROADMAP.md` progress line now reads 28.1–28.3 done, **next 28.4**.
 
+---
+
+## 2026-09-26 (3) — restore repairs an interrupted tool batch (Buffy)
+
+**Files owned (declared before editing):** `packages/core/src/agent/session.ts`,
+`packages/core/src/agent/__tests__/session.test.ts`, this file.
+**No protected artifact touched.**
+
+**The gap:** `repairUnclosedToolCalls` had exactly ONE production caller — the `catch` inside
+`send()`. The `if (restore)` branch built a `HistoryStore` and never repaired, so a session
+resumed from a save taken between an assistant `tool_call` and its results replayed an
+UNANSWERED tool_call on the first request. T6's property test did not catch this: it pins the
+store METHOD in isolation, not the session's restore wiring — which is exactly why the hole
+survived a green suite.
+
+**Fix:** repair in the restore branch, before the seed estimate counts the messages, so a resumed
+history is replayable before anything is sent. Idempotent, so a clean save is a no-op.
+
+**RED→GREEN:** the new test failed with `expected [] to deeply equal [ 'call-1' ]` when the repair
+call was removed, and passes with it. The existing "restores from a StoredSession" expectation
+(`getHistory()` deep-equals the stored history) still holds unchanged — the repair is a no-op for
+a history that ended on a normal turn, which is the property that makes it safe to run
+unconditionally.
+
+**Evidence:** full `npm run gate` green — Steps 0/0.5/1/1.5/2/3 PASSED; suites **cli 115, core
+757, tui 272 (1,144 total)**, 25/25 mock evals, exit 0.
+

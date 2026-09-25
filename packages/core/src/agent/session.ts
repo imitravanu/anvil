@@ -108,6 +108,12 @@ export class AgentSession {
     this.createdAt = restore?.metadata.createdAt ?? new Date().toISOString();
     if (restore) {
       this.history = new HistoryStore(restore.history);
+      // A session saved mid-batch (killed process) ends on an assistant message
+      // whose tool_calls were never answered. Left alone, the FIRST request
+      // replays an unanswered tool_call and the provider rejects the turn — so
+      // repair at the single owner of the pairing invariant, BEFORE the seed
+      // estimate below counts the messages. Idempotent: a no-op after a clean turn.
+      this.history.repairUnclosedToolCalls("session resumed after an interrupted turn");
       this.plan = restore.metadata.plan ?? null;
       this.ledger = new SessionLedger(restore.metadata.runLedger ?? []);
       // Proactive compaction seed: a resumed session has no measured usage,

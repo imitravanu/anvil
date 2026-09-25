@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { AgentSession, type AgentEvent, type AgentOptions } from "../index.js";
 import { FakeProvider, stalledStream, type ScriptEntry } from "./fakeProvider.js";
-import type { StreamEvent } from "../../providers/types.js";
+import type { ConversationMessage, StreamEvent } from "../../providers/types.js";
 
 let root: string;
 const never = new AbortController().signal;
@@ -276,6 +276,60 @@ describe("AgentSession.switchModel / clearHistory", () => {
     // Restored title is NOT overwritten by the next send
     await collect(resumed.send("another message"));
     expect(resumed.title).toBe("first message");
+  });
+});
+
+describe("AgentSession restore repairs an interrupted tool batch", () => {
+  it("answers dangling tool_calls before the first request, so replay stays valid", () => {
+    // What a killed process leaves behind: the assistant asked for a tool and the
+    // results never landed. Unrepaired, the FIRST send replays an unanswered
+    // tool_call and the provider rejects the turn.
+    const dangling: ConversationMessage[] = [
+      { role: "user", content: [{ type: "text", text: "read the file" }] },
+      {
+        role: "assistant",
+        content: [
+          { type: "tool_call", call: { id: "call-1", name: "read_file", input: { path: "a.txt" } } },
+        ],
+      },
+    ];
+    const provider = new FakeProvider([
+      [{ type: "text_delta", text: "ok" }, { type: "turn_end", stopReason: "end_turn" }],
+    ]);
+    const resumed = new AgentSession(
+      provider,
+      {
+        systemPrompt: "test",
+        model: "fake-model",
+        maxTokens: 1024,
+        projectRoot: root,
+        permissionBroker: { async requestPermission() { return true; } },
+      },
+      {
+        metadata: {
+          id: "restored-interrupted",
+          title: "interrupted",
+          providerId: "anthropic",
+          model: "fake-model",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        history: dangling,
+      }
+    );
+
+    type ToolResultPart = Extract<ConversationMessage["content"][number], { type: "tool_result" }>;
+    // Exactly one synthetic, error-marked result answers the dangling call...
+    const results = resumed
+      .getHistory()
+      .flatMap((m) => m.content)
+      .filter((c): c is ToolResultPart => c.type === "tool_result");
+    expect(results.map((c) => c.result.toolCallId)).toEqual(["call-1"]);
+    expect(results[0].result.isError).toBe(true);
+    // ...and the history no longer ends on an unanswered assistant tool call.
+    const last = resumed.getHistory().at(-1)!;
+    expect(last.role).toBe("assistant");
+    expect(last.content.some((c) => c.type === "tool_call")).toBe(false);
   });
 });
 
