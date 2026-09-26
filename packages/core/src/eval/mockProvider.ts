@@ -9,6 +9,7 @@ import path from "node:path";
  */
 export function createEvalMockProvider(task: EvalTask): ModelProvider {
   let turnCount = 0;
+  let callSeq = 0;
   return {
     id: "openai",
     displayName: "Anvil Eval Mock Provider",
@@ -45,7 +46,9 @@ export function createEvalMockProvider(task: EvalTask): ModelProvider {
         for (const { relPath, content } of expectedFiles) {
           const inputObj = { path: relPath, content };
 
-          const callId = `call_${Math.random().toString(36).slice(2, 9)}`;
+          // Deterministic (the docstring promises it): a counter, not
+          // Math.random(). Evals/CI compare runs, so ids must be reproducible.
+          const callId = `call_${++callSeq}`;
           yield {
             type: "tool_call_start",
             id: callId,

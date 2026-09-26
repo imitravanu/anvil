@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { resolveWithinRoot } from "../tools/paths.js";
+import { loadProjectMemory, buildSystemPromptWithMemory } from "./memory.js";
 
 export const MAX_RULES_BYTES = 16 * 1024; // 16 KB cap
 
@@ -65,8 +66,6 @@ export function loadProjectRules(projectRoot: string): ProjectRules | null {
 
   return null;
 }
-
-import { loadProjectMemory, buildSystemPromptWithMemory } from "./memory.js";
 
 /**
  * Injects project-specific rules and project memory into the base system prompt.

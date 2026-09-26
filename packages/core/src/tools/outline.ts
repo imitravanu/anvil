@@ -4,7 +4,9 @@ import path from "node:path";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 import { EXCLUDED_DIRS, resolveWithinRoot } from "./paths.js";
 
-const CODE_EXTENSIONS = new Set([
+// AUDIT-08: named distinctly from guardian/scanner.ts's own CODE_EXTENSIONS —
+// the two sets differ, and one shared name invited reading the wrong one.
+const OUTLINE_CODE_EXTENSIONS = new Set([
   ".ts",
   ".tsx",
   ".js",
@@ -260,7 +262,7 @@ async function collectFiles(targetAbs: string, projectRoot: string): Promise<str
         await walk(path.join(dir, e.name));
       } else if (e.isFile()) {
         const ext = path.extname(e.name);
-        if (CODE_EXTENSIONS.has(ext)) {
+        if (OUTLINE_CODE_EXTENSIONS.has(ext)) {
           results.push(path.join(dir, e.name));
           if (results.length >= MAX_OUTLINE_FILES) break;
         }

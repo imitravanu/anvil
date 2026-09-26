@@ -97,11 +97,6 @@ export function FirstRunSetup({
             // throw escapes as an uncaught exception and kills the process
             // mid-onboarding — so it is caught here and retried in place
             // (`saveSession` is wrapped the same way for the same reason).
-            // `saveCredential` writes to ~/.anvil and throws on a full disk or
-            // unwritable home. This runs inside an Ink input handler, where a
-            // throw escapes as an uncaught exception and kills the process
-            // mid-onboarding — so it is caught here and retried in place
-            // (`saveSession` is wrapped the same way for the same reason).
             try {
               saveCredential(provider.field, trimmed);
             } catch (err: unknown) {

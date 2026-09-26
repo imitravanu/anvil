@@ -17,6 +17,22 @@
 > (`npm test`, `npm run gate`, `fetch-depth: 0`) are all still present. No path
 > added/removed from the manifest. Gate run with `--ack-protected-change`;
 > committed with `--no-verify`.
+> **DONE 2026-09-27 (Buffy, audit task G — P3 sweep, part 1):** owns
+> `packages/core/src/eval/mockProvider.ts` (deterministic call ids, AUDIT-09),
+> `.env.example` (4 missing keys, AUDIT-10),
+> `packages/core/src/tools/outline.ts` + `packages/core/src/guardian/scanner.ts`
+> (distinct `CODE_EXTENSIONS` names, AUDIT-08),
+> `packages/cli/package.json` (drop the bogus `types`, AUDIT-07),
+> `packages/core/src/config/rules.ts` (import moved to top, AUDIT-12),
+> `packages/tui/src/components/FirstRunSetup.tsx` (duplicate comment removed,
+> AUDIT-14), `packages/cli/src/__tests__/docTruth.test.ts` (all three env-access
+> styles, AUDIT-13), `CHANGELOG.md`, plus this file.
+> **Deliberately DEFERRED: AUDIT-11** (caps outside `config/constants.ts`) — it
+> spans ~11 core modules and is a sweeping, low-value refactor; a chief-engineer
+> call to not ride a big churn along with small fixes. **AUDIT-06** (stale
+> "566 tests" in the hook header) is a PROTECTED artifact and needs the §3.4
+> path. **AUDIT-15/16** (rewind time, /retry images) follow in their own
+> commits. No protected artifact touched by this entry.
 > **DONE 2026-09-27 (Buffy, audit task F — certification verdicts that count):**
 > owns `packages/core/src/cert/runner.ts` (github cert model aligned to its
 > registry row; `setModelCertification`'s return is now checked and an

@@ -7,7 +7,6 @@
   "keywords": ["ai", "coding-agent", "terminal", "cli", "ink"],
   "type": "module",
   "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "bin": {
     "anvil": "bin/anvil.cjs"
   },

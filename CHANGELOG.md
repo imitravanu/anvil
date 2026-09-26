@@ -4,6 +4,25 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### P3 sweep: determinism, doc-truth, and consistency (AUDIT-07…14, 2026-09-27)
+
+- **`eval/mockProvider.ts` is deterministic again (AUDIT-09).** Its title
+  promised determinism while generating tool-call ids with `Math.random()`; ids
+  now come from a counter, so eval/CI runs are reproducible.
+- **`.env.example` documents every provider key core reads (AUDIT-10).**
+  `INCEPTION_API_KEY`, `QWENCLOUD_API_KEY`, `DASHSCOPE_API_KEY` (its alias), and
+  `GITHUB_API_KEY` were absent.
+- **The two core `CODE_EXTENSIONS` sets have distinct names (AUDIT-08)** —
+  `OUTLINE_CODE_EXTENSIONS` and `GUARDIAN_CODE_EXTENSIONS`; their contents
+  differ, so one shared name invited reading the wrong one.
+- **The CLI no longer declares `types: dist/index.d.ts` (AUDIT-07)** — a binary
+  package with no library entry was pointing at a 31-byte shebang file.
+- **`config/rules.ts` has its `memory.js` import at the top (AUDIT-12)**, and
+  `FirstRunSetup`'s 5-line comment is stated once instead of twice (AUDIT-14).
+- **docTruth sees all three env-access styles (AUDIT-13)** — `process.env.X`,
+  `process.env["X"]`, and `getEnv*("X")` — so a var read only through a helper
+  no longer reads as "never read".
+
 ### Certification can no longer pass with an unrecorded verdict (AUDIT-03, 2026-09-27)
 
 - **GitHub's cert model wasn't a registry row, so its 5/5 pass recorded

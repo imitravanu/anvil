@@ -115,7 +115,8 @@ function isCorePackageFile(file: string): boolean {
 }
 
 /** Source types the guardian scans — the same set the repo gate's PATHSPEC covers. */
-const CODE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
+// AUDIT-08: named distinctly from tools/outline.ts's own (different) set.
+const GUARDIAN_CODE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 
 /**
  * True only when the name carries a POSITIVELY non-code extension. A name with
@@ -126,7 +127,7 @@ const CODE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 function isNonCodePath(file: string): boolean {
   const match = /\.([A-Za-z0-9]+)$/.exec(file);
   if (match === null) return false;
-  return !CODE_EXTENSIONS.has(`.${match[1].toLowerCase()}`);
+  return !GUARDIAN_CODE_EXTENSIONS.has(`.${match[1].toLowerCase()}`);
 }
 
 /** Split patterns that span consecutive lines to evade single-line detection. */

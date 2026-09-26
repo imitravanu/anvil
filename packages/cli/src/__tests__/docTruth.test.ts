@@ -47,8 +47,17 @@ function coreEnvVars(): Set<string> {
         if (entry.name === "__tests__" || entry.name === "node_modules") continue;
         walk(full);
       } else if (entry.name.endsWith(".ts")) {
-        for (const m of fs.readFileSync(full, "utf-8").matchAll(/process\.env\.([A-Z][A-Z0-9_]*)/g)) {
-          names.add(m[1]!);
+        const source = fs.readFileSync(full, "utf-8");
+        // Three access styles core really uses. A single process.env.X regex
+        // silently missed the other two, so a documented var read only via a
+        // helper looked "never read" (AUDIT-13).
+        const patterns = [
+          /process\.env\.([A-Z][A-Z0-9_]*)/g,
+          /process\.env\[\s*["']([A-Z][A-Z0-9_]*)["']\s*\]/g,
+          /\bgetEnv[A-Za-z]*\(\s*["']([A-Z][A-Z0-9_]*)["']/g,
+        ];
+        for (const pattern of patterns) {
+          for (const m of source.matchAll(pattern)) names.add(m[1]!);
         }
       }
     }
