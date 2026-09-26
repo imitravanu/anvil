@@ -4,6 +4,18 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Packaging smoke test: the CLI is now proven to install and run (audit task A, 2026-09-27)
+
+- **A green gate is evidence about code, not that something ships.** The monorepo
+  hoists `node_modules`, so a bundle that imports an undeclared package still
+  builds and tests green — then dies on first import for anyone who is not this
+  repository (that exact defect shipped once). New `scripts/verify-package.mjs`
+  packs all three workspaces, installs **only** the CLI tarball into a throwaway
+  directory with no monorepo present, and runs the installed `anvil --version`.
+  Wired as `npm run verify:package` (builds first). It caught one real edge
+  immediately: bare `npm pack packages/core` is parsed by npm as a GitHub spec
+  and fails with a git error, so the script passes an explicit `./` path.
+
 ### `update_memory` now passes the permission gate (AUDIT-01, 2026-09-27)
 
 - **The one tool that wrote to the project without a prompt no longer does.**

@@ -20,6 +20,7 @@
     "certify:all": "bash scripts/certify-all.sh",
     "gate": "node scripts/verify-gate.mjs",
     "measure:startup": "node scripts/measure-startup.mjs",
+    "verify:package": "npm run build && node scripts/verify-package.mjs",
     "hooks:install": "git config core.hooksPath .githooks && chmod +x .githooks/pre-commit",
     "prepublishOnly": "npm run build"
   },

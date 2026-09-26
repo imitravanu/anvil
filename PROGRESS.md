@@ -5,6 +5,15 @@
 > **CLOSED 2026-09-27:** the ACTIVE claim below (OpenCode session, Phase 28.8–28.12)
 > is now fully discharged — 28.11 was committed (`25703e6`) and 28.12 was completed
 > by Buffy (next entry). No live claim remains; Phase 28 is closed out.
+> **DONE 2026-09-27 (Buffy, audit task A — packaging smoke test):** owns NEW
+> `scripts/verify-package.mjs` (packs all three workspaces, installs only the CLI
+> tarball into a temp dir with no monorepo, runs `anvil --version`), `package.json`
+> (new `verify:package` script = build + verify), `CHANGELOG.md`, plus this file.
+> Proves the §6 class ("the gate is evidence about code, not that something
+> ships") on a real clean install; documented that no production export is dead —
+> `verify:package` is the caller. Verified locally: packs core/tui/cli, installs
+> the CLI alone, the installed binary reports `anvil 1.1.0`. No protected artifact
+> touched by this entry (CI wiring is a separate, protected follow-up).
 > **DONE 2026-09-27 (Buffy, PROTECTED — AGENTS.md §3.3 Definition of Done):**
 > owns `AGENTS.md` (§3.3: added the "committed, or deliberately held with the
 > reason and the exact files recorded in PROGRESS.md before the turn ends"
