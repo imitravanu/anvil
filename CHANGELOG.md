@@ -4,6 +4,19 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Model metadata is now provider-qualified (AUDIT-02, 2026-09-27)
+
+- **The TUI no longer resolves a model by bare id.** A few ids exist under two
+  providers with divergent metadata — `gpt-4o-mini` is PAID on `openai` and FREE
+  on `github` — and every chrome surface resolved by bare id, so one screen could
+  render another provider's row (a free GitHub model reading as
+  `OpenAI · GPT-4o mini [PAID]` while the picker showed FREE). The helpers gained
+  an optional `providerId` and a new `modelInfo()`; Header, StatusBar, the empty
+  state, SessionPicker, and `/image`'s vision check now pass the session's
+  provider, which App threads through. Omitting it keeps the old first-match
+  behavior for free-form ids (OpenRouter-style) — a documented fallback, not an
+  accident.
+
 ### Packaging smoke test: the CLI is now proven to install and run (audit task A, 2026-09-27)
 
 - **A green gate is evidence about code, not that something ships.** The monorepo

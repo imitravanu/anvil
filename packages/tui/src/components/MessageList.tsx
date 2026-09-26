@@ -8,9 +8,9 @@ import { WordmarkAnimation, wordmarkMode } from "./Wordmark.js";
 import { displayModelLabel, providerLabel, providerOfModel } from "../util/format.js";
 import { hiddenMessageCount, applyTranscriptPin } from "../util/transcriptWindow.js";
 
-function EmptyState({ model }: { model: string }) {
+function EmptyState({ model, providerId }: { model: string; providerId?: string }) {
   const theme = useTheme();
-  const provider = providerOfModel(model);
+  const provider = providerOfModel(model, providerId);
   const { stdout } = useStdout();
   const [settled, setSettled] = useState(false);
   // The mode decision is a pure function (see Wordmark.tsx) so every branch is
@@ -37,7 +37,7 @@ function EmptyState({ model }: { model: string }) {
         <>
           <Text color={theme.colors.textSecondary}>Terminal coding agent</Text>
           <Text color={theme.colors.textSecondary}>
-            {provider ? providerLabel(provider) : "Anvil"} · {displayModelLabel(model)}
+            {provider ? providerLabel(provider) : "Anvil"} · {displayModelLabel(model, providerId)}
           </Text>
           <Box marginTop={1} flexDirection="column">
             <Text color={theme.colors.userText}>Just type a task — I can read, edit, and run code in this project.</Text>
@@ -58,7 +58,7 @@ function EmptyState({ model }: { model: string }) {
   );
 }
 
-export function MessageList({ messages, model, expandTools, pinnedBack }: { messages: DisplayMessage[]; model: string; expandTools?: boolean; pinnedBack?: number }) {
+export function MessageList({ messages, model, providerId, expandTools, pinnedBack }: { messages: DisplayMessage[]; model: string; providerId?: string; expandTools?: boolean; pinnedBack?: number }) {
   const theme = useTheme();
   const { stdout } = useStdout();
   const termRows = stdout?.rows ?? 24;
@@ -97,7 +97,7 @@ export function MessageList({ messages, model, expandTools, pinnedBack }: { mess
         overflow="hidden"
         justifyContent="center"
       >
-        <EmptyState model={model} />
+        <EmptyState model={model} providerId={providerId} />
       </Box>
     );
   }

@@ -309,6 +309,7 @@ export function App({
             each other's rows. */}
         <Header
           model={currentModel}
+          providerId={activeProviderId}
           isBusy={isBusy}
           context={situationalContext}
           sessionTitle={session.title}
@@ -318,7 +319,7 @@ export function App({
           <Divider />
         </Box>
         <Box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0}>
-          <MessageList messages={messages} model={currentModel} expandTools={expandTools} pinnedBack={transcriptPinned} />
+          <MessageList messages={messages} model={currentModel} providerId={activeProviderId} expandTools={expandTools} pinnedBack={transcriptPinned} />
         </Box>
         <Box flexShrink={0}>
           <Divider />
@@ -413,6 +414,7 @@ export function App({
         )}
         <StatusBar
           model={currentModel}
+          providerId={activeProviderId}
           isBusy={isBusy}
           usage={usage}
           checkpointCount={session.getCheckpoints().length}

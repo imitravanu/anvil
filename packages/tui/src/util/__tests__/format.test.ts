@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collapsePlan, curtail, displayModelLabel, formatCertificationBadge, formatDuration, formatTime, providerLabel, providerOfModel } from "../format.js";
+import { collapsePlan, curtail, displayModelLabel, formatCertificationBadge, formatDuration, formatTime, modelInfo, providerLabel, providerOfModel } from "../format.js";
 
 describe("format helpers", () => {
   it("displayModelLabel resolves a known registry model and falls back to the id", () => {
@@ -15,6 +15,25 @@ describe("format helpers", () => {
 
   it("providerOfModel returns the provider id of a known model", () => {
     expect(providerOfModel("gemini-3.6-flash")).toBe("gemini");
+  });
+
+  it("qualifies an ambiguous model id by provider (AUDIT-02)", () => {
+    // `gpt-4o-mini` is registered under TWO providers with divergent metadata
+    // (paid on openai, free on github). Resolving by bare id let the header
+    // render the wrong row — the picker says FREE, the chrome says [PAID].
+    expect(displayModelLabel("gpt-4o-mini", "github")).toBe("GPT-4o mini (via GitHub)");
+    expect(displayModelLabel("gpt-4o-mini", "openai")).toBe("GPT-4o mini");
+    expect(providerOfModel("gpt-4o-mini", "github")).toBe("github");
+    expect(providerOfModel("gpt-4o-mini", "openai")).toBe("openai");
+    expect(modelInfo("gpt-4o-mini", "github")?.isFree).toBe(true);
+    expect(modelInfo("gpt-4o-mini", "openai")?.isFree).toBe(false);
+  });
+
+  it("falls back to first-match for an id whose provider is unknown (free-form ids)", () => {
+    // OpenRouter-style ids are not enumerable; an unknown provider must not
+    // resolve to nothing — the documented fallback keeps the old behavior.
+    expect(modelInfo("gemini-3.6-flash", "not-a-provider")).toBeUndefined();
+    expect(displayModelLabel("totally-unknown-model", "github")).toBe("totally-unknown-model");
   });
 
   it("formatDuration switches unit at a second and renders nothing when unmeasured", () => {

@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 import { Box, Text, useStdout } from "ink";
-import { MODEL_REGISTRY, type SituationalContext } from "@anvil/core";
+import type { SituationalContext } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 import {
   curtail,
   displayModelLabel,
   displayWidth,
+  modelInfo,
   providerOfModel,
   providerLabel,
   formatPricingTag,
@@ -15,6 +16,8 @@ export interface HeaderProps {
   model: string;
   isBusy: boolean;
   context?: SituationalContext;
+  /** Provider the session runs on — qualifies ambiguous model ids (AUDIT-02). */
+  providerId?: string;
   /** Named/auto-titled session (Phase 28.9); null/empty means "unnamed". */
   sessionTitle?: string | null;
   /** Completed user turns this session; drives the tag's "N turns" segment. */
@@ -45,13 +48,15 @@ export function headerSessionPlan(
   return { showTitle, titleV, turnsSuffix };
 }
 
-export function Header({ model, isBusy, context, sessionTitle, turnCount }: HeaderProps) {
+export function Header({ model, isBusy, context, providerId, sessionTitle, turnCount }: HeaderProps) {
   const theme = useTheme();
   const { stdout } = useStdout();
   const width = stdout?.columns ?? 80;
-  const info = MODEL_REGISTRY.find((m) => m.id === model);
-  const provider = info ? providerLabel(providerOfModel(model) ?? info.providerId) : "Anvil";
-  const modelName = displayModelLabel(model);
+  // Provider-qualified (AUDIT-02): the same id under two providers must read
+  // ITS provider's row, so a free model can't render as [PAID].
+  const info = modelInfo(model, providerId);
+  const provider = info ? providerLabel(providerOfModel(model, providerId) ?? info.providerId) : "Anvil";
+  const modelName = displayModelLabel(model, providerId);
   const state = isBusy ? "busy" : "idle";
   const { showTitle, titleV, turnsSuffix } = headerSessionPlan(width, sessionTitle, turnCount);
   const fullTag = `${provider} · ${modelName}${formatPricingTag(info?.isFree)}${turnsSuffix} · ${state}`;

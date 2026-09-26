@@ -1,11 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import { MODEL_REGISTRY, getErrorMessage } from "@anvil/core";
+import { getErrorMessage } from "@anvil/core";
 import type { CommandHandlerDeps } from "../types.js";
 import { IMAGE_MAX_BYTES } from "../../util/displayLimits.js";
+import { modelInfo } from "../../util/format.js";
 
 export function handleAttachImage(deps: CommandHandlerDeps, rawPath: string): void {
-  const { isBusy, printSystemMessage, addPendingImage, currentModel } = deps;
+  const { isBusy, printSystemMessage, addPendingImage, currentModel, activeProviderId } = deps;
   if (isBusy) {
     printSystemMessage("Cannot attach images while a turn is in flight.");
     return;
@@ -48,7 +49,9 @@ export function handleAttachImage(deps: CommandHandlerDeps, rawPath: string): vo
       return;
     }
     addPendingImage({ mediaType, data: buf.toString("base64"), path: p });
-    const supportsVision = MODEL_REGISTRY.find((m) => m.id === currentModel)?.supportsVision;
+    // Provider-qualified (AUDIT-02): the vision flag must come from THIS
+    // provider's row, not another provider's same-named model.
+    const supportsVision = modelInfo(currentModel, activeProviderId)?.supportsVision;
     const note = supportsVision === false ? " (note: this model may not support vision)" : "";
     printSystemMessage(
       `Image attached (${Math.ceil(buf.length / 1024)} KB) — it sends with your next message.${note}`

@@ -1,10 +1,24 @@
-import { MODEL_REGISTRY } from "@anvil/core";
+import { getModel } from "@anvil/core";
 import { PROVIDER_LABELS } from "./labels.js";
 
+/**
+ * Registry row for a model id, QUALIFIED by provider when known.
+ *
+ * AUDIT-02: nearly every model id is unique, but a few exist under two
+ * providers with divergent metadata (`gpt-4o-mini` is PAID on `openai` and
+ * FREE on `github`). Resolving by bare id let one screen say [PAID] while the
+ * picker said FREE about the same model. Callers that know their provider MUST
+ * pass it; omitting it keeps the old first-match behavior for free-form ids
+ * (OpenRouter-style, which the registry cannot enumerate) — a documented
+ * fallback, not an accident.
+ */
+export function modelInfo(modelId: string, providerId?: string) {
+  return getModel(modelId, providerId);
+}
+
 /** Friendly display name for a model id; falls back to the raw id. */
-export function displayModelLabel(modelId: string): string {
-  const info = MODEL_REGISTRY.find((m) => m.id === modelId);
-  return info?.displayName ?? modelId;
+export function displayModelLabel(modelId: string, providerId?: string): string {
+  return modelInfo(modelId, providerId)?.displayName ?? modelId;
 }
 
 /** Friendly provider label for a provider id; falls back to the id. */
@@ -13,8 +27,8 @@ export function providerLabel(providerId: string): string {
 }
 
 /** Provider id for a model id (from the registry), if known. */
-export function providerOfModel(modelId: string): string | null {
-  return MODEL_REGISTRY.find((m) => m.id === modelId)?.providerId ?? null;
+export function providerOfModel(modelId: string, providerId?: string): string | null {
+  return modelInfo(modelId, providerId)?.providerId ?? null;
 }
 
 /**

@@ -1,9 +1,8 @@
 import { Box, Text, useStdout } from "ink";
-import { MODEL_REGISTRY } from "@anvil/core";
 import type { UsageTotals } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { breakpointForWidth } from "../hooks/useTerminalSize.js";
-import { curtail, displayModelLabel, displayWidth, formatPricingTag } from "../util/format.js";
+import { curtail, displayModelLabel, displayWidth, formatPricingTag, modelInfo } from "../util/format.js";
 import { brailleSparkline } from "../util/braille.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
 import { ContextGauge, gaugeDisplayText } from "./ContextGauge.js";
@@ -11,6 +10,8 @@ import { ContextGauge, gaugeDisplayText } from "./ContextGauge.js";
 export interface StatusBarProps {
   model: string;
   isBusy: boolean;
+  /** Provider the session runs on — qualifies ambiguous model ids (AUDIT-02). */
+  providerId?: string;
   usage: UsageTotals;
   checkpointCount?: number;
   testStatus?: "green" | "failed" | "running" | null;
@@ -23,6 +24,7 @@ const fmt = (n: number): string => n.toLocaleString("en-US");
 export function StatusBar({
   model,
   isBusy,
+  providerId,
   usage,
   checkpointCount,
   testStatus,
@@ -32,9 +34,11 @@ export function StatusBar({
   const { stdout } = useStdout();
   const width = stdout?.columns ?? 80;
   const busyFrame = useSpinnerFrame(isBusy);
-  const info = MODEL_REGISTRY.find((m) => m.id === model);
+  // Provider-qualified (AUDIT-02): a free model on one provider must not render
+  // its paid sibling's pricing/context window here.
+  const info = modelInfo(model, providerId);
 
-  const modelLabel = `${displayModelLabel(model)}${formatPricingTag(info?.isFree)}`;
+  const modelLabel = `${displayModelLabel(model, providerId)}${formatPricingTag(info?.isFree)}`;
   const state = isBusy ? (
     <>
       <Text color={theme.colors.accent}>{busyFrame}</Text> busy

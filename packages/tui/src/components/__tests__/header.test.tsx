@@ -72,6 +72,21 @@ describe("Header render at the harness width (100 columns)", () => {
     unmount();
   });
 
+  it("qualifies gpt-4o-mini by the session's provider (AUDIT-02)", () => {
+    const gh = renderThemed(<Header model="gpt-4o-mini" providerId="github" isBusy={false} context={CONTEXT} />);
+    const ghOut = frameText(gh.lastFrame);
+    gh.unmount();
+    expect(ghOut).toContain("GitHub");
+    expect(ghOut).toContain("GPT-4o mini (via GitHub)");
+    expect(ghOut).not.toContain("[PAID]");
+
+    const oa = renderThemed(<Header model="gpt-4o-mini" providerId="openai" isBusy={false} context={CONTEXT} />);
+    const oaOut = frameText(oa.lastFrame);
+    oa.unmount();
+    expect(oaOut).toContain("OpenAI");
+    expect(oaOut).not.toContain("via GitHub");
+  });
+
   it("renders the compact header without a context", () => {
     const { lastFrame, unmount } = renderThemed(
       <Header model="gpt-4o-mini" isBusy={false} sessionTitle="refactor auth" turnCount={7} />

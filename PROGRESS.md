@@ -17,6 +17,17 @@
 > (`npm test`, `npm run gate`, `fetch-depth: 0`) are all still present. No path
 > added/removed from the manifest. Gate run with `--ack-protected-change`;
 > committed with `--no-verify`.
+> **DONE 2026-09-27 (Buffy, audit task C — provider-qualified model metadata):**
+> owns `packages/tui/src/util/format.ts` (`modelInfo()` + optional `providerId`
+> on `displayModelLabel`/`providerOfModel`, now via core's `getModel`),
+> `components/{Header,StatusBar,MessageList,SessionPicker,App}.tsx`,
+> `commands/handlers/media.ts` (thread the session provider), and tests
+> `util/__tests__/format.test.ts` (+2), `components/__tests__/header.test.tsx`
+> (+1), `CHANGELOG.md`, plus this file. The audit named 5 bare-id sites; the
+> real count was 7 (also the empty state, SessionPicker, and the StatusBar
+> label), all fixed so the bug is not left half-fixed. Verified: `gpt-4o-mini`
+> resolves FREE on github and PAID on openai. TUI suite 326/326; typecheck
+> clean. No protected artifact touched.
 > **DONE 2026-09-27 (Buffy, audit task A — packaging smoke test):** owns NEW
 > `scripts/verify-package.mjs` (packs all three workspaces, installs only the CLI
 > tarball into a temp dir with no monorepo, runs `anvil --version`), `package.json`

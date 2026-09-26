@@ -75,7 +75,7 @@ export function SessionPicker({
             return (
               <Text key={meta.id} color={isSelected ? theme.colors.primary : theme.colors.userText}>
                 {isSelected ? "❯ " : "  "}
-                {curtail(meta.title, SESSION_TITLE_MAX)} · {displayModelLabel(meta.model)} · updated {relativeTime(meta.updatedAt)}
+                {curtail(meta.title, SESSION_TITLE_MAX)} · {displayModelLabel(meta.model, meta.providerId)} · updated {relativeTime(meta.updatedAt)}
               </Text>
             );
           })}
