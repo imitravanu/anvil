@@ -4,6 +4,15 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### `/retry` keeps the attachments of the turn it retries (AUDIT-16, 2026-09-27)
+
+- **An attached `/image` no longer vanishes when you retry.** `send` carries the
+  CURRENT pending-image set, which is empty during a retry, so retrying a turn
+  re-sent its text without its image. `/retry` now re-reads and re-stages the
+  last user turn's attachments first (reporting any it can no longer read), and
+  a shared `readImageForAttachment()` helper means `/image` and `/retry` cannot
+  drift on the size-before-read guard.
+
 ### The rewind modal's clock is locale-stable (AUDIT-15, 2026-09-27)
 
 - **`RewindModal` rendered checkpoint times with `toLocaleTimeString()`** — the

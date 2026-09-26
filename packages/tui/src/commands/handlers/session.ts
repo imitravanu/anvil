@@ -8,6 +8,7 @@ import {
 } from "@anvil/core";
 import type { CommandHandlerDeps } from "../types.js";
 import { curtail, relativeTime } from "../../util/format.js";
+import { readImageForAttachment } from "./media.js";
 import { SESSION_TITLE_MAX } from "../../util/displayLimits.js";
 
 export function handleClearHistory(deps: CommandHandlerDeps): void {
@@ -125,7 +126,7 @@ export function handleSessionRename(deps: CommandHandlerDeps, title: string): vo
 }
 
 export function handleRetryLast(deps: CommandHandlerDeps, replacement?: string): void {
-  const { isBusy, printSystemMessage, session, messages, replaceMessages, send } = deps;
+  const { isBusy, printSystemMessage, session, messages, replaceMessages, send, addPendingImage } = deps;
   if (isBusy) {
     printSystemMessage("Cannot retry while a turn is in flight.");
     return;
@@ -137,7 +138,25 @@ export function handleRetryLast(deps: CommandHandlerDeps, replacement?: string):
   }
   const text = replacement || previous || "";
   const lastUserIdx = messages.map((m) => m.role).lastIndexOf("user");
+  // AUDIT-16: the retried turn's image attachments must survive the retry.
+  // `send` carries only the CURRENT pending set (empty on retry), so an
+  // attached /image was silently lost. Re-stage them from the last user
+  // message before sending.
+  const lastUser = lastUserIdx >= 0 ? messages[lastUserIdx] : undefined;
+  let reattached = 0;
+  for (const img of lastUser?.images ?? []) {
+    const res = readImageForAttachment(img.path);
+    if (res.ok) {
+      addPendingImage({ mediaType: res.image.mediaType, data: res.image.data, path: res.image.path });
+      reattached++;
+    } else {
+      printSystemMessage(`Could not re-attach ${img.path}: ${res.error}`);
+    }
+  }
   replaceMessages(lastUserIdx > 0 ? messages.slice(0, lastUserIdx) : []);
-  printSystemMessage(replacement ? "Retrying with your corrected message." : "Retrying your last message.");
+  const attachNote = reattached > 0 ? ` Re-attached ${reattached} image${reattached === 1 ? "" : "s"}.` : "";
+  printSystemMessage(
+    (replacement ? "Retrying with your corrected message." : "Retrying your last message.") + attachNote
+  );
   void send(text);
 }

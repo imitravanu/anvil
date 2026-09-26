@@ -17,6 +17,13 @@
 > (`npm test`, `npm run gate`, `fetch-depth: 0`) are all still present. No path
 > added/removed from the manifest. Gate run with `--ack-protected-change`;
 > committed with `--no-verify`.
+> **DONE 2026-09-27 (Buffy, audit task G — P3 sweep, part 3 / AUDIT-16):** owns
+> `packages/tui/src/commands/handlers/media.ts` (extracted
+> `readImageForAttachment()` — the size-before-read guard now has ONE home),
+> `packages/tui/src/commands/handlers/session.ts` (`handleRetryLast` re-stages
+> the last user turn's images before `send`, reporting unreadable ones), NEW
+> `packages/tui/src/commands/handlers/__tests__/sessionRetry.test.ts` (3 tests),
+> `CHANGELOG.md`, plus this file. No protected artifact touched.
 > **DONE 2026-09-27 (Buffy, audit task G — P3 sweep, part 2 / AUDIT-15):** owns
 > `packages/tui/src/components/RewindModal.tsx` (uses `formatTime`, not
 > `toLocaleTimeString`), `packages/tui/src/__visual__/visual.test.tsx` and
