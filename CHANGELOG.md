@@ -66,6 +66,19 @@ All notable changes to Anvil are documented here. The format follows
   The formatter is a new shared `formatTokenCount()` — the context gauge's
   private copy of the same logic now imports it, so both displays always
   agree about the same number.
+- **Code blocks now carry their line numbers** (Phase 28.11): blocks from
+  three lines up render a right-aligned `textMuted` gutter (` 1 │ const x
+  = 42;`); one-liners and pairs stay clean. A fence anchor
+  (`typescript:src/auth.ts#L24`) starts numbering at the file's own line so
+  the gutter matches what the editor shows, and the head+tail window keeps
+  TRUE numbers — the tail of a 50-line block reads 48-50, not 1-3. The code
+  shrinks by exactly the gutter width, so a numbered block can never wrap
+  wider than the same block unnumbered. Fixing this also removed a
+  long-standing phantom `▎` line: the fence template's trailing newline
+  made every code block render one stray empty bar line — now guarded and
+  asserted. The `chat-exchange` visual baseline was regenerated via the
+  sanctioned `VISUAL_UPDATE=1` path; the diff shows the gutter arriving and
+  the phantom leaving.
 - **Adopted work, honestly labelled.** This wave was found uncommitted after
   its session stopped mid-phase without declaring ownership; it was verified
   green against the full gate, completed per the roadmap protocol, and its

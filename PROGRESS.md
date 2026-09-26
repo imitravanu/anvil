@@ -3,8 +3,20 @@
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
 > **ACTIVE 2026-09-26 (OpenCode chief-engineer session, Phase 28.8–28.12
-> completion):** owns the remaining Phase 28 tasks, in roadmap order: 28.11
-> (code-block line numbers), 28.12 (visual baseline refresh, LAST).
+> completion):** owns the remaining Phase 28 tasks, in roadmap order: 28.12
+> (visual baseline refresh, LAST).
+> **DONE 2026-09-26 (same session, 28.11 code-block line numbers):** owns
+> `packages/tui/src/markdown/MarkdownView.tsx` (gutter + `fenceStartLine` +
+> phantom-line fix), `packages/tui/src/util/displayLimits.ts`
+> (`CODE_NUMBER_MIN_LINES`), NEW
+> `packages/tui/src/markdown/__tests__/codeNumbers.test.tsx` (8 tests),
+> `packages/tui/__visual-baselines__/chat-exchange.txt` (sanctioned
+> VISUAL_UPDATE=1 regen — gutter arrives, phantom `▎` line leaves;
+> inspected in the commit diff), `docs/PHASE-28-ROADMAP.md`, `CHANGELOG.md`,
+> plus this file. Numbers from 3 lines up, right-aligned, `#L<N>` fence
+> anchors honored, true numbers across the head+tail window, code width
+> shrunk by the exact gutter. TUI suite 323/323; typecheck clean; full gate
+> green before commit. No protected artifact touched.
 > **DONE 2026-09-26 (same session, 28.10 per-turn token cost line):** owns
 > `packages/tui/src/hooks/eventReducer.ts` (DisplayMessage token fields +
 > usage-case accumulation), `packages/tui/src/components/MessageView.tsx`

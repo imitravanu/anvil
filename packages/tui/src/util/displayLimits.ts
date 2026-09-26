@@ -17,6 +17,10 @@ export const IMAGE_MAX_BYTES = 5 * 1024 * 1024; // /image attachment cap
 export const CODE_HEAD_LINES = 10;
 export const CODE_TAIL_LINES = 3;
 
+// 28.11: code blocks from this many lines get a line-number gutter. One-liners
+// and pairs stay clean — a gutter on a snippet costs more than it orients.
+export const CODE_NUMBER_MIN_LINES = 3;
+
 /**
  * Whether a markdown block gets a blank line above it. Paragraph-like blocks
  * (text, hr) stay tight under their neighbors; structural blocks breathe.

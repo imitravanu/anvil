@@ -9,10 +9,9 @@
  2. shutdown() — stops it gracefully
  3. reload() — hot reloads config
 
- ▎ export function boot(port: number): Server {
- ▎   return createServer({ port, tls: true });
- ▎ }
- ▎
+ ▎ 1 │ export function boot(port: number): Server {
+ ▎ 2 │   return createServer({ port, tls: true });
+ ▎ 3 │ }
 
  ▍ Note: reload() requires the config watcher to be enabled.
 

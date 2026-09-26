@@ -6,6 +6,7 @@ import { curtail, displayWidth } from "../util/format.js";
 import { wrapSpans } from "../util/wrapSpans.js";
 import {
   CODE_HEAD_LINES,
+  CODE_NUMBER_MIN_LINES,
   CODE_TAIL_LINES,
   markdownBlockSpaced,
 } from "../util/displayLimits.js";
@@ -37,6 +38,17 @@ function Spans({ spans }: { spans: MarkdownSpan[] }) {
 
 function plainText(spans: MarkdownSpan[]): string {
   return spans.map((s) => s.text).join("");
+}
+
+/**
+ * Parse a `#L<N>` anchor from a fence info string (`typescript:src/auth.ts#L24`).
+ * Returns 1 when absent or invalid — numbering must never start at 0 or from
+ * a nonsense anchor, because the whole point is matching the file on disk.
+ */
+export function fenceStartLine(fenceInfo: string): number {
+  const m = /#L(\d+)/.exec(fenceInfo);
+  const n = m ? Number(m[1]) : 1;
+  return Number.isSafeInteger(n) && n > 0 ? n : 1;
 }
 
 function TableView({ headers, rows }: { headers: MarkdownSpan[][]; rows: MarkdownSpan[][][] }) {
@@ -186,29 +198,55 @@ function renderBlock(
       // Curtail plain code lines BEFORE highlighting: a single minified
       // line would otherwise render as 100+ visual rows and stack the
       // frame. Curtailing post-highlight would slice ANSI sequences.
-      const all = block.code.split("\n").map((l) => curtail(l, maxCodeLen));
-      const highlight = (lines: string[]) =>
-        highlightCodeBlocks(`\`\`\`${block.language}\n${lines.join("\n")}\n\`\`\``).split("\n");
+      const raw = block.code.split("\n");
+      // 28.11: number real code from three lines up. A fence anchor
+      // (`js:src/auth.ts#L24`) starts numbering at the file's own line so
+      // the gutter matches what the user sees in their editor.
+      const startLine = fenceStartLine(block.language);
+      const numbered = raw.length >= CODE_NUMBER_MIN_LINES;
+      // Gutter = widest line number + " │ " (3 cells). The code shrinks by
+      // exactly the gutter, so a numbered block can never render wider
+      // than the same block unnumbered.
+      const numWidth = numbered ? String(startLine + raw.length - 1).length : 0;
+      const codeWidth = numbered ? Math.max(10, maxCodeLen - (numWidth + 3)) : maxCodeLen;
+      const all = raw.map((l) => curtail(l, codeWidth));
+      const highlight = (lines: string[]): string[] => {
+        const out = highlightCodeBlocks(`\`\`\`${block.language}\n${lines.join("\n")}\n\`\`\``).split("\n");
+        // The fence template always ends the captured code with "\n", so
+        // the split always manufactures ONE phantom trailing entry. Pop it —
+        // but only when it is genuinely extra, so a real empty last line of
+        // code survives (and keeps its number).
+        if (out.length > lines.length && out[out.length - 1] === "") out.pop();
+        return out;
+      };
       // Window long blocks head+tail; ANSI output splits safely on \n
-      // (escape sequences never contain a newline byte).
+      // (escape sequences never contain a newline byte). The gutter keeps
+      // the ORIGINAL numbers across the window — the tail of a 50-line
+      // block must read 48-50, not 1-3.
       // The `muted` flag marks the omitted-lines notice — readable, but the
       // quietest readable tier (textMuted), never decoration dim.
-      const segs: { text: string; muted?: boolean }[] =
-        all.length > CODE_HEAD_LINES + CODE_TAIL_LINES + 2
-          ? [
-              ...highlight(all.slice(0, CODE_HEAD_LINES)).map((text) => ({ text })),
-              {
-                text: `… ${all.length - CODE_HEAD_LINES - CODE_TAIL_LINES} lines omitted (${all.length} total — full block in the session file)`,
-                muted: true,
-              },
-              ...highlight(all.slice(-CODE_TAIL_LINES)).map((text) => ({ text })),
-            ]
-          : highlight(all).map((text) => ({ text }));
+      const windowed = raw.length > CODE_HEAD_LINES + CODE_TAIL_LINES + 2;
+      const segs: { text: string; muted?: boolean; line?: number }[] = windowed
+        ? [
+            ...highlight(all.slice(0, CODE_HEAD_LINES)).map((text, i) => ({ text, line: startLine + i })),
+            {
+              text: `… ${all.length - CODE_HEAD_LINES - CODE_TAIL_LINES} lines omitted (${all.length} total — full block in the session file)`,
+              muted: true,
+            },
+            ...highlight(all.slice(-CODE_TAIL_LINES)).map((text, i) => ({
+              text,
+              line: startLine + all.length - CODE_TAIL_LINES + i,
+            })),
+          ]
+        : highlight(all).map((text, i) => ({ text, line: startLine + i }));
+      const gutterText = (line: number | undefined): string =>
+        `${line === undefined ? " ".repeat(numWidth) : String(line).padStart(numWidth)} │ `;
       return (
         <Box flexDirection="column">
           {segs.map((s, j) => (
             <Text key={j}>
               <Text dimColor>▎ </Text>
+              {numbered && <Text color={theme.colors.textMuted}>{gutterText(s.line)}</Text>}
               <Text color={s.muted ? theme.colors.textMuted : undefined}>{s.text}</Text>
             </Text>
           ))}
