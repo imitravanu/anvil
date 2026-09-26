@@ -42,6 +42,13 @@ jobs:
       - name: Run provider certification gate
         run: npm run certify -- --mock --all
 
+      # AUDIT-04: the release path is the ONLY one that publishes, yet it ran
+      # build/typecheck/test/eval without the gate — so the integrity manifest
+      # (Step 0.5) and the slop/residual scans (Steps 1/1.5) were absent from
+      # the one path that ships. Run the full gate before any publish.
+      - name: Run Guardian Gate (integrity + anti-slop + quality)
+        run: npm run gate
+
       - name: Publish @anvil/core
         run: npm publish -w @anvil/core --access public
         env:

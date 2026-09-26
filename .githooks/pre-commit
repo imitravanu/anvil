@@ -9,9 +9,12 @@
 # `--no-verify` bypasses them by design — but the lazy attack class (staging a
 # weakened gate + re-hashed manifest) must be refused at commit time, loudly.
 #
-# The full auditability lives in `npm run gate` (build/typecheck/566 tests/
-# eval + manifest + residual scan) and in CI + PR review, which no local
+# The full auditability lives in `npm run gate` (build/typecheck/full test
+# suite/eval + manifest + residual scan) and in CI + PR review, which no local
 # process can skip. Install (per clone):  npm run hooks:install
+#
+# AUDIT-06: this header used to name a fixed test count ("566 tests") that
+# silently rotted as the suite grew. It now names the step, not a number.
 set -u
 
 # --- Layer A: protected-path tamper refusal (self-contained) ----------------

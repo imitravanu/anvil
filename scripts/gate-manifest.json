@@ -9,8 +9,8 @@
     "packages/cli/src/__tests__/gate.sentinel.test.ts": "e82d34d82b160ab75c562f18e0be516bc18880b0a739e736b92aa3f6e09d50bd",
     ".github/workflows/ci.yml": "dbaed623cb63ec1f3d65bb5620a98ebfac133adf7bcc269c38cbaa18445c6772",
     ".github/workflows/live-eval.yml": "b5c090ad8e1d7e7da759c7d177fdb96c11f151674cb734d827c3b9d5b7b578c8",
-    ".github/workflows/release.yml": "6a1fd17e62a7d73d2b44b3842079b92211890dd32238f3f751414835ae56296d",
+    ".github/workflows/release.yml": "ddb897809ca88f9a27e41120ce3a938ce081022fba5be3d979fd6312e2cecedc",
     ".github/workflows/visual-regression.yml": "19bcbfab770086b30e84ff0aff6f20f692396975b9b780de1743f3a9e04595df",
-    ".githooks/pre-commit": "b77d7bd1e76fb29a927d0b1514f29e7533458d51a0c49dea763a8e0aceff1db9"
+    ".githooks/pre-commit": "e3ccbf7e69e53b92ebce9d2130d84b33ee8ce28e67edc4b668be7da0a341e937"
   }
 }

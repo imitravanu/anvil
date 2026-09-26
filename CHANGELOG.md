@@ -4,6 +4,17 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### The release path runs the gate; the hook stops naming a test count (AUDIT-04/06, 2026-09-27)
+
+- **Publishing now runs the full gate.** `release.yml` ran build/typecheck/tests/
+  eval but never `npm run gate`, so the integrity manifest (Step 0.5) and the
+  slop/residual scans were missing from the one path that ships — the same
+  coverage hole CI had and release lacked. It now runs the gate before any
+  publish.
+- **The pre-commit hook's header no longer states a fixed test count** ("566
+  tests", long stale). It names the step — "full test suite" — so it cannot rot
+  again.
+
 ### `/retry` keeps the attachments of the turn it retries (AUDIT-16, 2026-09-27)
 
 - **An attached `/image` no longer vanishes when you retry.** `send` carries the

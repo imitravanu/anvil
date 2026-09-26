@@ -17,6 +17,18 @@
 > (`npm test`, `npm run gate`, `fetch-depth: 0`) are all still present. No path
 > added/removed from the manifest. Gate run with `--ack-protected-change`;
 > committed with `--no-verify`.
+> **DONE 2026-09-27 (Buffy, PROTECTED — audit task D + AUDIT-06):** owns
+> `.github/workflows/release.yml` (added a `npm run gate` step before any
+> publish — AUDIT-04/task D) and `.githooks/pre-commit` (header no longer names
+> a fixed test count that rots; says "full test suite" instead — AUDIT-06), plus
+> `scripts/gate-manifest.json` (both SHA-256s regenerated:
+> `6a1fd17e…`→`ddb89780…`, `b77d7bd1…`→`e3ccbf7e…`). **Declared per §3.4(a);
+> manifest regenerated in the same commit per §3.4(b); human review per
+> §3.4(c)** — the owner directed continuing the audit fix pass. release.yml:
+> one step added, no trigger/permission/secret changed. Hook: comment-only; the
+> five literals the sentinel asserts against it are all present, and it still
+> contains no `--ack-protected-change`. No manifest path added/removed. Gate run
+> with `--ack-protected-change`; committed with `--no-verify`.
 > **DONE 2026-09-27 (Buffy, audit task G — P3 sweep, part 3 / AUDIT-16):** owns
 > `packages/tui/src/commands/handlers/media.ts` (extracted
 > `readImageForAttachment()` — the size-before-read guard now has ONE home),
