@@ -4,6 +4,15 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### The rewind modal's clock is locale-stable (AUDIT-15, 2026-09-27)
+
+- **`RewindModal` rendered checkpoint times with `toLocaleTimeString()`** — the
+  locale API whose output format varies across machines, which is exactly what
+  `util/format.ts`'s `formatTime()` exists to avoid (its own comment says so).
+  It now uses `formatTime`, and both visual harnesses scrub the rendered HH:MM
+  value for timezone portability. The txt and 18 PNG `08-rewind-modal` baselines
+  were regenerated; the only visible change is `(HH:MM:SS PM)` → `(HH:MM)`.
+
 ### P3 sweep: determinism, doc-truth, and consistency (AUDIT-07…14, 2026-09-27)
 
 - **`eval/mockProvider.ts` is deterministic again (AUDIT-09).** Its title

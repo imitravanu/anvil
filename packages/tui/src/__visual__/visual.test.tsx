@@ -157,9 +157,11 @@ const CHECKPOINTS: CheckpointMeta[] = Array.from({ length: 5 }, (_, i) => ({
   skipped: 0,
 }));
 
-// Locale/TZ-independent: the rewind modal renders toLocaleTimeString, which
-// varies by environment — normalize it so the baseline is portable.
-const normalizeTimes = (frame: string): string => frame.replace(/\d{1,2}:\d{2}:\d{2}\s*(?:[APap][Mm])?/g, "HH:MM:SS PM");
+// TZ-independent: the rewind modal renders local HH:MM via formatTime (AUDIT-15),
+// whose VALUE varies by timezone — normalize the clock so the baseline is portable.
+// Format is now locale-stable (formatTime), so only the value needs scrubbing.
+const normalizeTimes = (frame: string): string =>
+  frame.replace(/\d{1,2}:\d{2}(?::\d{2})?\s*(?:[APap][Mm])?/g, "HH:MM");
 
 // --- Scenarios ---
 
@@ -279,15 +281,9 @@ describe("visual regression — TUI frames", () => {
 
   it("rewind modal — 5 checkpoints (times normalized)", () => {
     const stub = { getCheckpoints: () => CHECKPOINTS } as unknown as AgentSession;
-    const orig = Date.prototype.toLocaleTimeString;
-    Date.prototype.toLocaleTimeString = () => "12:34:56 PM";
-    try {
-      expectVisual(
-        normalizeTimes(renderFrame(<RewindModal session={stub} onSelect={() => undefined} onClose={() => undefined} />, DEFAULT_COLUMNS, DEFAULT_ROWS)),
-        "rewind-modal"
-      );
-    } finally {
-      Date.prototype.toLocaleTimeString = orig;
-    }
+    expectVisual(
+      normalizeTimes(renderFrame(<RewindModal session={stub} onSelect={() => undefined} onClose={() => undefined} />, DEFAULT_COLUMNS, DEFAULT_ROWS)),
+      "rewind-modal"
+    );
   });
 });

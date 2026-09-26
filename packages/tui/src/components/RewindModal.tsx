@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import type { AgentSession, CheckpointMeta } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
+import { formatTime } from "../util/format.js";
 
 export interface RewindModalProps {
   session: AgentSession;
@@ -88,7 +89,11 @@ export function RewindModal({ session, onSelect, onClose }: RewindModalProps) {
               {rows.map((cp: CheckpointMeta) => {
                 const idx = checkpoints.indexOf(cp);
                 const isSelected = idx === selectedIdx;
-                const timeStr = new Date(cp.ts).toLocaleTimeString();
+                // AUDIT-15: formatTime (manual HH:MM) instead of
+                // toLocaleTimeString — the locale API's output format varies
+                // across machines, which is exactly what format.ts exists to
+                // avoid (it made visual baselines flaky).
+                const timeStr = formatTime(new Date(cp.ts).getTime());
                 const fileText = `${cp.files} file${cp.files === 1 ? "" : "s"} snapshotted`;
 
                 return (

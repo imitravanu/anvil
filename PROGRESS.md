@@ -17,6 +17,14 @@
 > (`npm test`, `npm run gate`, `fetch-depth: 0`) are all still present. No path
 > added/removed from the manifest. Gate run with `--ack-protected-change`;
 > committed with `--no-verify`.
+> **DONE 2026-09-27 (Buffy, audit task G — P3 sweep, part 2 / AUDIT-15):** owns
+> `packages/tui/src/components/RewindModal.tsx` (uses `formatTime`, not
+> `toLocaleTimeString`), `packages/tui/src/__visual__/visual.test.tsx` and
+> `packages/tui/scripts/visual-capture.mjs` (both scrub the clock VALUE now that
+> the format is locale-stable), `packages/tui/__visual-baselines__/rewind-modal.txt`
+> (regen) + the 18 `08-rewind-modal.png` baselines (capture + promote), all via
+> the sanctioned paths, `CHANGELOG.md`, plus this file. `visual:diff` 144/144.
+> No protected artifact touched.
 > **DONE 2026-09-27 (Buffy, audit task G — P3 sweep, part 1):** owns
 > `packages/core/src/eval/mockProvider.ts` (deterministic call ids, AUDIT-09),
 > `.env.example` (4 missing keys, AUDIT-10),

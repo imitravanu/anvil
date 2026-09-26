@@ -131,7 +131,10 @@ const STUB_SESSION = {
   getCheckpoints: () => CHECKPOINTS,
 };
 
-const normalizeTimes = (frame) => frame.replace(/\d{1,2}:\d{2}:\d{2}/g, "HH:MM:SS");
+// AUDIT-15: RewindModal renders local HH:MM via formatTime, so only the clock
+// VALUE needs scrubbing (the format is already locale-stable).
+const normalizeTimes = (frame) =>
+  frame.replace(/\d{1,2}:\d{2}(?::\d{2})?\s*(?:[APap][Mm])?/g, "HH:MM");
 
 // --- Scenarios Factory ---
 
@@ -224,17 +227,10 @@ function renderInkFrame(element, cols, rows, theme) {
   stdout.write = (chunk) => {
     last = chunk;
   };
-  const origTime = Date.prototype.toLocaleTimeString;
-  Date.prototype.toLocaleTimeString = () => "12:34:56 PM";
-  let app;
-  try {
-    app = render(
-      React.createElement(ThemeContext.Provider, { value: theme }, element),
-      { stdout, debug: true, exitOnCtrlC: false, patchConsole: false }
-    );
-  } finally {
-    Date.prototype.toLocaleTimeString = origTime;
-  }
+  const app = render(
+    React.createElement(ThemeContext.Provider, { value: theme }, element),
+    { stdout, debug: true, exitOnCtrlC: false, patchConsole: false }
+  );
   const raw = last || "";
   app.unmount();
   app.cleanup?.();
