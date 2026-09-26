@@ -3,16 +3,21 @@
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
 > **ACTIVE 2026-09-26 (OpenCode chief-engineer session, Phase 28.8–28.12
-> completion):** owns the remaining Phase 28 tasks, in roadmap order: 28.8
-> (finish the muted-vs-dim pass across all components), 28.9 (header session
-> title + turn counter), 28.10 (per-turn token annotations under `/expand`),
-> 28.11 (code-block line numbers), 28.12 (visual baseline refresh, LAST).
-> Candidate files: `packages/tui/src/components/{DiffModal,ModelPicker,ToolCallView,Header,StatusBar,MessageView,MissionDeck,ExpandedLines,App}.tsx`,
-> `packages/tui/src/markdown/MarkdownView.tsx`, `packages/tui/src/hooks/useAgentController.ts`,
-> `packages/core/src/config/constants.ts` (new bounds only), matching
-> `__tests__` updates, `docs/PHASE-28-ROADMAP.md`, `CHANGELOG.md`, and this
-> file. Full gate green required after each task, before its commit. No
-> protected artifact touched.
+> completion):** owns the remaining Phase 28 tasks, in roadmap order: 28.9
+> (header session title + turn counter), 28.10 (per-turn token annotations
+> under `/expand`), 28.11 (code-block line numbers), 28.12 (visual baseline
+> refresh, LAST).
+> **DONE 2026-09-26 (same session, 28.8 muted-vs-dim pass):** owns
+> `packages/tui/src/components/{App,GuardianReportCard,VerificationCard,RewindModal,CommandPalette,SessionPicker,FirstRunSetup,DiffModal,ModelPicker,StatusBar,MissionDeck}.tsx`,
+> `packages/tui/src/markdown/MarkdownView.tsx`,
+> `packages/tui/src/diff/{SideBySideDiff,colorizeDiff}.tsx`,
+> NEW `packages/tui/src/theme/__tests__/dimContract.test.ts`,
+> `docs/PHASE-28-ROADMAP.md`, `CHANGELOG.md`, plus this file. Readable text
+> across all 16 surfaces moved to `textSecondary`/`textMuted`; `dim` is now
+> decoration-only (separators, rules, borders, strike, quote marker, code
+> bar), enforced by the source-level dim contract test. TUI suite 303/303
+> green including the new contract. Full `npm run gate` green before commit.
+> No protected artifact touched.
 >
 > **DONE 2026-09-26 (OpenCode chief-engineer session, Phase 28.4–28.6 adoption):**
 > owns the adopted orphaned working set of a prior session that stopped

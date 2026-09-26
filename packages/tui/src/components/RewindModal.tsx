@@ -49,9 +49,9 @@ export function RewindModal({ session, onSelect, onClose }: RewindModalProps) {
         <Text bold color={theme.colors.primary}>
           Time-Travel Checkpoint Rewind
         </Text>
-        <Text dimColor>No checkpoints recorded in this session yet.</Text>
+        <Text color={theme.colors.textSecondary}>No checkpoints recorded in this session yet.</Text>
         <Box marginTop={1}>
-          <Text dimColor>Press Esc to close.</Text>
+          <Text color={theme.colors.textSecondary}>Press Esc to close.</Text>
         </Box>
       </Box>
     );
@@ -72,7 +72,7 @@ export function RewindModal({ session, onSelect, onClose }: RewindModalProps) {
         <Text bold color={theme.colors.accent}>
           Time-Travel Checkpoint Rewind
         </Text>
-        <Text dimColor>↑/↓: navigate · Enter: restore · Esc: cancel</Text>
+        <Text color={theme.colors.textSecondary}>↑/↓: navigate · Enter: restore · Esc: cancel</Text>
       </Box>
 
       {/* Sliding window around the selection — a long session must not make
@@ -84,7 +84,7 @@ export function RewindModal({ session, onSelect, onClose }: RewindModalProps) {
           const rows = checkpoints.slice(start, start + windowSize);
           return (
             <>
-              {start > 0 && <Text dimColor>  … {start} older checkpoint{start === 1 ? "" : "s"}</Text>}
+              {start > 0 && <Text color={theme.colors.textSecondary}>  … {start} older checkpoint{start === 1 ? "" : "s"}</Text>}
               {rows.map((cp: CheckpointMeta) => {
                 const idx = checkpoints.indexOf(cp);
                 const isSelected = idx === selectedIdx;
@@ -97,7 +97,7 @@ export function RewindModal({ session, onSelect, onClose }: RewindModalProps) {
                       {isSelected ? "❯ " : "  "}
                       #{cp.id}
                     </Text>
-                    <Text color={theme.colors.dim}>({timeStr})</Text>
+                    <Text color={theme.colors.textMuted}>({timeStr})</Text>
                     <Text color={isSelected ? theme.colors.assistantText : theme.colors.userText}>
                       {fileText}
                     </Text>
@@ -110,7 +110,7 @@ export function RewindModal({ session, onSelect, onClose }: RewindModalProps) {
                 );
               })}
               {start + rows.length < checkpoints.length && (
-                <Text dimColor>
+                <Text color={theme.colors.textSecondary}>
                   … {checkpoints.length - start - rows.length} newer checkpoint{checkpoints.length - start - rows.length === 1 ? "" : "s"}
                 </Text>
               )}

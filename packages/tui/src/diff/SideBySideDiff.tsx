@@ -64,9 +64,9 @@ export function SideBySideDiff({
         const key = `${i}`;
         if (row.kind === "banner") {
           const color =
-            row.tone === "hunk" ? theme.colors.accent : undefined;
+            row.tone === "hunk" ? theme.colors.accent : theme.colors.textSecondary;
           return (
-            <Text key={key} dimColor={row.tone !== "hunk"} color={color}>
+            <Text key={key} color={color}>
               {curtail(row.text, colWidth * 2)}
             </Text>
           );
@@ -80,18 +80,18 @@ export function SideBySideDiff({
         return (
           <Box key={key} flexShrink={0}>
             <Box width={colWidth} flexShrink={0}>
-              <Text dimColor backgroundColor={leftBg}>{leftNo} </Text>
+              <Text color={theme.colors.textMuted} backgroundColor={leftBg}>{leftNo} </Text>
               <Text color={cellColor(row.left.tone)} backgroundColor={leftBg}>{curtail(row.left.text, textWidth)}</Text>
             </Box>
             <Text color={theme.colors.separator}> │ </Text>
             <Box width={colWidth} flexShrink={0}>
-              <Text dimColor backgroundColor={rightBg}>{rightNo} </Text>
+              <Text color={theme.colors.textMuted} backgroundColor={rightBg}>{rightNo} </Text>
               <Text color={cellColor(row.right.tone)} backgroundColor={rightBg}>{curtail(row.right.text, textWidth)}</Text>
             </Box>
           </Box>
         );
       })}
-      {omitted > 0 && <Text dimColor>… {omitted} more diff row(s) omitted</Text>}
+      {omitted > 0 && <Text color={theme.colors.textSecondary}>… {omitted} more diff row(s) omitted</Text>}
     </Box>
   );
 }

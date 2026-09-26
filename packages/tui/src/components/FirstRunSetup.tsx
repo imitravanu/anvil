@@ -51,7 +51,7 @@ export function FirstRunSetup({
     return (
       <Box flexDirection="column" flexShrink={0} paddingX={1}>
         <Text color={theme.colors.primary}>{title}</Text>
-        <Text dimColor>Step 1 of 2 — choose a provider, Enter to continue{onCancel ? ", Esc to cancel" : ""}:</Text>
+        <Text color={theme.colors.textSecondary}>Step 1 of 2 — choose a provider, Enter to continue{onCancel ? ", Esc to cancel" : ""}:</Text>
         {PROVIDERS.map((p, i) => (
           <Text key={p.id} color={i === selected ? theme.colors.primary : undefined}>
             {i === selected ? "❯ " : "  "}
@@ -65,7 +65,7 @@ export function FirstRunSetup({
   if (step === "key") {
     return (
       <Box flexDirection="column" flexShrink={0} paddingX={1}>
-        <Text dimColor>Step 2 of 2 — paste the key (↑/↓ won't work here)</Text>
+        <Text color={theme.colors.textSecondary}>Step 2 of 2 — paste the key (↑/↓ won't work here)</Text>
         <Text color={theme.colors.primary}>
           Paste your {provider.marketLabel} API key (input is hidden):
         </Text>
@@ -120,7 +120,7 @@ export function FirstRunSetup({
   return (
     <Box flexDirection="column" flexShrink={0} paddingX={1}>
       <Text color={theme.colors.toolDone}>✓ {provider.marketLabel} API key saved.</Text>
-      <Text dimColor>Add more providers or press Enter to continue.</Text>
+      <Text color={theme.colors.textSecondary}>Add more providers or press Enter to continue.</Text>
     </Box>
   );
 }

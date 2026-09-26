@@ -71,7 +71,7 @@ export function MissionDeck({ goal, plan, isBusy = false }: MissionDeckProps) {
               ? theme.colors.toolRunning
               : isFailed
                 ? theme.colors.toolError
-                : theme.colors.dim;
+                : theme.colors.textSecondary;
 
           return (
             <Box key={m.id} paddingLeft={1} gap={1}>

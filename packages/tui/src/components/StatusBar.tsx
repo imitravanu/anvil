@@ -101,7 +101,7 @@ export function StatusBar({
         <Text>
           {sep}
           <ContextGauge inputTokens={usage.inputTokens} contextWindow={info?.contextWindow} width={width} />
-          {spark && <Text color={theme.colors.dim}>{sparkPlain}</Text>}
+          {spark && <Text color={theme.colors.textSecondary}>{sparkPlain}</Text>}
         </Text>
       )}{" "}
       <Text color={theme.colors.dim}>│</Text> {tokensShown}

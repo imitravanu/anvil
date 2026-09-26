@@ -83,7 +83,7 @@ export function ColorizedDiff({
         const key = `${i}`;
         if (row.kind === "file") {
           return (
-            <Text key={key} dimColor bold>
+            <Text key={key} color={theme.colors.textSecondary} bold>
               {curtail(row.text, maxText)}
             </Text>
           );
@@ -97,14 +97,14 @@ export function ColorizedDiff({
         }
         if (row.kind === "meta") {
           return (
-            <Text key={key} dimColor>
+            <Text key={key} color={theme.colors.textSecondary}>
               {curtail(row.text, maxText)}
             </Text>
           );
         }
         if (row.kind === "context") {
           return (
-            <Text key={key} dimColor>
+            <Text key={key} color={theme.colors.textSecondary}>
               {gutter(row)}
               {curtail(row.text, maxText)}
             </Text>
@@ -125,7 +125,7 @@ export function ColorizedDiff({
             <Text color={base} bold>
               {sign}
             </Text>
-            <Text dimColor>{gutter(row)}</Text>
+            <Text color={theme.colors.textMuted}>{gutter(row)}</Text>
             {useWords ? (
               <WordText segs={segs} base={base} />
             ) : (
@@ -134,7 +134,7 @@ export function ColorizedDiff({
           </Text>
         );
       })}
-      {omitted > 0 && <Text dimColor>… {omitted} more diff line(s) omitted</Text>}
+      {omitted > 0 && <Text color={theme.colors.textSecondary}>… {omitted} more diff line(s) omitted</Text>}
     </Box>
   );
 }

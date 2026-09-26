@@ -23,7 +23,7 @@ function Spans({ spans }: { spans: MarkdownSpan[] }) {
           color={s.code ? theme.colors.toolName : undefined}
         >
           {s.text}
-          {s.linkN != null && <Text dimColor> [{s.linkN}]</Text>}
+          {s.linkN != null && <Text color={theme.colors.textMuted}> [{s.linkN}]</Text>}
         </Text>
       ))}
     </>
@@ -157,8 +157,11 @@ function renderBlock(
     }
     case "quote":
       return (
-        <Text dimColor>
-          {"▍".repeat(Math.min(block.depth, 3))} <Spans spans={block.spans} />
+        // 28.8: the marker is decoration (dim); the quoted words are readable
+        // text and must sit in the text tier, not decoration dim.
+        <Text color={theme.colors.textSecondary}>
+          <Text color={theme.colors.dim}>{"▍".repeat(Math.min(block.depth, 3))} </Text>
+          <Spans spans={block.spans} />
         </Text>
       );
     case "hr":
@@ -173,7 +176,7 @@ function renderBlock(
       return (
         <Box flexDirection="column">
           {block.links.map((l) => (
-            <Text key={l.n} dimColor>
+            <Text key={l.n} color={theme.colors.textSecondary}>
               [{l.n}] {l.text !== l.url ? `${l.text} → ` : ""}{l.url}
             </Text>
           ))}
@@ -188,13 +191,15 @@ function renderBlock(
         highlightCodeBlocks(`\`\`\`${block.language}\n${lines.join("\n")}\n\`\`\``).split("\n");
       // Window long blocks head+tail; ANSI output splits safely on \n
       // (escape sequences never contain a newline byte).
-      const segs: { text: string; dim?: boolean }[] =
+      // The `muted` flag marks the omitted-lines notice — readable, but the
+      // quietest readable tier (textMuted), never decoration dim.
+      const segs: { text: string; muted?: boolean }[] =
         all.length > CODE_HEAD_LINES + CODE_TAIL_LINES + 2
           ? [
               ...highlight(all.slice(0, CODE_HEAD_LINES)).map((text) => ({ text })),
               {
                 text: `… ${all.length - CODE_HEAD_LINES - CODE_TAIL_LINES} lines omitted (${all.length} total — full block in the session file)`,
-                dim: true,
+                muted: true,
               },
               ...highlight(all.slice(-CODE_TAIL_LINES)).map((text) => ({ text })),
             ]
@@ -204,7 +209,7 @@ function renderBlock(
           {segs.map((s, j) => (
             <Text key={j}>
               <Text dimColor>▎ </Text>
-              <Text dimColor={s.dim || undefined}>{s.text}</Text>
+              <Text color={s.muted ? theme.colors.textMuted : undefined}>{s.text}</Text>
             </Text>
           ))}
         </Box>

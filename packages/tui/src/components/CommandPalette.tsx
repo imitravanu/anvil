@@ -31,16 +31,16 @@ export function CommandPalette({
       paddingX={1}
     >
       {matches.length === 0 ? (
-        <Text color={theme.colors.dim}>No matching commands.</Text>
+        <Text color={theme.colors.textSecondary}>No matching commands.</Text>
       ) : (
         matches.map((command, i) => (
           <Text key={command.name}>
-            <Text color={i === highlight ? theme.colors.brand : theme.colors.dim}>
+            <Text color={i === highlight ? theme.colors.brand : theme.colors.textSecondary}>
               {i === highlight ? "❯ " : "  "}
             </Text>
             <Text color={theme.colors.accent}>{commandIcon(command.name)} </Text>
             <Text color={theme.colors.toolName}>/{command.name}</Text>
-            <Text color={i === highlight ? theme.colors.userText : theme.colors.dim}>
+            <Text color={i === highlight ? theme.colors.userText : theme.colors.textSecondary}>
               {" — "}
               {command.description}
             </Text>
@@ -50,7 +50,7 @@ export function CommandPalette({
           </Text>
         ))
       )}
-      <Text dimColor> ↑/↓ navigate · Enter run · Esc close · Tab fill</Text>
+      <Text color={theme.colors.textSecondary}> ↑/↓ navigate · Enter run · Esc close · Tab fill</Text>
     </Box>
   );
 }

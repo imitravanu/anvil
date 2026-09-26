@@ -140,7 +140,7 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
         </Text>
         <Text color={theme.colors.toolError}>Failed to compute the session diff: {error}</Text>
         <Box marginTop={1}>
-          <Text dimColor>Press Esc to close.</Text>
+          <Text color={theme.colors.textSecondary}>Press Esc to close.</Text>
         </Box>
       </Box>
     );
@@ -161,7 +161,7 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
           <Text bold color={theme.colors.primary}>
             Branch Diff ({branchDiff.branch}...HEAD)
           </Text>
-          <Text dimColor>S: side-by-side · C: copy · Esc / q: close</Text>
+          <Text color={theme.colors.textSecondary}>S: side-by-side · C: copy · Esc / q: close</Text>
         </Box>
         <Box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} marginY={1} overflow="hidden">
           {hasContent ? (
@@ -175,7 +175,7 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
               />
             )
           ) : (
-            <Text dimColor italic>
+            <Text color={theme.colors.textSecondary} italic>
               No differences between branch &quot;{branchDiff.branch}&quot; and HEAD.
             </Text>
           )}
@@ -196,10 +196,10 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
         <Text bold color={theme.colors.primary}>
           Diff Inspector
         </Text>
-        <Text dimColor>No files modified in this session yet.</Text>
+        <Text color={theme.colors.textSecondary}>No files modified in this session yet.</Text>
         {coverageWarning && <Text color={theme.colors.accent}>⚠ {coverageWarning}</Text>}
         <Box marginTop={1}>
-          <Text dimColor>Press Esc to close.</Text>
+          <Text color={theme.colors.textSecondary}>Press Esc to close.</Text>
         </Box>
       </Box>
     );
@@ -230,7 +230,7 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
         <Text bold color={theme.colors.primary}>
           Diff Inspector ({activeIdx + 1}/{changes.length} files)
         </Text>
-        <Text dimColor>Tab / Left / Right: switch file · S: side-by-side · C: copy · Esc: close</Text>
+        <Text color={theme.colors.textSecondary}>Tab / Left / Right: switch file · S: side-by-side · C: copy · Esc: close</Text>
       </Box>
       {copiedNote && (
         <Box flexShrink={0} paddingX={1}>
@@ -245,15 +245,14 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
 
       {/* File Tabs */}
       <Box flexShrink={0} marginY={1} gap={1} width={tabsWidth} overflow="hidden">
-        {start > 0 && <Text dimColor>…</Text>}
+        {start > 0 && <Text color={theme.colors.textSecondary}>…</Text>}
         {tabs.map((c: SessionFileChange) => {
           const i = changes.indexOf(c);
           return (
             <Text
               key={c.path}
               bold={i === activeIdx}
-              color={i === activeIdx ? theme.colors.accent : undefined}
-              dimColor={i !== activeIdx}
+              color={i === activeIdx ? theme.colors.accent : theme.colors.textSecondary}
               inverse={i === activeIdx}
             >
               {" "}
@@ -261,14 +260,14 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
             </Text>
           );
         })}
-        {start + tabCount < changes.length && <Text dimColor>…</Text>}
+        {start + tabCount < changes.length && <Text color={theme.colors.textSecondary}>…</Text>}
       </Box>
 
       <Box justifyContent="space-between" flexShrink={0} paddingX={1}>
         <Text bold color={theme.colors.assistantText}>
           {curtail(activeFile.path, Math.max(20, termWidth - 20))}
         </Text>
-        <Text dimColor>{kindBadge}</Text>
+        <Text color={theme.colors.textSecondary}>{kindBadge}</Text>
       </Box>
 
       {/* Diff Content — the only scrolling region; clipped, never overflowing
@@ -281,7 +280,7 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
             <ColorizedDiff diff={activeFile.diff} maxRows={Math.max(3, height - 9)} maxText={Math.max(20, termWidth - 10)} />
           )
         ) : (
-          <Text dimColor italic>
+          <Text color={theme.colors.textSecondary} italic>
             (Empty or deleted file)
           </Text>
         )}

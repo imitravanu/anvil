@@ -198,7 +198,7 @@ export function ModelPicker({
 
     if (!row.enabled) {
       return (
-        <Text key={row.model.id} color={theme.colors.dim}>
+        <Text key={row.model.id} color={theme.colors.textSecondary}>
           {marker}
           {row.model.displayName}
           {windowSuffix}
@@ -216,17 +216,17 @@ export function ModelPicker({
         {kind === "free" ? (
           <Text color={theme.colors.toolDone} bold> [FREE]</Text>
         ) : kind === "paid" ? (
-          <Text color={theme.colors.dim}> [PAID]</Text>
+          <Text color={theme.colors.textSecondary}> [PAID]</Text>
         ) : null}
         {certBadge === "live" ? (
           // A mock pass is real but weaker — dim it, don't dress it as a probe.
-          <Text color={row.model.certifiedMode === "live" ? theme.colors.toolDone : theme.colors.dim}>
+          <Text color={row.model.certifiedMode === "live" ? theme.colors.toolDone : theme.colors.textSecondary}>
             {certLabel}
           </Text>
         ) : certBadge === "broken" ? (
           <Text color={theme.colors.toolError}>{certLabel}</Text>
         ) : certBadge === "untested" ? (
-          <Text color={theme.colors.dim}>{certLabel}</Text>
+          <Text color={theme.colors.textSecondary}>{certLabel}</Text>
         ) : null}
 
         {limited ? <Text color={theme.colors.toolRunning}> [rate-limited]</Text> : null}
@@ -267,25 +267,25 @@ export function ModelPicker({
           : "No models match the filter — backspace to clear it, Esc to cancel"}
       </Text>
       {filter && (
-        <Text dimColor>
+        <Text color={theme.colors.textSecondary}>
           filter: <Text color={theme.colors.toolName}>{filter}</Text> — Backspace to erase, Esc to clear
         </Text>
       )}
-      {cacheNote && <Text dimColor>⚠ {cacheNote}</Text>}
+      {cacheNote && <Text color={theme.colors.textSecondary}>⚠ {cacheNote}</Text>}
       {hasAbove && (
-        <Text dimColor>  ▲ {scrollOffset} more above...</Text>
+        <Text color={theme.colors.textSecondary}>  ▲ {scrollOffset} more above...</Text>
       )}
       {grouped.map((section) => (
         <Box key={section.key} flexDirection="column">
-          <Text dimColor>─ {section.header} ─</Text>
+          <Text color={theme.colors.textSecondary}>─ {section.header} ─</Text>
           {section.rows.map(renderRow)}
         </Box>
       ))}
       {hasBelow && (
-        <Text dimColor>  ▼ {ordered.length - (scrollOffset + MAX_VISIBLE)} more below...</Text>
+        <Text color={theme.colors.textSecondary}>  ▼ {ordered.length - (scrollOffset + MAX_VISIBLE)} more below...</Text>
       )}
       {/* DW-2.5 footer hints — the keyboard contract, always visible. */}
-      <Text dimColor> ↑/↓ navigate · Enter select · Esc cancel · type to filter</Text>
+      <Text color={theme.colors.textSecondary}> ↑/↓ navigate · Enter select · Esc cancel · type to filter</Text>
     </Box>
   );
 }

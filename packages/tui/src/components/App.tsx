@@ -160,6 +160,8 @@ export function App({
   // Theme active before the picker started previewing — previews mutate
   // themeName, so Esc-restore needs a value captured at open time.
   const themeBeforePicker = useRef(initialTheme);
+  // 28.8: App-level readable notices use the text tier, never decoration dim.
+  const theme = useTheme();
   useEffect(() => {
     if (!isThemePickerOpen) themeBeforePicker.current = themeName;
   }, [isThemePickerOpen, themeName]);
@@ -315,7 +317,7 @@ export function App({
         <MissionDeck goal={goal} plan={plan} isBusy={isBusy} />
         {queued.length > 0 && (
           <Box flexShrink={0} paddingX={2}>
-            <Text dimColor>
+            <Text color={theme.colors.textSecondary}>
               ⏳ {queued.length} message{queued.length === 1 ? "" : "s"} queued — sends when the current turn finishes
             </Text>
           </Box>

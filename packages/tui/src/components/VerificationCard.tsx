@@ -46,14 +46,14 @@ export function VerificationCard({ verification }: { verification: DisplayVerifi
         {/* The command shares the title row (space-between) — an uncurtailed
             long command wraps and grows the fixed-feel card. Verification
             summaries quote test-runner output (\r progress lines, ANSI). */}
-        <Text dimColor>
+        <Text color={theme.colors.textSecondary}>
           cmd: {curtail(sanitizeTerminalText(verification.command), Math.max(10, width - 46))}
         </Text>
       </Box>
 
       {verification.summary && (
         <Box paddingLeft={3}>
-          <Text dimColor>{curtail(sanitizeTerminalText(verification.summary), 120)}</Text>
+          <Text color={theme.colors.textSecondary}>{curtail(sanitizeTerminalText(verification.summary), 120)}</Text>
         </Box>
       )}
 

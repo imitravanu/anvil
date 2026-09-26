@@ -37,7 +37,7 @@ export function GuardianReportCard({ report }: { report: DisplayGuardianReport }
       <Box gap={1}>
         <Text color={theme.colors.error}>⚠ </Text>
         <Text bold color={theme.colors.accent}>Guardian</Text>
-        <Text color={theme.colors.dim}>— guarded before execution</Text>
+        <Text color={theme.colors.textSecondary}>— guarded before execution</Text>
       </Box>
       <Box paddingLeft={2}>
         <Text color={report.blocked > 0 ? theme.colors.error : theme.colors.toolDone}>
@@ -51,17 +51,17 @@ export function GuardianReportCard({ report }: { report: DisplayGuardianReport }
             {"• "}
             {sanitizeTerminalText(v.file)}:{v.line}
           </Text>
-          <Text color={theme.colors.dim}> [{familyLabel(v.family)}] </Text>
+          <Text color={theme.colors.textSecondary}> [{familyLabel(v.family)}] </Text>
           <Text color={theme.colors.userText}>{curtail(sanitizeTerminalText(v.detail), 80)}</Text>
         </Box>
       ))}
       {report.violations.length > 8 && (
         <Box paddingLeft={2}>
-          <Text color={theme.colors.dim}>… {report.violations.length - 8} more</Text>
+          <Text color={theme.colors.textSecondary}>… {report.violations.length - 8} more</Text>
         </Box>
       )}
       <Box paddingLeft={2}>
-        <Text color={theme.colors.dim}>Fix the violations and retry — do not re-emit unchanged calls.</Text>
+        <Text color={theme.colors.textSecondary}>Fix the violations and retry — do not re-emit unchanged calls.</Text>
       </Box>
     </Box>
   );

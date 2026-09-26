@@ -65,10 +65,10 @@ export function SessionPicker({
       {loaded.failed ? (
         <Text color={theme.colors.toolError}>Could not load saved sessions (sessions dir unreadable).</Text>
       ) : sessions.length === 0 ? (
-        <Text dimColor>No saved sessions yet.</Text>
+        <Text color={theme.colors.textSecondary}>No saved sessions yet.</Text>
       ) : (
         <>
-          {hasAbove && <Text dimColor>  ▲ {scrollOffset} more above...</Text>}
+          {hasAbove && <Text color={theme.colors.textSecondary}>  ▲ {scrollOffset} more above...</Text>}
           {visibleSessions.map((meta, i) => {
             const globalIndex = scrollOffset + i;
             const isSelected = globalIndex === selected;
@@ -80,7 +80,7 @@ export function SessionPicker({
             );
           })}
           {hasBelow && (
-            <Text dimColor>  ▼ {sessions.length - (scrollOffset + MAX_VISIBLE)} more below...</Text>
+            <Text color={theme.colors.textSecondary}>  ▼ {sessions.length - (scrollOffset + MAX_VISIBLE)} more below...</Text>
           )}
         </>
       )}
