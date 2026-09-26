@@ -5,6 +5,15 @@
 > **CLOSED 2026-09-27:** the ACTIVE claim below (OpenCode session, Phase 28.8–28.12)
 > is now fully discharged — 28.11 was committed (`25703e6`) and 28.12 was completed
 > by Buffy (next entry). No live claim remains; Phase 28 is closed out.
+> **DONE 2026-09-27 (Buffy, AUDIT-01 P1 — update_memory gating):** owns
+> `packages/core/src/tools/updateMemory.ts` (`mutating: false` → `true` + the
+> why-comment), `packages/core/src/tools/__tests__/updateMemory.test.ts` (flag
+> expectation), `packages/core/src/agent/__tests__/orchestrator.test.ts` (+2:
+> approved call prompts + runs; denied call writes nothing), `CHANGELOG.md`,
+> plus this file. Owner chose the audit's option (a) — gate it — after review
+> noted the non-mutating flag was a deliberate Phase 19 decision, not an
+> oversight (its own progress doc says so). Core suite 759/759. No protected
+> artifact touched.
 > **DONE 2026-09-27 (Buffy, 28.11 landing + 28.12 close-out):** owns
 > `packages/tui/scripts/visual-capture.mjs` (added `forge` to `THEME_LIST`; matrix
 > comment corrected to 6 sizes × 3 themes), NEW

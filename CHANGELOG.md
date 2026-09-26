@@ -4,6 +4,21 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### `update_memory` now passes the permission gate (AUDIT-01, 2026-09-27)
+
+- **The one tool that wrote to the project without a prompt no longer does.**
+  `update_memory` performs a real write — it creates `.anvil/`, writes
+  `.anvil/.gitignore`, appends, and rewrites the whole file when the 32KB cap is
+  hit — yet it was declared `mutating: false`, so the tool orchestrator skipped
+  both the permission prompt and the serial-batch rule for it (and the guardian
+  only inspects calls carrying a `path`, which this tool does not). A declared
+  read-only tool that mutates is exactly the trust-model drift `write_file`'s
+  prompt exists to prevent. It is now `mutating: true`: every memory note prompts,
+  which is noisy and honest. Landed as the audit's reversible "do now" option;
+  splitting the tool (a gated model-facing tool plus an internal path) remains the
+  larger fix if the prompting proves too frequent. Regression tests pin both
+  directions — an approved call prompts and runs, a denied call writes nothing.
+
 ### Phase 28 visual identity, wave 1: thinking timer, animated wordmark, theme-selectable meters, compact permission bar, readable-text contract (2026-09-26)
 
 - **A blank turn now answers "is it working?" with a clock.** The static

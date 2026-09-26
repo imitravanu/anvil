@@ -5,7 +5,7 @@ import { appendToMemory, MEMORY_RELATIVE_PATH } from "../config/memory.js";
 export const definition: ToolDefinition = {
   name: "update_memory",
   description:
-    "Record a note in the project memory for future sessions. Use for: what was tried, where things live, conventions discovered.",
+    "Record a note in the project memory for future sessions (writes .anvil/memory.md — requires permission). Use for: what was tried, where things live, conventions discovered.",
   inputSchema: {
     type: "object",
     properties: {
@@ -16,7 +16,15 @@ export const definition: ToolDefinition = {
     },
     required: ["entry"],
   },
-  mutating: false,
+  // AUDIT-01: this tool writes to the project (mkdir, .gitignore creation, and
+  // a full-file rewrite when the 32KB cap is hit), so it MUST pass the same
+  // trust boundary as write_file/edit_file. It was declared non-mutating in
+  // Phase 19 to avoid prompting on every note; that saved prompts by letting an
+  // ungated write happen — the tool-orchestrator keys both the permission
+  // prompt and the serial/concurrent batch decision off `mutating`, and the
+  // guardian only inspects calls carrying a `path` (this tool's input is
+  // `entry`). Honest and noisy beats quiet and unprompted.
+  mutating: true,
 };
 
 export const execute: ToolExecutor = async (input, ctx: ToolContext) => {

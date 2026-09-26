@@ -21,7 +21,8 @@ afterEach(() => {
 describe("update_memory tool", () => {
   it("has correct tool definition properties", () => {
     expect(definition.name).toBe("update_memory");
-    expect(definition.mutating).toBe(false);
+    // AUDIT-01: writes to the project, so it is gated like write_file/edit_file.
+    expect(definition.mutating).toBe(true);
     expect(definition.inputSchema.required).toContain("entry");
   });
 

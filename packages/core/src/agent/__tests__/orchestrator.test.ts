@@ -134,6 +134,34 @@ describe("ToolOrchestrator policy", () => {
     expect(fs.readFileSync(path.join(tmp, "c.txt"), "utf8")).toBe("new");
   });
 
+  it("update_memory is gated — a call presents a permission prompt (AUDIT-01)", async () => {
+    // Regression: update_memory writes to the project (mkdir, .gitignore
+    // creation, full-file rewrite at the cap) but was declared non-mutating, so
+    // it bypassed this branch entirely and ran unprompted. Flipped to
+    // mutating:true so the same trust boundary that gates write_file gates it.
+    const b = broker(true);
+    const { o } = orch(b);
+    const call = runnable("update_memory", { entry: "note" });
+    expect(o.isSerialBatch([call])).toBe(true);
+    const { events, results } = await collect(
+      o.run([call]) as AsyncGenerator<AgentEvent, Map<string, unknown>>
+    );
+    expect(b.calls).toEqual(["update_memory"]);
+    expect(events.map((e) => e.type)).toEqual(["tool_started", "tool_finished"]);
+    expect(results.size).toBe(1);
+  });
+
+  it("a denied update_memory call writes nothing (AUDIT-01)", async () => {
+    const b = broker(false);
+    const { o } = orch(b);
+    const { events } = await collect(
+      o.run([runnable("update_memory", { entry: "should not land" })]) as AsyncGenerator<AgentEvent, Map<string, unknown>>
+    );
+    expect(events.map((e) => e.type)).toEqual(["tool_permission_denied"]);
+    expect(b.calls).toEqual(["update_memory"]);
+    expect(fs.existsSync(path.join(tmp, ".anvil", "memory.md"))).toBe(false);
+  });
+
   it("treats unknown tools as mutating (serial) and reports them", async () => {
     const { o } = orch(broker(true));
     const batch = [
