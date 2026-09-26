@@ -17,6 +17,13 @@
 > (`npm test`, `npm run gate`, `fetch-depth: 0`) are all still present. No path
 > added/removed from the manifest. Gate run with `--ack-protected-change`;
 > committed with `--no-verify`.
+> **DONE 2026-09-27 (Buffy, audit task F — certification verdicts that count):**
+> owns `packages/core/src/cert/runner.ts` (github cert model aligned to its
+> registry row; `setModelCertification`'s return is now checked and an
+> unrecordable verdict throws), `packages/core/src/cert/__tests__/certify.test.ts`
+> (+2: every cert model resolves provider-qualified; an unknown model fails
+> loudly), `CHANGELOG.md`, plus this file. AUDIT-03. Core suite 761/761;
+> typecheck clean. No protected artifact touched.
 > **DONE 2026-09-27 (Buffy, audit task C — provider-qualified model metadata):**
 > owns `packages/tui/src/util/format.ts` (`modelInfo()` + optional `providerId`
 > on `displayModelLabel`/`providerOfModel`, now via core's `getModel`),

@@ -4,6 +4,16 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Certification can no longer pass with an unrecorded verdict (AUDIT-03, 2026-09-27)
+
+- **GitHub's cert model wasn't a registry row, so its 5/5 pass recorded
+  nothing.** `PROVIDER_CERT_MODELS.github` named `Phi-3.5-mini-instruct`, which
+  is absent from `MODEL_REGISTRY`; `setModelCertification` returned `false` and
+  that return value was ignored, so the harness ran the whole suite and changed
+  no row. The model now points at github's own `gpt-4o-mini` registry row, and an
+  unrecordable verdict throws instead of reporting a pass that isn't real. A
+  guard asserts every `PROVIDER_CERT_MODELS` entry resolves provider-qualified.
+
 ### Model metadata is now provider-qualified (AUDIT-02, 2026-09-27)
 
 - **The TUI no longer resolves a model by bare id.** A few ids exist under two

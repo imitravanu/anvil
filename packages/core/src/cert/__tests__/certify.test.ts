@@ -6,7 +6,7 @@ import {
   PROVIDER_CERT_MODELS,
   resolveCertificationCredentials,
 } from "../runner.js";
-import { getLatestCertificationDate } from "../../providers/registry.js";
+import { getLatestCertificationDate, getModel } from "../../providers/registry.js";
 import type { ProviderId } from "../../providers/types.js";
 
 describe("Phase 18: Provider Certification Harness", () => {
@@ -119,5 +119,21 @@ describe("Phase 18: Provider Certification Harness", () => {
     const latest = getLatestCertificationDate();
     expect(latest).toBeTruthy();
     expect(typeof latest).toBe("string");
+  });
+
+  it("every cert model is a registry row, provider-qualified (AUDIT-03)", () => {
+    // github's entry used to be `Phi-3.5-mini-instruct`, which is not in
+    // MODEL_REGISTRY — so setModelCertification returned false and the verdict
+    // was discarded. This guard makes that impossible for any provider.
+    for (const [pid, model] of Object.entries(PROVIDER_CERT_MODELS)) {
+      expect(getModel(model, pid), `${pid} cert model "${model}" is not a registry row`).toBeDefined();
+    }
+  });
+
+  it("fails loudly when the cert model is not in the registry (AUDIT-03)", async () => {
+    const mock = createMockCertificationProvider("github");
+    await expect(
+      certifyProvider(mock, { model: "not-a-registry-model", timeoutMs: 5000 })
+    ).rejects.toThrow(/not in the model registry/);
   });
 });

@@ -32,7 +32,11 @@ export const PROVIDER_CERT_MODELS: Record<ProviderId, string> = {
   orcarouter: "orcarouter/free",
   groq: "llama-3.3-70b-versatile",
   cerebras: "llama3.1-8b",
-  github: "Phi-3.5-mini-instruct",
+  // AUDIT-03: was "Phi-3.5-mini-instruct", which is NOT a registry row — so
+  // setModelCertification returned false and the 5/5 verdict was discarded.
+  // gpt-4o-mini is github's own registry row (provider-qualified lookup keeps
+  // it distinct from openai's paid row of the same id).
+  github: "gpt-4o-mini",
   mistral: "mistral-small-latest",
   inception: "mercury-2.5",
   ollama: "qwen2.5-coder:latest",
@@ -537,7 +541,22 @@ export async function certifyProvider(
 
   // Update in-memory registry status, recording HOW it was obtained so a mock
   // pass is never badged as a live probe.
-  setModelCertification(model, provider.id, status, undefined, options.mock ? "mock" : "live");
+  // AUDIT-03: the return value used to be ignored, so certifying a model that
+  // is not a registry row ran the whole suite and silently changed nothing — a
+  // full 5/5 report that recorded no verdict. An unrecordable result is a
+  // configuration bug, so fail loudly rather than report a pass that isn't.
+  const recorded = setModelCertification(
+    model,
+    provider.id,
+    status,
+    undefined,
+    options.mock ? "mock" : "live"
+  );
+  if (!recorded) {
+    throw new Error(
+      `Certification model "${model}" for provider "${provider.id}" is not in the model registry — the verdict cannot be recorded. Align PROVIDER_CERT_MODELS with a registry row (AUDIT-03).`
+    );
+  }
 
   return {
     providerId: provider.id,
