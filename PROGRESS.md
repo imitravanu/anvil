@@ -2,9 +2,32 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
-> **ACTIVE 2026-09-26 (OpenCode chief-engineer session, Phase 28.8–28.12
-> completion):** owns the remaining Phase 28 tasks, in roadmap order: 28.12
-> (visual baseline refresh, LAST).
+> **CLOSED 2026-09-27:** the ACTIVE claim below (OpenCode session, Phase 28.8–28.12)
+> is now fully discharged — 28.11 was committed (`25703e6`) and 28.12 was completed
+> by Buffy (next entry). No live claim remains; Phase 28 is closed out.
+> **DONE 2026-09-27 (Buffy, 28.11 landing + 28.12 close-out):** owns
+> `packages/tui/scripts/visual-capture.mjs` (added `forge` to `THEME_LIST`; matrix
+> comment corrected to 6 sizes × 3 themes), NEW
+> `packages/tui/__visual-baselines__/forge-<WxH>/*.png` (48 frames — 6 sizes × 8
+> scenarios), `docs/PHASE-28-ROADMAP.md` (28.12 rewritten: the two-harness
+> distinction; boxes ticked), `CHANGELOG.md`, plus this file. **28.11 was already
+> complete and gate-green in the working tree but never committed** (the
+> WORKING≠COMMITTED failure — root-caused below); it was landed byte-identical as
+> `25703e6`. **28.12's contradiction resolved:** the `.txt` harness is single-theme
+> by design (pins shape, not colour — a per-theme capture would be byte-identical
+> files); per-theme baselines belong to the PNG matrix, whose `THEME_LIST` lives in
+> `visual-capture.mjs`, **not** the CI workflow — so **no protected artifact was
+> touched.** `visual:capture` produced 144 frames; only `forge-*` was promoted;
+> `visual:diff` reports **144/144 PASS** within 2.5%. Full gate green before commit.
+> **Stale-but-untouched:** `.github/workflows/visual-regression.yml`'s job label
+> still reads "3 sizes x 2 themes" (now 6 × 3). It is a protected artifact and a
+> cosmetic label; fixing it needs the AGENTS.md §3.4 path — proposed, not done.
+> **Root cause of repeated mid-way stops (recorded, not yet fixed):** "done" was
+> defined as a green gate, never a commit, so a session can finish the engineering
+> and end its turn with the work still only on disk — three occurrences now
+> (28.4–28.7, 28.11, and the untracked audit doc). Proposed Definition-of-Done
+> amendment (commit, or record why not) is a protected `AGENTS.md` change and needs
+> the owner's §3.4 acknowledgement.
 > **DONE 2026-09-26 (same session, 28.11 code-block line numbers):** owns
 > `packages/tui/src/markdown/MarkdownView.tsx` (gutter + `fenceStartLine` +
 > phantom-line fix), `packages/tui/src/util/displayLimits.ts`

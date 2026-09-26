@@ -94,6 +94,15 @@ All notable changes to Anvil are documented here. The format follows
   baseline `wordmark-settled.txt` pins the SHAPE — the harness is ANSI-free,
   so the per-theme colour ramps are pinned by unit tests instead, which is why
   one baseline serves all six themes.
+- **`forge` now has rendered PNG baselines** (Phase 28.12, phase close-out).
+  The repository has two visual harnesses: the `.txt` frame capture is
+  deliberately single-theme (dark, ANSI-free — it pins layout, never colour),
+  while the PNG pixel matrix renders every theme in full colour. `forge` was
+  added to that matrix's `THEME_LIST`, growing it from 12 to 18 configurations
+  (6 sizes × 3 themes × 8 scenarios = 144 frames), all passing within the 2.5%
+  cross-OS threshold. Only the new `forge-*` baselines were promoted, so the
+  committed `dark`/`highContrast` PNGs are untouched. The matrix lives in
+  `visual-capture.mjs`, not the CI workflow, so no protected artifact changed.
 
 ### Session search: find the session you worked on X in (2026-09-23)
 

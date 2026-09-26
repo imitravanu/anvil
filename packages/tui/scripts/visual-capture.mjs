@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Visual regression frame capture engine (Phase 0 spec: docs/PHASE-0-VISUAL-REGRESSION-SPEC.md)
- * Renders scenarios across the full matrix (3 sizes x 2 themes) and rasterizes
+ * Renders scenarios across the full matrix (6 sizes x 3 themes) and rasterizes
  * deterministic PNG frames using puppeteer-core.
  */
 import fs from "node:fs";
@@ -49,6 +49,12 @@ const SIZES = [
 const THEME_LIST = [
   { name: "dark", theme: THEMES.dark, bg: "#0d1117", fg: "#c9d1d9" },
   { name: "highContrast", theme: THEMES.highContrast, bg: "#000000", fg: "#ffffff" },
+  // Phase 28.12: forge is the 6th built-in theme and the one whose "dim is
+  // decoration-only" philosophy most needs a rendered baseline — the PNG
+  // matrix is the only harness that captures colour, so it is the only place
+  // forge's rendering can regress visibly. bg/fg are the theme's own
+  // surface/textPrimary so the frame background matches the product.
+  { name: "forge", theme: THEMES.forge, bg: "#2a2e33", fg: "#e4e6ea" },
 ];
 
 // --- Deterministic Fixtures ---

@@ -5,7 +5,7 @@
 > **Author:** Chief Engineer Audit  
 > **Origin:** Deep analysis of the full TUI codebase (73 source files in `@anvil/tui`), the `anvil-ui-demo` forge prototype (`/home/mitravanu/anvil-ui-demo/demo.mjs`), completed DW-1→DW-4 design waves, and current UI/UX gaps identified during a full-stack review.  
 > **Purpose:** This document is the **actionable build guide** for any agent working on Anvil's visual identity and UX refinement. Every task has exact file paths, modification instructions, watchouts, and acceptance criteria. Tasks are sequenced — **do not skip ahead**.
-> **Progress (2026-09-26) — verified against code & tests:** 28.1 ✅ forge theme (`a2088ca`), 28.2 ✅ diff tints (`2d22f8f`), 28.3 ✅ tool call timing, 28.4 ✅ thinking elapsed indicator, 28.5 ✅ animated wordmark, 28.6 ✅ thin/theme-selectable meters, 28.7 ✅ compact inline permission bar, 28.8 ✅ muted-vs-dim pass (enforced by `theme/__tests__/dimContract.test.ts`), 28.9 ✅ header session title & turn counter (pure `headerSessionPlan` gates: title ≥92, turns ≥105), 28.10 ✅ per-turn token cost line (usage events accumulate onto the turn's message; `/expand`-gated, settled-only, absent on resumed history), 28.11 ✅ code-block line numbers (≥3 lines, right-aligned, `#L24` fence anchors honored, true numbers across the head+tail window — and the fix removed a long-standing phantom `▎` line the highlighter's trailing newline manufactured). 28.4–28.7 were **adopted from a session that stopped mid-phase** (it never declared ownership in `PROGRESS.md`; its uncommitted work was verified green against the full gate, completed, and landed — see `PROGRESS.md` 2026-09-26). Its sequencing was in order: 28.4→28.5→28.6→28.7, with 28.8 started and finished by the takeover session. **Next: 28.12 — Visual Regression Baseline Refresh (the phase's final task).** A box is ticked only once its criterion is confirmed in the live tree; criteria that need a real interactive terminal (28.4's `✻` on glass, 28.5's live keypress-skip) are deliberately left unticked until a human pass confirms them; 28.12 remains.
+> **Progress (2026-09-26) — verified against code & tests:** 28.1 ✅ forge theme (`a2088ca`), 28.2 ✅ diff tints (`2d22f8f`), 28.3 ✅ tool call timing, 28.4 ✅ thinking elapsed indicator, 28.5 ✅ animated wordmark, 28.6 ✅ thin/theme-selectable meters, 28.7 ✅ compact inline permission bar, 28.8 ✅ muted-vs-dim pass (enforced by `theme/__tests__/dimContract.test.ts`), 28.9 ✅ header session title & turn counter (pure `headerSessionPlan` gates: title ≥92, turns ≥105), 28.10 ✅ per-turn token cost line (usage events accumulate onto the turn's message; `/expand`-gated, settled-only, absent on resumed history), 28.11 ✅ code-block line numbers (≥3 lines, right-aligned, `#L24` fence anchors honored, true numbers across the head+tail window — and the fix removed a long-standing phantom `▎` line the highlighter's trailing newline manufactured), 28.12 ✅ forge added to the PNG matrix (18 configurations, 144 frames — all pass). 28.4–28.7 were **adopted from a session that stopped mid-phase** (it never declared ownership in `PROGRESS.md`; its uncommitted work was verified green against the full gate, completed, and landed — see `PROGRESS.md` 2026-09-26). Its sequencing was in order: 28.4→28.5→28.6→28.7, with 28.8 started and finished by the takeover session. **Phase 28 is complete.** A box is ticked only once its criterion is confirmed in the live tree; criteria that need a real interactive terminal (28.4's `✻` on glass, 28.5's live keypress-skip) are deliberately left unticked until a human pass confirms them.
 
 ---
 
@@ -571,25 +571,49 @@ Add line numbers to syntax-highlighted code blocks in `MarkdownView`.
 ### What
 Regenerate all visual regression baselines after the above changes land.
 
+### What (corrected 2026-09-26 — see the harness note below)
+Add `forge` to the **PNG pixel-matrix** so the 6th theme has rendered baselines,
+and confirm the whole matrix still passes.
+
+### Two harnesses — this task is about the SECOND one
+
+| Harness | Runner | Renders | Baselines | Catches |
+|---|---|---|---|---|
+| Text frames | `npm run visual` (vitest `__visual__/visual.test.tsx`) | `THEMES.dark` only, ANSI-stripped | `*.txt` | layout/shape regressions (line stacking, wrapping, truncation) |
+| **PNG matrix** | `npm run visual:capture` → `visual:diff` | **every theme in `THEME_LIST`**, full colour | `<theme>-<WxH>/*.png` | **colour** regressions, per-theme rendering |
+
+This distinction was missing from the original task, which said "regenerate all PNG
+baselines" and then asked for per-theme baselines — impossible from the `.txt`
+harness, which is single-theme by design (a per-theme `.txt` capture would be six
+byte-identical files). The per-theme criterion belongs to the PNG harness.
+
 ### Files to Modify
 
-**`packages/tui/__visual-baselines__/`** — regenerate all PNG baselines.
+**`packages/tui/scripts/visual-capture.mjs`** — add `forge` to `THEME_LIST`
+(`bg`/`fg` = the theme's own `surface`/`textPrimary`, so the frame background
+matches the product). **This is the only file that defines the matrix** — the CI
+workflow merely calls `npm run visual:capture` and `npm run visual:diff`, so
+adding a theme needs **no** protected-workflow edit. (The workflow's job *label*
+still reads "3 sizes x 2 themes"; that is now stale — left untouched deliberately,
+as it is a protected artifact and a cosmetic label only. See PROGRESS 2026-09-26.)
 
-**`.github/workflows/visual-regression.yml`** — verify the matrix still covers: 3 sizes × 2 themes. Consider adding `forge` as a 3rd theme in the matrix (3 sizes × 3 themes = 9 configurations).
+**`packages/tui/__visual-baselines__/forge-<WxH>/*.png`** — NEW; 48 frames
+(6 sizes × 8 scenarios).
 
-### Procedure
-1. Run `npm run visual -- --update` to regenerate baselines.
-2. Visually inspect every baseline image.
-3. Commit the new baselines.
+### Procedure (as actually run)
+1. `node scripts/visual-capture.mjs` — captures the full 6×3×8 = 144-frame matrix into `__visual-current__/`.
+2. Promote **only** the new `forge-*` directories (`cp -r __visual-current__/forge-* __visual-baselines__/`) so the committed `dark`/`highContrast` baselines do not churn.
+3. `node scripts/visual-diff.mjs` — all **144** scenarios PASS within 2.5%.
+4. Commit the script change + the 48 new baselines.
 
 ### Watchouts
 - **This MUST be the last task** — all visual changes must be stable before capturing baselines.
-- **Adding forge to the CI matrix** increases CI time by ~33%. Worth it for a 6th built-in theme.
+- **Adding a third theme** grows the matrix from 12 to 18 configurations (+50% frames). Accepted for a 6th built-in theme.
 
 ### Acceptance Criteria
-- [ ] All visual regression tests pass with updated baselines
-- [ ] At least `dark`, `highContrast`, and `forge` themes have baselines
-- [ ] `npm run gate` green
+- [x] All visual regression tests pass with updated baselines (144/144 within 2.5%)
+- [x] At least `dark`, `highContrast`, and `forge` themes have baselines
+- [x] `npm run gate` green
 
 ---
 
