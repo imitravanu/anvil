@@ -3,10 +3,20 @@
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
 > **ACTIVE 2026-09-26 (OpenCode chief-engineer session, Phase 28.8–28.12
-> completion):** owns the remaining Phase 28 tasks, in roadmap order: 28.9
-> (header session title + turn counter), 28.10 (per-turn token annotations
-> under `/expand`), 28.11 (code-block line numbers), 28.12 (visual baseline
-> refresh, LAST).
+> completion):** owns the remaining Phase 28 tasks, in roadmap order: 28.10
+> (per-turn token annotations under `/expand`), 28.11 (code-block line
+> numbers), 28.12 (visual baseline refresh, LAST).
+> **DONE 2026-09-26 (same session, 28.9 header session title + turn count):**
+> owns `packages/tui/src/components/{Header,App}.tsx`, NEW
+> `packages/tui/src/components/__tests__/header.test.tsx`,
+> `docs/PHASE-28-ROADMAP.md`, `CHANGELOG.md`, plus this file. Pure
+> `headerSessionPlan()` gates: title ≥92 cols (quoted, curtail-24,
+> budget-aware via `leftWidth`), turns ≥105 cols in the model tag via
+> `fitTag` degradation; unnamed sessions render no empty quotes. App passes
+> `session.title` (restored on resume, auto-set after the first user message,
+> live via `/session rename`) + user-turn count from the display state. TUI
+> suite 310/310 green including 7 new header tests; full gate green before
+> commit. No protected artifact touched.
 > **DONE 2026-09-26 (same session, 28.8 muted-vs-dim pass):** owns
 > `packages/tui/src/components/{App,GuardianReportCard,VerificationCard,RewindModal,CommandPalette,SessionPicker,FirstRunSetup,DiffModal,ModelPicker,StatusBar,MissionDeck}.tsx`,
 > `packages/tui/src/markdown/MarkdownView.tsx`,

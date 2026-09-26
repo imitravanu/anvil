@@ -104,6 +104,10 @@ export function App({
   });
   const persistRef = useRef<() => void>(() => undefined);
 
+  // Phase 28.9: completed user turns — resumed sessions seed this from their
+  // history, fresh ones count from zero. System/assistant rows never count.
+  const turnCount = messages.filter((m) => m.role === "user").length;
+
   const [situationalContext, setSituationalContext] = useState<SituationalContext | undefined>();
   useEffect(() => {
     let active = true;
@@ -303,7 +307,13 @@ export function App({
             shrink — Ink's CSS-style default flex-shrink:1 otherwise compresses
             everything at once, which is what made turns and chrome overwrite
             each other's rows. */}
-        <Header model={currentModel} isBusy={isBusy} context={situationalContext} />
+        <Header
+          model={currentModel}
+          isBusy={isBusy}
+          context={situationalContext}
+          sessionTitle={session.title}
+          turnCount={turnCount}
+        />
         <Box flexShrink={0}>
           <Divider />
         </Box>

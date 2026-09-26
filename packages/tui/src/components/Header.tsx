@@ -15,9 +15,37 @@ export interface HeaderProps {
   model: string;
   isBusy: boolean;
   context?: SituationalContext;
+  /** Named/auto-titled session (Phase 28.9); null/empty means "unnamed". */
+  sessionTitle?: string | null;
+  /** Completed user turns this session; drives the tag's "N turns" segment. */
+  turnCount?: number;
 }
 
-export function Header({ model, isBusy, context }: HeaderProps) {
+/**
+ * Phase 28.9 session-identity display plan. Pure — the harness cannot fake
+ * stdout columns, so width gates are decided outside the render (the
+ * wordmarkMode precedent). Thresholds ride the existing left-column ladder:
+ * the title joins at ≥92 (session identity outranks the environment line),
+ * turns join the model tag at ≥105 (the same row the tests segment enters).
+ * The tag's own fitTag budget still degrades first, so neither segment can
+ * ever push the brand or the repo line off-screen.
+ */
+export function headerSessionPlan(
+  width: number,
+  sessionTitle: string | null | undefined,
+  turnCount: number | undefined
+): { showTitle: boolean; titleV: string; turnsSuffix: string } {
+  const named = typeof sessionTitle === "string" && sessionTitle.trim().length > 0;
+  const showTitle = named && width >= 92;
+  const titleV = showTitle ? `"${curtail(sessionTitle ?? "", 24)}"` : "";
+  const turnsSuffix =
+    turnCount !== undefined && width >= 105
+      ? ` · ${turnCount} ${turnCount === 1 ? "turn" : "turns"}`
+      : "";
+  return { showTitle, titleV, turnsSuffix };
+}
+
+export function Header({ model, isBusy, context, sessionTitle, turnCount }: HeaderProps) {
   const theme = useTheme();
   const { stdout } = useStdout();
   const width = stdout?.columns ?? 80;
@@ -25,7 +53,8 @@ export function Header({ model, isBusy, context }: HeaderProps) {
   const provider = info ? providerLabel(providerOfModel(model) ?? info.providerId) : "Anvil";
   const modelName = displayModelLabel(model);
   const state = isBusy ? "busy" : "idle";
-  const fullTag = `${provider} · ${modelName}${formatPricingTag(info?.isFree)} · ${state}`;
+  const { showTitle, titleV, turnsSuffix } = headerSessionPlan(width, sessionTitle, turnCount);
+  const fullTag = `${provider} · ${modelName}${formatPricingTag(info?.isFree)}${turnsSuffix} · ${state}`;
   // State and pricing already live in the StatusBar; when the full tag can't
   // fit, prefer dropping them over truncating the model name mid-word.
   const compactTag = `${provider} · ${modelName}`;
@@ -98,6 +127,10 @@ export function Header({ model, isBusy, context }: HeaderProps) {
     const segment = (txt: string) => {
       w += 1 /* gap */ + displayWidth(txt);
     };
+    if (showTitle) {
+      segment("│");
+      segment(titleV);
+    }
     segment("│");
     segment(`repo: ${nameV} (● ${branchV})`);
     if (showEnv) {
@@ -122,6 +155,12 @@ export function Header({ model, isBusy, context }: HeaderProps) {
     <Box justifyContent="space-between" flexShrink={0} flexGrow={1}>
       <Box gap={1}>
         <Text bold color={theme.colors.brand}>▲ ANVIL</Text>
+        {showTitle && (
+          <>
+            <Text color={theme.colors.separator}>│</Text>
+            <Text color={theme.colors.textSecondary}>{titleV}</Text>
+          </>
+        )}
         <Text color={theme.colors.separator}>│</Text>
         <Text>
           <Text color={theme.colors.textSecondary}>repo: </Text>

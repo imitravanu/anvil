@@ -45,6 +45,15 @@ All notable changes to Anvil are documented here. The format follows
   residual drain scan — migrate once, stays green forever). 16 components
   and both diff renderers were converted, including the two the dead session
   never reached (`ModelPicker`, `DiffModal`).
+- **The header now knows which session you're in and how long you've been at
+  it** (Phase 28.9): a named/auto-titled session renders as
+  `▲ ANVIL │ "refactor auth"` in the cockpit header (≥92 cols, quoted,
+  budget-aware — it can never push the repo line or the brand off-screen),
+  and the model tag gains `· 12 turns · idle` from 105 cols. Both width
+  gates live in a pure `headerSessionPlan()` (the `wordmarkMode` precedent —
+  the harness cannot fake stdout columns), and unnamed sessions render no
+  empty quotes. Turn counts come from the live message state, so a resumed
+  session reports its restored history honestly.
 - **Adopted work, honestly labelled.** This wave was found uncommitted after
   its session stopped mid-phase without declaring ownership; it was verified
   green against the full gate, completed per the roadmap protocol, and its
