@@ -11,7 +11,11 @@ import { frameText, renderThemed, tick } from "../../test-utils/testRender.js";
  * ceiling rather than asserting at an exact millisecond — under gate load an
  * exact-window assertion is a coin flip.
  */
-async function waitUntil(predicate: () => boolean, ceilingMs = 3000): Promise<boolean> {
+// 10s, not 3s: under the full gate (68 test files in parallel, machine
+// saturated) this file alone has been observed to run 3.09s before the 1s tick
+// even landed, so a 3s ceiling is a coin flip. The wait is a property wait, not
+// a deadline — its only job is to bound a genuine hang.
+async function waitUntil(predicate: () => boolean, ceilingMs = 10000): Promise<boolean> {
   const started = Date.now();
   while (Date.now() - started < ceilingMs) {
     if (predicate()) return true;
