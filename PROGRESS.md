@@ -5,6 +5,25 @@
 > **CLOSED 2026-09-27:** the ACTIVE claim below (OpenCode session, Phase 28.8–28.12)
 > is now fully discharged — 28.11 was committed (`25703e6`) and 28.12 was completed
 > by Buffy (next entry). No live claim remains; Phase 28 is closed out.
+> **DONE 2026-09-27 (Buffy, PROTECTED — AGENTS.md §3.3 Definition of Done):**
+> owns `AGENTS.md` (§3.3: added the "committed, or deliberately held with the
+> reason and the exact files recorded in PROGRESS.md before the turn ends"
+> clause — the systemic fix for the repeated mid-way stops) and
+> `scripts/gate-manifest.json` (AGENTS.md SHA-256 regenerated
+> `04defacc…` → `2985798f…`; `generated` date bumped to 2026-09-27).
+> **Declared per §3.4(a); manifest regenerated in the same commit per §3.4(b);
+> human review recorded per §3.4(c)** — the owner explicitly selected "Do it
+> now, full §3.4 path" after the exact edit was described. **Prose only, one
+> rule added.** The five literals the sentinel asserts against `AGENTS.md`
+> (`npm run gate`, `Anti-Slop`, `getErrorMessage`, `PHASE-21-25-AUDIT.md`,
+> `Protected Artifact`) are all still present (grep count 5/1/1/2/1). No path
+> added or removed from the manifest, so the sentinel's exact-coverage assertion
+> still holds. UNTOUCHED: `scripts/verify-gate.mjs`, `.fresh-allowlist.json`,
+> `docs/PHASE-21-25-AUDIT.md`, `packages/cli/src/__tests__/gate.sentinel.test.ts`,
+> `.githooks/pre-commit`, and all four `.github/workflows/*.yml`. Gate run with
+> `--ack-protected-change` (Step 0.5 re-verified all hashes); commit made with
+> `git commit --no-verify` — the documented, deliberate escape hatch for
+> protected-artifact commits.
 > **DONE 2026-09-27 (Buffy, AUDIT-01 P1 — update_memory gating):** owns
 > `packages/core/src/tools/updateMemory.ts` (`mutating: false` → `true` + the
 > why-comment), `packages/core/src/tools/__tests__/updateMemory.test.ts` (flag

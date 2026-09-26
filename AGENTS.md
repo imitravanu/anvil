@@ -69,6 +69,7 @@
 
 3. **Definition of Done & Review Teeth:**  
    All contributions must achieve a 100% green gate across build, typecheck, unit tests, and mock evals.  
+   **A green gate is necessary, not sufficient.** A task is not done until its work is either **committed**, or **deliberately held with the reason and the exact files recorded in `PROGRESS.md` before the turn ends**. Work that lives only in the working tree is invisible to `git log`, can be overwritten unseen by the next session, and is lost on a clean or reset — this has silently recurred in this repository, where finished, gate-green work was left uncommitted more than once and had to be "adopted" later. If a task is blocked on a protected artifact or a human-only check, say so explicitly and stop; never end a turn leaving uncommitted work unexplained.  
    **Working code that skipped the entry protocol is rejected the same as broken code.** Any contribution that passes the mechanical gate but caused multi-agent collisions, skipped file ownership declarations, or violated architectural boundaries will be rejected on peer review.
 
 4. **The Guardian Gate Is a Protected Artifact:**  
