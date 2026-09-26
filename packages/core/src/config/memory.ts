@@ -2,8 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { resolveWithinRoot } from "../tools/paths.js";
 import type { ProjectRules } from "./rules.js";
+import { MAX_MEMORY_BYTES } from "./constants.js";
 
-export const MAX_MEMORY_BYTES = 32 * 1024; // 32 KB cap
+export { MAX_MEMORY_BYTES };
 export const MEMORY_RELATIVE_PATH = ".anvil/memory.md";
 export const GITIGNORE_RELATIVE_PATH = ".anvil/.gitignore";
 

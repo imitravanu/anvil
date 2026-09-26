@@ -3,8 +3,9 @@ import path from "node:path";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 import { resolveWithinRoot } from "./paths.js";
 import { atomicWriteText } from "../atomicWrite.js";
+import { MAX_WRITE_BYTES } from "../config/constants.js";
 
-export const MAX_WRITE_BYTES = 512 * 1024;
+export { MAX_WRITE_BYTES };
 
 export const definition: ToolDefinition = {
   name: "write_file",

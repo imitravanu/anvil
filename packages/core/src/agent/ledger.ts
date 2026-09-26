@@ -2,7 +2,9 @@
 // Capped so session files stay growth-bounded. The entry shape is serial:
 // {seq, ts, eventType, tool?, inputHash?, outcome, tokens?, elapsedMs}.
 
-export const LEDGER_CAP = 1000;
+// Centralized in config/constants (§2.4); re-exported so the public API is unchanged.
+import { LEDGER_CAP } from "../config/constants.js";
+export { LEDGER_CAP };
 
 export type LedgerOutcome = "ok" | "error" | "denied" | "aborted";
 

@@ -2319,3 +2319,43 @@ counted rejected) and pass now; the parity test ran against the real extracted g
 copy. **Evidence:** full `npm run gate -- --ack-protected-change` (Steps 0–5, sentinel included)
 + final no-ack gate on the committed tree, exit 0.
 
+
+---
+
+## 2026-09-28 (2) — AUDIT-11: all cap-shaped constants centralized, with a conformance guard (Buffy)
+
+**Files owned (declared before editing):** `packages/core/src/config/constants.ts`,
+`packages/tui/src/util/displayLimits.ts`, the 16 consumer modules whose local cap declarations
+moved (transport.ts, client.ts, goalEngine.ts, ledger.ts, subagent.ts, checkpoints.ts,
+freeModels.ts, grep.ts, listFiles.ts, writeFile.ts, verifyTests.ts, rules.ts, memory.ts, mcp.ts,
+guardian/rules.ts, headless.ts), the 3 TUI consumer modules (util/subagent.ts, eventReducer.ts,
+colorizeDiff.tsx), `packages/cli/src/__tests__/constantsConformance.test.ts` (new), CHANGELOG.md,
+this file. **No protected artifact touched.**
+
+**What AUDIT-11 actually was.** The audit's table entry had no detail section; the finding is
+constitution §2.4: cap-shaped constants (MAX/CAP/LIMIT/BYTES/_MS/TIMEOUT/RETRIES/…) must live in
+`config/constants.ts`, not beside the code they bound. A sweep found 36 such exported constants
+in 19 files outside the central modules (the audit's earlier "sweeping ~11-module refactor"
+estimate was close — it was 19).
+
+**The migration.** All 22 core caps now declared in `config/constants.ts`; all 3 TUI caps in
+`util/displayLimits.ts` (the TUI's existing central budget file — it cannot import core's
+constants without importing the engine). Every defining module re-exports its names, so zero
+import sites changed and every public API is byte-stable — the exact precedent
+`checkpoints.ts`/`subagent.ts` already used. No numeric value changed anywhere.
+
+**The guard.** New `constantsConformance.test.ts` (cli suite — the only workspace that sees all
+three packages) walks every non-test source file and fails if a cap-shaped `export const` is
+declared outside the two central files, or if a name is declared in both. **Teeth proven:** with
+a fake `FAKE_CAP_BYTES` planted in an unrelated file, the test failed naming it, and passed again
+after removal.
+
+**Two live catches during the migration:** (1) my first pass missed `config/mcp.ts`'s
+`DEFAULT_MCP_TIMEOUT_MS`, which collided with the new central declaration via double star-export
+(TS2308) — resolved with a named re-export shim; (2) the conformance test itself flagged
+`guardian/rules.ts`'s `MAX_CUSTOM_RULES` on its first run — a straggler my manual sweep had
+missed, found by the guard doing its job.
+
+**Evidence:** full `npm run gate` green — Steps 0–5; suites **cli 117, core 763, tui 329
+(1,209 total)**, 25/25 mock evals, exit 0.
+

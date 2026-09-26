@@ -15,12 +15,14 @@ import { buildSystemPrompt } from "../config/rules.js";
 // sub-agent actions still prompt the user).
 // ---------------------------------------------------------------------------
 
-import { SUB_AGENT_REPORT_MAX_CHARS } from "../config/constants.js";
+import {
+  SUB_AGENT_REPORT_MAX_CHARS,
+  SUB_AGENT_MAX_ITERATIONS,
+  SUB_AGENT_MAX_TOKENS,
+  MAX_DELEGATIONS_PER_TURN,
+} from "../config/constants.js";
 import { log } from "../logger.js";
-export { SUB_AGENT_REPORT_MAX_CHARS };
-export const SUB_AGENT_MAX_ITERATIONS = 12;
-export const SUB_AGENT_MAX_TOKENS = 4096;
-export const MAX_DELEGATIONS_PER_TURN = 3;
+export { SUB_AGENT_REPORT_MAX_CHARS, SUB_AGENT_MAX_ITERATIONS, SUB_AGENT_MAX_TOKENS, MAX_DELEGATIONS_PER_TURN };
 
 export const SUB_AGENT_SYSTEM_PROMPT =
   "You are a focused sub-agent inside Anvil, a terminal coding agent. You are given exactly " +

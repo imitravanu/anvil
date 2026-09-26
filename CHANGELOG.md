@@ -4,6 +4,20 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Every cap now lives in one place, with a guard to keep it that way (AUDIT-11, 2026-09-28)
+
+- **22 cap-shaped constants migrated into `config/constants.ts`** (stdin
+  bounds, MCP line/page caps, sub-agent budgets, checkpoint snapshot caps,
+  tool output/timeout bounds, config file caps, the goal-turn and run-ledger
+  bounds, and more). The defining modules re-export their names, so no public
+  API or import site changed. The TUI's three stray caps moved into its
+  existing central file `util/displayLimits.ts` (the TUI can't take numbers
+  from core without dragging in the engine).
+- **A conformance test now enforces it.** Any future cap-shaped constant
+  declared outside the two central files fails the suite; duplicates across
+  the two files fail too. Verified it has teeth: a planted fake cap was
+  caught before the fix landed.
+
 ### The allowlist contract is repo-shape agnostic, and provably identical in gate and core (AUDIT-05, 2026-09-28)
 
 - **One shape rule, two provably-identical implementations.** The allowlist

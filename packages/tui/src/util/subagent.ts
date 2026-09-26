@@ -1,5 +1,5 @@
 /** sub-agent cards: collapsed line + capped report lines. Pure. */
-import { SUBAGENT_TASK_MAX, capLines } from "./displayLimits.js";
+import { SUBAGENT_TASK_MAX, SUB_REPORT_RETAIN_MAX, capLines } from "./displayLimits.js";
 
 export interface SubAgentRecord {
   task: string;
@@ -13,7 +13,7 @@ export interface SubAgentRecord {
 }
 
 /** Heap guard: full reports stay in history for the model; the card keeps this much. */
-export const SUB_REPORT_RETAIN_MAX = 4000;
+export { SUB_REPORT_RETAIN_MAX };
 const TRUNC_MARK = "[report shortened for display — full version went to the model]";
 
 export function retainReport(report: string): string {

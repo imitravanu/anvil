@@ -1,6 +1,8 @@
 import {
   AgentSession,
   buildSystemPrompt,
+  MAX_STDIN_BYTES,
+  MAX_STDIN_WAIT_MS,
   type ModelProvider,
   type PermissionBroker,
   type ToolDefinition,
@@ -42,8 +44,9 @@ export class HeadlessPermissionBroker implements PermissionBroker {
   }
 }
 
-export const MAX_STDIN_BYTES = 1024 * 1024; // 1 MB cap
-export const MAX_STDIN_WAIT_MS = 30_000; // 30s hard timeout
+// Centralized in @anvil/core's config/constants (§2.4); re-exported so the
+// public API and every import site stay unchanged.
+export { MAX_STDIN_BYTES, MAX_STDIN_WAIT_MS };
 
 /**
  * Reads all buffered data from stdin until EOF (for piped usage).

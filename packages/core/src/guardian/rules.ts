@@ -1,4 +1,5 @@
 import { loadProjectRules } from "../config/rules.js";
+import { MAX_CUSTOM_RULES } from "../config/constants.js";
 
 /**
  * Phase 26.0 — project-rules → scanner bridge.
@@ -11,8 +12,9 @@ export interface CustomGuardianRule {
   detail: string;
 }
 
-/** Upper bound so a runaway rules block can't make every scan quadratic. */
-export const MAX_CUSTOM_RULES = 32;
+/** Upper bound so a runaway rules block can't make every scan quadratic.
+ * Centralized in config/constants (§2.4); re-exported so the public API is unchanged. */
+export { MAX_CUSTOM_RULES };
 
 /** The declared block: `<!-- guardian:rules ... -->`. */
 const BLOCK_RE = /<!--\s*guardian:rules\s*([\s\S]*?)-->/;

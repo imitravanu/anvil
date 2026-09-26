@@ -12,7 +12,9 @@ import { buildSystemPrompt } from "../../config/rules.js";
 import { TOOL_DEFINITIONS } from "../../tools/index.js";
 import { autoCommitMilestone } from "../../git/gitUtils.js";
 
-export const MAX_GOAL_TURNS = 10;
+// Centralized in config/constants (§2.4); re-exported so the public API is unchanged.
+import { MAX_GOAL_TURNS } from "../../config/constants.js";
+export { MAX_GOAL_TURNS };
 
 const GOAL_AGENT_SYSTEM_PROMPT =
   "You are Anvil's Autonomous Mission Operator. You are given a high-level engineering goal. " +

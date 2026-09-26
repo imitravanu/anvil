@@ -84,8 +84,10 @@ export function createTransportPump(): TransportPump {
 
 /** Cap on a single protocol line — a server streaming gigabytes without a
  * newline is either logging into the wrong pipe or hostile; either way the
- * transport must fail fast instead of OOMing the agent process. */
-export const MAX_MCP_LINE_BYTES = 1024 * 1024;
+ * transport must fail fast instead of OOMing the agent process. The value is
+ * centralized in config/constants (§2.4); re-exported so the public API is unchanged. */
+import { MAX_MCP_LINE_BYTES } from "../config/constants.js";
+export { MAX_MCP_LINE_BYTES };
 
 export interface LineSplitter {
   push(chunk: Buffer): void;

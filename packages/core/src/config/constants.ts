@@ -176,3 +176,64 @@ export const GUARDIAN_MAX_AUTO_FIXES = getEnvNumber("ANVIL_GUARDIAN_MAX_FIXES", 
 // Phase 26.2 — `anvil gate --watch` debounce + rate bound (no magic numbers).
 export const GUARDIAN_WATCH_INTERVAL_MS = getEnvNumber("ANVIL_GUARDIAN_WATCH_MS", 500);
 export const GUARDIAN_WATCH_MAX_SCANS_PER_MIN = getEnvNumber("ANVIL_GUARDIAN_WATCH_MAX_SCANS", 60);
+
+// ── AUDIT-11 (2026-09-28) — caps migrated from their consumer modules ────────
+// Constitution §2.4: cap-shaped constants live here, not beside the code they
+// bound. The defining modules re-export these names so their public API and
+// every import site stay unchanged. A conformance test in config/__tests__
+// fails if a cap-shaped export reappears outside this file (or the TUI's
+// displayLimits.ts, its display-budget equivalent).
+
+// CLI headless (`anvil -p`) stdin intake bounds.
+export const MAX_STDIN_BYTES = 1024 * 1024; // 1 MB cap
+export const MAX_STDIN_WAIT_MS = 30_000; // 30s hard timeout
+
+// MCP transport retention (transport.ts) and tools/list cursor loop (client.ts).
+export const MAX_MCP_LINE_BYTES = 1024 * 1024;
+export const MAX_LIST_PAGES = 20;
+
+// Goal engine (agent/goal).
+export const MAX_GOAL_TURNS = 10;
+
+// Run ledger (agent/ledger.ts): entries kept per session file.
+export const LEDGER_CAP = 1000;
+
+// Sub-agent budgets (agent/subagent.ts).
+export const SUB_AGENT_MAX_ITERATIONS = 12;
+export const SUB_AGENT_MAX_TOKENS = 4096;
+export const MAX_DELEGATIONS_PER_TURN = 3;
+
+// Checkpoint snapshot caps (agent/checkpoints.ts). The per-file cap matches the
+// tool read/write caps, so any tool-touched file fits.
+export const CHECKPOINT_FILE_MAX = 512 * 1024;
+export const CHECKPOINT_TOTAL_MAX = 2 * 1024 * 1024;
+
+// Free-model discovery cache (providers/freeModels.ts).
+export const DEFAULT_SYNC_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+// Grep tool bounds (tools/grep.ts): pattern size and the longest line tested.
+export const GREP_PATTERN_MAX_LENGTH = 256;
+export const GREP_LINE_TEST_MAX = 4096;
+
+// list_files walk bound (tools/listFiles.ts).
+export const MAX_FILES = 10_000;
+
+// write_file payload cap (tools/writeFile.ts).
+export const MAX_WRITE_BYTES = 512 * 1024;
+
+// verify_tests runner bounds (tools/verifyTests.ts).
+export const RUN_TEST_TIMEOUT_MS = 60_000;
+export const MAX_TEST_OUTPUT_BYTES = 30 * 1024;
+
+// Project config file caps (config/rules.ts, config/memory.ts).
+export const MAX_RULES_BYTES = 16 * 1024; // 16 KB cap
+export const MAX_MEMORY_BYTES = 32 * 1024; // 32 KB cap
+
+// Custom guardian rules bound (guardian/rules.ts): a runaway rules block must
+// not make every scan quadratic.
+export const MAX_CUSTOM_RULES = 32;
+
+// Per-server default tool-call timeout for MCP config entries (config/mcp.ts).
+// Distinct from DEFAULT_MCP_REQUEST_TIMEOUT_MS above, which is the transport
+// default; this is the config-layer fallback before validation clamps it.
+export const DEFAULT_MCP_TIMEOUT_MS = 60_000;

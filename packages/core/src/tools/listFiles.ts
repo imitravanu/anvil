@@ -19,7 +19,9 @@ function globToRegex(pattern: string): RegExp {
   return new RegExp(`^${escaped}$`);
 }
 
-export const MAX_FILES = 10_000;
+// Centralized in config/constants (§2.4); re-exported so the public API is unchanged.
+import { MAX_FILES } from "../config/constants.js";
+export { MAX_FILES };
 
 async function walk(
   dir: string,

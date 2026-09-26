@@ -10,7 +10,9 @@ import { loadModelsCacheV2, saveModelsCacheV2, ModelsCacheV2 } from "./cache.js"
 // ---------------------------------------------------------------------------
 
 export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-export const DEFAULT_SYNC_TTL_MS = 10 * 60 * 1000; // 10 minutes
+// Centralized in config/constants (§2.4); re-exported so the public API is unchanged.
+import { DEFAULT_SYNC_TTL_MS } from "../config/constants.js";
+export { DEFAULT_SYNC_TTL_MS };
 const REFERER = "https://github.com/imitravanu/anvil";
 const TITLE = "Anvil";
 

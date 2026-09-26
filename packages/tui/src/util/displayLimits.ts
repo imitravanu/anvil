@@ -11,6 +11,16 @@ export const HISTORY_RECALL_CAP = 100; // sentHistory bound
 export const MESSAGE_QUEUE_CAP = 10; // messages typed while a turn runs
 export const IMAGE_MAX_BYTES = 5 * 1024 * 1024; // /image attachment cap
 
+// AUDIT-11: caps that lived beside their consumers (§2.4) — centralized here
+// with the rest of the display budgets; the defining modules re-export them so
+// their public API is unchanged.
+/** Heap guard: full sub-agent reports go to the model; the card keeps this much. */
+export const SUB_REPORT_RETAIN_MAX = 4000;
+/** Retained tool-output cap so long sessions can't bloat React state. */
+export const OUTPUT_RETAIN_MAX = 6000;
+/** Max diff rows rendered in the permission overlay before an omission note. */
+export const MAX_DIFF_ROWS = 40;
+
 // Code-block windowing: a 40-line block otherwise fills the whole transcript
 // and (via the flex clip) shows only its tail, silently. Render head+tail
 // with an omission marker instead; the full block lives in the session file.

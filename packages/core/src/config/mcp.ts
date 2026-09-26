@@ -41,7 +41,13 @@ export interface McpConfig {
   problems: McpConfigProblem[];
 }
 
-export const DEFAULT_MCP_TIMEOUT_MS = 60_000;
+// Centralized in config/constants (§2.4) — distinct from the transport-layer
+// DEFAULT_MCP_REQUEST_TIMEOUT_MS; this is the config-layer fallback before
+// validation clamps it. Re-exported (named) so importers of this module are
+// unaffected and the barrel keeps a single unambiguous member.
+import { DEFAULT_MCP_TIMEOUT_MS } from "./constants.js";
+
+export { DEFAULT_MCP_TIMEOUT_MS };
 const SERVER_ID_RE = /^[a-z0-9-_]{1,40}$/;
 
 export function mcpConfigPath(): string {

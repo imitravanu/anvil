@@ -172,8 +172,10 @@ export class McpClient {
   }
 }
 
-/** Cap on tools/list pages per connection (a cursor loop must not hang boot). */
-export const MAX_LIST_PAGES = 20;
+/** Cap on tools/list pages per connection (a cursor loop must not hang boot).
+ * Centralized in config/constants (§2.4); re-exported so the public API is unchanged. */
+import { MAX_LIST_PAGES } from "../config/constants.js";
+export { MAX_LIST_PAGES };
 
 function toToolDef(serverId: string, t: unknown): McpToolDef | null {
   if (!isRecord(t) || typeof t.name !== "string" || t.name.length === 0) return null;

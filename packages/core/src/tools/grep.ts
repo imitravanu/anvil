@@ -16,8 +16,10 @@ const MAX_FILE_BYTES = 1024 * 1024;
 //    its own repetition or alternation — e.g. (a|aa)+$ hangs a 38-character
 //    line for >60s on Node 24 (verified); (?:ab)+ (fixed text, no alternation)
 //    and plain alternation (a|b) without an outer repeat stay allowed.
-export const GREP_PATTERN_MAX_LENGTH = 256;
-export const GREP_LINE_TEST_MAX = 4096;
+// Both caps are centralized in config/constants (§2.4); re-exported so the
+// public API is unchanged.
+import { GREP_PATTERN_MAX_LENGTH, GREP_LINE_TEST_MAX } from "../config/constants.js";
+export { GREP_PATTERN_MAX_LENGTH, GREP_LINE_TEST_MAX };
 
 /**
  * Structural view of a pattern for the shape check. Escaped atoms and

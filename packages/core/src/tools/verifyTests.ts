@@ -3,9 +3,9 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { ToolContext, ToolDefinition, ToolExecutor, ToolExecutionResult } from "./types.js";
 import { resolveWithinRoot } from "./paths.js";
+import { RUN_TEST_TIMEOUT_MS, MAX_TEST_OUTPUT_BYTES } from "../config/constants.js";
 
-export const RUN_TEST_TIMEOUT_MS = 60_000;
-export const MAX_TEST_OUTPUT_BYTES = 30 * 1024;
+export { RUN_TEST_TIMEOUT_MS, MAX_TEST_OUTPUT_BYTES };
 
 // Sanity bounds for the env override — a hostile value must not busy-freeze
 // the turn (`0`) nor park it for an hour (huge values).

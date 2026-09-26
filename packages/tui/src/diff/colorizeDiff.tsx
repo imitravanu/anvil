@@ -4,9 +4,10 @@ import { parseDiff, type DiffRow } from "./parseDiff.js";
 import { pairRows, type WordSeg } from "./wordDiff.js";
 import { useTheme } from "../theme/theme.js";
 import { curtail } from "../util/format.js";
+import { MAX_DIFF_ROWS } from "../util/displayLimits.js";
 
 /** Max diff rows rendered in the permission overlay before an omission note. */
-export const MAX_DIFF_ROWS = 40;
+export { MAX_DIFF_ROWS };
 
 /**
  * Line-number gutter. These three literals must stay 12 cells with the `│` at

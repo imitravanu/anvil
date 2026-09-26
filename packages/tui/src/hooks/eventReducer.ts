@@ -3,7 +3,7 @@ import type React from "react";
 import type { AgentEvent } from "@anvil/core";
 import { retainReport, type SubAgentRecord } from "../util/subagent.js";
 import { friendlyError } from "../util/errors.js";
-import { TRANSCRIPT_STATE_CAP } from "../util/displayLimits.js";
+import { TRANSCRIPT_STATE_CAP, OUTPUT_RETAIN_MAX } from "../util/displayLimits.js";
 
 export type DisplaySubAgent = SubAgentRecord;
 
@@ -20,7 +20,7 @@ export interface DisplayToolCall {
 }
 
 /** Cap retained output so long sessions can't bloat React state. */
-export const OUTPUT_RETAIN_MAX = 6000;
+export { OUTPUT_RETAIN_MAX };
 
 /** Per-string cap inside retained output (the total cap alone still spikes). */
 const RETAIN_STRING_MAX = 2000;

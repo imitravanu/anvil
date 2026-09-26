@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import { resolveWithinRoot } from "../tools/paths.js";
 import { loadProjectMemory, buildSystemPromptWithMemory } from "./memory.js";
+import { MAX_RULES_BYTES } from "./constants.js";
 
-export const MAX_RULES_BYTES = 16 * 1024; // 16 KB cap
+export { MAX_RULES_BYTES };
 
 export const RULE_CANDIDATES = [
   ".anvil/rules",
