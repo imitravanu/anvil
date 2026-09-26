@@ -2276,3 +2276,46 @@ inlined again, so the tarball needs nothing beyond itself. Full `npm run gate` g
 T8 now records the revert and its reason, replacing the "measured 37% win" claim that independent
 re-measurement could not reproduce.
 
+
+---
+
+## 2026-09-28 — AUDIT-05: allowlist shape rule made repo-shape agnostic, with a gate↔core parity guard (Buffy)
+
+**Files owned (declared before editing):** `packages/core/src/guardian/allowlist.ts`,
+`packages/core/src/guardian/index.ts`, `packages/core/src/guardian/__tests__/allowlist.test.ts`,
+`CHANGELOG.md`, this file.
+**PROTECTED ARTIFACTS TOUCHED (§3.4(a) declaration, owner-approved in-session):**
+`scripts/verify-gate.mjs`, `packages/cli/src/__tests__/gate.sentinel.test.ts`,
+`.github/workflows/visual-regression.yml`, `scripts/gate-manifest.json`.
+
+**Why protected edits were necessary.** The audit's proposed fix ("one validator exported by core
+and imported by the gate") is unimplementable: core is a shipped npm artifact (must stay
+self-contained), and the gate is plain `.mjs` that runs Step 1 before any build (cannot import
+core's TS). The real fix therefore has to relax the shape rule **in both implementations**, which
+means editing the gate's allowlist-validation logic — protected — and the sentinel test that pins
+it, in the same protected cycle. The visual-regression job label (stale "3 sizes x 2 themes" since
+28.12) was folded into this same approved cycle.
+
+**The fix.** Both sides now enforce one rule — `isValidSourceFilePath`: a repo-relative source
+file path (`packages/<pkg>/src/x.ts` **or** foreign-repo `src/x.ts`), rejecting directories,
+trailing slashes, globs, absolute paths, `..`/`.` segments, backslashes, empty strings, and
+non-source extensions (JS/TS-family only, since that is the scan surface both consumers inspect).
+Sentinel literal `ENTRY_FILE_RE` (asserted since 2026-09-13) moved to the new predicate name in
+the same commit.
+
+**Drift guard.** New sentinel test "gate and core agree exactly on the allowlist entry shape"
+extracts `isValidSourceFilePath` from the gate's source, constructs it via `new Function`, and
+runs it against core's exported predicate (re-exported via `@anvil/core`) over 4 accept + 12
+reject cases. Any divergence fails on both sides. This is the production caller for the new
+export (§2.8).
+
+**Manifest:** hashes regenerated for the three changed protected files
+(`verify-gate.mjs`, `gate.sentinel.test.ts`, `visual-regression.yml`); manifest coverage is
+unchanged (10 paths). `visual-regression.yml` change is a one-line job *label* only — no
+trigger, secret, or step touched.
+
+**RED→GREEN:** new core tests failed first (`expected 1 to be +0` — foreign `src/legacy.ts` was
+counted rejected) and pass now; the parity test ran against the real extracted gate code, not a
+copy. **Evidence:** full `npm run gate -- --ack-protected-change` (Steps 0–5, sentinel included)
++ final no-ack gate on the committed tree, exit 0.
+

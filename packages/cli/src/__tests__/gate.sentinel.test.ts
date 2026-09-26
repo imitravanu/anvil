@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { isValidSourceFilePath } from "@anvil/core";
 
 /**
  * GATE INTEGRITY SENTINEL (hardening, 2026-09-13)
@@ -84,7 +85,51 @@ describe("gate integrity sentinel", () => {
 
   it("allowlist cannot be weaponized (entry shape is validated)", () => {
     const gate = read("scripts/verify-gate.mjs");
-    expect(gate).toContain("ENTRY_FILE_RE");
+    expect(gate).toContain("isValidSourceFilePath");
+  });
+
+  // AUDIT-05: the gate (plain .mjs, repo-only) and core's shipped reader must
+  // agree on what an allowlist entry is. A shared module is impossible — the
+  // gate runs before any build and core is a shipped npm artifact — so the
+  // gate's predicate is extracted from its source and pinned to core's
+  // exported implementation. If either drifts, this fails on both.
+  it("gate and core agree exactly on the allowlist entry shape", () => {
+    const gate = read("scripts/verify-gate.mjs");
+    const match = gate.match(/function isValidSourceFilePath\(file\) \{([\s\S]*?)\n\}/);
+    expect(match, "gate must define isValidSourceFilePath").not.toBeNull();
+    const gateFn = new Function("file", `${match![1]}\nreturn isValidSourceFilePath(file);`) as (
+      file: unknown
+    ) => boolean;
+
+    const accept = [
+      "packages/core/src/x.ts",
+      "packages/tui/src/a/b/c.mjs",
+      "src/legacy.ts",
+      "app/page.tsx",
+    ];
+    const reject = [
+      "",
+      "packages",
+      "packages/core/src",
+      "packages/core/src/",
+      "packages/core/src/*.ts",
+      "/etc/x.ts",
+      "../outside/x.ts",
+      "packages/core/src/./x.ts",
+      "packages\\core\\src\\x.ts",
+      "README.md",
+      "src/notes.txt",
+      "lib/util.py",
+    ];
+
+    for (const file of accept) {
+      expect(gateFn(file), `gate should accept ${file}`).toBe(true);
+      expect(isValidSourceFilePath(file), `core should accept ${file}`).toBe(true);
+    }
+    for (const file of reject) {
+      expect(gateFn(file), `gate should reject ${file}`).toBe(false);
+      expect(isValidSourceFilePath(file), `core should reject ${file}`).toBe(false);
+    }
   });
 
   it("constitution has not been watered down", () => {

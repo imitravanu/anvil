@@ -4,6 +4,25 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### The allowlist contract is repo-shape agnostic, and provably identical in gate and core (AUDIT-05, 2026-09-28)
+
+- **One shape rule, two provably-identical implementations.** The allowlist
+  entry contract was `packages/<pkg>/src/*` in both the repo gate and core's
+  shipped reader — but `anvil init --guarded` provisions `.fresh-allowlist.json`
+  into any repo, and a non-monorepo lays sources out as `src/...`, so its
+  legitimate entries hard-failed the gate there and were silently counted
+  `rejected` by the reader. Both now enforce the same rule: a repo-relative
+  source file path (`packages/<pkg>/src/x.ts` **or** `src/x.ts`) — directories,
+  globs, absolute paths, `..` traversal, dot segments, backslashes, and
+  non-source extensions are rejected.
+- **A shared module was impossible** (the gate is plain `.mjs` that runs before
+  any build; core is shipped TS), so the two implementations are pinned by a
+  sentinel parity test that extracts the gate's predicate from source and runs
+  it against core's exported `isValidSourceFilePath` on accept/reject cases —
+  drift fails on both sides.
+- **The CI visual job label now states reality** (6 sizes x 3 themes) — stale
+  since the forge theme joined the matrix; fixed in the same protected cycle.
+
 ### The release path runs the gate; the hook stops naming a test count (AUDIT-04/06, 2026-09-27)
 
 - **Publishing now runs the full gate.** `release.yml` ran build/typecheck/tests/

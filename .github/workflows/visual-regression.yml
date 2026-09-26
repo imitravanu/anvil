@@ -8,7 +8,7 @@ on:
 
 jobs:
   visual-regression:
-    name: Pixelmatch TUI Matrix (3 sizes x 2 themes)
+    name: Pixelmatch TUI Matrix (6 sizes x 3 themes)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

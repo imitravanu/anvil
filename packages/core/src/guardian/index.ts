@@ -20,5 +20,5 @@ export {
 export type { HealthSnapshot, HealthDerived, ScanObservation } from "./health.js";
 export { parseCustomGuardianRules, loadCustomGuardianRules, MAX_CUSTOM_RULES } from "./rules.js";
 export type { CustomGuardianRule } from "./rules.js";
-export { loadFreshAllowlist } from "./allowlist.js";
+export { loadFreshAllowlist, isValidSourceFilePath } from "./allowlist.js";
 export type { FreshAllowlist, FreshAllowlistEntry } from "./allowlist.js";

@@ -38,6 +38,26 @@ console.log(`================================================================${R
 const isCommentLine = (text) => /^\s*(?:\/\/|\/\*|\*)/.test(text);
 
 /**
+ * AUDIT-05 (2026-09-26): an allowlist entry must name a repo-relative SOURCE
+ * FILE — never a directory, glob, absolute path, `..` traversal, or non-source
+ * file. The old `packages/<pkg>/src/` prefix rule accepted directories and any
+ * extension, and was useless in foreign repos provisioned by
+ * `anvil init --guarded`, where `src/...` is the natural layout. A shared
+ * module is impossible here (core is shipped TS, this file is plain .mjs that
+ * runs before any build), so core's guardian/allowlist.ts ships the identical
+ * predicate and a parity test in the CLI sentinel suite fails if they drift.
+ */
+function isValidSourceFilePath(file) {
+  if (typeof file !== "string" || file.length === 0) return false;
+  if (file.startsWith("/") || file.includes("\\")) return false;
+  if (file.includes("..")) return false;
+  if (file.includes("*")) return false;
+  if (file.endsWith("/")) return false;
+  if (file.split("/").includes(".") || file.split("/").includes("..")) return false;
+  return /\.[cm]?[jt]sx?$/.test(file);
+}
+
+/**
  * Pure violation scanner for diff lines.
  * Evaluates added lines and returns an array of violation messages.
  */
@@ -297,13 +317,12 @@ try {
       fail("STEP 1", `Failed to parse .fresh-allowlist.json: ${parseErr.message}`);
     }
     const entries = Array.isArray(allowlistData.entries) ? allowlistData.entries : [];
-    const ENTRY_FILE_RE = /^packages\/[^/]+\/src\//;
     for (const entry of entries) {
       if (typeof entry !== "object" || entry === null) {
         fail("STEP 1", `Malformed allowlist entry (must be an object): ${JSON.stringify(entry)}`);
       }
-      if (typeof entry.file !== "string" || !ENTRY_FILE_RE.test(entry.file)) {
-        fail("STEP 1", `Rejected allowlist entry (must be a file path under packages/<pkg>/src/): ${JSON.stringify(entry.file)}`);
+      if (!isValidSourceFilePath(entry.file)) {
+        fail("STEP 1", `Rejected allowlist entry (must be a repo-relative source file path, e.g. packages/<pkg>/src/x.ts or src/x.ts — no directories, globs, absolute paths, or traversal): ${JSON.stringify(entry.file)}`);
       }
       if (typeof entry.reason !== "string" || entry.reason.trim().length < 4) {
         fail("STEP 1", `Allowlist entry for ${entry.file} requires a real reason (>=4 chars).`);
