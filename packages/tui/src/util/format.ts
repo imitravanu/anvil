@@ -44,6 +44,17 @@ export function formatDuration(ms: number | undefined): string {
 }
 
 /**
+ * Compact token counts for cost annotations (Phase 28.10): 999 → "999",
+ * 12,345 → "12.3k", 2,500,000 → "2.5M". Shared by the context gauge and the
+ * per-turn cost line so both always agree about the same number.
+ */
+export function formatTokenCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return `${n}`;
+}
+
+/**
  * Certification badge. A "live" status is labeled by HOW it was earned: a real
  * probe renders " [✅ live]", the mock suite renders " [✅ mock]". An unrecorded
  * mode defaults to "mock" — the conservative label, since an absent mode is not

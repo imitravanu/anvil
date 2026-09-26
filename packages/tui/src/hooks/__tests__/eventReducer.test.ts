@@ -11,6 +11,36 @@ describe("eventReducer", () => {
     expect(msg.streaming).toBe(false);
   });
 
+  it("usage events accumulate onto the turn's message as per-turn token totals (28.10)", () => {
+    let assistant: DisplayMessage = {
+      id: "a1",
+      role: "assistant",
+      text: "",
+      streaming: true,
+      toolCalls: [],
+      subAgents: [],
+    };
+    const update = (fn: (m: DisplayMessage) => DisplayMessage) => {
+      assistant = fn(assistant);
+    };
+    let usage: UsageTotals = { inputTokens: 0, outputTokens: 0 };
+    const setUsage = (action: React.SetStateAction<UsageTotals>) => {
+      usage = typeof action === "function" ? action(usage) : action;
+    };
+    const setMessages = vi.fn();
+    const setPlan = vi.fn();
+
+    // A multi-step turn reports usage once per provider response; the
+    // message must end with the SUM, not the last report.
+    applyEvent({ type: "usage", inputTokens: 1_200, outputTokens: 340 }, update, setUsage, setMessages, setPlan);
+    applyEvent({ type: "usage", inputTokens: 800, outputTokens: 260 }, update, setUsage, setMessages, setPlan);
+
+    expect(assistant.inputTokens).toBe(2_000);
+    expect(assistant.outputTokens).toBe(600);
+    // The cumulative session totals still track the same events exactly.
+    expect(usage).toEqual({ inputTokens: 2_000, outputTokens: 600 });
+  });
+
   it("appendSystemMessage caps history at TRANSCRIPT_STATE_CAP", () => {
     let state: DisplayMessage[] = [];
     const setMessages = (action: React.SetStateAction<DisplayMessage[]>) => {

@@ -5,7 +5,7 @@
 > **Author:** Chief Engineer Audit  
 > **Origin:** Deep analysis of the full TUI codebase (73 source files in `@anvil/tui`), the `anvil-ui-demo` forge prototype (`/home/mitravanu/anvil-ui-demo/demo.mjs`), completed DW-1→DW-4 design waves, and current UI/UX gaps identified during a full-stack review.  
 > **Purpose:** This document is the **actionable build guide** for any agent working on Anvil's visual identity and UX refinement. Every task has exact file paths, modification instructions, watchouts, and acceptance criteria. Tasks are sequenced — **do not skip ahead**.
-> **Progress (2026-09-26) — verified against code & tests:** 28.1 ✅ forge theme (`a2088ca`), 28.2 ✅ diff tints (`2d22f8f`), 28.3 ✅ tool call timing, 28.4 ✅ thinking elapsed indicator, 28.5 ✅ animated wordmark, 28.6 ✅ thin/theme-selectable meters, 28.7 ✅ compact inline permission bar, 28.8 ✅ muted-vs-dim pass (enforced by `theme/__tests__/dimContract.test.ts`), 28.9 ✅ header session title & turn counter (pure `headerSessionPlan` gates: title ≥92, turns ≥105). 28.4–28.7 were **adopted from a session that stopped mid-phase** (it never declared ownership in `PROGRESS.md`; its uncommitted work was verified green against the full gate, completed, and landed — see `PROGRESS.md` 2026-09-26). Its sequencing was in order: 28.4→28.5→28.6→28.7, with 28.8 started and finished by the takeover session. **Next: 28.10 — Message Cost Annotations.** A box is ticked only once its criterion is confirmed in the live tree; criteria that need a real interactive terminal (28.4's `✻` on glass, 28.5's live keypress-skip) are deliberately left unticked until a human pass confirms them; 28.10–28.12 remain.
+> **Progress (2026-09-26) — verified against code & tests:** 28.1 ✅ forge theme (`a2088ca`), 28.2 ✅ diff tints (`2d22f8f`), 28.3 ✅ tool call timing, 28.4 ✅ thinking elapsed indicator, 28.5 ✅ animated wordmark, 28.6 ✅ thin/theme-selectable meters, 28.7 ✅ compact inline permission bar, 28.8 ✅ muted-vs-dim pass (enforced by `theme/__tests__/dimContract.test.ts`), 28.9 ✅ header session title & turn counter (pure `headerSessionPlan` gates: title ≥92, turns ≥105), 28.10 ✅ per-turn token cost line (usage events accumulate onto the turn's message; `/expand`-gated, settled-only, absent on resumed history). 28.4–28.7 were **adopted from a session that stopped mid-phase** (it never declared ownership in `PROGRESS.md`; its uncommitted work was verified green against the full gate, completed, and landed — see `PROGRESS.md` 2026-09-26). Its sequencing was in order: 28.4→28.5→28.6→28.7, with 28.8 started and finished by the takeover session. **Next: 28.11 — Code Block Line Numbers.** A box is ticked only once its criterion is confirmed in the live tree; criteria that need a real interactive terminal (28.4's `✻` on glass, 28.5's live keypress-skip) are deliberately left unticked until a human pass confirms them; 28.11–28.12 remain.
 
 ---
 
@@ -535,10 +535,10 @@ Users on paid models want to see cost accumulation. The data is available from c
 - **Check if `turn_complete` or `stream_end` events carry per-turn token counts** — the existing `usage` in `useAgentController` is cumulative. Per-turn data may need delta calculation.
 
 ### Acceptance Criteria
-- [ ] `/expand` shows per-turn token counts on settled assistant messages
-- [ ] Default (compact) view shows no token counts
-- [ ] Resumed sessions gracefully omit missing data
-- [ ] `npm run gate` green
+- [x] `/expand` shows per-turn token counts on settled assistant messages
+- [x] Default (compact) view shows no token counts
+- [x] Resumed sessions gracefully omit missing data
+- [x] `npm run gate` green
 
 ---
 

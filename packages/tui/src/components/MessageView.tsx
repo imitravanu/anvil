@@ -4,7 +4,7 @@ import type { DisplayMessage } from "../hooks/useAgentController.js";
 import { MarkdownView, parseMarkdownText } from "../markdown/MarkdownView.js";
 import { useTheme } from "../theme/theme.js";
 import { rule } from "../util/chrome.js";
-import { displayWidth, formatTime } from "../util/format.js";
+import { displayWidth, formatTime, formatTokenCount } from "../util/format.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
 import { useBlink, useSpinnerFrame } from "../util/useSpinner.js";
 import { ToolCallView } from "./ToolCallView.js";
@@ -109,6 +109,13 @@ export const MessageView = React.memo(function MessageView({ message, expandTool
       {message.subAgents.map((sub, i) => (
         <SubAgentView key={i} sub={sub} expanded={expandTools} />
       ))}
+      {expandTools && !message.streaming && message.inputTokens !== undefined && (
+        // 28.10 per-turn cost line: only under /expand, only once settled,
+        // and only when real usage data exists (resumed history has none).
+        <Text color={theme.colors.textMuted}>
+          {formatTokenCount(message.inputTokens)} in · {formatTokenCount(message.outputTokens ?? 0)} out
+        </Text>
+      )}
     </Box>
   );
 });

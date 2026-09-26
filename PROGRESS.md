@@ -3,9 +3,21 @@
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
 > **ACTIVE 2026-09-26 (OpenCode chief-engineer session, Phase 28.8–28.12
-> completion):** owns the remaining Phase 28 tasks, in roadmap order: 28.10
-> (per-turn token annotations under `/expand`), 28.11 (code-block line
-> numbers), 28.12 (visual baseline refresh, LAST).
+> completion):** owns the remaining Phase 28 tasks, in roadmap order: 28.11
+> (code-block line numbers), 28.12 (visual baseline refresh, LAST).
+> **DONE 2026-09-26 (same session, 28.10 per-turn token cost line):** owns
+> `packages/tui/src/hooks/eventReducer.ts` (DisplayMessage token fields +
+> usage-case accumulation), `packages/tui/src/components/MessageView.tsx`
+> (cost line), `packages/tui/src/components/ContextGauge.tsx` (shared
+> formatter), `packages/tui/src/util/format.ts` (formatTokenCount), NEW
+> `packages/tui/src/components/__tests__/messageViewCost.test.tsx` (4 tests),
+> `packages/tui/src/hooks/__tests__/eventReducer.test.ts` (accumulation
+> test), `docs/PHASE-28-ROADMAP.md`, `CHANGELOG.md`, plus this file.
+> Per-turn totals accumulate from core's per-response usage events onto the
+> turn's message; session totals unchanged. Visible only under `/expand`,
+> only settled, only with real data (resumed history omits). TUI suite
+> 315/315; typecheck clean; full gate green before commit. No protected
+> artifact touched.
 > **DONE 2026-09-26 (same session, 28.9 header session title + turn count):**
 > owns `packages/tui/src/components/{Header,App}.tsx`, NEW
 > `packages/tui/src/components/__tests__/header.test.tsx`,

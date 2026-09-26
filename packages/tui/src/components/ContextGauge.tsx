@@ -1,6 +1,7 @@
 import { Text } from "ink";
 import { useTheme } from "../theme/theme.js";
 import { styledMeter, type MeterStyle } from "../util/chrome.js";
+import { formatTokenCount } from "../util/format.js";
 import { useBlink } from "../util/useSpinner.js";
 
 /**
@@ -16,12 +17,6 @@ export function gaugeVariantForWidth(width: number): GaugeVariant {
   if (width >= 120) return "wide";
   if (width >= 80) return "normal";
   return "compact";
-}
-
-function formatCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return `${n}`;
 }
 
 /**
@@ -40,7 +35,7 @@ export function gaugeDisplayText(
   const variant = gaugeVariantForWidth(width);
   const bar = styledMeter(meterStyle, fraction, variant === "wide" ? 10 : 6);
   if (variant === "wide") {
-    return `${bar} ${pct} (${formatCount(inputTokens)} / ${formatCount(contextWindow)})`;
+    return `${bar} ${pct} (${formatTokenCount(inputTokens)} / ${formatTokenCount(contextWindow)})`;
   }
   if (variant === "normal") return `${bar} ${pct}`;
   return pct;

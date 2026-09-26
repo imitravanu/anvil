@@ -101,6 +101,13 @@ export interface DisplayMessage {
   errorText?: string;
   /** Creation time (epoch ms); absent for resumed history — no time renders. */
   ts?: number;
+  /**
+   * Per-turn token totals (Phase 28.10), accumulated from this turn's
+   * `usage` events. Absent on resumed history (no events replay) — the
+   * cost line renders only when the data is genuinely known.
+   */
+  inputTokens?: number;
+  outputTokens?: number;
 }
 
 export interface UsageTotals {
@@ -171,6 +178,16 @@ export function applyEvent(
       setUsage((prev) => ({
         inputTokens: prev.inputTokens + event.inputTokens,
         outputTokens: prev.outputTokens + event.outputTokens,
+      }));
+      // 28.10: the same event carries THIS response's tokens, so accumulating
+      // onto the turn's message yields the per-turn total for /expand — a
+      // multi-step turn (text → tools → text) reports each provider response
+      // and they sum naturally. Resumed history replays no events, so those
+      // messages stay unannotated rather than showing a fabricated zero.
+      update((m) => ({
+        ...m,
+        inputTokens: (m.inputTokens ?? 0) + event.inputTokens,
+        outputTokens: (m.outputTokens ?? 0) + event.outputTokens,
       }));
       break;
     case "error":

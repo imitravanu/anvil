@@ -54,6 +54,18 @@ All notable changes to Anvil are documented here. The format follows
   the harness cannot fake stdout columns), and unnamed sessions render no
   empty quotes. Turn counts come from the live message state, so a resumed
   session reports its restored history honestly.
+- **`/expand` now shows what each turn actually cost you** (Phase 28.10):
+  settled assistant messages gain a quiet `1.2k in · 567 out` line. The
+  data needed no new plumbing philosophy — core's `usage` events already
+  carry per-response token counts, so the reducer now accumulates them onto
+  the turn's message as they arrive (multi-step turns sum naturally), while
+  the session totals it already fed stay byte-identical. Three visibility
+  gates, each with a reason: `/expand` (compact stays quiet), settled-only
+  (never annotate a live turn), and real data (resumed history replays no
+  events, so it renders nothing rather than a fabricated "0 in · 0 out").
+  The formatter is a new shared `formatTokenCount()` — the context gauge's
+  private copy of the same logic now imports it, so both displays always
+  agree about the same number.
 - **Adopted work, honestly labelled.** This wave was found uncommitted after
   its session stopped mid-phase without declaring ownership; it was verified
   green against the full gate, completed per the roadmap protocol, and its
