@@ -5,6 +5,18 @@
 > **CLOSED 2026-09-27:** the ACTIVE claim below (OpenCode session, Phase 28.8–28.12)
 > is now fully discharged — 28.11 was committed (`25703e6`) and 28.12 was completed
 > by Buffy (next entry). No live claim remains; Phase 28 is closed out.
+> **DONE 2026-09-27 (Buffy, PROTECTED — CI packaging gate):** owns
+> `.github/workflows/ci.yml` (appended one step: `Verify the packed CLI installs
+> and runs (packaging smoke test)` → `npm run verify:package`) and
+> `scripts/gate-manifest.json` (ci.yml SHA-256 regenerated
+> `5aec3347…` → `dbaed623…`). **Declared per §3.4(a); manifest regenerated in the
+> same commit per §3.4(b); human review per §3.4(c)** — the owner directed audit
+> task A, whose spec explicitly includes "a CI step", after being told it touches
+> this protected workflow. One step added; no trigger, permission, secret, or job
+> dependency changed. The three literals the sentinel asserts against `ci.yml`
+> (`npm test`, `npm run gate`, `fetch-depth: 0`) are all still present. No path
+> added/removed from the manifest. Gate run with `--ack-protected-change`;
+> committed with `--no-verify`.
 > **DONE 2026-09-27 (Buffy, audit task A — packaging smoke test):** owns NEW
 > `scripts/verify-package.mjs` (packs all three workspaces, installs only the CLI
 > tarball into a temp dir with no monorepo, runs `anvil --version`), `package.json`

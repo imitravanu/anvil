@@ -52,3 +52,10 @@ jobs:
       # gate.sentinel.test.ts) independently asserts the gate is intact.
       - name: Run Guardian Gate (integrity + anti-slop + quality)
         run: npm run gate
+
+      # Audit task A: a green gate tests the CODE; this installs the packed CLI
+      # into a clean directory with no monorepo and runs it, so an undeclared
+      # runtime import the hoisted node_modules would hide fails here. This is
+      # the only step that proves the published artifact actually ships.
+      - name: Verify the packed CLI installs and runs (packaging smoke test)
+        run: npm run verify:package
