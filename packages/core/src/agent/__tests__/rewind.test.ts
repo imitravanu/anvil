@@ -103,6 +103,44 @@ describe("rewind checkpoints", () => {
     expect(fs.existsSync(file)).toBe(false);
   });
 
+  it("restore replaces a symlink at the target instead of writing through it", async () => {
+    const file = path.join(tmp, "a.txt");
+    fs.writeFileSync(file, "original");
+    const { session } = newSession([writeTurn(file, "NEW", "w0"), textTurn()]);
+    await runOneTurn(session);
+
+    // After the turn, swap the target for a symlink pointing OUTSIDE the
+    // project. The restore must rename over the link (like write_file's atomic
+    // write does), never follow it — plain writeFile would have dropped the
+    // restored bytes outside the project through the link.
+    const outside = path.join(tmp, "..", `anvil-rewind-outside-${process.pid}.txt`);
+    fs.rmSync(outside, { force: true });
+    fs.rmSync(file);
+    fs.symlinkSync(outside, file);
+
+    const result = await session.rewind(1);
+    expect(result.ok).toBe(true);
+    expect(fs.lstatSync(file).isSymbolicLink()).toBe(false);
+    expect(fs.existsSync(outside)).toBe(false);
+    expect(fs.readFileSync(file, "utf-8")).toBe("original");
+    expect(fs.readdirSync(tmp).filter((f) => f.includes(".tmp."))).toEqual([]);
+    fs.rmSync(outside, { force: true });
+  });
+
+  it("restore preserves the executable bit of the replaced file", async () => {
+    const file = path.join(tmp, "run.sh");
+    fs.writeFileSync(file, "#!/bin/sh\noriginal", { mode: 0o755 });
+    const { session } = newSession([writeTurn(file, "NEW", "w0"), textTurn()]);
+    await runOneTurn(session);
+
+    const result = await session.rewind(1);
+    expect(result.ok).toBe(true);
+    // A naive temp-then-rename write resets the file to 0644; the restore must
+    // carry the replaced file's mode across, like write_file does.
+    expect((fs.statSync(file).mode & 0o777) & 0o111).toBe(0o111);
+    expect(fs.readFileSync(file, "utf-8")).toBe("#!/bin/sh\noriginal");
+  });
+
   it("R3: read-only and run_command-only turns snapshot nothing", async () => {
     const file = path.join(tmp, "a.txt");
     fs.writeFileSync(file, "x");

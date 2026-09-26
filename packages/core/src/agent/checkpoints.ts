@@ -35,6 +35,7 @@ export interface Checkpoint {
 
 /** Ring size per session. */
 import { CHECKPOINT_KEEP, CHECKPOINT_FILE_MAX, CHECKPOINT_TOTAL_MAX } from "../config/constants.js";
+import { atomicWriteBuffer } from "../atomicWrite.js";
 import { log } from "../logger.js";
 export { CHECKPOINT_KEEP, CHECKPOINT_FILE_MAX, CHECKPOINT_TOTAL_MAX };
 
@@ -215,7 +216,19 @@ export async function restoreCheckpoint(
         deleted.push(f.path);
       } else {
         await fs.mkdir(path.dirname(resolved), { recursive: true });
-        await fs.writeFile(resolved, f.content);
+        // Atomic temp+rename (same primitive as write_file/edit_file): a crash
+        // mid-restore can no longer leave a half-written file behind, and the
+        // rename REPLACES a symlink at the target instead of following it —
+        // the restore was the one write in the mutation surface that could
+        // still be redirected through a swapped link. The replaced file's mode
+        // is carried across so an executable script survives a rewind intact.
+        let prevMode: number | undefined;
+        try {
+          prevMode = (await fs.stat(resolved)).mode & 0o777;
+        } catch {
+          // target absent — default mode applies
+        }
+        await atomicWriteBuffer(resolved, f.content, { mode: prevMode });
         restored.push(f.path);
       }
     } catch (err: unknown) {

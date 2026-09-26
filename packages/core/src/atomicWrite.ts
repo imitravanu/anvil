@@ -49,6 +49,39 @@ export function atomicWriteJson(file: string, data: unknown, opts?: { mode?: num
 }
 
 /**
+ * Write bytes atomically: temp file in the same directory (+ optional mode,
+ * applied before rename) then rename over the target. Same primitive as
+ * `atomicWriteText` for arbitrary bytes — restores of binary snapshots need
+ * byte-exact fidelity, and the rename REPLACES a symlink at the target rather
+ * than following it, so no caller can be redirected through a swapped link.
+ */
+export async function atomicWriteBuffer(
+  file: string,
+  content: Buffer,
+  opts?: { mode?: number; signal?: AbortSignal }
+): Promise<void> {
+  if (opts?.signal?.aborted) throw new Error("Aborted before writing");
+  await fs.promises.mkdir(path.dirname(file), { recursive: true });
+  const tmp = `${file}.tmp.${process.pid}.${tmpSeq++}`;
+  try {
+    if (opts?.mode !== undefined) {
+      await fs.promises.writeFile(tmp, content, { mode: opts.mode });
+    } else {
+      await fs.promises.writeFile(tmp, content);
+    }
+    if (opts?.signal?.aborted) throw new Error("Aborted before renaming");
+    await fs.promises.rename(tmp, file);
+  } catch (err) {
+    try {
+      await fs.promises.unlink(tmp);
+    } catch {
+      // already gone
+    }
+    throw err;
+  }
+}
+
+/**
  * Write text atomically: temp file in the same directory (+ optional mode,
  * applied before rename) then rename over the target.
  */

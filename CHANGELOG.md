@@ -4,6 +4,19 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Rewind writes are now atomic and symlink-proof like every other write (2026-09-28)
+
+- **Found by a fresh security sweep, not the audit.** `restoreCheckpoint` was
+  the one write in the whole mutation surface that used plain `writeFile`:
+  a crash mid-restore could leave a half-written file, and a symlink swapped
+  in at the target would have the restore write **through** it — landing the
+  restored bytes outside the project. `write_file` and `edit_file` were
+  already immune (their atomic temp+rename *replaces* links); rewind now uses
+  the same primitive, carrying the replaced file's mode across so an
+  executable script survives a rewind intact.
+- Pinned by two tests: the symlink-swap proof (failed RED against the old
+  code, passes now) and an executable-bit guard (keeps the fix honest).
+
 ### Every cap now lives in one place, with a guard to keep it that way (AUDIT-11, 2026-09-28)
 
 - **22 cap-shaped constants migrated into `config/constants.ts`** (stdin

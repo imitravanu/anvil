@@ -2359,3 +2359,51 @@ missed, found by the guard doing its job.
 **Evidence:** full `npm run gate` green — Steps 0–5; suites **cli 117, core 763, tui 329
 (1,209 total)**, 25/25 mock evals, exit 0.
 
+
+---
+
+## 2026-09-28 (3) — Fresh security sweep: rewind restore hardened (Buffy)
+
+**Files owned (declared before editing):** `packages/core/src/agent/checkpoints.ts`,
+`packages/core/src/agent/__tests__/rewind.test.ts`, `CHANGELOG.md`, this file.
+**No protected artifact touched.**
+
+**Why another sweep.** The 2026-09-26 audit was closed out; this was a fresh pass over surfaces
+the audit did not cover, with three probes: (1) every tool's `mutating` flag vs its executor's
+real behavior, (2) the path-containment boundary under symlink/traversal stress, (3) promise,
+JSON, and signal hygiene.
+
+**What held up (verified, not assumed):**
+- `mutating` flags: all 13 tools honest. `verifyTests` spawns processes but is correctly
+  `mutating: false` — the model-supplied pattern is spawned as a direct argv element, never
+  shell-interpolated, and the shell path carries only project-config-derived commands.
+- `resolveWithinRoot`: symlink-aware containment held under every probe, including the broken-
+  symlink case — and the reason write_file/edit_file survive it is that `atomicWriteText`'s
+  POSIX rename REPLACES a link instead of following it. Empirically proven, not just reasoned.
+- MCP tools are namespaced (`mcp_<server>__<tool>`) and plugin tools (`plugin_<name>__<tool>`)
+  are forced `mutating: true` — neither can shadow a built-in or dodge the permission gate.
+- Session store validates ids (`SAFE_ID_RE`) before any path.join; every reader tolerates
+  corruption; every writer is atomic.
+- No unguarded JSON.parse in any production path; the one raw `.then()` chain is the orchestrator's
+  permission race, which has full rejection handling (a broken broker denies by default).
+
+**The one real finding.** `restoreCheckpoint` — the write behind `/rewind` — used plain
+`fs.writeFile`: non-atomic (a crash mid-restore leaves a half-written file) and symlink-
+FOLLOWING (a symlink swapped in at the target between the turn and the rewind would carry the
+restored bytes outside the project). Every other write in the mutation surface already used
+temp+rename. Fixed: restore now goes through `atomicWriteText` with the replaced file's mode
+carried across, so the safety property "no Anvil write follows a symlink" is universal.
+
+**RED→GREEN:** the new symlink-swap test failed against the old code (`isSymbolicLink` was true
+after restore; the outside target existed) and passes now. The mode-preservation test passed
+before AND after — its job is to pin the fix against a naive temp+rename that resets 0755→0644.
+
+**Evidence:** core 765/765 (was 763; +2), full `npm run gate` green before commit.
+
+**Process correction, on the record:** the first commit attempt was chained after the gate with
+`;` instead of `&&`, so it landed even though that gate run had FAILED Step 2 — vitest does not
+typecheck, but the gate's real `tsc` caught `atomicWriteText(string)` being handed a Buffer
+snapshot. The fix (`atomicWriteBuffer`, byte-exact for binary snapshots) was applied, the gate
+re-run fully green (1,211 tests), and the broken commit amended in place before anything shipped.
+Lesson recorded: gate exit codes gate the commit, never the other way around.
+
