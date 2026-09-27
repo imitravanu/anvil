@@ -11,7 +11,8 @@ comments cite the exact bug each rule replaces), not because it is a to-do list.
 |---|---|
 | [`../AGENTS.md`](../AGENTS.md) | The engineering constitution. Law: violations fail the gate. |
 | [`../PROGRESS.md`](../PROGRESS.md) | The live engineering record (dated session entries, evidence per change). |
-| [`PHASE-28-ROADMAP.md`](PHASE-28-ROADMAP.md) | **Current work** — visual identity / UX. Next: 28.3. Sequencing: do not skip ahead. |
+| [`PHASE-29-ROADMAP.md`](PHASE-29-ROADMAP.md) | **Current work** — frontier presentation engine (Ink 7 + React 19). Sequencing: do not skip ahead. |
+| [`PHASE-28-ROADMAP.md`](PHASE-28-ROADMAP.md) | COMPLETE (2026-09-26) — visual identity & UX refinement (144 baselines, forge theme, thin meters). |
 | [`HARDENING-PLAN-2026-09-26.md`](HARDENING-PLAN-2026-09-26.md) | COMPLETE (2026-09-26) — the hardening plan, T1–T10, with per-task acceptance. Read its `**Status:**` line before reopening anything in it. |
 | [`ENGINEERING-MEMORY.md`](ENGINEERING-MEMORY.md) | Durable engineering knowledge that outlives a phase. |
 | [`ENGINEERING-ROADMAP.md`](ENGINEERING-ROADMAP.md) | Where the work is heading after the current plan. |

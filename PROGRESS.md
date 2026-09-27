@@ -2,6 +2,12 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-28 (Antigravity chief-engineer session, Phase 29 Frontier Architecture Roadmap):**
+> owns `docs/PHASE-29-ROADMAP.md`, `docs/README.md`, `PROGRESS.md`.
+> Authored the authoritative Phase 29 build guide establishing Anvil as a frontier autonomous coding tool:
+> Ink 7 + React 19 concurrent presentation engine, flicker-free incremental differential rendering,
+> native Kitty keyboard protocol integration, and non-blocking autonomous agent execution. Doc truth verified green (11/11 tests pass). No protected artifact touched.
+>
 > **DONE 2026-09-27 (Antigravity chief-engineer session, Space Bunny Alpha empirical benchmark & live-eval headroom):**
 > owns `packages/core/src/config/constants.ts`, `evals/run.ts`, `docs/SPACE-BUNNY-ALPHA-RESEARCH.md`,
 > `docs/README.md`, `CHANGELOG.md`, plus this file.
