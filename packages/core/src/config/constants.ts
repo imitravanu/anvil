@@ -72,6 +72,10 @@ export const MAX_VERIFY_REPAIRS = getEnvNumber("ANVIL_MAX_VERIFY_REPAIRS", 2);
 // raise it without a code change.
 export const EVAL_TASK_TIMEOUT_MS = getEnvNumber("ANVIL_EVAL_TIMEOUT_MS", 30_000);
 
+// Live evaluations over the network with multi-turn tool calling require generous
+// execution bounds (e.g. 15–20 tool turns + compilation/test execution).
+export const EVAL_LIVE_TASK_TIMEOUT_MS = getEnvNumber("ANVIL_EVAL_LIVE_TIMEOUT_MS", 120_000);
+
 // Phase 27.3 — failure diff capture: a failed task's unified diff is model-authored
 // and bounded so a runaway write cannot bloat the report or the persisted .diff.
 export const EVAL_FAILURE_DIFF_MAX_CHARS = getEnvNumber("ANVIL_EVAL_FAILURE_DIFF_CHARS", 8_000);

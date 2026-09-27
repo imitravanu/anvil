@@ -2,6 +2,13 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-27 (Antigravity chief-engineer session, Space Bunny Alpha empirical benchmark & live-eval headroom):**
+> owns `packages/core/src/config/constants.ts`, `evals/run.ts`, `docs/SPACE-BUNNY-ALPHA-RESEARCH.md`,
+> `docs/README.md`, `CHANGELOG.md`, plus this file.
+> Establishes EVAL_LIVE_TASK_TIMEOUT_MS (120_000) in constants.ts and default live-eval timeout in evals/run.ts.
+> Empirically benchmarked stealth/space-bunny-alpha across 8 task categories (bugfixes, logic, generics, python, multifile, circular require)
+> with 100% pass rate (8/8) and 97 autonomous tool executions for $0.00 cost. Documented in docs/SPACE-BUNNY-ALPHA-RESEARCH.md and docs index. Full gate 100% green. No protected artifact touched.
+>
 > **DONE 2026-09-27 (Antigravity chief-engineer session, reasoning-model certification & space-bunny-alpha integration):**
 > owns `packages/core/src/config/constants.ts`, `packages/core/src/cert/runner.ts`,
 > `packages/core/src/providers/registry.ts`, `README.md`, `CHANGELOG.md`, plus this file.

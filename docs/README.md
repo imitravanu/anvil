@@ -18,6 +18,7 @@ comments cite the exact bug each rule replaces), not because it is a to-do list.
 | [`ANTI-SLOP-GATE-PLAN.md`](ANTI-SLOP-GATE-PLAN.md) | Why the gate looks the way it does. |
 | [`PHASE-21-25-ROADMAP.md`](PHASE-21-25-ROADMAP.md) | The multi-phase hardening roadmap referenced by the constitution. |
 | [`STABILIZATION-ROADMAP-2026-09.md`](STABILIZATION-ROADMAP-2026-09.md) | Stabilization scope; its status header is asserted against its own checkboxes. |
+| [`SPACE-BUNNY-ALPHA-RESEARCH.md`](SPACE-BUNNY-ALPHA-RESEARCH.md) | Empirical evaluation & benchmark record for Space Bunny Alpha (100% pass across 8 task categories). |
 
 ## Contracts — code and tests reference these by path, so they do not move
 

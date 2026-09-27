@@ -19,7 +19,7 @@ import {
   resolveEvalsDir,
   findGuardianDeltaPair,
 } from "../packages/core/src/eval/index.js";
-import { EVAL_RATE_LIMIT_DELAY_MS } from "../packages/core/src/config/constants.js";
+import { EVAL_RATE_LIMIT_DELAY_MS, EVAL_LIVE_TASK_TIMEOUT_MS } from "../packages/core/src/config/constants.js";
 import { resolveConcurrency } from "../packages/core/src/eval/runner.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -107,10 +107,13 @@ async function main() {
   // the runner — so live runs died at 30s mid-work (a passing task once landed at
   // 29.27s). When this env var is set it is passed as an explicit operator
   // override, which the runner prefers over task config. Unset in CI, so mock
-  // per-task budgets are untouched.
+  // per-task budgets are untouched. For live runs (!useMock), default to
+  // EVAL_LIVE_TASK_TIMEOUT_MS (120s) so multi-turn tool calling has headroom.
   const envTimeout = Number(process.env.ANVIL_EVAL_TIMEOUT_MS);
   const timeoutOverride =
-    Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : undefined;
+    Number.isFinite(envTimeout) && envTimeout > 0
+      ? envTimeout
+      : (!useMock ? EVAL_LIVE_TASK_TIMEOUT_MS : undefined);
 
   // 26.3: free-tier rate-limit pacing is applied by the runner between tasks
   // via `betweenTaskDelayMs` (below) — see runAllEvalTasks.
