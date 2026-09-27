@@ -4,6 +4,11 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Engineering roadmap reconciled with completed stabilization and audit receipts (2026-09-27)
+
+- **The parallel M0–M5 release track is now fully reconciled with shipped work.** `docs/ENGINEERING-ROADMAP.md` had remained in "M0 is in progress" despite the completion of S0–S7 stabilization items and the closure of all 16 audit findings. It now documents the verified receipts for M0 (baseline gate & packaging smoke), M1 (single dispatch authority & memory gating), M2 (final repair verification, distinct exit codes, and atomic symlink-proof rewind restore), M3 (provider usage normalization, MCP SSE/STDIO cleanup), M4 (25-task benchmark suite & live runners), and M5 (release workflow gate & packaging integrity).
+- **Upstream sync:** 45 gate-verified local commits (encompassing Phase 26–28 and the audit closure) pushed to `origin/master`.
+
 ### The 2026-09-26 chief-engineer audit is closed — all 16 findings verified, not assumed (2026-09-27)
 
 - **The audit document is now a tracked, closed record.** `docs/AUDIT-2026-09-26.md` was the only untracked file in the tree — the review that produced 16 findings was itself invisible to `git log`. It is now committed with a §11 closure record that maps every finding to its fix commit and, more importantly, to the **direct live-tree probe** that re-verified it (a closure based on commit-message trust would be the exact "measured the part that stayed green" failure the audit documents in its own §6). All 16 fixes confirmed present at `5d0fdb0`; the §8 plan A–G fully executed; the §9 owner questions answered by the actions taken.

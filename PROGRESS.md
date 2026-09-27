@@ -1,6 +1,11 @@
 # PROGRESS — multi-agent coordination
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
+> **DONE 2026-09-27 (Antigravity chief-engineer session, roadmap reconciliation & upstream sync):**
+> owns `docs/ENGINEERING-ROADMAP.md`, `CHANGELOG.md`, plus this file. Reconciles the M0–M5 release
+> track with the completed stabilization and audit records (S0–S7 and AUDIT-01..16 closed with verified receipts),
+> marks M0–M3 complete, records M4 benchmark status, and aligns M5 release criteria with the v1.3.0 UX features
+> and packaging smoke gate. Pushed 45 verified commits to origin/master. No protected artifact touched.
 >
 > **DONE 2026-09-27 (OpenCode chief-engineer deep-dive session, audit closure):**
 > owns `docs/AUDIT-2026-09-26.md` (now TRACKED — adds the §11 Closure record + two status
