@@ -2,6 +2,21 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-27 (OpenCode chief-engineer deep-dive session, gate-flake fix):**
+> owns `packages/tui/vitest.config.ts` (suite `testTimeout: 20_000`, mirroring the
+> CLI suite's precedent for the same failure class),
+> `packages/tui/src/components/__tests__/thinkingTimer.test.tsx` (comment-only:
+> record the ceiling-must-sit-below-the-timeout invariant), `CHANGELOG.md`, plus
+> this file. No production code change; no protected artifact touched.
+> **RED observed before the fix:** a full `npm test` run failed
+> `ThinkingTimer > starts at thinking… and counts up once a second` at 5023ms
+> (vitest's 5s default killing the test mid-wait) while the isolated run passes
+> in 1.05s — the 10s property-wait ceiling from 9503fcb was unreachable.
+> **GREEN after:** the same full `npm test` passes 1,211/1,211 (cli 18 files/117 ·
+> core 98/765 · tui 56/329); full `npm run gate` green Steps 0–5, exit 0.
+> The untracked `docs/AUDIT-2026-09-26.md` still belongs to a separate review
+> session and remains deliberately NOT committed here.
+>
 > **CLOSED 2026-09-27:** the ACTIVE claim below (OpenCode session, Phase 28.8–28.12)
 > is now fully discharged — 28.11 was committed (`25703e6`) and 28.12 was completed
 > by Buffy (next entry). No live claim remains; Phase 28 is closed out.

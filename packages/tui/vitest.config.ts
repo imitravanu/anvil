@@ -5,6 +5,11 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    // The thinking-timer property wait can need ~10s of real time under gate
+    // load before its 1s tick lands; vitest's 5s default killed the test
+    // mid-wait, so the ceiling could never be reached and the gate went red on
+    // machine load. The CLI suite set 20_000 for this same flake class.
+    testTimeout: 20_000,
     // Coverage is opt-in (`npm run coverage`), separate from `npm test`, so a
     // low-coverage area never blocks the gate. Counts production src/ only —
     // the __visual__ baseline tests are golden fixtures, not coverage surface.

@@ -14,7 +14,10 @@ import { frameText, renderThemed, tick } from "../../test-utils/testRender.js";
 // 10s, not 3s: under the full gate (68 test files in parallel, machine
 // saturated) this file alone has been observed to run 3.09s before the 1s tick
 // even landed, so a 3s ceiling is a coin flip. The wait is a property wait, not
-// a deadline — its only job is to bound a genuine hang.
+// a deadline — its only job is to bound a genuine hang. It is reachable only
+// because the suite testTimeout (20s, vitest.config.ts) sits above it: a
+// ceiling vitest's timeout undercuts can never be reached — the test is killed
+// mid-wait instead (that was the 9503fcb miss).
 async function waitUntil(predicate: () => boolean, ceilingMs = 10000): Promise<boolean> {
   const started = Date.now();
   while (Date.now() - started < ceilingMs) {
