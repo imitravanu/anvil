@@ -53,4 +53,33 @@ describe("read_file", () => {
     expect(output.content.length).toBeLessThan(cap + 64);
     expect(result.summary).toContain(", truncated");
   });
+
+  it("reads a code file in skeleton mode folding large implementation bodies", async () => {
+    const code = `
+export interface Logger {
+  log(msg: string): void;
+}
+
+export function heavyProcessor(input: string[]): string[] {
+  const result: string[] = [];
+  for (const item of input) {
+    if (item.length > 5) {
+      result.push(item.toUpperCase());
+    } else {
+      result.push(item.toLowerCase());
+    }
+  }
+  return result;
+}
+`;
+    await fs.writeFile(path.join(root, "service.ts"), code);
+    const result = await executeTool("read_file", { path: "service.ts", mode: "skeleton" }, ctx);
+    expect(result.isError).toBe(false);
+    const output = result.output as { content: string; mode: string };
+    expect(output.mode).toBe("skeleton");
+    expect(output.content).toContain("export interface Logger {");
+    expect(output.content).toContain("export function heavyProcessor");
+    expect(output.content).toContain("lines folded");
+    expect(result.summary).toContain(", skeleton");
+  });
 });

@@ -4,6 +4,9 @@ import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 import { resolveWithinRoot } from "./paths.js";
 import { atomicWriteText } from "../atomicWrite.js";
 import { MAX_WRITE_BYTES } from "../config/constants.js";
+import { getProjectSymbolIndex } from "./findSymbol.js";
+import { checkPostMutationDiagnostics } from "../lsp/sensor.js";
+import type { LspDiagnostic } from "../lsp/types.js";
 
 export { MAX_WRITE_BYTES };
 
@@ -55,10 +58,43 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
     // new file
   }
   await atomicWriteText(abs, content, { mode: prevMode, signal: ctx.signal });
+
+  // Invalidate / update symbol index for workspace topology
+  try {
+    const index = getProjectSymbolIndex(ctx.projectRoot);
+    if (index.size > 0) {
+      index.indexFile(relPath, content);
+    }
+  } catch {
+    // Best-effort index update
+  }
+
+  // Check post-mutation compiler diagnostics (bounded to 400ms)
+  let diagnostics: LspDiagnostic[] = [];
+  try {
+    diagnostics = await checkPostMutationDiagnostics(ctx.projectRoot, abs, content, 400);
+  } catch {
+    diagnostics = [];
+  }
+
+  const errors = diagnostics.filter((d) => d.severity === "error").length;
+  const warnings = diagnostics.filter((d) => d.severity === "warning").length;
+  let diagSummary = "";
+  if (errors > 0) {
+    diagSummary = ` · ⚠ ${errors} compiler error${errors > 1 ? "s" : ""}`;
+  } else if (warnings > 0) {
+    diagSummary = ` · ⚠ ${warnings} compiler warning${warnings > 1 ? "s" : ""}`;
+  }
+
   return {
-    output: { path: relPath, bytes, overwrote: existed },
+    output: {
+      path: relPath,
+      bytes,
+      overwrote: existed,
+      ...(diagnostics.length > 0 ? { diagnostics } : {}),
+    },
     isError: false,
-    summary: `${existed ? "Overwrote" : "Created"} ${relPath} (${bytes} bytes${existed ? `, was ${prevBytes}` : ""})`,
+    summary: `${existed ? "Overwrote" : "Created"} ${relPath} (${bytes} bytes${existed ? `, was ${prevBytes}` : ""})${diagSummary}`,
   };
 };
 

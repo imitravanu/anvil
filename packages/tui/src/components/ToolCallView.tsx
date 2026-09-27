@@ -49,12 +49,26 @@ export function ToolCallView({ call, expanded }: { call: DisplayToolCall; expand
   // Reserve the suffix's cells (plus its separating space) BEFORE curtailing, so
   // the composed row still fits one line instead of wrapping.
   const body = duration ? curtail(line, Math.max(8, budget - duration.length - 1)) : curtail(line, budget);
+  const rawDiags = (call.output as { diagnostics?: unknown[] })?.diagnostics;
+  const diagnostics = Array.isArray(rawDiags)
+    ? (rawDiags as { line?: number; severity?: string; message?: string }[])
+    : [];
+
   return (
     <Box flexDirection="column">
       <Box paddingLeft={3}>
         <Text color={color}>{body}</Text>
         {duration ? <Text color={theme.colors.textMuted}>{` ${duration}`}</Text> : null}
       </Box>
+      {!expanded && call.status !== "running" && diagnostics.length > 0 && (
+        <Box flexDirection="column" paddingLeft={5}>
+          {diagnostics.slice(0, 3).map((d, i) => (
+            <Text key={i} color={d.severity === "error" ? theme.colors.error : theme.colors.warning}>
+              {d.severity === "error" ? "✖ " : "▲ "}line {d.line}: {curtail(d.message ?? "", Math.max(10, budget - 12))}
+            </Text>
+          ))}
+        </Box>
+      )}
       {expanded && call.status !== "running" && (
         <ExpandedLines lines={formatToolOutput(call.output)} />
       )}

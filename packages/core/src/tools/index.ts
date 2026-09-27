@@ -7,6 +7,7 @@ import * as listFiles from "./listFiles.js";
 import * as grep from "./grep.js";
 import * as bash from "./bash.js";
 import * as outline from "./outline.js";
+import * as findSymbol from "./findSymbol.js";
 import * as verifyTests from "./verifyTests.js";
 import * as updatePlan from "./updatePlan.js"; // plan scratchpad
 import * as delegateTask from "./delegateTask.js"; // sub-agent delegation tool
@@ -42,6 +43,7 @@ const REGISTRY: RegisteredTool[] = [
   { definition: grep.definition, execute: grep.execute },
   { definition: bash.definition, execute: bash.execute, describe: bash.describe },
   { definition: outline.definition, execute: outline.execute },
+  { definition: findSymbol.definition, execute: findSymbol.execute },
   { definition: verifyTests.definition, execute: verifyTests.execute },
   { definition: updatePlan.definition, execute: updatePlan.execute, executeSession: updatePlan.executeSession },
   { definition: delegateTask.definition, execute: delegateTask.execute, executeSession: delegateTask.executeSession },

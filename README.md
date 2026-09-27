@@ -14,7 +14,7 @@
 
 <p align="center">
   <b>Anvil</b> is a professional-grade, terminal-based AI coding agent with an interactive React (Ink) terminal interface.<br>
-  Featuring <b>12 LLM providers</b>, <b>15 autonomous tools</b>, interactive unified-diff permissions, LSP code intelligence, and file checkpoints.
+  Featuring <b>12 LLM providers</b>, <b>16 autonomous tools</b>, interactive unified-diff permissions, LSP code intelligence, and file checkpoints.
 </p>
 
 ---
@@ -23,8 +23,8 @@
 
 - **Twelve Providers, One Unified Interface**: Seamlessly switch between Anthropic, OpenAI, Google Gemini, OpenRouter, Orcarouter, Groq, GitHub Models, Cerebras, Mistral AI, Inception, local Ollama, and QwenCloud.
 - **100% Free & Local Model Support**: Keep API costs at $0 using Groq, GitHub Models, Cerebras, Mistral experimentation, or fully offline Ollama. Every model is clearly labeled `[FREE]` or `[PAID]`.
-- **Autonomous Agent Loop with 15 Tools**:
-  - **Filesystem**: `read_file`, `write_file`, `edit_file` (unified diffs), `list_files`, `grep`.
+- **Autonomous Agent Loop with 16 Tools**:
+  - **Filesystem & AST Intelligence**: `read_file` (with AST skeleton folding), `write_file`, `edit_file` (unified diffs), `list_files`, `grep`, `find_symbol`.
   - **Code Intelligence (LSP)**: `get_outline`, `goto_definition`, `find_references`, `get_hover`, `get_diagnostics`.
   - **Execution & Memory**: `run_command`, `verify_tests`, `update_plan`, `delegate_task` (sub-agent), `update_memory`.
 - **Interactive Unified Diff Permissions**: Every mutating tool shows the exact diff or command before execution (`Allow once` / `Always allow this session` / `Deny` / `Esc`). Safe read-only commands (`ls`, `cat`, `git status`) run automatically.

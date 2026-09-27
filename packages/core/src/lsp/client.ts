@@ -21,6 +21,7 @@ export class LspStdioClient implements LspClient {
   private pending = new Map<number, PendingRequest>();
   private buffer = Buffer.alloc(0);
   private collected: LspDiagnostic[] = [];
+  private pathDiagnostics = new Map<string, { diagnostics: LspDiagnostic[]; timestamp: number }>();
   private rootUri: string;
   /** Set once the child exits or fails — a dead client must be recreated, not reused. */
   private dead = false;
@@ -125,14 +126,17 @@ export class LspStdioClient implements LspClient {
     }
     if (msg.method === "textDocument/publishDiagnostics") {
       const params = msg.params as { uri?: string; diagnostics?: { range?: { start?: { line?: number } }; severity?: number; message?: string }[] };
-      const path = typeof params.uri === "string" ? params.uri.replace(/^file:\/\//, "") : "";
-      for (const d of params.diagnostics ?? []) {
-        this.collected.push({
-          path,
-          line: (d.range?.start?.line ?? 0) + 1,
-          severity: d.severity === 1 ? "error" : d.severity === 2 ? "warning" : "info",
-          message: d.message ?? "",
-        });
+      const rawUri = typeof params.uri === "string" ? params.uri : "";
+      const path = decodeURIComponent(rawUri.replace(/^file:\/\//, ""));
+      const diags: LspDiagnostic[] = (params.diagnostics ?? []).map((d) => ({
+        path,
+        line: (d.range?.start?.line ?? 0) + 1,
+        severity: d.severity === 1 ? "error" : d.severity === 2 ? "warning" : "info",
+        message: d.message ?? "",
+      }));
+      this.pathDiagnostics.set(path, { diagnostics: diags, timestamp: Date.now() });
+      for (const d of diags) {
+        this.collected.push(d);
       }
     }
   }
@@ -279,6 +283,42 @@ export class LspStdioClient implements LspClient {
 
   async diagnostics(): Promise<LspDiagnostic[]> {
     return [...this.collected];
+  }
+
+  /**
+   * Poll for diagnostics on a specific path after a mutation.
+   * Resolves immediately if diagnostics were already received at or after `sinceTimestamp`,
+   * or polls until `timeoutMs` expires.
+   */
+  async diagnosticsForPath(targetPath: string, sinceTimestamp: number = 0, timeoutMs: number = 500): Promise<LspDiagnostic[]> {
+    const deadline = Date.now() + timeoutMs;
+    const findForPath = (): LspDiagnostic[] | null => {
+      for (const [p, val] of this.pathDiagnostics.entries()) {
+        if (p === targetPath || p.endsWith(targetPath) || targetPath.endsWith(p)) {
+          if (val.timestamp >= sinceTimestamp) {
+            return val.diagnostics;
+          }
+        }
+      }
+      return null;
+    };
+
+    const initial = findForPath();
+    if (initial !== null) return [...initial];
+
+    while (Date.now() < deadline) {
+      if (this.dead) break;
+      await new Promise<void>((resolve) => setTimeout(resolve, 25));
+      const found = findForPath();
+      if (found !== null) return [...found];
+    }
+
+    for (const [p, val] of this.pathDiagnostics.entries()) {
+      if (p === targetPath || p.endsWith(targetPath) || targetPath.endsWith(p)) {
+        return [...val.diagnostics];
+      }
+    }
+    return [];
   }
 
   async close(): Promise<void> {

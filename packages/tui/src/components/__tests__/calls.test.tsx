@@ -120,6 +120,23 @@ describe("ToolCallView", () => {
     expect(out).toContain("Cancelled");
     unmount();
   });
+
+  it("renders compiler diagnostics below the call when present", () => {
+    const diagCall: DisplayToolCall = {
+      ...doneCall,
+      summary: "Edited src/calc.ts (+1 −1) · ⚠ 1 compiler error",
+      output: {
+        diagnostics: [
+          { line: 42, severity: "error", message: "Cannot find name 'foo'" },
+        ],
+      },
+    };
+    const { lastFrame, unmount } = renderThemed(<ToolCallView call={diagCall} />);
+    const text = frameText(lastFrame);
+    expect(text).toContain("⚠ 1 compiler error");
+    expect(text).toContain("line 42: Cannot find name 'foo'");
+    unmount();
+  });
 });
 
 const doneSub: DisplaySubAgent = {

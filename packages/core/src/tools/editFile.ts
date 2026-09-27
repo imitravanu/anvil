@@ -4,6 +4,9 @@ import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 import { MAX_WRITE_BYTES } from "./writeFile.js";
 import { resolveWithinRoot } from "./paths.js";
 import { atomicWriteText } from "../atomicWrite.js";
+import { getProjectSymbolIndex } from "./findSymbol.js";
+import { checkPostMutationDiagnostics } from "../lsp/sensor.js";
+import type { LspDiagnostic } from "../lsp/types.js";
 
 interface EditInput {
   path: string;
@@ -124,13 +127,48 @@ export const execute: ToolExecutor = async (rawInput, ctx: ToolContext) => {
   }
   await atomicWriteText(result.abs, result.updated, { signal: ctx.signal });
   const { added, removed } = diffChurn(result.diff);
+
+  // Invalidate / update symbol index for workspace topology
+  try {
+    const index = getProjectSymbolIndex(ctx.projectRoot);
+    if (index.size > 0) {
+      index.indexFile(input.path, result.updated);
+    }
+  } catch {
+    // Best-effort index update
+  }
+
+  // Check post-mutation compiler diagnostics (bounded to 400ms)
+  let diagnostics: LspDiagnostic[] = [];
+  try {
+    diagnostics = await checkPostMutationDiagnostics(ctx.projectRoot, result.abs, result.updated, 400);
+  } catch {
+    diagnostics = [];
+  }
+
+  const errors = diagnostics.filter((d) => d.severity === "error").length;
+  const warnings = diagnostics.filter((d) => d.severity === "warning").length;
+  let diagSummary = "";
+  if (errors > 0) {
+    diagSummary = ` · ⚠ ${errors} compiler error${errors > 1 ? "s" : ""}`;
+  } else if (warnings > 0) {
+    diagSummary = ` · ⚠ ${warnings} compiler warning${warnings > 1 ? "s" : ""}`;
+  }
+
   return {
     // The diff itself rides in output (visible via /expand); the card shows a
     // one-liner — the raw diff's first line was the "===" separator, which
     // rendered as "✓ edit_file ====…" in the transcript.
-    output: { path: input.path, changed: true, added, removed, diff: result.diff },
+    output: {
+      path: input.path,
+      changed: true,
+      added,
+      removed,
+      diff: result.diff,
+      ...(diagnostics.length > 0 ? { diagnostics } : {}),
+    },
     isError: false,
-    summary: `Edited ${input.path} (+${added} −${removed})`,
+    summary: `Edited ${input.path} (+${added} −${removed})${diagSummary}`,
   };
 };
 

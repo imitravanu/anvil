@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 import { resolveWithinRoot } from "./paths.js";
 import { MAX_READ_FILE_BYTES } from "../config/constants.js";
+import { generateSkeleton } from "../ast/folder.js";
 
 // Large-file guard: reading a multi-megabyte file would blow the model's context.
 const MAX_BYTES = MAX_READ_FILE_BYTES;
@@ -10,17 +11,26 @@ export const definition: ToolDefinition = {
   name: "read_file",
   description:
     "Read a text file from the project. Returns the content prefixed with cat -n style line " +
-    "numbers (do NOT include these numbers when quoting file content in edit_file's old_str).",
+    "numbers (do NOT include these numbers when quoting file content in edit_file's old_str). " +
+    "Supports mode='skeleton' to fold large function/method bodies for token-efficient exploration.",
   inputSchema: {
     type: "object",
-    properties: { path: { type: "string", description: "Path relative to the project root" } },
+    properties: {
+      path: { type: "string", description: "Path relative to the project root" },
+      mode: {
+        type: "string",
+        enum: ["full", "skeleton"],
+        description:
+          "Read mode: 'full' (default) reads entire content; 'skeleton' folds function/method bodies into summary comments while preserving signatures, types, and interfaces.",
+      },
+    },
     required: ["path"],
   },
   mutating: false,
 };
 
 export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
-  const { path: relPath } = (input ?? {}) as { path?: string };
+  const { path: relPath, mode = "full" } = (input ?? {}) as { path?: string; mode?: "full" | "skeleton" };
   if (typeof relPath !== "string") {
     return {
       output: { error: "read_file requires a string argument: path" },
@@ -60,7 +70,10 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
       summary: `read_file: ${relPath} is a binary file (${totalBytes} bytes)`,
     };
   }
-  const text = buf.toString("utf8");
+  let text = buf.toString("utf8");
+  if (mode === "skeleton") {
+    text = generateSkeleton(text, relPath);
+  }
   const content = text
     .split("\n")
     .map((line, i) => `${String(i + 1).padStart(6)}\t${line}`)
@@ -68,8 +81,8 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   return {
     // totalBytes is the TRUE file size (from stat), so callers see how much was
     // truncated; content carries only the bounded head.
-    output: { path: relPath, totalBytes, truncated, content },
+    output: { path: relPath, totalBytes, truncated, mode, content },
     isError: false,
-    summary: `Read ${relPath} (${totalBytes} bytes${truncated ? ", truncated" : ""})`,
+    summary: `Read ${relPath} (${totalBytes} bytes${truncated ? ", truncated" : ""}${mode === "skeleton" ? ", skeleton" : ""})`,
   };
 };

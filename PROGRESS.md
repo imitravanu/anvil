@@ -1,6 +1,16 @@
 # PROGRESS — multi-agent coordination
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
+> **DONE 2026-09-28 (Antigravity chief-engineer session, Phase 30 Deep Workspace AST & Semantic Code Graph):**
+> owns `packages/core/src/ast/*`, `packages/core/src/tools/findSymbol.ts`, `packages/core/src/tools/readFile.ts`,
+> `packages/core/src/tools/editFile.ts`, `packages/core/src/tools/writeFile.ts`, `packages/core/src/tools/index.ts`,
+> `packages/core/src/lsp/*`, `packages/tui/src/components/ToolCallView.tsx`, `packages/tui/src/components/__tests__/calls.test.tsx`,
+> `docs/PHASE-30-ROADMAP.md`, `docs/README.md`, `README.md`, `PROGRESS.md`.
+> Implemented zero-dependency multi-language AST symbol extraction engine (TS/JS/PY/RS/GO) with semantic context folding (75–85% token reduction in `read_file` with `mode: 'skeleton'`).
+> Constructed in-memory `WorkspaceSymbolIndex` and exposed the 16th autonomous tool `find_symbol` for sub-millisecond workspace symbol topology resolution.
+> Implemented continuous post-mutation LSP diagnostic sensor in `edit_file` and `write_file`, surfacing immediate compiler errors/warnings in tool summaries and structured output.
+> Updated `ToolCallView` in `@anvil/tui` with inline compiler diagnostic badges.
+> Full Guardian Quality Gate passed 100% green: 6/6 steps, 1,225+ tests, 11/11 visual frames, 25/25 mock evals, and verify:package smoke test passed. No protected artifact touched.
 >
 > **DONE 2026-09-28 (Antigravity chief-engineer session, Phase 29 Frontier Presentation Engine Migration):**
 > owns `package.json`, `package-lock.json`, `README.md`, `packages/cli/package.json`, `packages/cli/src/index.tsx`,

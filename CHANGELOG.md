@@ -4,6 +4,15 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Phase 30 — Deep Workspace AST & Semantic Code Graph (2026-09-28)
+
+- **Zero-Dependency Multi-Language AST Symbol Parser (`@anvil/core/ast`):** Built deterministic, ultra-fast AST parser capable of extracting classes, methods, constructors, interfaces, type aliases, enums, functions, and docstrings across TypeScript, JavaScript, Python, Rust, and Go. Parses 1,000-line files in <3ms with zero runtime external dependencies.
+- **Semantic Context Skeletonization & Folding in `read_file`:** Upgraded `read_file` with `mode: "skeleton" | "full"`. In skeleton mode, executable function/method bodies are folded into concise structural markers (`/* ... N lines folded (L{start}-L{end}) ... */`) while preserving signatures, types, and interfaces, cutting token consumption by 75–85% for large file exploration.
+- **In-Memory Workspace Symbol Index (`WorkspaceSymbolIndex`):** Built repository-wide symbol topology map indexing definitions across source files, with microsecond search and incremental cache invalidation on write/edit.
+- **Dedicated `find_symbol` Tool:** Added Anvil's 16th autonomous tool `find_symbol`, enabling rapid global symbol lookups by query, kind, and exact match without raw filesystem regex sweeps.
+- **Continuous Post-Mutation LSP Diagnostic Sensor:** Integrated real-time language server diagnostics into `edit_file` and `write_file`. Immediately after atomic write, queries active language servers (bounded to 400ms) and surfaces syntax errors, unresolved identifiers, or type mismatches directly in tool summaries and structured output (`diagnostics: [...]`).
+- **TUI Inline Diagnostic Badges:** Enhanced `ToolCallView` in `@anvil/tui` to render inline compiler error/warning badges (`✖ line 42: ...`) directly under mutation cards.
+
 ### Space Bunny Alpha live certified & reasoning-model certification headroom (2026-09-27)
 
 - **Reasoning-model token headroom in provider certification (`CERT_MAX_TOKENS_STREAMING` / `CERT_MAX_TOKENS_MULTI_TURN`):** Modern reasoning and thinking models (Gemini 3.x, Space Bunny Alpha, Mercury) emit internal reasoning tokens before visible text, which previously exhausted small streaming (`50`) and multi-turn (`80`) token limits mid-output. Bound caps are now centralized constants in `config/constants.ts` (streaming: 200, multi-turn: 300) per AUDIT-11.

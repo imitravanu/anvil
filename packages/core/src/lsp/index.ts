@@ -11,3 +11,5 @@ export {
   getDiagnosticsDef,
   getDiagnosticsExec,
 } from "./tools.js";
+export { checkPostMutationDiagnostics } from "./sensor.js";
+
