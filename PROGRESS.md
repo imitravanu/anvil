@@ -1,6 +1,14 @@
 # PROGRESS — multi-agent coordination
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
+>
+> **DONE 2026-09-27 (Antigravity chief-engineer session, release v1.2.0):**
+> owns `packages/core/src/version.ts`, `packages/core/package.json`, `packages/tui/package.json`,
+> `packages/cli/package.json`, `packages/tui/__visual-baselines__/empty-state.txt`,
+> `CHANGELOG.md`, plus this file. Bumped version 1.1.0 → 1.2.0, promoted [Unreleased] changelog,
+> fixed date hygiene on AUDIT entries, updated empty-state visual baseline, verified packaging smoke
+> test (installs and runs anvil 1.2.0), full build and typecheck green. No protected artifact touched.
+>
 > **DONE 2026-09-27 (Antigravity chief-engineer session, roadmap reconciliation & upstream sync):**
 > owns `docs/ENGINEERING-ROADMAP.md`, `CHANGELOG.md`, plus this file. Reconciles the M0–M5 release
 > track with the completed stabilization and audit records (S0–S7 and AUDIT-01..16 closed with verified receipts),

@@ -4,6 +4,8 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+## [1.2.0] — 2026-09-27
+
 ### Engineering roadmap reconciled with completed stabilization and audit receipts (2026-09-27)
 
 - **The parallel M0–M5 release track is now fully reconciled with shipped work.** `docs/ENGINEERING-ROADMAP.md` had remained in "M0 is in progress" despite the completion of S0–S7 stabilization items and the closure of all 16 audit findings. It now documents the verified receipts for M0 (baseline gate & packaging smoke), M1 (single dispatch authority & memory gating), M2 (final repair verification, distinct exit codes, and atomic symlink-proof rewind restore), M3 (provider usage normalization, MCP SSE/STDIO cleanup), M4 (25-task benchmark suite & live runners), and M5 (release workflow gate & packaging integrity).
@@ -18,7 +20,7 @@ All notable changes to Anvil are documented here. The format follows
 
 - **A green gate could go red on machine load — the flake was the timeout, not the clock.** `ThinkingTimer`'s property wait can need up to 10s of real time under a saturated gate run before its 1s interval tick lands, but the TUI suite kept vitest's 5s default test timeout, so vitest killed the test mid-wait: observed live, a full `npm test` run failed it at 5023ms while the isolated run passes in 1.05s. The earlier fix (`9503fcb`) raised the ceiling 3s → 10s without raising the timeout, which made the new ceiling unreachable and moved the flake rather than fixing it. The TUI suite now sets `testTimeout: 20_000` — the same call the CLI suite already made for this failure class — so the wait is bounded by its own ceiling again and a genuine hang fails at the assertion instead of being killed mid-wait.
 
-### Rewind writes are now atomic and symlink-proof like every other write (2026-09-28)
+### Rewind writes are now atomic and symlink-proof like every other write (2026-09-27)
 
 - **Found by a fresh security sweep, not the audit.** `restoreCheckpoint` was
   the one write in the whole mutation surface that used plain `writeFile`:
@@ -31,7 +33,7 @@ All notable changes to Anvil are documented here. The format follows
 - Pinned by two tests: the symlink-swap proof (failed RED against the old
   code, passes now) and an executable-bit guard (keeps the fix honest).
 
-### Every cap now lives in one place, with a guard to keep it that way (AUDIT-11, 2026-09-28)
+### Every cap now lives in one place, with a guard to keep it that way (AUDIT-11, 2026-09-27)
 
 - **22 cap-shaped constants migrated into `config/constants.ts`** (stdin
   bounds, MCP line/page caps, sub-agent budgets, checkpoint snapshot caps,
@@ -45,7 +47,7 @@ All notable changes to Anvil are documented here. The format follows
   the two files fail too. Verified it has teeth: a planted fake cap was
   caught before the fix landed.
 
-### The allowlist contract is repo-shape agnostic, and provably identical in gate and core (AUDIT-05, 2026-09-28)
+### The allowlist contract is repo-shape agnostic, and provably identical in gate and core (AUDIT-05, 2026-09-27)
 
 - **One shape rule, two provably-identical implementations.** The allowlist
   entry contract was `packages/<pkg>/src/*` in both the repo gate and core's
