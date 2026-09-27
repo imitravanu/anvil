@@ -140,6 +140,17 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     certifiedMode: "live",
   },
   {
+    // Latest Gemini flash model recommended by the Gemini API.
+    id: "gemini-3.8-flash",
+    providerId: "gemini",
+    displayName: "Gemini 3.8 Flash",
+    contextWindow: 1_000_000,
+    supportsTools: true,
+    supportsVision: true,
+    isFree: true,
+    certified: "untested",
+  },
+  {
     id: "gemini-2.0-flash",
     providerId: "gemini",
     displayName: "Gemini 2.0 Flash",
@@ -207,6 +218,18 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     certified: "live",
     certifiedAt: "2026-09-10T18:00:00.000Z",
     certifiedMode: "mock",
+  },
+  {
+    id: "stealth/space-bunny-alpha",
+    providerId: "openrouter",
+    displayName: "Space Bunny Alpha (Free)",
+    contextWindow: 1_000_000,
+    supportsTools: true,
+    supportsVision: true,
+    isFree: true,
+    certified: "live",
+    certifiedAt: "2026-09-27T00:00:00.000Z",
+    certifiedMode: "live",
   },
   {
     id: "google/gemma-4-31b-it:free",

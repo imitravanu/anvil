@@ -2,6 +2,14 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-27 (Antigravity chief-engineer session, reasoning-model certification & space-bunny-alpha integration):**
+> owns `packages/core/src/config/constants.ts`, `packages/core/src/cert/runner.ts`,
+> `packages/core/src/providers/registry.ts`, `README.md`, `CHANGELOG.md`, plus this file.
+> Raises streaming and multi-turn cert token caps to 200/300 via CERT_MAX_TOKENS_STREAMING and
+> CERT_MAX_TOKENS_MULTI_TURN for reasoning-token models. Registers stealth/space-bunny-alpha and gemini-3.8-flash
+> in MODEL_REGISTRY, updates README doc-truth stats, and promotes stealth/space-bunny-alpha as the live cert model for OpenRouter.
+> Live certified 5/5 criteria, live evaluated 100% on fast benchmark tasks, full guardian quality gate 100% green. No protected artifact touched.
+>
 > **DONE 2026-09-27 (Antigravity chief-engineer session, release v1.2.0):**
 > owns `packages/core/src/version.ts`, `packages/core/package.json`, `packages/tui/package.json`,
 > `packages/cli/package.json`, `packages/tui/__visual-baselines__/empty-state.txt`,

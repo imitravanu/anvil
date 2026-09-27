@@ -237,3 +237,10 @@ export const MAX_CUSTOM_RULES = 32;
 // Distinct from DEFAULT_MCP_REQUEST_TIMEOUT_MS above, which is the transport
 // default; this is the config-layer fallback before validation clamps it.
 export const DEFAULT_MCP_TIMEOUT_MS = 60_000;
+
+// Provider certification bounds (cert/runner.ts): modern reasoning/thinking models
+// (Gemini 3.x, Mercury) emit internal reasoning tokens before answering, requiring
+// enough completion headroom to emit deltas and complete multi-turn secret code word recall.
+export const CERT_MAX_TOKENS_STREAMING = 200;
+export const CERT_MAX_TOKENS_MULTI_TURN = 300;
+

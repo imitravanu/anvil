@@ -4,6 +4,13 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Space Bunny Alpha live certified & reasoning-model certification headroom (2026-09-27)
+
+- **Reasoning-model token headroom in provider certification (`CERT_MAX_TOKENS_STREAMING` / `CERT_MAX_TOKENS_MULTI_TURN`):** Modern reasoning and thinking models (Gemini 3.x, Space Bunny Alpha, Mercury) emit internal reasoning tokens before visible text, which previously exhausted small streaming (`50`) and multi-turn (`80`) token limits mid-output. Bound caps are now centralized constants in `config/constants.ts` (streaming: 200, multi-turn: 300) per AUDIT-11.
+- **Space Bunny Alpha (`stealth/space-bunny-alpha`) registered & live certified:** Added to `MODEL_REGISTRY` with 1M context, full tools, and vision capability. Passed 5/5 live certification criteria on OpenRouter and achieved a 100% pass rate in live coding evaluation (`evals/run.ts --filter 01-bugfix`).
+- **Gemini 3.8 Flash (`gemini-3.8-flash`) registered:** Added to `MODEL_REGISTRY` as the latest Gemini flash model.
+- **Doc-truth synchronization:** `README.md` release badge updated to `v1.2.0` and model-picker counts synchronized to 63 free-visible models (75 registered), passing the bidirectional `docTruth.test.ts` mechanical assertion guard.
+
 ## [1.2.0] — 2026-09-27
 
 ### Engineering roadmap reconciled with completed stabilization and audit receipts (2026-09-27)

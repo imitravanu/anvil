@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/imitravanu/anvil/releases"><img src="https://img.shields.io/badge/Release-v1.1.0-ff6a00?style=flat-square" alt="Version"></a>
+  <a href="https://github.com/imitravanu/anvil/releases"><img src="https://img.shields.io/badge/Release-v1.2.0-ff6a00?style=flat-square" alt="Version"></a>
   <a href="https://github.com/imitravanu/anvil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/imitravanu/anvil/ci.yml?branch=master&style=flat-square&label=CI%20Build" alt="CI"></a>
   <a href="https://github.com/imitravanu/anvil/actions/workflows/visual-regression.yml"><img src="https://img.shields.io/github/actions/workflow/status/imitravanu/anvil/visual-regression.yml?branch=master&style=flat-square&label=Visual%20Gate" alt="Visual Gate"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node-%3E%3D20-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node"></a>
@@ -28,7 +28,7 @@
   - **Code Intelligence (LSP)**: `get_outline`, `goto_definition`, `find_references`, `get_hover`, `get_diagnostics`.
   - **Execution & Memory**: `run_command`, `verify_tests`, `update_plan`, `delegate_task` (sub-agent), `update_memory`.
 - **Interactive Unified Diff Permissions**: Every mutating tool shows the exact diff or command before execution (`Allow once` / `Always allow this session` / `Deny` / `Esc`). Safe read-only commands (`ls`, `cat`, `git status`) run automatically.
-- **Model Picker with Live Search**: Filter through 61 free-visible models (73 registered) plus live-synced OpenRouter/Orcarouter free models mid-session via `/model`.
+- **Model Picker with Live Search**: Filter through 63 free-visible models (75 registered) plus live-synced OpenRouter/Orcarouter free models mid-session via `/model`.
 - **Session Checkpoints & Rewind**: Automatic pre-mutation snapshots allow full file rollbacks via `/rewind <n>`.
 - **Context Compaction**: Summarizes older conversation regions when nearing model context windows without breaking tool-call continuity.
 - **Extensible Architecture**: Native MCP (Model Context Protocol) support over `stdio` and `SSE`, sub-agent delegation, and custom themes.

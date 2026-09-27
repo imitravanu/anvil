@@ -16,6 +16,7 @@ import {
 } from "../providers/freeModels.js";
 import { setModelCertification } from "../providers/registry.js";
 import { loadCredentials } from "../config/index.js";
+import { CERT_MAX_TOKENS_STREAMING, CERT_MAX_TOKENS_MULTI_TURN } from "../config/constants.js";
 import type { ProviderCredentials } from "../providers/index.js";
 import type {
   TestCriterion,
@@ -28,7 +29,7 @@ export const PROVIDER_CERT_MODELS: Record<ProviderId, string> = {
   anthropic: "claude-3-5-haiku-20241022",
   openai: "gpt-4o-mini",
   gemini: "gemini-3.6-flash",
-  openrouter: "openrouter/free",
+  openrouter: "stealth/space-bunny-alpha",
   orcarouter: "orcarouter/free",
   groq: "llama-3.3-70b-versatile",
   cerebras: "llama3.1-8b",
@@ -89,7 +90,7 @@ async function testStreaming(
         },
       ],
       tools: [],
-      maxTokens: 50,
+      maxTokens: CERT_MAX_TOKENS_STREAMING,
       signal: AbortSignal.timeout(timeoutMs),
     });
 
@@ -280,7 +281,7 @@ async function testMultiTurn(
       systemPrompt: "Be terse.",
       messages,
       tools: [],
-      maxTokens: 80,
+      maxTokens: CERT_MAX_TOKENS_MULTI_TURN,
       signal: AbortSignal.timeout(timeoutMs),
     })) {
       if (onEvent) onEvent(ev);
@@ -300,7 +301,7 @@ async function testMultiTurn(
       systemPrompt: "Be terse.",
       messages,
       tools: [],
-      maxTokens: 80,
+      maxTokens: CERT_MAX_TOKENS_MULTI_TURN,
       signal: AbortSignal.timeout(timeoutMs),
     })) {
       if (onEvent) onEvent(ev);
@@ -325,7 +326,7 @@ async function testMultiTurn(
       systemPrompt: "Be terse.",
       messages,
       tools: [],
-      maxTokens: 80,
+      maxTokens: CERT_MAX_TOKENS_MULTI_TURN,
       signal: AbortSignal.timeout(timeoutMs),
     })) {
       if (onEvent) onEvent(ev);
