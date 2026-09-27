@@ -39,6 +39,13 @@ function EmptyState({ model, providerId }: { model: string; providerId?: string 
           <Text color={theme.colors.textSecondary}>
             {provider ? providerLabel(provider) : "Anvil"} · {displayModelLabel(model, providerId)}
           </Text>
+          <Box marginTop={1} gap={1}>
+            <Text color={theme.colors.brand}>◈ 16 tools</Text>
+            <Text color={theme.colors.textMuted}>·</Text>
+            <Text color={theme.colors.accent}>⚡ AST code graph</Text>
+            <Text color={theme.colors.textMuted}>·</Text>
+            <Text color={theme.colors.success}>✓ continuous LSP</Text>
+          </Box>
           <Box marginTop={1} flexDirection="column">
             <Text color={theme.colors.userText}>Just type a task — I can read, edit, and run code in this project.</Text>
           </Box>
@@ -46,8 +53,9 @@ function EmptyState({ model, providerId }: { model: string; providerId?: string 
             <Text color={theme.colors.textSecondary}>Try:</Text>
             <Text><Text color={theme.colors.primary}>/help</Text><Text color={theme.colors.textSecondary}> — list commands</Text></Text>
             <Text><Text color={theme.colors.primary}>/model</Text><Text color={theme.colors.textSecondary}> — switch model or provider</Text></Text>
+            <Text><Text color={theme.colors.primary}>/goal</Text><Text color={theme.colors.textSecondary}> — autonomous mission with plan & critique</Text></Text>
+            <Text><Text color={theme.colors.primary}>/diff</Text><Text color={theme.colors.textSecondary}> — review file changes & unified diffs</Text></Text>
             <Text><Text color={theme.colors.primary}>/session</Text><Text color={theme.colors.textSecondary}> — resume a past conversation</Text></Text>
-            <Text><Text color={theme.colors.primary}>/connect</Text><Text color={theme.colors.textSecondary}> — add or update a provider API key</Text></Text>
           </Box>
           <Box marginTop={1}>
             <Text color={theme.colors.textSecondary}>v{CORE_VERSION}</Text>

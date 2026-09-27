@@ -152,9 +152,9 @@ export function Header({ model, isBusy, context, providerId, sessionTitle, turnC
     }
     return w;
   };
-  // Frame border (2) + inner padding (2): the frame itself airs the edge, so
-  // no extra breathing room — every cell counts at 100 columns.
-  const rightReserve = 4;
+  // Frame border (2) + inner padding (2) + 2 cells breathing room so the
+  // right-hand model tag never collides with the left segments at boundary widths.
+  const rightReserve = 6;
 
   return frame(
     <Box justifyContent="space-between" flexShrink={0} flexGrow={1}>
@@ -208,7 +208,7 @@ export function Header({ model, isBusy, context, providerId, sessionTitle, turnC
       </Box>
       {/* Shrink-proof + budgeted to the exact remainder: the left column can
           never be squeezed and the tag degrades gracefully on narrow widths. */}
-      <Box flexShrink={0}>
+      <Box flexShrink={0} paddingLeft={1}>
         <Text color={theme.colors.textMuted}>{fitTag(Math.max(16, width - leftWidth() - rightReserve))}</Text>
       </Box>
     </Box>

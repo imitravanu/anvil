@@ -2,7 +2,7 @@ import { Box, Text, useStdout } from "ink";
 import type { DisplayToolCall } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { TOOL_SUMMARY_MAX } from "../util/displayLimits.js";
-import { curtail, formatDuration } from "../util/format.js";
+import { curtail, displayWidth, formatDuration } from "../util/format.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
 import { formatToolOutput } from "../util/toolOutput.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
@@ -37,18 +37,19 @@ export function ToolCallView({ call, expanded }: { call: DisplayToolCall; expand
         : call.status === "cancelled"
           ? theme.colors.textMuted
           : theme.colors.error;
-  // The composed one-liner must fit one terminal row — it is a card title, and
-  // wrapping it adds transcript rows the scrollback estimator never counts.
-  const line = `${symbol} ${call.name} ${describeCall(call)}`;
+  const desc = describeCall(call);
   // Duration only for a SETTLED call: a running tool has no measurement yet, so
   // rendering one would be a fabricated number (and status "cancelled" never ran
   // to completion, so it has none either).
   const duration =
     call.status === "done" || call.status === "error" ? formatDuration(call.durationMs) : "";
   const budget = Math.max(20, (stdout?.columns ?? 80) - 4);
-  // Reserve the suffix's cells (plus its separating space) BEFORE curtailing, so
-  // the composed row still fits one line instead of wrapping.
-  const body = duration ? curtail(line, Math.max(8, budget - duration.length - 1)) : curtail(line, budget);
+  const prefix = `${symbol} ${call.name} `;
+  const prefixLen = displayWidth(prefix);
+  const suffixLen = duration ? displayWidth(` ${duration}`) : 0;
+  const descBudget = Math.max(8, budget - prefixLen - suffixLen);
+  const descCurtailed = curtail(desc, descBudget);
+
   const rawDiags = (call.output as { diagnostics?: unknown[] })?.diagnostics;
   const diagnostics = Array.isArray(rawDiags)
     ? (rawDiags as { line?: number; severity?: string; message?: string }[])
@@ -57,7 +58,21 @@ export function ToolCallView({ call, expanded }: { call: DisplayToolCall; expand
   return (
     <Box flexDirection="column">
       <Box paddingLeft={3}>
-        <Text color={color}>{body}</Text>
+        <Text color={color}>{symbol} </Text>
+        <Text color={call.status === "error" ? theme.colors.error : theme.colors.toolName} bold>
+          {call.name}{" "}
+        </Text>
+        <Text
+          color={
+            call.status === "error"
+              ? theme.colors.error
+              : call.status === "cancelled"
+                ? theme.colors.textMuted
+                : theme.colors.userText
+          }
+        >
+          {descCurtailed}
+        </Text>
         {duration ? <Text color={theme.colors.textMuted}>{` ${duration}`}</Text> : null}
       </Box>
       {!expanded && call.status !== "running" && diagnostics.length > 0 && (

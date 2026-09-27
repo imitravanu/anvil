@@ -1,6 +1,19 @@
 # PROGRESS — multi-agent coordination
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
+> **DONE 2026-09-28 (Antigravity chief-engineer session, Phase 31 Frontier TUI Craftsmanship & UX Elevation):**
+> owns `packages/tui/src/components/Header.tsx`, `packages/tui/src/components/ToolCallView.tsx`,
+> `packages/tui/src/components/MessageList.tsx`, `packages/tui/__visual-baselines__/empty-state.txt`,
+> `packages/tui/__visual-baselines__/header-cockpit-100.txt`, `docs/PHASE-31-ROADMAP.md`,
+> `docs/README.md`, `PROGRESS.md`.
+> Elevated Anvil's terminal presentation engine to frontier-grade aesthetics and developer craftsmanship using Ink 7 and React 19 capabilities:
+> - Header Cockpit layout precision: resolved 100-column text collision between package manager and model badges via calibrated cell reserves.
+> - Tool Call semantic token hierarchy: decomposed monochrome logs into high-contrast semantic tokens (status glyph, bold tool name, readable summary, execution duration in textMuted).
+> - Post-mutation diagnostic callouts: integrated continuous LSP compiler error surfaces directly into tool completion cards.
+> - Developer Cockpit empty state: built telemetry capability pill bar (◈ 16 tools · ⚡ AST code graph · ✓ continuous LSP) and elevated autonomous mission hints (/goal, /diff).
+> - 100% compliance with visual regression baselines (11/11 frames pass) and dimContract (dim color strictly reserved for decorative borders).
+> Full Guardian Quality Gate passed 100% green: 6/6 steps, 1,225+ tests, 25/25 mock evals, verify:package smoke test passed. No protected artifact touched.
+>
 > **DONE 2026-09-28 (Antigravity chief-engineer session, Phase 30 Deep Workspace AST & Semantic Code Graph):**
 > owns `packages/core/src/ast/*`, `packages/core/src/tools/findSymbol.ts`, `packages/core/src/tools/readFile.ts`,
 > `packages/core/src/tools/editFile.ts`, `packages/core/src/tools/writeFile.ts`, `packages/core/src/tools/index.ts`,
