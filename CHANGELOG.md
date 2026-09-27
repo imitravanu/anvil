@@ -4,6 +4,11 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### The 2026-09-26 chief-engineer audit is closed — all 16 findings verified, not assumed (2026-09-27)
+
+- **The audit document is now a tracked, closed record.** `docs/AUDIT-2026-09-26.md` was the only untracked file in the tree — the review that produced 16 findings was itself invisible to `git log`. It is now committed with a §11 closure record that maps every finding to its fix commit and, more importantly, to the **direct live-tree probe** that re-verified it (a closure based on commit-message trust would be the exact "measured the part that stayed green" failure the audit documents in its own §6). All 16 fixes confirmed present at `5d0fdb0`; the §8 plan A–G fully executed; the §9 owner questions answered by the actions taken.
+- **One new defect fell out of the closure pass:** the `ThinkingTimer` gate flake (see the entry below) — found because the closure re-ran the full suite rather than trusting the green recorded in the audit's §7 ledger.
+
 ### The thinking-timer test's 10-second ceiling is now actually reachable (2026-09-27)
 
 - **A green gate could go red on machine load — the flake was the timeout, not the clock.** `ThinkingTimer`'s property wait can need up to 10s of real time under a saturated gate run before its 1s interval tick lands, but the TUI suite kept vitest's 5s default test timeout, so vitest killed the test mid-wait: observed live, a full `npm test` run failed it at 5023ms while the isolated run passes in 1.05s. The earlier fix (`9503fcb`) raised the ceiling 3s → 10s without raising the timeout, which made the new ceiling unreachable and moved the flake rather than fixing it. The TUI suite now sets `testTimeout: 20_000` — the same call the CLI suite already made for this failure class — so the wait is bounded by its own ceiling again and a genuine hang fails at the assertion instead of being killed mid-wait.

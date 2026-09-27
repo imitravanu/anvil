@@ -2,6 +2,16 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-27 (OpenCode chief-engineer deep-dive session, audit closure):**
+> owns `docs/AUDIT-2026-09-26.md` (now TRACKED — adds the §11 Closure record + two status
+> corrections superseding its "all remain open" lines; §§1–10 review text untouched; this is the
+> owner-selected answer to the doc's §9.4), `CHANGELOG.md`, plus this file. Every one of the 16
+> findings was re-verified against the live tree by **direct probe** before being marked closed
+> (01/02/03/04/05/06/07/08/09/10/11/12/13/14/15/16 all confirmed at `5d0fdb0`; probes listed in
+> the doc's §11.1). One new defect surfaced and was fixed first: the thinking-timer gate flake
+> (`5d0fdb0`, entry below). Full `npm run gate` green (Steps 0–5) before commit; verify:package
+> and measure:startup re-run green. No code change in this entry; no protected artifact touched.
+>
 > **DONE 2026-09-27 (OpenCode chief-engineer deep-dive session, gate-flake fix):**
 > owns `packages/tui/vitest.config.ts` (suite `testTimeout: 20_000`, mirroring the
 > CLI suite's precedent for the same failure class),
