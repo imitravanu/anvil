@@ -2,6 +2,16 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-28 (Antigravity chief-engineer session, Phase 29 Frontier Presentation Engine Migration):**
+> owns `package.json`, `package-lock.json`, `README.md`, `packages/cli/package.json`, `packages/cli/src/index.tsx`,
+> `packages/tui/package.json`, `packages/tui/src/__visual__/visual.test.tsx`, `packages/tui/src/components/ThinkingTimer.tsx`,
+> `packages/tui/src/hooks/__tests__/useAgentController.test.tsx`, `packages/tui/src/util/useSpinner.ts`, plus this file.
+> Upgraded entire monorepo to Node >=22, Ink 7.1.1, React 19.2.0, with clean root overrides deduplicating reconciler across packages.
+> Activated native incremental differential rendering (`incrementalRendering: true`) and Kitty keyboard protocol detection (`kittyKeyboard: { mode: "auto" }`).
+> Migrated ThinkingTimer and spinner engine (useSpinnerFrame, useBlink) to Ink 7 native `useAnimation` hook, consolidating animation loop into single tick.
+> Self-contained CLI bundle reduced to 7.1mb with 0 runtime external dependencies.
+> Full Guardian Gate passed 100% green: 6/6 steps, 1,211+ tests, 11/11 visual frames, 25/25 mock evals, and verify:package smoke test passed. No protected artifact touched.
+>
 > **DONE 2026-09-28 (Antigravity chief-engineer session, Phase 29 Frontier Architecture Roadmap):**
 > owns `docs/PHASE-29-ROADMAP.md`, `docs/README.md`, `PROGRESS.md`.
 > Authored the authoritative Phase 29 build guide establishing Anvil as a frontier autonomous coding tool:

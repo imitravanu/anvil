@@ -409,6 +409,7 @@ describe("useAgentController - S6 cancel-queue UX", () => {
     await new Promise((r) => setTimeout(r, 30));
     // Typed while busy → queues (does not throw, does not start a turn).
     await api.current!.send("typed during turn");
+    await new Promise((r) => setTimeout(r, 30));
     expect(api.current!.queued).toEqual(["typed during turn"]);
     // Cancel the in-flight turn; the queued message must NOT fire.
     api.current!.cancel();

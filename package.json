@@ -29,8 +29,12 @@
     "@vitest/coverage-v8": "^4.1.11",
     "typescript": "^5.7.2"
   },
+  "overrides": {
+    "ink": "^7.1.1",
+    "react": "^19.2.0"
+  },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "description": "Anvil — a terminal-based AI coding agent (monorepo: core, tui, cli)",
   "repository": {

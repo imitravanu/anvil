@@ -1,11 +1,14 @@
-import { useEffect, useState } from "react";
+import { useAnimation } from "ink";
 
 /**
- * DW-3.1 — context-matched spinner system.
+ * DW-3.1 & Phase 29.7 — context-matched spinner system.
  * dots: tool execution / busy states (subtle, fast)
  * pulse: streaming wakefulness (breathing)
  * arrows: waiting on async work (directional)
  * blocks: goal milestone progress (filling up)
+ *
+ * Driven by Ink 7's native `useAnimation` hook, which consolidates all
+ * animated spinners into a single coordinated event loop tick.
  */
 export const SPINNERS = {
   dots: { frames: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"], interval: 80 },
@@ -21,13 +24,8 @@ export const SPINNER_FRAMES: readonly string[] = SPINNERS.dots.frames;
 /** Cycles the style's frames while `active`; freezes otherwise. */
 export function useSpinnerFrame(active: boolean, style: SpinnerStyle = "dots"): string {
   const { frames, interval } = SPINNERS[style];
-  const [frame, setFrame] = useState(0);
-  useEffect(() => {
-    if (!active) return;
-    const id = setInterval(() => setFrame((f) => (f + 1) % frames.length), interval);
-    return () => clearInterval(id);
-  }, [active, frames, interval]);
-  return frames[frame];
+  const { frame } = useAnimation({ interval, isActive: active });
+  return frames[frame % frames.length];
 }
 
 /**
@@ -35,11 +33,6 @@ export function useSpinnerFrame(active: boolean, style: SpinnerStyle = "dots"): 
  * static test frames are deterministic; toggles on the interval while active.
  */
 export function useBlink(active: boolean, intervalMs = 530): boolean {
-  const [on, setOn] = useState(true);
-  useEffect(() => {
-    if (!active) return;
-    const id = setInterval(() => setOn((v) => !v), intervalMs);
-    return () => clearInterval(id);
-  }, [active, intervalMs]);
-  return on;
+  const { frame } = useAnimation({ interval: intervalMs, isActive: active });
+  return frame % 2 === 0;
 }

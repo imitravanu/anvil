@@ -395,7 +395,11 @@ async function bootChat(flags: Record<string, string>): Promise<void> {
         reconnect: () => connectAllMcpServers(mcpConns, { timeoutMs: 10_000 }),
       }}
     />,
-    { exitOnCtrlC: false }
+    {
+      exitOnCtrlC: false,
+      incrementalRendering: true,
+      kittyKeyboard: { mode: "auto" },
+    }
   );
 }
 
@@ -445,7 +449,11 @@ function runSetup(thenChat: boolean): void {
         else exitAltScreen();
       }}
     />,
-    { exitOnCtrlC: false }
+    {
+      exitOnCtrlC: false,
+      incrementalRendering: true,
+      kittyKeyboard: { mode: "auto" },
+    }
   );
   appInstance = instance;
 }

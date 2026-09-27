@@ -41,20 +41,33 @@ const DEFAULT_ROWS = 30;
  * with explicit columns/rows so width-sensitive scenarios are captured.
  */
 function renderFrame(ui: React.ReactElement, columns: number, rows: number): string {
-  const stdout = new EventEmitter() as unknown as Record<string, unknown> & EventEmitter;
+  const stdout = new EventEmitter() as unknown as NodeJS.WriteStream;
   let last: string | undefined;
+  const stdin = new EventEmitter() as unknown as NodeJS.ReadStream;
+  Object.defineProperties(stdin, {
+    isTTY: { get: () => true },
+    setRawMode: { value: () => stdin },
+    setEncoding: { value: () => stdin },
+    read: { value: () => null },
+    resume: { value: () => stdin },
+    pause: { value: () => stdin },
+    ref: { value: () => stdin },
+    unref: { value: () => stdin },
+  });
+  const writes: string[] = [];
   Object.defineProperties(stdout, {
     columns: { get: () => columns },
     rows: { get: () => rows },
     write: {
       value: (frame: string) => {
+        writes.push(frame);
         last = frame;
       },
     },
   });
   const instance = inkRender(
     <ThemeContext.Provider value={THEMES.dark}>{ui}</ThemeContext.Provider>,
-    { stdout: stdout as never, debug: true, exitOnCtrlC: false, patchConsole: false }
+    { stdout, stdin, debug: true, exitOnCtrlC: false, patchConsole: false }
   );
   const frame = last ?? "";
   instance.unmount();
