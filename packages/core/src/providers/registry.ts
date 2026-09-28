@@ -364,6 +364,14 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     certifiedMode: "mock",
   },
   {
+    // Phase 38.3: "broken", not "live". Live probe 2026-09-29 returned HTTP
+    // 403 "only available on agentic harnesses" for this id — measured with
+    // Anvil's own attribution headers (openrouter.ts), because a bare request
+    // 403s too and could not separate "unreachable" from "my probe lacked
+    // headers". The prior "live" verdict came from a mock run that never
+    // touched the gateway, so it certified the id's SHAPE, not its reachability.
+    // "broken" is the honest status: it is a recorded observation that the id
+    // does not work, which is exactly what the field means.
     id: "thinkingmachines/inkling:free",
     providerId: "openrouter",
     displayName: "Thinking Machines: Inkling (Free)",
@@ -371,11 +379,12 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
-    certified: "live",
-    certifiedAt: "2026-09-10T18:00:00.000Z",
-    certifiedMode: "mock",
+    certified: "broken",
+    certifiedAt: "2026-09-29T00:00:00.000Z",
+    certifiedMode: "live",
   },
   {
+    // Phase 38.3: same 403 as inkling:free, measured the same way.
     id: "thinkingmachines/inkling-small:free",
     providerId: "openrouter",
     displayName: "Thinking Machines: Inkling Small (Free)",
@@ -383,9 +392,9 @@ export const MODEL_REGISTRY: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     isFree: true,
-    certified: "live",
-    certifiedAt: "2026-09-10T18:00:00.000Z",
-    certifiedMode: "mock",
+    certified: "broken",
+    certifiedAt: "2026-09-29T00:00:00.000Z",
+    certifiedMode: "live",
   },
   {
     id: "dots-studio/dots-3-note-preview:free",

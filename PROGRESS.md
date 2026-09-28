@@ -77,6 +77,52 @@
 > `CompletionRequest` still cannot REQUEST reasoning — both recorded as
 > boundaries in §4 rather than folded into this task's completion.
 >
+> **DONE 2026-09-29 (Chief-engineer session — Phase 38.3: the picker no longer offers models the gateway refuses):**
+> owns `packages/core/src/providers/registry.ts`,
+> NEW `packages/core/src/providers/__tests__/unreachableModels.test.ts`,
+> `packages/tui/src/util/__tests__/format.test.ts`,
+> `docs/PHASE-38-ROADMAP.md`, `docs/CURRENT-FOCUS.md`, `CHANGELOG.md`, plus this
+> file.
+> **Finding:** `thinkingmachines/inkling:free` and `inkling-small:free` return
+> HTTP 403 ("only available on agentic harnesses"). Probe M's first attempt
+> 403'd too, which made the result UNPROVABLE — a bare request cannot
+> distinguish "Anvil cannot reach this" from "my probe is not shaped like
+> Anvil". Rerun with Anvil's exact attribution headers
+> (`openrouter.ts:50-53`), the 403 persisted, and only then was anything
+> concluded. **A probe whose result depends on the prober's own shape is
+> invalid until the prober is made to match the product** — that is the whole
+> correction here.
+> **Root cause, not just the symptom:** both rows shipped as
+> `certified: "live"` from a `certifiedMode: "mock"` run. The mock lane
+> certifies an id's SHAPE and never touches the gateway, so the verdict was
+> recorded without any evidence of reachability. The picker reads the verdict
+> and the user reads a tick.
+> **Fix:** both are now `certified: "broken"` with `certifiedMode: "live"` —
+> verdict paired with the provenance that actually supports it. Rows were NOT
+> deleted: removal would erase the observation and let `syncFreeModels`
+> re-inject them as unknown-but-plausible.
+> **Guard scoped honestly:** a unit test cannot call 75 live endpoints, and one
+> implying that coverage would be a mock run wearing a live label — the exact
+> defect being fixed. So the test pins the two PROBED ids and the invariant they
+> violated, and one case asserts the probe list itself (2 ids, both present) so
+> that fixing either model fails the guard and forces the observation to be
+> revisited rather than left to rot.
+> **Boundary drawn at the architecture line:** core owns the registry data and
+> asserts it there; the badge rendering is asserted in the TUI suite
+> (`format.test.ts`) because core must not import from tui, and the failure the
+> user actually experiences is a rendering one. Both halves covered, neither
+> crosses the boundary.
+> **Mutation receipt:** against the REVERTED registry, **6 of 7 failed**, with
+> the defect named in the assertion message ("returned HTTP 403 in a live probe
+> … but is still certified \"live\". A mock run cannot certify reachability.").
+> 7/7 after.
+> **Gate Steps 0–5 green** after: **1,320 tests** (126 cli / 857 core / 337 tui),
+> 25/25 mock evals. No protected artifact touched. Committed; no work held.
+> **Not claimed:** 43 other mock-certified rows remain unverified (the picker
+> already labels them `[✅ mock]`, so the over-claim is in the data, not the
+> user-visible label), and the runtime free-model sync can still inject a row
+> that has never answered. Both recorded in §4.
+>
 > **DONE 2026-09-29 (Chief-engineer session — Phase 38 wave 2 probes: reasoning and caching, run live):**
 > owns `docs/PHASE-38-ROADMAP.md` (§1 wave-2 receipts, §2 revised ranking, §4
 > revised boundaries), `docs/CURRENT-FOCUS.md`, plus this file. No production

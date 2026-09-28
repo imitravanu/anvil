@@ -110,6 +110,23 @@ describe("format helpers", () => {
     expect(formatCertificationBadge(undefined)).toBe("");
   });
 
+  it("never renders a tick for a model the gateway refuses (Phase 38.3)", () => {
+    // Probe N: two OpenRouter ids answered HTTP 403 for an Anvil-shaped request.
+    // They shipped as `certified: "live"` from a mock run, so the picker offered
+    // them as working choices. The registry now marks them "broken" (core test
+    // `unreachableModels.test.ts` owns the data); this owns the rendering, and
+    // asserts the user-visible half of that contract.
+    for (const status of ["broken", "untested"] as const) {
+      const badge = formatCertificationBadge(status, "live");
+      expect(badge, `a ${status} model must not render as available`).not.toContain("✅");
+    }
+    // "broken" is specific; "untested" is merely unknown. Collapsing them would
+    // overstate what Anvil knows.
+    expect(formatCertificationBadge("broken", "live")).not.toBe(
+      formatCertificationBadge("untested", "live")
+    );
+  });
+
   it("formatTime renders zero-padded local HH:MM", () => {
     expect(formatTime(new Date(2026, 8, 14, 9, 5).getTime())).toBe("09:05");
     expect(formatTime(new Date(2026, 8, 14, 23, 59).getTime())).toBe("23:59");

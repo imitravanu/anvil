@@ -41,8 +41,12 @@
     cache is still not *requested* — there is no `cache_control` anywhere, so
     this is still being paid for as though no cache existed (38.7).
   - **Two shipped models 403 for every user.** `thinkingmachines/inkling:free`
-    and `inkling-small:free` are in the picker labelled `certified: "live"`,
+    and `inkling-small:free` were in the picker labelled `certified: "live"`,
     recorded from a **mock** run. Verified with Anvil's exact headers.
+    **FIXED by 38.3** — both are now `broken` with live provenance, kept listed
+    rather than deleted so the observation survives a future sync. **Boundary:**
+    43 other mock-certified rows remain unverified; the picker already labels
+    them `[✅ mock]`, and a full live sweep is out of scope here.
   Receipts and the corrected ranking: [`PHASE-38-ROADMAP.md`](PHASE-38-ROADMAP.md) §1.
 - Phase 37 landed (2026-09-28): the Phase 36 §4 trigger fired — a
   non-excluded Rust build tree put 402 generated symbols into a fixture index,

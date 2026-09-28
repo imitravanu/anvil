@@ -4,6 +4,36 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Two models that 403 for every user are no longer offered as working (Phase 38.3)
+
+- `thinkingmachines/inkling:free` and `thinkingmachines/inkling-small:free`
+  return **HTTP 403 "only available on agentic harnesses"**, measured with
+  Anvil's own attribution headers — a bare request 403s too, so the first probe
+  could not separate "unreachable" from "my probe lacked headers" and was rerun
+  before anything was concluded.
+- Both shipped as `certified: "live"` from a run whose `certifiedMode` was
+  `"mock"`. **A mock run certifies an id's shape, never its reachability**, so
+  the verdict was recorded without ever touching the gateway. The picker offered
+  two models that fail for everyone who selects them.
+- Both are now `certified: "broken"` with `certifiedMode: "live"` — the verdict
+  paired with the provenance that actually supports it.
+- **The rows were not deleted.** Removing them would erase the observation and
+  let a free-model sync re-add them as unknown-but-plausible; marked broken they
+  still say they do not work here.
+- **The guard is scoped to what was measured, on purpose.** A unit test cannot
+  call 75 live endpoints, and one implying that coverage would be another mock
+  run wearing a live label. It pins the two probed ids plus the invariant they
+  violated, and one case makes the probe list itself falsifiable so a future fix
+  forces the observation to be revisited.
+- Core asserts the registry data; the picker badge is asserted in the TUI suite,
+  because core must not import from tui and the failure a user sees is a
+  rendering one. Both halves are covered.
+- **Mutation receipt:** run against the reverted registry, 6 of 7 assertions
+  failed, naming the defect in the message. 7/7 after.
+- **Not claimed:** 43 other mock-certified rows are unverified, and the runtime
+  free-model sync can still inject a row that has never answered. Both are
+  recorded as boundaries in [`PHASE-38-ROADMAP.md`](docs/PHASE-38-ROADMAP.md) §4.
+
 ### Token accounting now counts reasoning and reports cache hits (Phase 38.2)
 
 - **Gemini under-reported output tokens by up to 328×.** `thoughtsTokenCount` is

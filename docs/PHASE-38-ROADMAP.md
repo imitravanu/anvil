@@ -4,11 +4,12 @@
 > **Date:** 2026-09-29
 > **Author:** Chief Engineer
 > **Core Mandate:** *"We are not making some cheap copy here; we are building frontier coding tools."*
-> **Status:** IN PROGRESS — 38.1 (measurement parity) and 38.2 (token accounting)
-> landed, both with fail-first mutation receipts. Wave 2 probes ran live against
-> Gemini and OpenRouter and produced four receipts, two of which **corrected** an
-> earlier hypothesis; the ranking below changed as a result. The prompt rewrite
-> (38.5) is deliberately blocked on the A/B harness (38.4).
+> **Status:** IN PROGRESS — 38.1 (measurement parity), 38.2 (token accounting),
+> and 38.3 (unreachable models) landed, each with a fail-first mutation receipt.
+> Wave 2 probes ran live against Gemini and OpenRouter and produced four
+> receipts, two of which **corrected** an earlier hypothesis; the ranking below
+> changed as a result. Next is 38.4, the A/B harness, which unblocks the prompt
+> rewrite (38.5).
 > **Scope:** Anvil's agent loop, guardian, compaction, rewind, LSP, and permission
 > surfaces are at or past frontier engineering. The instruction layer driving all
 > of it is eleven words, and the harness that is supposed to detect a bad
@@ -175,7 +176,7 @@ rather than the model list: `certified: "live"` was recorded from a run whose
 | :--- | :--- | :---: | :---: | :---: |
 | **38.1** | One owner for the agent profile (prompt, output budget, verify flag); CLI, headless, and the eval lane all route through it; fail-first parity guard | Probe G, H, I | **P0** | **COMPLETE** |
 | **38.2** | Count reasoning tokens in Gemini usage (`thoughtsTokenCount`) so `/context` and compaction stop under-reporting by up to 328× | Probe K | **P0** | **COMPLETE** |
-| **38.3** | Retire or re-label the two unreachable `inkling` models the picker offers as live-certified | Probe N | **P0** | **OPEN** |
+| **38.3** | Mark the two unreachable `inkling` models broken, with live provenance and a guard on the picker contract | Probe N | **P0** | **COMPLETE** |
 | **38.4** | A prompt A/B harness on a live model: fixed tasks, N trials, pass rate / cost / tool calls / edit-error rate | Probe H | **P0** | **OPEN** |
 | **38.5** | The real system prompt — tool-use policy, search-before-edit, verification, conventions | Probe J, M | **P1** | **OPEN — blocked on 38.4** |
 | **38.6** | Reasoning deltas as a first-class `StreamEvent`; surface `reasoning_tokens` and `cached_tokens` in usage | Probe L | **P1** | **OPEN** |
@@ -281,6 +282,35 @@ One pre-existing test needed updating rather than deleting: it asserted
 rebuild that dropped breakdowns. It now asserts the full event is forwarded, and
 a second test covers the reasoning/cache path.
 
+### 38.3 — The picker no longer offers models the gateway refuses (COMPLETE)
+
+Both rows are now `certified: "broken"` with `certifiedMode: "live"` — the
+verdict and its provenance, which is the whole point of the pair. A mock run
+certified the id's *shape*; a live probe establishes its *reachability*, and
+only the second kind of evidence can support a "does not work" claim.
+
+The rows were **not deleted.** Deleting them would erase the observation and let
+a future free-model sync re-add them as unknown-but-plausible. Marked broken,
+the model still exists in the list and still says it does not work here.
+
+**The guard is scoped to what was measured, deliberately.** A test cannot call
+75 live endpoints, and one that implied it was covering all of them would be
+another mock run wearing a live label — the exact defect this task fixes. So
+`unreachableModels.test.ts` pins the two probed ids and the invariant they
+violated, and one case exists purely to make the probe list itself falsifiable:
+if either id is ever fixed, that test fails and forces the observation to be
+revisited rather than left to rot.
+
+The core test asserts the data; the badge mapping is asserted in the TUI suite
+(`format.test.ts`) because **core must not import from tui** and the failure the
+user actually sees is a rendering one. The split is drawn at the boundary, and
+both halves are covered.
+
+**Mutation receipt:** run against the **reverted** registry — **6 of 7 failed**,
+naming the defect in the message itself (`returned HTTP 403 in a live probe …
+but is still certified "live". A mock run cannot certify reachability.`). 7/7
+after.
+
 ### 38.4 — The A/B harness (OPEN, next)
 
 The requirement is a lane that can **fail on a real model and distinguish
@@ -344,9 +374,18 @@ saturated for this model class.
   first surface to starve. It is not fixed in this phase.
 - **The suite still cannot differentiate frontier models** (carried from Phase
   37 §4). 38.4's harder tier is the first move against it.
-- **Two registry models are unreachable and this phase does not yet fix it**
-  (Probe N). Recorded here as well as as task 38.3 so the boundary is visible
-  to anyone reading the probe receipts before the task lands.
+- **45 of the 69 rows labelled `certified: "live"` came from mock runs**, and
+  38.3 fixed only the two Probe N measured. The remaining 43 are unverified,
+  not wrong: the picker already renders them `[✅ mock]` rather than `[✅ live]`
+  (`format.ts:77-87`), so the over-claim is in the *data*, not the label the
+  user reads. A live sweep of every row is the real fix and is **not** in this
+  phase — it needs quota and a decision about which providers matter. Recorded
+  so the boundary is explicit rather than implied by a task marked complete.
+- **The free-model sync can reintroduce this class.** `syncFreeModels` injects
+  rows at runtime, and an injected row's certification state comes from the
+  gateway listing, not from a probe. A synced id can therefore be selected
+  before anything has confirmed it answers. 38.3 guards the two known ids; it
+  does not yet make newly-synced rows probe-on-first-use.
 
 ## 5. Method (unchanged, it keeps proving itself)
 
