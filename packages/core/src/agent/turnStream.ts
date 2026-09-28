@@ -6,7 +6,11 @@
  * without a whole session.
  */
 
-import type { ModelProvider, ConversationMessage } from "../providers/types.js";
+import type {
+  ModelProvider,
+  ConversationMessage,
+  StreamEvent,
+} from "../providers/types.js";
 import {
   getConsecutiveRateLimitCount,
   isQuotaExhaustedMessage,
@@ -32,8 +36,18 @@ export interface StreamTurnInput {
   /** Carries the once-per-turn rate-limit retry flag. */
   turn: TurnState;
   /** Called for each usage event so the session can cache the latest counts. */
-  onUsage: (usage: { inputTokens: number; outputTokens: number }) => void;
+  onUsage: (usage: UsageTotals) => void;
 }
+
+/**
+ * Token accounting for one round. `outputTokens` is the number the session
+ * budgets and compacts against, so it must be the provider's TOTAL output
+ * including reasoning — see the Gemini adapter, where `thoughtsTokenCount` is
+ * reported OUTSIDE `candidatesTokenCount` and therefore has to be added in.
+ * `reasoningTokens` / `cachedInputTokens` are breakdowns of those two figures,
+ * never additions, and stay undefined when the provider does not report them.
+ */
+export type UsageTotals = Extract<StreamEvent, { type: "usage" }>;
 
 /** Everything the turn loop needs after a streamed round. */
 export interface TurnStreamResult {
@@ -106,8 +120,8 @@ export async function* streamAssistantTurn(
       }
       case "usage":
         sawUsage = true;
-        input.onUsage({ inputTokens: event.inputTokens, outputTokens: event.outputTokens });
-        yield { type: "usage", inputTokens: event.inputTokens, outputTokens: event.outputTokens };
+        input.onUsage(event);
+        yield event;
         break;
       case "error": {
         if (isRateLimitMessage(event.message)) {

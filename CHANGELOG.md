@@ -4,6 +4,43 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Token accounting now counts reasoning and reports cache hits (Phase 38.2)
+
+- **Gemini under-reported output tokens by up to 328×.** `thoughtsTokenCount` is
+  reported *outside* `candidatesTokenCount` — measured at 327 against 1 on a
+  one-line turn to `gemini-3.6-flash` — and the adapter read only the latter. A
+  trivial turn was recorded as **1 output token when 328 were spent**, so
+  `/context` and the compaction calibration both worked from a wrong number on
+  the registry's default free model. Reasoning is now summed into
+  `outputTokens`, the figure the session budgets against.
+- **The OpenAI wire format was wrong in the opposite direction, and is left
+  alone on purpose.** `completion_tokens` already includes `reasoning_tokens`
+  (measured 515 of 641), so adding them would over-report by 80%. That adapter
+  now surfaces reasoning as a **breakdown only**. A dedicated test pins the two
+  adapters' opposite correct behaviour, so a future harmonizing edit that adds
+  reasoning twice fails instead of silently inflating the total.
+- `cachedInputTokens` is reported on both paths as a **breakdown of**
+  `inputTokens`, never an addition — every vendor measured counts cached tokens
+  inside the prompt total. A 75% hit rate on `space-bunny-alpha` was previously
+  invisible and priced as if it were fresh.
+- **A missing count is not a zero.** Providers that omit a breakdown yield
+  `undefined`, so no surface can render "no reasoning" from a provider that
+  never said so.
+- **The class is closed, not just the instance:** the `usage` event is now
+  forwarded whole through `turnStream` instead of being rebuilt field-by-field.
+  That rebuild was the mechanism dropping breakdowns. The status bar reports
+  thinking share and cache share.
+- **Mutation receipt:** the new accounting tests were run against the reverted
+  adapters — **6 of 11 assertions failed**, each naming the real measured number
+  (`expected 1 to be 328`, `expected 100 to be 615`, …). 11/11 pass after.
+- **What this does NOT do:** reasoning is still generated and discarded — the
+  tokens are counted, the text is thrown away. `CompletionRequest` still has no
+  reasoning field, so Anvil cannot yet *request* more or less of it. Both remain
+  recorded as boundaries in [`PHASE-38-ROADMAP.md`](docs/PHASE-38-ROADMAP.md) §4.
+- One pre-existing test asserted `onUsage` received a two-field object, pinning
+  the exact rebuild that dropped breakdowns; it now asserts the full event is
+  forwarded.
+
 ### Frontier agent brain: reasoning and caching probed live (2026-09-29)
 
 Documentation-only; no production code changed. Four probes were run against the

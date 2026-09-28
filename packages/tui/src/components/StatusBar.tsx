@@ -47,7 +47,19 @@ export function StatusBar({
     "○ idle"
   );
   const statePlain = isBusy ? `${busyFrame} busy` : "○ idle";
-  const tokens = `tokens ${fmt(usage.inputTokens)} in · ${fmt(usage.outputTokens)} out`;
+  // Phase 38.2: show the two facts the flat pair used to hide — how much of
+  // `out` was reasoning, and how much of `in` came from the prompt cache
+  // (already inside inputTokens, so it is a share, not an addition).
+  const thinkingShare =
+    usage.reasoningTokens && usage.reasoningTokens > 0 && usage.outputTokens > 0
+      ? Math.round((usage.reasoningTokens / usage.outputTokens) * 100)
+      : null;
+  const tokens =
+    `tokens ${fmt(usage.inputTokens)} in · ${fmt(usage.outputTokens)} out` +
+    (thinkingShare !== null ? ` (${thinkingShare}% thinking)` : "") +
+    (usage.cachedInputTokens && usage.cachedInputTokens > 0
+      ? ` · ${Math.round((usage.cachedInputTokens / Math.max(usage.inputTokens, 1)) * 100)}% cached`
+      : "");
   const hints = isBusy ? "esc cancel · ctrl+c cancel" : "ctrl+c exit · /help";
 
   // DW-4.2 context gauge (adaptive component) + DW-4.3 token-growth

@@ -113,6 +113,19 @@ export interface DisplayMessage {
 export interface UsageTotals {
   inputTokens: number;
   outputTokens: number;
+  /**
+   * Reasoning tokens included in `outputTokens` (Phase 38.2). Kept apart so the
+   * status bar can show that a turn spent most of its output thinking rather
+   * than answering. Accumulates only when the provider reports it — 0 means
+   * "none reported", never "zero tokens".
+   */
+  reasoningTokens?: number;
+  /**
+   * Input tokens served from the provider's prompt cache, counted INSIDE
+   * `inputTokens`. The difference (input - cached) is what was actually billed
+   * as fresh.
+   */
+  cachedInputTokens?: number;
 }
 
 export function systemMessage(text: string): DisplayMessage {
@@ -175,9 +188,17 @@ export function applyEvent(
       }));
       break;
     case "usage":
+      // Optional breakdowns accumulate only when present, so a provider that
+      // omits them never has its zero written over a real running total.
       setUsage((prev) => ({
         inputTokens: prev.inputTokens + event.inputTokens,
         outputTokens: prev.outputTokens + event.outputTokens,
+        ...(event.reasoningTokens === undefined
+          ? {}
+          : { reasoningTokens: (prev.reasoningTokens ?? 0) + event.reasoningTokens }),
+        ...(event.cachedInputTokens === undefined
+          ? {}
+          : { cachedInputTokens: (prev.cachedInputTokens ?? 0) + event.cachedInputTokens }),
       }));
       // 28.10: the same event carries THIS response's tokens, so accumulating
       // onto the turn's message yields the per-turn total for /expand — a

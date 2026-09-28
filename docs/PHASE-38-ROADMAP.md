@@ -4,11 +4,11 @@
 > **Date:** 2026-09-29
 > **Author:** Chief Engineer
 > **Core Mandate:** *"We are not making some cheap copy here; we are building frontier coding tools."*
-> **Status:** IN PROGRESS — wave 1 landed (38.1, measurement parity, with a
-> fail-first mutation receipt). Wave 2 probes ran live against Gemini and
-> OpenRouter and produced four receipts, two of which **corrected** an earlier
-> hypothesis; the ranking below changed as a result. The prompt rewrite (38.5)
-> is deliberately blocked on the A/B harness (38.4).
+> **Status:** IN PROGRESS — 38.1 (measurement parity) and 38.2 (token accounting)
+> landed, both with fail-first mutation receipts. Wave 2 probes ran live against
+> Gemini and OpenRouter and produced four receipts, two of which **corrected** an
+> earlier hypothesis; the ranking below changed as a result. The prompt rewrite
+> (38.5) is deliberately blocked on the A/B harness (38.4).
 > **Scope:** Anvil's agent loop, guardian, compaction, rewind, LSP, and permission
 > surfaces are at or past frontier engineering. The instruction layer driving all
 > of it is eleven words, and the harness that is supposed to detect a bad
@@ -174,7 +174,7 @@ rather than the model list: `certified: "live"` was recorded from a run whose
 | Task | Focus Area | Impact | Priority | Status |
 | :--- | :--- | :---: | :---: | :---: |
 | **38.1** | One owner for the agent profile (prompt, output budget, verify flag); CLI, headless, and the eval lane all route through it; fail-first parity guard | Probe G, H, I | **P0** | **COMPLETE** |
-| **38.2** | Count reasoning tokens in Gemini usage (`thoughtsTokenCount`) so `/context` and compaction stop under-reporting by up to 328× | Probe K | **P0** | **OPEN** |
+| **38.2** | Count reasoning tokens in Gemini usage (`thoughtsTokenCount`) so `/context` and compaction stop under-reporting by up to 328× | Probe K | **P0** | **COMPLETE** |
 | **38.3** | Retire or re-label the two unreachable `inkling` models the picker offers as live-certified | Probe N | **P0** | **OPEN** |
 | **38.4** | A prompt A/B harness on a live model: fixed tasks, N trials, pass rate / cost / tool calls / edit-error rate | Probe H | **P0** | **OPEN** |
 | **38.5** | The real system prompt — tool-use policy, search-before-edit, verification, conventions | Probe J, M | **P1** | **OPEN — blocked on 38.4** |
@@ -234,7 +234,54 @@ and the eval lane opting out of the shared owner.
 *recorded* property rather than a surprise — it is the Probe H receipt in
 executable form.
 
-### 38.3 — The A/B harness (OPEN, next)
+### 38.2 — Token accounting tells the truth on both wire formats (COMPLETE)
+
+The fix is not "add reasoning tokens" — it is that **the two adapters were
+wrong in opposite directions**, and only one of them was visible.
+
+- **Gemini adds them.** `thoughtsTokenCount` is reported *outside*
+  `candidatesTokenCount` (Probe K: 327 against 1), so the adapter now sums
+  them into `outputTokens` — the figure the session budgets and compacts
+  against — and breaks the reasoning out separately.
+- **OpenAI-style does not add them.** `completion_tokens` *already contains*
+  `reasoning_tokens` (Probe L: 515 of 641), so adding would have over-reported
+  by 80%. That adapter now surfaces the figure as a breakdown only.
+- Both report `cachedInputTokens` as a **breakdown of** `inputTokens`, never an
+  addition — cached tokens are counted inside the prompt total by every vendor
+  measured.
+- `0` and "not reported" are kept distinct: an absent field is `undefined`, so
+  no consumer can render "no reasoning" from a provider that never said so.
+- The `usage` event is now forwarded whole through `turnStream` rather than
+  rebuilt field-by-field. That rebuild was the mechanism by which breakdowns
+  were being dropped, so removing it closes the class, not just the instance.
+- The status bar now reports thinking share and cache share, and the TUI reducer
+  accumulates the optional fields without letting a missing zero overwrite a
+  real running total.
+
+**Mutation receipt:** the new `usageAccounting.test.ts` was run against the
+**reverted** adapters — **6 of 11 assertions failed**, each naming the real
+measured number:
+
+```
+expected 1 to be 328          <- Gemini dropped 327 reasoning tokens
+expected undefined to be 327  <- reasoning never surfaced
+expected undefined to be 800  <- Gemini cached-input ignored
+expected undefined to be 515  <- OpenAI reasoning ignored
+expected undefined to be 149  <- OpenAI cached-input ignored
+expected 100 to be 615        <- the add-vs-do-not-add asymmetry
+```
+
+After restoring, **11/11 pass.** The last one is the load-bearing test: it
+pins the two adapters' *opposite* correct behaviour, so a future "harmonizing"
+edit that adds reasoning twice on the OpenAI path fails rather than silently
+over-reporting.
+
+One pre-existing test needed updating rather than deleting: it asserted
+`onUsage` was called with a two-field object, which was pinning the very
+rebuild that dropped breakdowns. It now asserts the full event is forwarded, and
+a second test covers the reasoning/cache path.
+
+### 38.4 — The A/B harness (OPEN, next)
 
 The requirement is a lane that can **fail on a real model and distinguish
 provider error from task failure**. `PHASE-36-ROADMAP.md:96` already recorded
@@ -248,18 +295,32 @@ saturated for this model class.
 ## 4. Declared boundaries (recorded, not hidden)
 
 - **Anvil discards 2,026 characters of live reasoning per turn** (Probe L) and
-  offers no way to see it. This is a *missing capability*, not a defect: the
-  models work, the answers are correct, and the token count is honest on the
-  OpenAI-style path. 38.6 makes reasoning a first-class event. What Anvil does
-  **not** do today is let a user or a model condition on it, and no claim is
-  made that reasoning is being used — it is generated and thrown away.
-- **Cache hit rates are invisible on every provider.** Probe L measured a real
-  75% hit on `space-bunny-alpha` and Probe M measured a 4,177-token prefix that
-  is 4.1× the Anthropic minimum. Until 38.6/38.7 land, the cost figures in
-  `eval/report.ts` are an **upper bound that overstates spend**, because
-  `prompt_tokens` is priced at full rate while most of it was cached. This
-  corrects the record rather than flattering it: earlier cost comparisons that
-  treated input tokens as uniformly full-price are wrong in Anvil's favour.
+  still does, after 38.2. What 38.2 changed is the *accounting*: the tokens are
+  now counted, broken out, and shown as a share in the status bar. The reasoning
+  **text** is still generated and thrown away — nothing displays it and history
+  never stores it, so no user or model can condition on it. 38.6 makes it a
+  first-class event. This is stated as a remaining boundary rather than folded
+  into 38.2's completion, because "we know how many tokens it cost" and "you can
+  read what it said" are different claims and only the first is now true.
+- **Reasoning support is still not a feature you can configure.** 38.2 measures
+  reasoning that a model chose to spend. Nothing lets a user or a provider
+  *request* it: `CompletionRequest` still has no reasoning field, so
+  `reasoning_effort` and Anthropic's `thinking` are unreachable. A reasoning
+  model works better for it; Anvil cannot yet ask for more or less. That is 38.6,
+  and the two should not be conflated in review.
+- **Cache hit rates are now visible; the savings are still unrealized.** 38.2
+  surfaces `cachedInputTokens` and the status bar shows the share. What it does
+  **not** do is ask for a cache: there is still no `cache_control` anywhere, so
+  the 4,177-token prefix (Probe M) is cacheable at 4.1× the Anthropic minimum
+  and is being paid for as though no cache existed. The 75% hit Probe L measured
+  came from OpenRouter's automatic caching, not from anything Anvil does. 38.7
+  is the task that captures it.
+- **`eval/report.ts` still overstates cost.** It prices `prompt_tokens` at the
+  full input rate with no cache discount, so its figures remain an **upper
+  bound**. Correcting the record rather than flattering it: earlier cost
+  comparisons that treated input tokens as uniformly full-price were wrong in
+  Anvil's favour. Pricing the cached fraction properly belongs with 38.7, where
+  the cache becomes Anvil's decision rather than a gateway's courtesy.
 - **The eval lane keeps `autoVerify: false`.** A repair loop changes the
   trajectory and can mask the exact failure a task asserts, so disabling it is
   a deliberate harness choice, not a leftover. It is now explicit and sourced
@@ -267,8 +328,8 @@ saturated for this model class.
   real and named: **the harness does not exercise closed-loop verification**,
   which shipping treats as core product behavior. 38.8 measures whether that
   omission hides failures. It is not fixed in this phase.
-- **The base prompt is still eleven words after 38.1.** 38.1 fixed *measurement
-  validity*, not the prompt. Anyone reading this doc as "the prompt is now
+- **The base prompt is still eleven words after 38.1 and 38.2.** Both tasks fixed
+  *measurement*, not the prompt. Anyone reading this doc as "the prompt is now
   good" has misread it: the prompt is unchanged and 38.5 is blocked on evidence.
 - **Gemini implicit caching is not reachable.** Probe M measured the Anvil
   prefix at 0.1× Gemini's 32,768-token implicit-cache floor, so Gemini needs

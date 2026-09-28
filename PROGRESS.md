@@ -37,6 +37,46 @@
 > **Gate Steps 0–5 green** after: **1,294 tests** (126 cli / 838 core / 330 tui),
 > 25/25 mock evals. No protected artifact touched. Committed; no work held.
 >
+> **DONE 2026-09-29 (Chief-engineer session — Phase 38.2: token accounting tells the truth on both wire formats):**
+> owns `packages/core/src/providers/gemini.ts`,
+> `packages/core/src/providers/openai.ts`, `packages/core/src/providers/types.ts`,
+> `packages/core/src/agent/turnStream.ts`, `packages/core/src/agent/types.ts`,
+> NEW `packages/core/src/providers/__tests__/usageAccounting.test.ts`,
+> `packages/core/src/agent/__tests__/turnStream.test.ts`,
+> `packages/tui/src/hooks/eventReducer.ts`, `packages/tui/src/components/StatusBar.tsx`,
+> `docs/PHASE-38-ROADMAP.md`, `CHANGELOG.md`, plus this file.
+> **Baseline:** gate green at 1,294 tests before any change.
+> **The finding is the OPPOSITE-direction one, and that is the whole task.**
+> Gemini reports `thoughtsTokenCount` OUTSIDE `candidatesTokenCount` (Probe K:
+> 327 vs 1), so it must be ADDED — a trivial turn was recorded as 1 output token
+> when 328 were spent. The OpenAI wire format already includes
+> `reasoning_tokens` inside `completion_tokens` (Probe L: 515 of 641), so it must
+> NOT be added — doing so would over-report by 80%. A single "add reasoning
+> everywhere" change would have fixed Gemini and broken the 9 providers on the
+> OpenAI path. `cachedInputTokens` is a breakdown of `inputTokens` on BOTH (every
+> vendor measured counts cached tokens inside the prompt total), never an
+> addition.
+> **Class closed, not just instance:** the `usage` event is now forwarded whole
+> through `turnStream` instead of rebuilt field-by-field — that rebuild was the
+> mechanism by which breakdowns were dropped. A missing count stays `undefined`
+> rather than becoming 0, so no surface can claim "no reasoning" from a provider
+> that never said so.
+> **Mutation receipt:** `usageAccounting.test.ts` run against the REVERTED
+> adapters — **6 of 11 assertions failed**, naming the real measured numbers
+> (`expected 1 to be 328`, `expected 100 to be 615`, `expected undefined to be
+> 515`, …). 11/11 after. The load-bearing case is the last one: it feeds both
+> adapters identical figures and pins that Gemini sums (615) while OpenAI does
+> not (641), so a future "harmonization" fails loudly instead of inflating.
+> **One existing test was corrected, not deleted:** it asserted `onUsage`
+> received a two-field object — pinning the exact rebuild that dropped
+> breakdowns. It now asserts the full event is forwarded, plus a new case for
+> the reasoning/cache path.
+> **Gate Steps 0–5 green** after: **1,306 tests** (126 cli / 850 core / 330 tui),
+> 25/25 mock evals. No protected artifact touched. Committed; no work held.
+> **Not claimed:** reasoning TEXT is still discarded (counted, not shown) and
+> `CompletionRequest` still cannot REQUEST reasoning — both recorded as
+> boundaries in §4 rather than folded into this task's completion.
+>
 > **DONE 2026-09-29 (Chief-engineer session — Phase 38 wave 2 probes: reasoning and caching, run live):**
 > owns `docs/PHASE-38-ROADMAP.md` (§1 wave-2 receipts, §2 revised ranking, §4
 > revised boundaries), `docs/CURRENT-FOCUS.md`, plus this file. No production

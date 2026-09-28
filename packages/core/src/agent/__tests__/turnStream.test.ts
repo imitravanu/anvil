@@ -124,8 +124,30 @@ describe("streamAssistantTurn", () => {
     const { events, result } = await drain(streamAssistantTurn(input));
 
     expect(events).toContainEqual({ type: "usage", inputTokens: 120, outputTokens: 40 });
-    expect(onUsage).toHaveBeenCalledWith({ inputTokens: 120, outputTokens: 40 });
+    // The stream event is forwarded whole, `type` discriminator included —
+    // rebuilding a narrower shape here is what used to drop breakdowns.
+    expect(onUsage).toHaveBeenCalledWith({ type: "usage", inputTokens: 120, outputTokens: 40 });
     expect(result?.sawUsage).toBe(true);
+  });
+
+  it("carries the reasoning and cache breakdowns through untouched (Phase 38.2)", async () => {
+    // The whole event is forwarded rather than rebuilt field-by-field, so a
+    // breakdown the provider reports reaches the session's accounting. Rebuilding
+    // `{inputTokens, outputTokens}` alone would silently drop both — which is
+    // how the cache rate became unobservable in the first place.
+    const usage = {
+      type: "usage" as const,
+      inputTokens: 198,
+      outputTokens: 641,
+      reasoningTokens: 515,
+      cachedInputTokens: 149,
+    };
+    const { input, onUsage } = makeInput([usage, { type: "turn_end", stopReason: "end_turn" }]);
+
+    const { events } = await drain(streamAssistantTurn(input));
+
+    expect(events).toContainEqual(usage);
+    expect(onUsage).toHaveBeenCalledWith(usage);
   });
 
   it("surfaces a non-rate-limit error and returns null", async () => {

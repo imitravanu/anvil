@@ -62,7 +62,25 @@ export type StreamEvent =
       input: unknown;
       providerMetadata?: Record<string, unknown>;
     }
-  | { type: "usage"; inputTokens: number; outputTokens: number }
+  | {
+      type: "usage";
+      inputTokens: number;
+      outputTokens: number;
+      /**
+       * Reasoning tokens, when the provider reports them SEPARATELY from
+       * `outputTokens` (Gemini's `thoughtsTokenCount`). Providers that fold
+       * reasoning into `outputTokens` (OpenAI-style `completion_tokens`)
+       * leave this undefined — 0 and undefined are different claims, and only
+       * the latter is honest when the number is unknown.
+       */
+      reasoningTokens?: number;
+      /**
+       * Input tokens served from the provider's prompt cache. A BREAKDOWN of
+       * `inputTokens`, never an addition: providers count cached tokens inside
+       * the prompt total. Undefined when the provider does not report it.
+       */
+      cachedInputTokens?: number;
+    }
   | {
       type: "turn_end";
       stopReason: "end_turn" | "tool_use" | "max_tokens" | "error" | "unknown";

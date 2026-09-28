@@ -17,6 +17,19 @@ export interface RawGeminiChunk {
   usageMetadata?: {
     promptTokenCount?: number;
     candidatesTokenCount?: number;
+    /**
+     * Reasoning tokens, billed as output but NOT included in
+     * `candidatesTokenCount` (measured: 327 against 1 on a one-line turn to
+     * `gemini-3.6-flash`, Phase 38 Probe K). Optional — the field is absent on
+     * non-thinking models and on gateways that omit it, and a missing count
+     * must never be invented as 0-with-confidence.
+     */
+    thoughtsTokenCount?: number;
+    /**
+     * Cached input tokens. `promptTokenCount` still counts these, so they are
+     * a *breakdown of* the input figure, never an addition to it.
+     */
+    cachedContentTokenCount?: number;
   } | null;
 }
 
@@ -63,7 +76,7 @@ export async function* translateGeminiChunkStream(
 ): AsyncGenerator<StreamEvent> {
   let sawFunctionCall = false;
   let finishReason: string | null = null;
-  let usage: { inputTokens: number; outputTokens: number } | null = null;
+  let usage: Omit<Extract<StreamEvent, { type: "usage" }>, "type"> | null = null;
 
   try {
     for await (const chunk of raw) {
@@ -89,9 +102,21 @@ export async function* translateGeminiChunkStream(
         }
       }
       if (chunk.usageMetadata) {
+        // candidatesTokenCount EXCLUDES thoughtsTokenCount on thinking models
+        // (Probe K: 327 reasoning against 1 candidate on a one-line turn), so
+        // reporting it alone under-reports real spend by two orders of
+        // magnitude. The reasoning is billed as output, so it belongs in the
+        // output figure the session budgets against — and is also broken out so
+        // a consumer can show it separately.
+        const reasoning = chunk.usageMetadata.thoughtsTokenCount ?? 0;
+        const cached = chunk.usageMetadata.cachedContentTokenCount;
         usage = {
           inputTokens: chunk.usageMetadata.promptTokenCount ?? 0,
-          outputTokens: chunk.usageMetadata.candidatesTokenCount ?? 0,
+          outputTokens: (chunk.usageMetadata.candidatesTokenCount ?? 0) + reasoning,
+          // Omitted (not 0) when the provider reported no reasoning at all, so
+          // "no reasoning field" and "zero reasoning tokens" stay distinct.
+          ...(reasoning > 0 ? { reasoningTokens: reasoning } : {}),
+          ...(typeof cached === "number" && cached > 0 ? { cachedInputTokens: cached } : {}),
         };
       }
       if (candidate?.finishReason) finishReason = candidate.finishReason;

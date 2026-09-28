@@ -31,7 +31,17 @@ export type AgentEvent =
   // decision read as a slow tool. Absent when nothing ran (an unknown tool or
   // unparsed input is reported without an execution).
   | { type: "tool_finished"; id: string; name: string; result: ToolExecutionResult; durationMs?: number }
-  | { type: "usage"; inputTokens: number; outputTokens: number }
+  // `outputTokens` is TOTAL output including reasoning, so the compaction
+  // budget is never blind to thinking tokens. `reasoningTokens` and
+  // `cachedInputTokens` are breakdowns of those two figures (never additions)
+  // and are absent when the provider does not report them — Phase 38.2.
+  | {
+      type: "usage";
+      inputTokens: number;
+      outputTokens: number;
+      reasoningTokens?: number;
+      cachedInputTokens?: number;
+    }
   | { type: "compacted"; summary: string }
   | { type: "turn_complete" }
   | { type: "cancelled" }

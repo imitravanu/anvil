@@ -22,18 +22,24 @@
   words: `"You are Anvil, a terminal coding agent. Be concise."` — no tool-use
   policy, no search-before-edit discipline, no verification expectation. Wave 2
   probed the reasoning and caching layers live and **corrected two hypotheses**:
-  - **Gemini under-reports output tokens by up to 328×** — `thoughtsTokenCount`
-    (327) is discarded while `candidatesTokenCount` (1) is recorded alone, so
-    `/context` and compaction are working from a wrong number on the default
-    free model. (An earlier hypothesis that reasoning text *leaked* into the
-    answer was **disproved** — the SDK strips thought parts by default.)
-  - **The OpenAI-style path discards live reasoning** — 2,026 characters of
+  - **Gemini under-reported output tokens by up to 328×** — `thoughtsTokenCount`
+    (327) was discarded while `candidatesTokenCount` (1) was recorded alone, so
+    `/context` and compaction worked from a wrong number on the default free
+    model. **FIXED by 38.2**, with the opposite-direction trap: reasoning is now
+    *summed* on Gemini and deliberately *not* added on the OpenAI wire format,
+    which already includes it — one "add it everywhere" change would have fixed
+    Gemini and broken 9 providers. (An earlier hypothesis that reasoning text
+    *leaked* into the answer was **disproved** — the SDK strips thought parts by
+    default.)
+  - **The OpenAI-style path discarded live reasoning** — 2,026 characters of
     `delta.reasoning` per turn against a 68-character answer, with
     `reasoning_tokens` (80% of output) and `cached_tokens` (a measured 75% hit
-    rate) both dropped.
+    rate) both dropped. **Accounting FIXED by 38.2**; the reasoning *text* is
+    still generated and thrown away (38.6).
   - **The request prefix is 4,177 tokens — 4.1× the Anthropic cache minimum**,
-    re-sent every assistant round. It is already being cache-hit and is being
-    accounted for at full price.
+    re-sent every assistant round. The hit rate is now *visible* (38.2) but the
+    cache is still not *requested* — there is no `cache_control` anywhere, so
+    this is still being paid for as though no cache existed (38.7).
   - **Two shipped models 403 for every user.** `thinkingmachines/inkling:free`
     and `inkling-small:free` are in the picker labelled `certified: "live"`,
     recorded from a **mock** run. Verified with Anvil's exact headers.

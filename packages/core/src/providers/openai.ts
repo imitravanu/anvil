@@ -36,7 +36,19 @@ export interface RawOpenAIChunk {
     };
     finish_reason?: string | null;
   }>;
-  usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    /**
+     * Per-family breakdowns. `reasoning_tokens` is a SUBSET of
+     * `completion_tokens` on this wire format (measured, Phase 38 Probe L), so
+     * it is reported alongside and never added in. `cached_tokens` is likewise
+     * a subset of `prompt_tokens` — OpenRouter returned 149 of 198 as cached,
+     * and Anvil was pricing all 198 as fresh.
+     */
+    completion_tokens_details?: { reasoning_tokens?: number | null } | null;
+    prompt_tokens_details?: { cached_tokens?: number | null } | null;
+  } | null;
 }
 
 /**
@@ -55,7 +67,7 @@ export async function* translateChatCompletionsChunkStream(
   let finishReason: string | null = null;
   // Usage can arrive on any chunk (gateways repeat it); the contract is
   // exactly one usage event per turn, so only the latest counts are kept.
-  let usage: { inputTokens: number; outputTokens: number } | null = null;
+  let usage: Omit<Extract<StreamEvent, { type: "usage" }>, "type"> | null = null;
 
   try {
     for await (const chunk of raw) {
@@ -77,9 +89,16 @@ export async function* translateChatCompletionsChunkStream(
       }
 
       if (chunk.usage) {
+        // Reasoning is already inside completion_tokens on this wire format,
+        // so it is broken out for display, not summed (contrast Gemini, where
+        // thoughtsTokenCount is EXCLUDED and must be added).
+        const reasoning = chunk.usage.completion_tokens_details?.reasoning_tokens ?? 0;
+        const cached = chunk.usage.prompt_tokens_details?.cached_tokens ?? 0;
         usage = {
           inputTokens: chunk.usage.prompt_tokens ?? 0,
           outputTokens: chunk.usage.completion_tokens ?? 0,
+          ...(reasoning > 0 ? { reasoningTokens: reasoning } : {}),
+          ...(cached > 0 ? { cachedInputTokens: cached } : {}),
         };
       }
 
