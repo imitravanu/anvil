@@ -4,6 +4,14 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Phase 31 — Frontier TUI craftsmanship (2026-09-28)
+
+- **The cockpit header no longer collides at exactly 100 columns** — the package-manager and model badges each carry calibrated cell reserves, pinned by the regenerated `header-cockpit-100` visual baseline.
+- **Tool cards decompose into semantic tokens:** status glyph, bold tool name, readable summary, and execution duration in `textMuted` — replacing the monochrome log line, under the source-level dim contract (readable text never rides `dim`).
+- **Compiler feedback lands in the card that caused it:** the Phase 30 post-mutation LSP sensor now surfaces inline `✖ line N: …` diagnostic badges directly under a completed mutation card.
+- **The empty state became a cockpit:** telemetry capability pills (`◈ 16 tools · ⚡ AST code graph · ✓ continuous LSP`) plus elevated mission hints (`/goal`, `/diff`), pinned by the regenerated `empty-state` baseline.
+- Evidence at HEAD: 11/11 visual frames, full gate Steps 0–5 green, 1,229 tests / 175 files.
+
 ### Phase 30 — Deep Workspace AST & Semantic Code Graph (2026-09-28)
 
 - **Zero-Dependency Multi-Language AST Symbol Parser (`@anvil/core/ast`):** Built deterministic, ultra-fast AST parser capable of extracting classes, methods, constructors, interfaces, type aliases, enums, functions, and docstrings across TypeScript, JavaScript, Python, Rust, and Go. Parses 1,000-line files in <3ms with zero runtime external dependencies.
@@ -12,6 +20,13 @@ All notable changes to Anvil are documented here. The format follows
 - **Dedicated `find_symbol` Tool:** Added Anvil's 16th autonomous tool `find_symbol`, enabling rapid global symbol lookups by query, kind, and exact match without raw filesystem regex sweeps.
 - **Continuous Post-Mutation LSP Diagnostic Sensor:** Integrated real-time language server diagnostics into `edit_file` and `write_file`. Immediately after atomic write, queries active language servers (bounded to 400ms) and surfaces syntax errors, unresolved identifiers, or type mismatches directly in tool summaries and structured output (`diagnostics: [...]`).
 - **TUI Inline Diagnostic Badges:** Enhanced `ToolCallView` in `@anvil/tui` to render inline compiler error/warning badges (`✖ line 42: ...`) directly under mutation cards.
+
+### Phase 29 — Ink 7 & React 19 presentation engine, Node ≥22 baseline (2026-09-28)
+
+- **The whole TUI now rides Ink 7.1.1 / React 19.2.0**, with root-level overrides deduplicating the reconciler across workspaces so one React instance serves every package, and the engine baseline moves to Node ≥22 (README badge synced; doc-truth green).
+- **Flicker-free by construction:** native incremental differential rendering (`incrementalRendering: true`) redraws only what changed, and the Kitty keyboard protocol is auto-detected (`kittyKeyboard: { mode: "auto" }`) for full key-event fidelity on capable terminals.
+- **One animation primitive:** `ThinkingTimer` and the spinner engine (`useSpinnerFrame`, `useBlink`) migrated onto Ink 7's native `useAnimation`, collapsing the animation loop into a single tick.
+- **Still one self-contained bundle:** 7.14 MB, zero runtime-external dependencies — re-proven after the migration by `verify:package` (a clean install outside the monorepo reports `anvil 1.2.0`), with the gate Steps 0–5 green and startup at 392 ms median / 467 ms p95.
 
 ### Space Bunny Alpha live certified & reasoning-model certification headroom (2026-09-27)
 
@@ -1651,13 +1666,7 @@ loop with six tools and path containment, interactive permission prompts with
 unified diffs, session persistence, context compaction, theming, first-run
 onboarding, sub-agent delegation, and MCP (stdio) support.
 
-## [Unreleased]
-
-### Planned
-
-- Verification/eval harness, provider certification, project memory & git-native workflow, distribution (see `docs/ROADMAP.md`).
-
-[Unreleased]: https://github.com/imitravanu/anvil/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/imitravanu/anvil/compare/v1.2.0...HEAD
 [0.8.0]: https://github.com/imitravanu/anvil/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/imitravanu/anvil/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/imitravanu/anvil/compare/v0.6.2...v0.6.3

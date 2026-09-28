@@ -1,6 +1,20 @@
 # PROGRESS — multi-agent coordination
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
+>
+> **DONE 2026-09-28 (OpenCode chief-engineer session, CHANGELOG truth gap after Phases 29–31):**
+> owns `CHANGELOG.md` (added the missing Phase 29 and Phase 31 entries to `[Unreleased]`;
+> removed the stale second `## [Unreleased]`/`### Planned` v0.6-era block at the file bottom
+> and refreshed its stale `[Unreleased]` link ref from v0.8.0 to v1.2.0), plus this file.
+> **Why:** the file's own header promises "All notable changes to Anvil are documented
+> here" — the entire Ink 7/React 19 presentation-engine migration (commit `723a6b1`) and
+> the Phase 31 TUI craftsmanship wave (`033a535`) had no entries, while the bottom block
+> still "planned" eval harness/certification/memory/distribution work that shipped in
+> Phases 17–20. Entry text sourced from the Antigravity session's own DONE records above
+> and independently verified here at HEAD (`033a535`): gate Steps 0–5 green,
+> `verify:package` clean-install OK (`anvil 1.2.0`), 1,229 tests / 175 files green,
+> startup 392 ms median, bundle 7.14 MB. No code change; no protected artifact touched.
+>
 > **DONE 2026-09-28 (Antigravity chief-engineer session, Phase 31 Frontier TUI Craftsmanship & UX Elevation):**
 > owns `packages/tui/src/components/Header.tsx`, `packages/tui/src/components/ToolCallView.tsx`,
 > `packages/tui/src/components/MessageList.tsx`, `packages/tui/__visual-baselines__/empty-state.txt`,
