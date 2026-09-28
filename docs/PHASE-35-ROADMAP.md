@@ -21,8 +21,8 @@
 
 | Task | Focus Area | Impact | Priority | Status |
 | :--- | :--- | :--- | :---: | :---: |
-| **35.1** | Addition discovery: a cheap root-level liveness check (e.g. directory mtimes or a bounded walk when the index is stale by age) so newly added files enter the index without a full rebuild per lookup | Boundary #1 | **P1** | **PENDING** |
-| **35.2** | Per-tool `subagent_progress` across members: yield the member's generator inside the team path instead of buffering until finish | Boundary #2 | **P1** | **PENDING** |
+| **35.1** | Addition discovery: a cheap root-level liveness check (e.g. directory mtimes or a bounded walk when the index is stale by age) so newly added files enter the index without a full rebuild per lookup | Boundary #1 | **P1** | **COMPLETE** |
+| **35.2** | Per-tool `subagent_progress` across members: yield the member's generator inside the team path instead of buffering until finish | Boundary #2 | **P1** | **COMPLETE** |
 | **35.3** | The tokeniser decision: measure bundle size, startup time, and grammar-missing behaviour for a tree-sitter bridge behind `AstSymbol`; write the decision (adopt, reject, or defer with criteria) — analysis first, no code | Boundary #3 | **P2** | **PENDING** |
 | **35.4** | Guardian gate, docs sync, record | — | **P0** | **PENDING** |
 

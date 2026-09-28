@@ -215,17 +215,20 @@ export class WorkspaceSymbolIndex {
    * longer exists: symbols that were renamed still resolve, and their new names
    * resolve to nothing. Both were reproduced live before this existed.
    *
-   * Cost is one stat per indexed file, which keeps `find_symbol`'s "instant"
-   * contract: a re-read happens only for a file whose mtime actually moved.
-   * Files indexed without a recorded mtime are re-read once to pin one.
+   * Cost is one stat per indexed file plus a bounded walk for NEW files, which
+   * keeps `find_symbol`'s "instant" contract: a re-read happens only for a file
+   * whose mtime actually moved. Files indexed without a recorded mtime are
+   * re-read once to pin one.
    *
-   * Known boundary (declared, not hidden): a file ADDED externally is not
-   * discovered here — that needs a full walk, i.e. `buildIndex`. The lies this
-   * repairs (ghosts, stale content) are the ones an agent branches on.
+   * Additions: the walk visits directories but parses only files the index has
+   * never seen, so a large tree whose files are all indexed costs only dirent
+   * stats. EXCLUDED_DIRS and the same extension set as `buildIndex` apply, so
+   * the two discovery paths can never disagree about what is indexable.
    */
-  public async validateFreshness(): Promise<{ reindexed: number; removed: number }> {
+  public async validateFreshness(): Promise<{ reindexed: number; removed: number; added: number }> {
     let reindexed = 0;
     let removed = 0;
+    let added = 0;
 
     for (const rel of [...this.fileSymbols.keys()]) {
       const full = path.join(this.projectRoot, rel);
@@ -248,7 +251,34 @@ export class WorkspaceSymbolIndex {
       reindexed++;
     }
 
-    return { reindexed, removed };
+    // Addition discovery: find indexable files the index has never seen.
+    // Directory mtimes alone miss files added to a subdirectory whose parent
+    // did not change, so this walks the tree; only unseen files are parsed.
+    const walkNew = async (dir: string): Promise<void> => {
+      const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+      for (const entry of entries) {
+        if (EXCLUDED_DIRS.has(entry.name)) continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await walkNew(full);
+          continue;
+        }
+        if (!entry.isFile()) continue;
+        const ext = path.extname(entry.name).toLowerCase();
+        if (!CODE_EXTENSIONS.has(ext)) continue;
+        const rel = normalizePath(path.relative(this.projectRoot, full));
+        if (this.fileSymbols.has(rel)) continue;
+        const st = await fs.stat(full).catch(() => null);
+        const content = await fs.readFile(full, "utf8").catch(() => "");
+        if (content) {
+          this.indexFile(rel, content, st?.mtimeMs);
+          added++;
+        }
+      }
+    };
+    await walkNew(this.projectRoot);
+
+    return { reindexed, removed, added };
   }
 
   /** Total symbols indexed across workspace. */

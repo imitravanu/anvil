@@ -115,6 +115,45 @@ describe("WorkspaceSymbolIndex freshness (external edits)", () => {
     }
   });
 
+  it("discovers a file ADDED externally, not just edits of known files", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "anvil-add-"));
+    try {
+      await fs.writeFile(path.join(dir, "a.ts"), "export function alpha() {}\n");
+      const idx = new WorkspaceSymbolIndex(dir);
+      await idx.buildIndex();
+      expect(idx.findSymbol("omega", { exact: true })).toEqual([]);
+
+      // External addition — a new file the index has never seen.
+      await fs.writeFile(path.join(dir, "new.ts"), "export function omega() {}\n");
+      const res = await idx.validateFreshness();
+      expect(res.added).toBe(1);
+      expect(idx.findSymbol("omega", { exact: true })).toHaveLength(1);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("skips excluded directories and non-code files when discovering additions", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "anvil-add2-"));
+    try {
+      await fs.writeFile(path.join(dir, "a.ts"), "export function alpha() {}\n");
+      await fs.mkdir(path.join(dir, "node_modules"), { recursive: true });
+      await fs.writeFile(
+        path.join(dir, "node_modules", "dep.ts"),
+        "export function shouldBeIgnored() {}\n"
+      );
+      await fs.writeFile(path.join(dir, "notes.md"), "# not code\n");
+      const idx = new WorkspaceSymbolIndex(dir);
+      await idx.buildIndex();
+
+      await idx.validateFreshness();
+      expect(idx.findSymbol("shouldBeIgnored")).toEqual([]);
+      expect(idx.findSymbol("alpha", { exact: true })).toHaveLength(1);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("does not re-read files that have not changed", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "anvil-fresh-"));
     try {

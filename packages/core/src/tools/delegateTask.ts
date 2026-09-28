@@ -124,44 +124,39 @@ export async function* executeSession(
     }
   }
 
-    // Phase 34 — live cross-member streaming. Per-member AgentEvents are
-    // buffered while that member runs, then yielded through this generator as
-    // soon as the runner announces the member's finished/failed transition, so
-    // member B's activity appears while member A is still working instead of
-    // everything arriving in one batch after the whole team settles. The runner
-    // emits transitions from its own sequencing (parallel fan-out, pipeline
-    // handoff); this adapter owns only the buffer. Failure semantics are
-    // unchanged: a failed member still flushes what it produced, its
-    // failureReason still lands in the tool result, nothing is laundered.
-    const collected: Map<string, AgentEvent[]> = new Map();
+    // Phase 34/35 — per-TOOL live streaming across members. Every event a
+    // member's sub-session emits (progress, checkpoints) is queued here the
+    // moment it happens, so member B's activity interleaves with member A's
+    // tool-by-tool progress instead of arriving in per-member batches. The
+    // runner emits lifecycle transitions from its own sequencing; this adapter
+    // owns the queue. Failure semantics are unchanged: a failed member's events
+    // have already streamed, its failureReason still lands in the tool result,
+    // and member_failed guarantees a terminating event so no stream hangs.
     const pending: AgentEvent[] = [];
     const memberTaskById = new Map(spec.members.map((m) => [m.id, m.task]));
     // The pipeline strategy starts member N only after member N-1's runMember
-    // resolves, i.e. after its member_finished has been queued. A runner that
-    // awaited the consumer instead of queueing would deadlock on handoff; the
-    // event-driven queue never blocks the emitter.
+    // resolves, i.e. after its finish has been queued. A runner that awaited
+    // the consumer instead of queueing would deadlock on handoff; the queue
+    // never blocks the emitter.
     let settled = false;
     let wake: (() => void) | null = null;
     const onMemberEvent: TeamRunnerDeps["onMemberEvent"] = (memberId, event) => {
       if (event.type === "member_started") {
         pending.push({ type: "subagent_started", task: memberTaskById.get(memberId) ?? "" });
-      } else {
-        const buffered = collected.get(memberId);
-        if (buffered) {
-          pending.push(...buffered);
-          collected.delete(memberId);
-        } else {
-          // The member failed before producing any events. Mirror the runner's
-          // own report convention so the member's stream still terminates.
-          pending.push({
-            type: "subagent_finished",
-            toolCalls: 0,
-            inputTokens: 0,
-            outputTokens: 0,
-            report: event.type === "member_failed" ? `member failed: ${event.reason}` : "",
-          });
-        }
+      } else if (event.type === "member_failed") {
+        // The adapter threw before its own subagent_finished (e.g. a provider
+        // error outside the sub-session's catch). Mirror the runner's report
+        // convention so the member's stream still terminates.
+        pending.push({
+          type: "subagent_finished",
+          toolCalls: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          report: `member failed: ${event.reason}`,
+        });
       }
+      // member_finished needs no event: the adapter queued the real
+      // subagent_finished with actual stats before returning.
       wake?.();
     };
     const waitForEvent = (): Promise<void> => new Promise((resolve) => { wake = resolve; });
@@ -176,7 +171,6 @@ export async function* executeSession(
     ): Promise<TeamMemberResult> => {
       const override = memberOverrides.get(member.id);
       const effectiveBudget = Math.max(1, Math.min(override ?? budget, totalBudget));
-      const events: AgentEvent[] = [];
       ctx.recordLedger({
         eventType: "subagent_started",
         tool: "delegate_task",
@@ -200,7 +194,10 @@ export async function* executeSession(
     });
       let step = await gen.next();
       while (!step.done) {
-        events.push(step.value);
+        // Live per-tool streaming: queue immediately instead of buffering until
+        // the member finishes.
+        pending.push(step.value);
+        wake?.();
         step = await gen.next();
       }
       const run = step.value;
@@ -215,14 +212,14 @@ export async function* executeSession(
         outcome: run.aborted ? "aborted" : run.failureReason ? "error" : "ok",
         elapsedMs: Date.now() - startedAt,
       });
-      events.push({
+      pending.push({
         type: "subagent_finished",
         toolCalls: run.toolCalls,
         inputTokens: run.usage.in,
         outputTokens: run.usage.out,
         report: capReport(run.report),
       });
-      collected.set(member.id, events);
+      wake?.();
       return {
         id: member.id,
         report: capReport(run.report),

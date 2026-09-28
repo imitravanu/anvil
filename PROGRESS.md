@@ -2,6 +2,36 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-28 (Buffy chief-engineer session, Phase 35.1 + 35.2 — boundaries #1 and #2 closed):**
+> owns `packages/core/src/ast/symbolIndex.ts`, `packages/core/src/ast/__tests__/symbolIndex.test.ts`,
+> `packages/core/src/tools/delegateTask.ts`, `packages/core/src/agent/__tests__/teamBudget.test.ts`,
+> `CHANGELOG.md`, plus this file.
+> **35.1 addition discovery:** validateFreshness now walks for UNSEEN indexable
+> files (same EXCLUDED_DIRS + extension policy as buildIndex — the two paths
+> cannot disagree) and parses only new ones; unchanged known files still cost
+> only a stat. Mutation check: 1 of 2 new tests fails on the old code; the
+> exclusion test passes both sides BY DESIGN (guards the new walk against
+> node_modules), labelled as a tripwire.
+> **35.2 per-tool streaming:** the Phase 34 per-member buffer was DELETED — the
+> member's events now push into the live queue as they happen. Simpler AND more
+> capable. The discriminator: a member reads a file (subagent_progress) then
+> STALLS in its next provider call; per-member batching could not surface that
+> progress before member_finished, which never comes while stalled. Mutation
+> check: fails against Phase 34 batching with "no tool progress surfaced while
+> the member was still running".
+> **Two lessons from this task, recorded because they cost real iterations:**
+> (1) my watchdog aborted a controller that was CONNECTED TO NOTHING — the stall
+> waits on the provider request's signal, so the test hung until vitest's
+> timeout; fixed with an explicit release() the stall's promise waits on.
+> (2) The first draft of the discriminator used strategy "parallel" and PASSED
+> against the old batching — the fake's shared script is consumed in call order,
+> so member→script assignment is timing-dependent and the stall entry may not
+> belong to the member the test watches. "pipeline" makes the mapping
+> deterministic. A mutation check that cannot fail is decoration; the false PASS
+> was caught only because I ran the old code anyway.
+> Gate Steps 0-5 green, 1276 tests (122/824/330), 25/25 evals. No protected
+> artifact touched. Remaining open: 35.3 tokeniser decision (analysis, no code).
+>
 > **DONE 2026-09-28 (Buffy chief-engineer session, Phase 34 closed / Phase 35 opened):**
 > owns `docs/PHASE-35-ROADMAP.md` (NEW), `docs/PHASE-34-ROADMAP.md`, `docs/README.md`,
 > plus this file. Phase 34 marked COMPLETE (per-member granularity — the

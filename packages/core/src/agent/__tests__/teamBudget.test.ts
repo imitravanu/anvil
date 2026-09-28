@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { AgentSession, type AgentEvent, type AgentOptions } from "../index.js";
 import { FakeProvider, type ScriptEntry } from "./fakeProvider.js";
-import type { StreamEvent } from "../../providers/types.js";
+import type { StreamEvent, CompletionRequest } from "../../providers/types.js";
 
 let root: string;
 
@@ -58,6 +58,90 @@ function callsForTask(provider: FakeProvider, task: string) {
     return first?.type === "text" && first.text === task;
   });
 }
+
+describe("Phase 35 — per-tool streaming across members", () => {
+  it("streams a member's tool progress while that member is stalled mid-run", async () => {
+    const file = path.join(root, "d.txt");
+    // One member reads a file (emitting subagent_progress) and then STALLS in
+    // its next provider call; the other member is tool-free so ANY progress
+    // event in the parent stream belongs to the stalled member. Under Phase 34
+    // per-member batching the progress event was buffered until the member
+    // FINISHED — which never happens here before the watchdog — so this test
+    // fails against batching and passes only with per-tool streaming.
+    // The stall releases ONLY when the test calls release() — the provider
+    // request's own signal (used as a safety net) fires only if the session
+    // cancels, which the test does not do.
+    let release: () => void = () => {};
+    const { session } = makeSession([
+      teamTurn({
+        // PIPELINE, not parallel: serial handoff guarantees member a consumes
+        // the first member entry and member b the second. Under parallel, the
+        // fake's shared script is consumed in call order and the assignment is
+        // timing-dependent — which silently invalidated the first draft of
+        // this test (it passed against the old batching for the wrong reason).
+        strategy: "pipeline",
+        totalIterations: 4, // split [2, 2]: member a must reach its second call
+        members: [
+          { id: "a", task: "task-a" },
+          { id: "b", task: "task-b" },
+        ],
+      }),
+      // Member a, turn 1: one tool call → its progress event.
+      readTurn(file, "s0"),
+      // Member a, turn 2: STALL until the test releases it.
+      (request: CompletionRequest) =>
+        (async function* () {
+          await new Promise<void>((resolve) => {
+            release = resolve;
+            if (request.signal?.aborted) resolve();
+            else request.signal?.addEventListener("abort", () => resolve(), { once: true });
+          });
+        })(),
+      // Member b (starts only after a's handoff): tool-free, ends immediately.
+      textTurn("done quick"),
+      // Parent-final.
+      textTurn(),
+    ]);
+
+    // Safety release so a structural surprise can never hang the suite past
+    // vitest's timeout.
+    const safety = setTimeout(() => release(), 8000);
+    try {
+      const collected: AgentEvent[] = [];
+      // Race so the observation window is explicit: after 1s the member is
+      // still stalled and we check what streamed DURING the stall.
+      const timeout = new Promise<{ timedOut: boolean }>((resolve) =>
+        setTimeout(() => resolve({ timedOut: true }), 1000)
+      );
+      const consume = (async () => {
+        for await (const ev of session.send("go")) collected.push(ev);
+        return { timedOut: false };
+      })();
+      const outcome = await Promise.race([consume, timeout]);
+
+      // THE discriminator: the member is still stalled at this point (released
+      // below), yet its tool progress must already have reached the stream.
+      // Phase 34 batching flushed progress only at member_finished — which
+      // cannot happen while the member is stalled — so this assertion is the
+      // one that fails against batching.
+      const sawProgress = collected.some((e) => e.type === "subagent_progress");
+      expect(
+        sawProgress,
+        "no tool progress surfaced while the member was still running"
+      ).toBe(true);
+
+      // Now let the stalled member finish and drain the whole stream.
+      release();
+      await consume;
+      expect(collected.filter((e) => e.type === "subagent_started").length).toBe(2);
+      expect(collected.filter((e) => e.type === "subagent_finished").length).toBe(2);
+      void outcome;
+    } finally {
+      clearTimeout(safety);
+      release();
+    }
+  }, 10_000);
+});
 
 describe("Phase 34 — live cross-member streaming (delegate_task team run)", () => {
   it("interleaves members: member B starts before member A finishes", async () => {

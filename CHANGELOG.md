@@ -4,6 +4,12 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Code intelligence & teams — the declared boundaries are closed (2026-09-28)
+
+- **`find_symbol` now discovers externally ADDED files.** `validateFreshness` previously repaired only edits and deletes of already-indexed files; a file brought in by `git checkout` was invisible until a full `buildIndex` walk. The freshness pass now also walks for unseen indexable files (same `EXCLUDED_DIRS` and extension policy as the full build, so the two discovery paths can never disagree) and parses only files the index has never seen.
+- **Team streaming is now per-TOOL, not just per-member.** A member's `subagent_progress` events stream the moment they happen instead of arriving with that member's flush — a tool-by-tool view of a multi-agent run even while one member is stalled mid-run. The per-member buffer was deleted outright: the live queue is a simplification, not an addition. The discriminating test fails against per-member batching with "no tool progress surfaced while the member was still running".
+- **A testing lesson recorded:** under the `parallel` strategy the fake provider's shared script is consumed in call order, so member→script assignment is timing-dependent — the first draft of that test passed against the old batching for the wrong reason. The `pipeline` strategy makes the mapping deterministic, which is what made the mutation check honest.
+
 ### Agent teams — sub-agent work is now visible while it happens (2026-09-28)
 
 During a multi-agent team run the TUI previously showed one spinner for the entire duration: `runTeam` reported only the merged end state, and `delegate_task` buffered every member's events and drained them after the whole team settled — the code's own comment admitted "cross-member streaming isn't live". A member failing at second 10 of a 5-minute run was silent until the end.
