@@ -4,6 +4,16 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Code intelligence — the advertised language support is now real (2026-09-28)
+
+`.go` and `.rs` files were already walked by the symbol indexer, and `find_symbol` already advertised `struct`/`trait` kinds, but the extraction behind them was incomplete or absent. `find_symbol` told an agent it had searched the whole workspace while silently missing entire languages.
+
+- **Go files had no parser at all.** `parseFileAst` routed `go` — a language `detectLanguage` recognises and the indexer walks — into the TypeScript parser's `default` branch, whose patterns match none of Go's syntax. Every `func`, method, `type`, `const` and `var` in a `.go` file was absent from `find_symbol`. There is now a real Go parser: free functions, receiver methods (`func (s *Server) Start()`), structs, interfaces, type aliases, `const`/`var`, grouped `const (…)` blocks, and Go's uppercase export rule.
+- **Rust declaration coverage was partial.** `enum`, `mod`, `impl`, `type`, `const`, `static` and `union` were not extracted, and `impl` methods were reported as *top-level* functions with the wrong parent. All of those are now extracted; `impl` emits kind `impl` with its methods as `method` children (and `impl Trait for Type` is named after the implementing type), and `mod` nests its contents recursively with file-absolute line numbers so nested symbols stay findable.
+- **Commented-out code was indexed as live symbols.** The parser skipped a block comment's first and last line but not its interior, so `/*\nexport function ghost() {}\n*/` produced a real `ghost` entry that `find_symbol` would return and no file contains. Comment and multi-line-template state is now tracked across lines — and for Python, so are triple-quoted strings, which previously turned a `def` or `class` written inside a module docstring (or a template constant) into a phantom symbol.
+- **A nested Python class was dropped from the index entirely.** The class body scan looked only for `def`, so a `class Inner:` inside `class Outer:` fell through and was then skipped by the outer loop, making it invisible to `find_symbol`. Nested classes are now collected recursively with their own members.
+- **An unbalanced brace inside a template literal desynchronised brace matching.** A `{` in a CSS-in-JS block or a commented-out line was counted as syntax, so the scanner ran past a function's real closing brace and reported a wrong `endLine` (or lost later declarations). Brace matching now ignores lines that live inside a comment or template literal.
+
 ### Code intelligence — deterministic symbol lookup & Windows-safe paths (2026-09-28)
 
 - **`find_symbol` now returns ranked, deterministic results.** The workspace symbol index iterated its name map in insertion order, which for a filesystem build is `readdir` order — so the same query produced a different ordering per machine and filesystem. Results are now ranked (exact name → prefix → substring) and then ordered by name and path, so an agent branching on a lookup gets a stable answer.

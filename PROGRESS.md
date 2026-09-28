@@ -2,6 +2,54 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-28 (Buffy chief-engineer session, Phase 31 closed / Phase 32 opened):**
+> owns `docs/PHASE-31-ROADMAP.md`, NEW `docs/PHASE-32-ROADMAP.md`, `docs/README.md`,
+> plus this file. Phase 31 task 31.6 was the only open item; closed with evidence
+> (176 files / 1249 tests, all 6 gate steps green, 25/25 evals) and the docs index
+> updated so PHASE-31 reads COMPLETE and PHASE-32 carries the single
+> **Current work** row — `docTruth.test.ts` fails if a completed doc is still
+> called current, and fails if no row is current at all, so closing a phase
+> without opening its successor is not possible. 31.6's "update global binary"
+> line was deliberately NOT executed: it mutates the host outside the repository
+> and is not something the gate can assert; `verify:package` stands in. Phase 32
+> inherits the six parser defects found below, with 32.6/32.7 left open and
+> declared as open rather than quietly dropped. No protected artifact touched.
+>
+> **DONE 2026-09-28 (Buffy chief-engineer session, advertised language support made real):**
+> owns `packages/core/src/ast/parser.ts`, `packages/core/src/ast/__tests__/parser.test.ts`,
+> `CHANGELOG.md`, plus this file. Found by probing the live parser with ordinary
+> code, not by assuming (an earlier probe of mine was INVALID — every case was
+> named `.ts`, so the Python/Rust/Go rows were all parsed by the TypeScript
+> parser; re-run with correct extensions before trusting any conclusion).
+> Six real defects, each covered by a test that FAILS against the old parser
+> (verified by stashing `parser.ts`: 11 new tests fail, all 6 pre-existing tests
+> pass on both sides):
+> (1) **Go had no parser at all** — `parseFileAst` sent `go` to the TS parser's
+> `default` branch, so every `func`/method/`type`/`const`/`var` in a `.go` file
+> was absent from `find_symbol`, while `.go` was already in the indexer's
+> extension set and `find_symbol` already advertised `struct`/`trait`. Added a
+> real Go parser (receiver methods, grouped `const (…)`, uppercase export rule).
+> (2) **Rust `enum`/`mod`/`impl`/`type`/`const`/`static`/`union` were missing**,
+> and `impl` methods were emitted as top-level `function` with the wrong parent.
+> `AstSymbolKind` already declared `"impl"` and `"module"` — the type contract
+> anticipated these; the implementation never landed. `mod` now recurses with
+> file-absolute line rebasing so nested symbols stay findable.
+> (3) **Commented-out code was indexed as live symbols** — the old check skipped a
+> block comment's first/last line but not its interior, so `ghost` symbols that
+> no file contains were returned by `find_symbol`.
+> (4) **An unbalanced brace in a template literal desynchronised brace matching**
+> — a CSS-in-JS `{` inflated depth, so a function reported a wrong `endLine` or
+> later declarations were swallowed. One `buildCodeLineMask` (comment + template
+> state across lines) now feeds both symbol detection and brace matching.
+> (5) **Python triple-quoted strings leaked phantom symbols** — a `def` or `class`
+> inside a module docstring or an assigned template was extracted as real
+> (`buildPythonCodeLineMask`). (6) **A nested Python class was dropped entirely** —
+> the class-body scan looked only for `def`, so `class Inner:` inside `class Outer:`
+> fell through to `mIdx++` and was then skipped by the outer `i = endIdx + 1`; it is
+> now collected recursively with its own members.
+> No protected artifact touched. 1249 tests green (+11 across core/cli/tui),
+> full gate Steps 0–5 green.
+>
 > **DONE 2026-09-28 (Buffy chief-engineer session, code-intelligence hardening):**
 > owns `packages/core/src/ast/symbolIndex.ts`, NEW
 > `packages/core/src/ast/__tests__/symbolIndex.test.ts`, `CHANGELOG.md`, plus this

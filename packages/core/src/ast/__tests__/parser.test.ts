@@ -177,6 +177,220 @@ pub fn start_server(cfg: Config) {
   });
 });
 
+describe("parseFileAst - Go", () => {
+  const goCode = `package main
+
+import "fmt"
+
+const MaxRetries = 3
+
+const (
+	Timeout = 30
+	Version = "1.0"
+)
+
+var counter int
+
+var (
+	name    string
+	enabled bool
+)
+
+type Server struct {
+	Host string
+	Port int
+}
+
+type Runner interface {
+	Run() error
+}
+
+type Alias = Server
+
+func NewServer(host string) *Server {
+	return &Server{Host: host}
+}
+
+func (s *Server) Start() error {
+	fmt.Println(s.Host)
+	return nil
+}
+
+func (s *Server) stop() {}
+`;
+
+  const find = (name: string) => parseFileAst(goCode, "main.go").symbols.find((s) => s.name === name);
+
+  it("routes .go to a Go parser and extracts funcs, methods, types, consts and vars", () => {
+    const ast = parseFileAst(goCode, "main.go");
+    expect(ast.language).toBe("go");
+
+    const fn = find("NewServer");
+    expect(fn?.kind).toBe("function");
+    expect(fn?.isExported).toBe(true);
+    expect(fn?.signature).toBe("func NewServer(host string) *Server");
+
+    expect(find("Start")?.kind).toBe("method");
+    expect(find("Server")?.kind).toBe("struct");
+    expect(find("Runner")?.kind).toBe("interface");
+    expect(find("Alias")?.kind).toBe("type");
+    expect(find("MaxRetries")?.kind).toBe("constant");
+    expect(find("counter")?.kind).toBe("variable");
+  });
+
+  it("marks unexported identifiers as not exported (Go's uppercase rule)", () => {
+    expect(find("stop")?.kind).toBe("method");
+    expect(find("stop")?.isExported).toBe(false);
+    expect(find("counter")?.isExported).toBe(false);
+    expect(find("MaxRetries")?.isExported).toBe(true);
+  });
+
+  it("reads every entry of a grouped const/var block, not just the first", () => {
+    for (const name of ["Timeout", "Version", "name", "enabled"]) {
+      expect(find(name), `${name} missing from its group`).toBeDefined();
+    }
+  });
+});
+
+describe("parseFileAst - Rust declaration coverage", () => {
+  const rsCode = `pub enum Mode {
+    Fast,
+    Slow,
+}
+
+pub mod storage {
+    pub fn open() -> bool {
+        true
+    }
+
+    pub struct Handle {
+        pub id: u32,
+    }
+}
+
+impl Mode {
+    pub fn label(&self) -> &str {
+        "mode"
+    }
+
+    fn secret(&self) {}
+}
+
+impl fmt::Display for Mode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "mode")
+    }
+}
+
+pub type Outcome = std::result::Result<u32, String>;
+
+pub const LIMIT: u32 = 10;
+static COUNTER: u32 = 0;
+
+pub union Raw {
+    a: u32,
+    b: f32,
+}
+`;
+  const ast = parseFileAst(rsCode, "lib.rs");
+  const find = (name: string) => ast.symbols.find((s) => s.name === name);
+
+  it("extracts enum, type alias, const, static and union", () => {
+    expect(find("Mode")?.kind).toBe("enum");
+    expect(find("Outcome")?.kind).toBe("type");
+    expect(find("LIMIT")?.kind).toBe("constant");
+    expect(find("COUNTER")?.kind).toBe("constant");
+    expect(find("Raw")?.kind).toBe("struct");
+  });
+
+  it("nests mod contents under the module instead of promoting them", () => {
+    const mod = find("storage");
+    expect(mod?.kind).toBe("module");
+    const childNames = (mod?.children ?? []).map((c) => c.name);
+    expect(childNames).toContain("open");
+    expect(childNames).toContain("Handle");
+    // Nested coordinates are file-absolute, not slice-relative.
+    const open = mod?.children?.find((c) => c.name === "open");
+    expect(open?.startLine).toBe(7);
+  });
+
+  it("attaches impl methods to the impl and reports them as methods", () => {
+    const impls = ast.symbols.filter((s) => s.kind === "impl");
+    expect(impls.map((s) => s.name)).toEqual(["Mode", "Mode"]);
+
+    const label = impls[0]?.children?.find((c) => c.name === "label");
+    expect(label?.kind).toBe("method");
+    expect(label?.isExported).toBe(true);
+    expect(impls[0]?.children?.find((c) => c.name === "secret")?.kind).toBe("method");
+
+    // The trait-impl form is named after the implementing type.
+    expect(impls[1]?.signature).toBe("impl fmt::Display for Mode");
+    expect(impls[1]?.children?.some((c) => c.name === "fmt")).toBe(true);
+
+    // No method may also be emitted as a top-level function.
+    expect(ast.symbols.filter((s) => s.kind === "function")).toEqual([]);
+  });
+});
+
+describe("parseFileAst - Python string masking and nesting", () => {
+  const names = (src: string) => parseFileAst(src, "a.py").symbols.map((s) => s.name);
+
+  it("does not extract a def from a module docstring", () => {
+    const src = '\"\"\"Example usage:\n\ndef fake():\n    pass\n\"\"\"\n\ndef real():\n    pass\n';
+    expect(names(src)).toEqual(["real"]);
+  });
+
+  it("does not extract a class from an assigned triple-quoted template", () => {
+    const src = 'TEMPLATE = \"\"\"\nclass Fake:\n    pass\n\"\"\"\n\ndef real():\n    pass\n';
+    expect(names(src)).toEqual(["real"]);
+  });
+
+  it("keeps a nested class, with its own members, instead of dropping it", () => {
+    const src = [
+      "class Outer:",
+      "    class Inner:",
+      "        def deep(self):",
+      "            pass",
+      "    def n(self):",
+      "        pass",
+    ].join("\n");
+    const outer = parseFileAst(src, "a.py").symbols.find((s) => s.name === "Outer");
+    const inner = outer?.children?.find((c) => c.name === "Inner");
+
+    expect(inner?.kind).toBe("class");
+    expect(inner?.children?.map((c) => c.name)).toEqual(["deep"]);
+    expect(inner?.startLine).toBe(2);
+    expect(outer?.children?.map((c) => c.name)).toEqual(["Inner", "n"]);
+  });
+});
+
+describe("comment and template masking", () => {
+  it("does not index commented-out code as live symbols", () => {
+    const ast = parseFileAst("/*\nexport function ghost() {}\n*/\nexport function real() {}\n", "a.ts");
+    expect(ast.symbols.map((s) => s.name)).toEqual(["real"]);
+  });
+
+  it("keeps correct end lines when a body holds a template with an unbalanced brace", () => {
+    const src = [
+      "export function first() {",
+      "  const s = css`",
+      "    .a { color: red;",
+      "  `;",
+      "}",
+      "export function second() {}",
+      "export function third() {}",
+    ].join("\n");
+    const ast = parseFileAst(src, "b.ts");
+    const find = (n: string) => ast.symbols.find((s) => s.name === n);
+
+    // The stray `{` inside the template must not push the scanner past the
+    // real closing brace and swallow the declarations that follow.
+    expect(find("first")?.endLine).toBe(5);
+    expect(find("second")?.startLine).toBe(6);
+    expect(find("third")?.startLine).toBe(7);
+  });
+});
+
 describe("generateSkeleton", () => {
   const longModule = `
 export interface Worker {

@@ -11,7 +11,8 @@ comments cite the exact bug each rule replaces), not because it is a to-do list.
 |---|---|
 | [`../AGENTS.md`](../AGENTS.md) | The engineering constitution. Law: violations fail the gate. |
 | [`../PROGRESS.md`](../PROGRESS.md) | The live engineering record (dated session entries, evidence per change). |
-| [`PHASE-31-ROADMAP.md`](PHASE-31-ROADMAP.md) | **Current work** — frontier TUI craftsmanship & UX elevation (Ink 7 + React 19). |
+| [`PHASE-32-ROADMAP.md`](PHASE-32-ROADMAP.md) | **Current work** — code-intelligence integrity: make the advertised language support real. |
+| [`PHASE-31-ROADMAP.md`](PHASE-31-ROADMAP.md) | COMPLETE (2026-09-28) — frontier TUI craftsmanship & UX elevation (Ink 7 + React 19). |
 | [`PHASE-30-ROADMAP.md`](PHASE-30-ROADMAP.md) | COMPLETE (2026-09-28) — deep workspace AST & semantic code graph. |
 | [`PHASE-29-ROADMAP.md`](PHASE-29-ROADMAP.md) | COMPLETE (2026-09-28) — frontier presentation engine (Ink 7 + React 19). |
 | [`PHASE-28-ROADMAP.md`](PHASE-28-ROADMAP.md) | COMPLETE (2026-09-26) — visual identity & UX refinement (144 baselines, forge theme, thin meters). |
