@@ -25,7 +25,7 @@ export function createEvalMockProvider(task: EvalTask): ModelProvider {
         if (fs.existsSync(expectedDir)) {
           // Manual recursion: readdirSync's `recursive` option and
           // entry.parentPath are Node >=22.5 APIs, while the engines floor is
-          // >=20 and CI runs Node 20 — guarded by not using them.
+          // >=22 (22.0-22.4 lack them) — guarded by not using them.
           const stack = [expectedDir];
           while (stack.length > 0) {
             const dir = stack.pop()!;

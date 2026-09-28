@@ -7,10 +7,10 @@
     ".fresh-allowlist.json": "48e9893b2be40588293ef4c045324f1a38c73ef7757ddb601e40dc8851318e4f",
     "docs/PHASE-21-25-AUDIT.md": "d733a5a50c892d6be2f77f1bba9b1ce3d2ed73698426c78f3ad3b2b17627c3ee",
     "packages/cli/src/__tests__/gate.sentinel.test.ts": "7b4e41be629b8fdf6826d26e5728dde9b7b89eddf415db9381035e43c518b059",
-    ".github/workflows/ci.yml": "dbaed623cb63ec1f3d65bb5620a98ebfac133adf7bcc269c38cbaa18445c6772",
-    ".github/workflows/live-eval.yml": "b5c090ad8e1d7e7da759c7d177fdb96c11f151674cb734d827c3b9d5b7b578c8",
-    ".github/workflows/release.yml": "ddb897809ca88f9a27e41120ce3a938ce081022fba5be3d979fd6312e2cecedc",
-    ".github/workflows/visual-regression.yml": "915278bbe7fb1da331203ade04f26f829dabd99d2cc4142911e499258d7f71d0",
+    ".github/workflows/ci.yml": "3fc64d84095f59e9accf5b4fedbfd42d70b9ea6ddbf930739c5a293d69c7b604",
+    ".github/workflows/live-eval.yml": "30ee6afcc125380bb70493a94cd9e3902f8fa6e3ec00d2579e33bc202afc0ced",
+    ".github/workflows/release.yml": "3599e1e32d44b152bbfc3af110fc0978e800aae1808fe4231deb88fc37bea0ad",
+    ".github/workflows/visual-regression.yml": "aa29f44b447fa4bddc15d5cc84895fe4a5cd61a595bc5d285b358ffb783030fd",
     ".githooks/pre-commit": "e3ccbf7e69e53b92ebce9d2130d84b33ee8ce28e67edc4b668be7da0a341e937"
   }
 }

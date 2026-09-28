@@ -2,6 +2,48 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-28 (Buffy chief-engineer session, Node baseline truth fix — PROTECTED):**
+> owns `.github/workflows/ci.yml`, `.github/workflows/live-eval.yml`,
+> `.github/workflows/release.yml`, `.github/workflows/visual-regression.yml`
+> (each setup-node step `node-version: 20` → `22`), `scripts/gate-manifest.json`
+> (the four workflow SHA-256s regenerated: ci `dbaed623…`→`3fc64d84…`,
+> live-eval `b5c090ad…`→`30ee6afc…`, release `ddb89780…`→`3599e1e3…`,
+> visual-regression `915278bb…`→`aa29f44b…`), `packages/core/src/eval/mockProvider.ts`
+> (comment only — the stale "engines floor is >=20 and CI runs Node 20" now states
+> the real floor), plus this file.
+> **PROTECTED per AGENTS.md §3.4 — declared here per (a); the manifest was regenerated
+> in the same working set per (b); the owner reviewed and selected "do the full §3.4
+> path" when shown the exact diff, which is (c).**
+> **Why:** Phase 29 (`723a6b1`) raised the declared engine floor to Node ≥22
+> (`package.json` `engines.node: ">=22"` + the README badge) but all four workflows
+> still ran Node 20 — so the pipeline that gates and PUBLISHES ran a different runtime
+> than the one advertised, and a core comment still documented the old floor. Verified
+> drift before editing (`grep node-version` = 4× `20`; `package.json` = `>=22`; README
+> badge = `>=22`). Same claim-vs-reality class as AUDIT-02/05/11.
+> **The core comment stays honest without using the new APIs:** readdirSync's
+> `recursive` option and `entry.parentPath` are Node ≥22.5 APIs, and `engines: ">=22"`
+> admits 22.0–22.4, so the manual recursion (and its guard) remain correct — only the
+> stated floor was wrong, not the code.
+> **Sentinel safety re-verified:** the three literals `gate.sentinel.test.ts` asserts
+> against `ci.yml` (`npm test`, `npm run gate`, `fetch-depth: 0`) are all still present;
+> the manifest's protected-path coverage set is unchanged (no path added/removed), so
+> the exact-coverage assertion still holds. UNTOUCHED: `scripts/verify-gate.mjs`,
+> `.fresh-allowlist.json`, `AGENTS.md`, `docs/PHASE-21-25-AUDIT.md`,
+> `packages/cli/src/__tests__/gate.sentinel.test.ts`, `.githooks/pre-commit`.
+> **Protected-diff review record (§3.4c):** four one-token edits (`20`→`22` on the
+> `node-version:` line of each setup-node step), one comment correction in a
+> non-protected source file, four recomputed hashes. No trigger, permission, secret,
+> job dependency, or step added/removed. Full gate Steps 0–5 run green with
+> `--ack-protected-change` before commit; committed with `--no-verify` (the documented,
+> deliberate escape hatch).
+>
+> **DONE 2026-09-28 (Buffy chief-engineer session, CHANGELOG truth-gap landing):**
+> owns `CHANGELOG.md` and this file. Landed the pending doc fix a prior session left
+> uncommitted (Phases 29/31 entries added, stale v0.6-era `Planned` block removed,
+> `[Unreleased]` compare link repaired v0.8.0 → v1.2.0). The WORKING≠COMMITTED failure
+> AGENTS.md §3.3 exists to stop — the work was complete and green, only unlanded.
+> Doc-only; no protected artifact touched.
+>
 > **DONE 2026-09-28 (OpenCode chief-engineer session, CHANGELOG truth gap after Phases 29–31):**
 > owns `CHANGELOG.md` (added the missing Phase 29 and Phase 31 entries to `[Unreleased]`;
 > removed the stale second `## [Unreleased]`/`### Planned` v0.6-era block at the file bottom
