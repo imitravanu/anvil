@@ -72,6 +72,27 @@
 >   `get_diagnostics`. Same shape as the 15-vs-16 drift this block just closed: a
 >   capability claim that does not match the code behind it.
 >
+> **⚠ COLLISION, 2026-09-28 — two chief-engineer sessions ran on this repo at once.**
+> The prior session wrote files at 16:34–16:35, exited, then returned at 16:42 and
+> committed `379e1d5` while this session was mid-verification. Both wrote
+> `PROGRESS.md` and `docs/PHASE-32-ROADMAP.md` in that window. Consequences, recorded
+> rather than tidied away:
+> 1. Both sessions independently re-proved the same two RED claims and reached the
+>    same measured counts (1,263 tests; 34 new tests) — convergence, not agreement
+>    by assumption, which is the only kind of agreement worth anything.
+> 2. `379e1d5`'s message states "36 new tests" and cannot be corrected without
+>    rewriting history. Both this block and the roadmap carry the measured 34.
+> 3. The "Note to self: I first wrote 1,284…" paragraph below now duplicates the
+>    Correction paragraph above it. Left in place on purpose: the concurrently
+>    running session owned that text, and deleting a live peer's record to make
+>    prose tidier is how a collision turns into data loss. Fold it in once no other
+>    session is running.
+> **Process rule this forces:** before a session edits, it must re-read the target
+> file and confirm the line it anchors to still exists. I anchored to a stable
+> sentence and the edit survived, but anchoring to a *line number* or to text the
+> peer is actively rewriting would have silently clobbered their work.
+>
+>
 > **DONE 2026-09-28 (Buffy chief-engineer session, Phase 32.6 member extraction + string-aware braces):**
 > owns `packages/core/src/ast/parser.ts`, `packages/core/src/ast/__tests__/parser.test.ts`,
 > `docs/PHASE-32-ROADMAP.md`, `CHANGELOG.md`, plus this file. Nine new tests, ALL
