@@ -38,10 +38,26 @@ Note on method: an earlier probe of this same file was **invalid** and its concl
 | **32.4** | Python nested-class collection | Nested classes absent from the index | **P1** | **COMPLETE** |
 | **32.5** | Deterministic ranked `find_symbol` + Windows-safe path canonicalization | Same query, different answer per machine; duplicate index entries on Windows | **P1** | **COMPLETE** |
 | **32.6** | Remaining extraction surfaces — Rust enum variants and trait methods, Go interface method sets, TS class arrow properties, raw-string literals in Rust/Go | Known gaps, honestly declared rather than claimed as covered | **P2** | **PENDING** |
-| **32.7** | `AstSymbolKind` coverage guard — a test asserting every kind the tool advertises can actually be produced by the parser | Makes defect class #1/#2 mechanical instead of discovered | **P1** | **PENDING** |
+| **32.7** | `AstSymbolKind` coverage guard — a test asserting every kind the tool advertises can actually be produced by the parser | Makes defect class #1/#2 mechanical instead of discovered | **P1** | **COMPLETE** |
 | **32.8** | Guardian gate, docs sync, record | — | **P0** | **IN PROGRESS** |
 
 ---
+
+### 32.7 — Symbol kind contract guard
+
+`packages/core/src/ast/__tests__/symbolKindContract.test.ts` reads the `kind` filter's
+advertised enum straight out of `find_symbol`'s shipped `definition` (never a hardcoded
+copy) and asserts it equals the set of kinds the parser really emits across a four-language
+corpus. The expected set is typed `Record<AstSymbolKind, true>`, so adding a kind to the
+union without covering it here is a **type error** rather than a silent gap.
+
+It paid for itself on first run: it failed with `find_symbol cannot filter by: impl, module`
+— two kinds the index could hold and return but the model had no way to filter for. `impl`
+and `module` were added to the advertised enum to fix it. Three assertions:
+
+1. the advertised enum is exactly the set of kinds the index can hold (both directions),
+2. every advertised kind is producible by a supported language's parser,
+3. no declared kind is silently dropped by the corpus.
 
 ## 3. Acceptance
 

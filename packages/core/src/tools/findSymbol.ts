@@ -37,6 +37,8 @@ export const definition: ToolDefinition = {
           "constant",
           "struct",
           "trait",
+          "impl",
+          "module",
         ],
         description: "Filter by symbol kind",
       },

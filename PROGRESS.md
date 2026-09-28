@@ -2,6 +2,21 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-28 (Buffy chief-engineer session, Phase 32.7 symbol-kind contract guard):**
+> owns `packages/core/src/tools/findSymbol.ts`, NEW
+> `packages/core/src/ast/__tests__/symbolKindContract.test.ts`,
+> `docs/PHASE-32-ROADMAP.md`, `CHANGELOG.md`, plus this file. 32.6's whole point was
+> to stop discovering this defect class by hand, so this landed as a test rather
+> than a note. The guard reads the advertised `kind` enum out of the shipped
+> `definition` (not a hardcoded copy) and compares it to the kinds the parser
+> really emits across a TS/Rust/Go/Python corpus; the expected set is typed
+> `Record<AstSymbolKind, true>`, so a new kind in the union that the test forgets
+> is a COMPILE ERROR, not a silent gap.
+> **It failed on first run** with `find_symbol cannot filter by: impl, module` —
+> two kinds `AstSymbolKind` declares, the parser produces and the index returns,
+> but which the model had no way to ask for. One-line fix (added to the enum);
+> guard and existing `findSymbol` tests green. No protected artifact touched.
+>
 > **DONE 2026-09-28 (Buffy chief-engineer session, Phase 31 closed / Phase 32 opened):**
 > owns `docs/PHASE-31-ROADMAP.md`, NEW `docs/PHASE-32-ROADMAP.md`, `docs/README.md`,
 > plus this file. Phase 31 task 31.6 was the only open item; closed with evidence
