@@ -2,6 +2,51 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-28 (Chief-engineer session — Phase 36 wave 1: two live-probe defects found and fixed, gate green):**
+> owns `packages/core/src/ast/parser.ts`, `packages/core/src/ast/__tests__/parser.test.ts`,
+> `packages/core/src/providers/freeModels.ts`, `packages/core/src/agent/turnStream.ts`,
+> `packages/core/src/providers/__tests__/freeModels.test.ts`,
+> `packages/core/src/agent/__tests__/turnStream.test.ts`,
+> NEW `docs/PHASE-36-ROADMAP.md`, `docs/README.md`, `docs/CURRENT-FOCUS.md`,
+> `CHANGELOG.md`, plus this file.
+> **Baseline verified before touching anything:** full gate Steps 0–5 green
+> (1,276 tests / 177 files — 122 cli / 824 core / 330 tui; 25/25 mock evals;
+> startup and packaging receipts unchanged).
+> **Three live probes, three findings:**
+> (1) `find_symbol` on THIS repo misses `isReadOnlyCommand` (bash.ts:289, an exported
+> function) — zero hits. Isolated: the scanner's line mask treats a backtick inside a
+> regex literal (`/[|;&<>()`$\\\n]/`, bash.ts:278) as opening a template literal, so
+> every declaration after it is masked as non-code. Crafted repro confirms the class
+> (`const M = /[a`b]/;` hides the next function). Fix: regex-literal awareness
+> (TS/JS only — regex literals are single-line by language definition) in
+> `buildCodeLineMask` and `findMatchingBrace`.
+> (2) Live eval lane `gemini/gemini-3.6-flash`: 0/5 `diagnose`, 0/5 `bugfix` —
+> five of the ten pre-fix runs hit the full 120 s eval timeout with ZERO tool
+> calls — the raw provider probe shows the real cause: free-tier DAILY quota exhausted
+> (clean provider error). But quota exhaustion is classified as a transient rate
+> limit (`isRateLimitMessage` matches "quota"), so the session waits (20s default,
+> doubling per consecutive failure, 120s cap) and retries a request that cannot
+> succeed — observed as 120.06s/120.10s timeouts with 0 tool calls instead of a
+> fast, explicit failure. Fix: hard quota-exhaustion with no provider retry hint
+> fails FAST (health records still updated); genuine 429s keep the retry path.
+> (3) Contrast probe: `inception/mercury-2.5` PASSED 21-diagnose (15.5s, 9 tools,
+> 42.6k in / 2.3k out) — harness and loop are live-healthy; (2) is a
+> provider-failure-handling defect, not a quality collapse. The mock lane's 25/25
+> ceiling cannot see either defect; both were found by live probes only.
+> **Gate Steps 0–5 green** after the change: 1,281 tests (122 cli / 829 core / 330
+> tui) across 177 files; 25/25 mock evals. Mutation receipts: 4 of the 5 new tests
+> fail against the pre-change code (2 parser, 1 classifier, 1 turn-stream
+> behavioural); the division tripwire passes both sides by design. End-to-end: the
+> original symbol probe now resolves `isReadOnlyCommand` → `bash.ts:289 (function)`
+> with the Rust control unchanged (17,848 symbols); eval task 02 went
+> 120.10 s / 0 tools / timeout → 19.65 s / 1 tool / no timeout, and a raw quota
+> call surfaces the provider's message in 3.0 s. **One process lesson, recorded
+> because it proves the guards work:** my first docs-index edit renamed the
+> CURRENT-FOCUS row without carrying the `**Current work**` marker, and
+> `docTruth.test.ts` failed the gate on exactly that drift ("never calls a
+> finished doc 'Current work'"); the fix was to mark the ACTIVE phase row as
+> Current work, not to weaken the guard. No protected artifact touched.
+>
 > **DONE 2026-09-28 (Buffy chief-engineer session, Phase 35.3/35.4 — tokeniser decision, phase closed):**
 > owns `docs/PHASE-35-ROADMAP.md`, `docs/README.md`, plus this file. 35.3 decided
 > DEFER with written adoption triggers, not a shrug: measured baseline (390 ms

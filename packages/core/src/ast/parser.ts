@@ -30,6 +30,66 @@ export function detectLanguage(filePath: string): string {
 }
 
 /**
+ * Length of the regex literal starting at `j`, or 0 when the character there
+ * does not open one.
+ *
+ * The line scanner had no regex-literal concept, so a backtick inside a
+ * character class — this repo's own `/[|;&<>()`$\\\n]/` in bash.ts — opened a
+ * phantom template literal and every declaration after it was masked as
+ * non-code: `find_symbol` returned zero hits for the exported
+ * `isReadOnlyCommand` while the function sat plainly in the file. Regex
+ * literals are single-line by language definition, so skipping one needs no
+ * cross-line state; that is why this is a pure per-line function.
+ *
+ * A `/` only opens a regex in expression position (after `=`, `(`, `,`,
+ * `return`, start of line, ...) — never after an identifier, number, `)`, `]`,
+ * or a quote, where it is division or a member access. An unterminated `/` is
+ * left alone: there is no state to carry, and a real regex cannot span lines.
+ */
+const REGEX_PRECEDING_KEYWORDS = new Set([
+  "return", "typeof", "case", "in", "of", "await", "yield", "delete",
+  "void", "new", "instanceof", "do", "else", "throw",
+]);
+const REGEX_PRECEDING_CHARS = "=([,;:?!&|+~^<>{}*%-";
+
+function regexLiteralLength(line: string, j: number): number {
+  if (line[j] !== "/") return 0;
+  const after = line[j + 1];
+  // `//` and `/*` are comments (the caller handles those first); a pattern
+  // whose first character is `/` or `*` escapes it (`\/`, `\*`), so this
+  // guard never rejects a real literal.
+  if (after === "/" || after === "*") return 0;
+
+  let k = j - 1;
+  while (k >= 0 && (line[k] === " " || line[k] === "\t")) k--;
+  if (k >= 0 && /[A-Za-z0-9_$]/.test(line[k])) {
+    const word = /([A-Za-z_$][A-Za-z0-9_$]*)$/.exec(line.slice(0, k + 1))?.[1] ?? "";
+    if (!REGEX_PRECEDING_KEYWORDS.has(word)) return 0;
+  } else if (k >= 0 && !REGEX_PRECEDING_CHARS.includes(line[k])) {
+    return 0;
+  }
+
+  let inClass = false;
+  let m = j + 1;
+  while (m < line.length) {
+    const c = line[m];
+    if (c === "\\") {
+      m += 2;
+      continue;
+    }
+    if (c === "[") inClass = true;
+    else if (c === "]") inClass = false;
+    else if (c === "/" && !inClass) {
+      let f = m + 1;
+      while (f < line.length && /[a-z]/i.test(line[f])) f++;
+      return f - j;
+    }
+    m++;
+  }
+  return 0;
+}
+
+/**
  * Marks each line as holding live code (true) or as living inside a comment or a
  * multi-line template literal (false).
  *
@@ -43,7 +103,7 @@ export function detectLanguage(filePath: string): string {
  */
 function buildCodeLineMask(
   lines: string[],
-  options: { rustRawStrings?: boolean } = {}
+  options: { rustRawStrings?: boolean; regexLiterals?: boolean } = {}
 ): boolean[] {
   const mask = new Array<boolean>(lines.length).fill(true);
   let inBlockComment = false;
@@ -112,6 +172,15 @@ function buildCodeLineMask(
         inBlockComment = true;
         j += 2;
         continue;
+      }
+
+      if (options.regexLiterals) {
+        const regexLen = regexLiteralLength(line, j);
+        if (regexLen > 0) {
+          hasCode = true;
+          j += regexLen;
+          continue;
+        }
       }
 
       if (char === "`") {
@@ -221,7 +290,7 @@ function shiftLines(symbols: AstSymbol[], delta: number): AstSymbol[] {
 function parseTypeScriptJs(lines: string[]): AstSymbol[] {
   const symbols: AstSymbol[] = [];
   const total = lines.length;
-  const codeLines = buildCodeLineMask(lines);
+  const codeLines = buildCodeLineMask(lines, { regexLiterals: true });
 
   // Helper to extract preceding JSDoc comment
   function extractDocstring(idx: number): string | undefined {
@@ -275,6 +344,12 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
         if (char === "/" && next === "/") {
           inLineComment = true;
           break;
+        }
+
+        const regexLen = regexLiteralLength(line, j);
+        if (regexLen > 0) {
+          j += regexLen - 1; // the loop's `j++` lands past the literal
+          continue;
         }
 
         if (char === '"' || char === "'" || char === "`") {

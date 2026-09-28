@@ -14,6 +14,7 @@ import {
   fetchOpenRouterFreeModels,
   getConsecutiveRateLimitCount,
   getRateLimitedModels,
+  isQuotaExhaustedMessage,
   isRateLimited,
   isRateLimitMessage,
   noteRateLimited,
@@ -152,6 +153,21 @@ describe("Phase 8 (B) — free-model coordinator", () => {
     expect(isRateLimited("phase8-test", "p8b-health-a")).toBe(true);
     expect(isRateLimited("phase8-test", "other")).toBe(false);
     expect(Object.keys(getRateLimitedModels())).toContain("phase8-test");
+  });
+
+  it("treats window-less quota exhaustion as terminal, windowed as transient", () => {
+    // The live gemini free-tier message: a DAILY cap, no retry window stated.
+    expect(
+      isQuotaExhaustedMessage(
+        "You exceeded your current quota, please check your plan and billing details. " +
+          "Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20"
+      )
+    ).toBe(true);
+    // A stated window is a claim the condition is time-bounded → transient path.
+    expect(isQuotaExhaustedMessage("429 quota exceeded. Please retry in 1s.")).toBe(false);
+    // Ordinary 429s carry no exhaustion phrasing at all.
+    expect(isQuotaExhaustedMessage("429 Too Many Requests")).toBe(false);
+    expect(isQuotaExhaustedMessage("no available capacity")).toBe(false);
   });
 
   it("prunes health records when a model is demoted (audit fix #3)", async () => {

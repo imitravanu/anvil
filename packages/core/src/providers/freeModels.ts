@@ -385,6 +385,24 @@ export function isRateLimitMessage(message: string): boolean {
   return /\b429\b|rate\s*[- ]?limit|quota|too many requests|no available capacity/i.test(message);
 }
 
+/**
+ * True when the provider reports the ACCOUNT quota exhausted — a daily cap or
+ * a billing limit, not a transient rate limit. A message that also states a
+ * retry window ("retry in 13s") is claiming the condition is time-bounded, so
+ * it stays on the transient path; a window-less exhaustion notice cannot be
+ * waited out by an in-turn retry (20s default, doubling per consecutive
+ * failure, capped at 120s) and must surface immediately. Reproduced live:
+ * gemini's free-tier daily cap ("exceeded your current quota ... free_tier
+ * requests, limit: 20") burned whole 120s turn budgets in futile waits with
+ * zero tool calls, because `isRateLimitMessage` matches "quota".
+ */
+export function isQuotaExhaustedMessage(message: string): boolean {
+  if (/retry in [\d.]+s/i.test(message)) return false;
+  return /exceeded your current quota|quota (?:has been )?exhausted|insufficient_quota|free[_ ]tier[_ ]requests|check your plan and billing/i.test(
+    message
+  );
+}
+
 const MIN_RETRY_WAIT_S = 1;
 const MAX_RETRY_WAIT_S = 120;
 const DEFAULT_RETRY_WAIT_S = 20;

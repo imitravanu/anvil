@@ -6,6 +6,10 @@
 
 ## Where the project stands (2026-09-28)
 
+- Phase 36 landed (2026-09-28): two live-probe defects fixed — the symbol scanner
+  masked every declaration after a regex literal holding a backtick, and
+  window-less quota exhaustion stalled turns for their full budget instead of
+  failing fast. Receipts in [`PHASE-36-ROADMAP.md`](PHASE-36-ROADMAP.md).
 - Phases 32–35 landed: the code-intelligence surface tells the truth (per-language
   extraction, kind contract, freshness incl. externally added files), team runs
   stream per-tool, and every self-claim in the README and TUI is derived or

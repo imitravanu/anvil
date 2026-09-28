@@ -4,6 +4,54 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### A backtick inside a regex literal can no longer hide declarations from `find_symbol` (2026-09-28)
+
+- **Found by a live probe on this repo's own code, not by the mock lane.** A
+  `WorkspaceSymbolIndex` built over the monorepo (258 ms, 1,650 symbols) returned
+  **zero hits for `isReadOnlyCommand`** — an exported function sitting plainly at
+  `bash.ts:289` — while neighbouring symbols resolved. The line scanner had no
+  regex-literal concept, so the backtick in the file's own safety regex
+  (``/[|;&<>()`$\\\n]/``, line 278) opened a phantom template literal; every line
+  after it was masked as non-code. A crafted minimal repro
+  (`const M = /[a`b]/;` followed by a function) reproduced the class.
+- The TS/JS mask and brace counter now skip regex literals as tokens
+  (`regexLiteralLength`), scoped by the standard expression-position heuristic so
+  division (`total / 2`) is never mistaken for a regex and an unterminated `/` is
+  left alone. Python/Rust/Go are untouched — those grammars have no regex
+  literals, and the new mask behaviour is opt-in.
+- Evidence: two new parser tests fail against the pre-change parser and pass
+  after; a division tripwire passes on both sides. The original probe re-run now
+  resolves `isReadOnlyCommand` → `bash.ts:289 (function)`, with the Rust control
+  (`gst-plugins-rs`, 17,848 symbols, ~1 s build) unchanged.
+
+### Hard quota exhaustion fails fast instead of burning the turn budget (2026-09-28)
+
+- **Found by the live eval lane.** `gemini/gemini-3.6-flash` went 0/5 on
+  `diagnose` and 0/5 on `bugfix`; five of the ten runs hit the full 120 s eval
+  timeout with **zero tool calls**. The raw provider probe showed the true cause — the
+  free-tier DAILY quota is exhausted (`You exceeded your current quota …
+  free_tier_requests, limit: 20`), stated cleanly by the provider in 3.0 s. The
+  defect was Anvil-side: `isRateLimitMessage` matches `quota`, so the session
+  waited (20 s default, doubling per consecutive failure, capped at 120 s) and
+  retried a request that cannot succeed.
+- `isQuotaExhaustedMessage` now separates account-level exhaustion from
+  transient rate limits: a window-less exhaustion notice is terminal and
+  surfaces the provider's own message; a provider that states a window
+  ("retry in 13s") keeps the transient retry path. Health bookkeeping
+  (`noteRateLimited` / `recordFailure`) still fires on the terminal path, so
+  `/health` and the circuit breaker see the failure.
+- Evidence: the new turn-stream test fails against pre-change code (`result` was
+  a retry result and no error surfaced) and passes after; the existing 429
+  retry, backoff, and circuit-breaker tests are unchanged and green. Live re-run
+  of the previously-stalled task 02: 120.10 s / 0 tools / timeout → 19.65 s /
+  1 tool / no timeout. Contrast lane on the same harness: `inception/mercury-2.5`
+  passed `21-diagnose` in 15.5 s (9 tools) — the loop itself is healthy.
+- **Boundary, recorded:** the free-tier quota is an environment limit. Live
+  quality signal on that provider requires available quota (or another
+  provider); the fix makes the state loud and fast, it cannot make the quota
+  exist.
+
+
 ### Code intelligence & teams — the declared boundaries are closed (2026-09-28)
 
 - **`find_symbol` now discovers externally ADDED files.** `validateFreshness` previously repaired only edits and deletes of already-indexed files; a file brought in by `git checkout` was invisible until a full `buildIndex` walk. The freshness pass now also walks for unseen indexable files (same `EXCLUDED_DIRS` and extension policy as the full build, so the two discovery paths can never disagree) and parses only files the index has never seen.

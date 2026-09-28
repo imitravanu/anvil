@@ -35,6 +35,7 @@ export {
   isRateLimited,
   getRateLimitedModels,
   isRateLimitMessage,
+  isQuotaExhaustedMessage,
   type FreeModelSource,
   type SourceResult,
   type SyncReport,

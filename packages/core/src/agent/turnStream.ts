@@ -9,6 +9,7 @@
 import type { ModelProvider, ConversationMessage } from "../providers/types.js";
 import {
   getConsecutiveRateLimitCount,
+  isQuotaExhaustedMessage,
   isRateLimitMessage,
   noteRateLimited,
   rateLimitRetrySeconds,
@@ -112,6 +113,14 @@ export async function* streamAssistantTurn(
         if (isRateLimitMessage(event.message)) {
           noteRateLimited(provider.id, input.model);
           recordFailure(provider.id, input.model);
+          if (isQuotaExhaustedMessage(event.message)) {
+            // A daily/account cap cannot be waited out — retrying in 20-120s
+            // cannot succeed, and the futile wait burned whole turn budgets
+            // (observed as 120s stalls with zero tool calls). Health is
+            // recorded above; the provider's own message is the honest report.
+            yield { type: "error", message: event.message };
+            return null;
+          }
           if (!turn.rateLimitRetried) {
             turn.rateLimitRetried = true;
             const consecutive = getConsecutiveRateLimitCount(provider.id, input.model);

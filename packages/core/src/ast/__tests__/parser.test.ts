@@ -565,6 +565,49 @@ describe("comment and template masking", () => {
     expect(find("second")?.startLine).toBe(6);
     expect(find("third")?.startLine).toBe(7);
   });
+
+  it("indexes declarations after a regex literal that holds a backtick", () => {
+    // Live defect (bash.ts:278): the scanner had no regex-literal concept, so
+    // the backtick inside SHELL_METACHARS' character class opened a phantom
+    // template literal and every declaration after it vanished from the index
+    // — `find_symbol` returned zero hits for the exported isReadOnlyCommand.
+    const src = [
+      "const SHELL_METACHARS = /[|;&<>()`$]/;",
+      "export function isReadOnlyCommand(command: string): boolean {",
+      "  return SHELL_METACHARS.test(command);",
+      "}",
+    ].join("\n");
+    const ast = parseFileAst(src, "bash.ts");
+    const fn = ast.symbols.find((s) => s.name === "isReadOnlyCommand");
+    expect(fn).toBeDefined();
+    expect(fn?.endLine).toBe(4);
+  });
+
+  it("keeps brace tracking correct when a parameter list holds a regex with a backtick", () => {
+    const src = [
+      "export function first(pat: RegExp = /`/) {",
+      '  return pat.test("x");',
+      "}",
+      "export function second(): void {}",
+    ].join("\n");
+    const ast = parseFileAst(src, "b.ts");
+    const first = ast.symbols.find((s) => s.name === "first");
+    const second = ast.symbols.find((s) => s.name === "second");
+    expect(first?.endLine).toBe(3);
+    expect(second?.startLine).toBe(4);
+  });
+
+  it("does not mistake division for a regex literal", () => {
+    const src = [
+      "const total = 10;",
+      "const half = total / 2;",
+      "export function afterDivision(): number {",
+      "  return half / total;",
+      "}",
+    ].join("\n");
+    const ast = parseFileAst(src, "c.ts");
+    expect(ast.symbols.find((s) => s.name === "afterDivision")?.endLine).toBe(5);
+  });
 });
 
 describe("generateSkeleton", () => {

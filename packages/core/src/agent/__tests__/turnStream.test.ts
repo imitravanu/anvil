@@ -4,6 +4,7 @@ import { TurnState } from "../turnState.js";
 import { FakeProvider } from "./fakeProvider.js";
 import type { AgentEvent } from "../types.js";
 import type { StreamEvent } from "../../providers/types.js";
+import { isRateLimited } from "../../providers/freeModels.js";
 
 async function drain(gen: AsyncGenerator<AgentEvent, TurnStreamResult | null>) {
   const events: AgentEvent[] = [];
@@ -166,5 +167,30 @@ describe("streamAssistantTurn", () => {
     const { events, result } = await drain(streamAssistantTurn(input));
     expect(result).toBeNull();
     expect(events).toContainEqual({ type: "error", message: "429 too many requests" });
+  });
+
+  it("fails fast on hard quota exhaustion instead of retrying", async () => {
+    // Live defect: gemini's free-tier DAILY cap ("You exceeded your current
+    // quota ... free_tier_requests, limit: 20") was classified as a transient
+    // rate limit, so the turn slept 20s+ (doubling per consecutive failure,
+    // capped at 120s) and retried a request that cannot succeed — observed as
+    // 120s eval stalls with zero tool calls. A window-less exhaustion notice
+    // is terminal; the existing 429 cases above keep their retry.
+    const quota =
+      "You exceeded your current quota, please check your plan and billing details. " +
+      "Quota exceeded for metric: generate_content_free_tier_requests, limit: 20";
+    const { input, turn } = makeInput([
+      { type: "error", message: quota },
+      { type: "turn_end", stopReason: "error" },
+    ]);
+
+    const { events, result } = await drain(streamAssistantTurn(input));
+
+    expect(result).toBeNull();
+    expect(events).toContainEqual({ type: "error", message: quota });
+    expect(turn.rateLimitRetried).toBe(false);
+    // Health bookkeeping is retained on the terminal path — the model is still
+    // marked, so /health and the circuit breaker see the failure.
+    expect(isRateLimited("anthropic", "fake-model")).toBe(true);
   });
 });

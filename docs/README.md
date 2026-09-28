@@ -1,6 +1,6 @@
 # Anvil docs — start here
 
-71 files, one active phase. This index exists so nobody has to read all of it to know what
+83 files, one active phase. This index exists so nobody has to read all of it to know what
 is current. Rule of thumb: **if a document is not listed as ACTIVE or CONTRACT, it is
 history** — kept because the engineering record is genuinely valuable (it is why the code
 comments cite the exact bug each rule replaces), not because it is a to-do list.
@@ -12,6 +12,7 @@ comments cite the exact bug each rule replaces), not because it is a to-do list.
 | [`../AGENTS.md`](../AGENTS.md) | The engineering constitution. Law: violations fail the gate. |
 | [`../PROGRESS.md`](../PROGRESS.md) | The live engineering record (dated session entries, evidence per change). |
 | [`CURRENT-FOCUS.md`](CURRENT-FOCUS.md) | **Current work** — standing state: where the project is, and the triggers that reopen work. |
+| [`PHASE-36-ROADMAP.md`](PHASE-36-ROADMAP.md) | COMPLETE (2026-09-28) — two live-probe defects fixed: regex-literal masking in the symbol scanner; window-less quota fails fast. |
 | [`PHASE-35-ROADMAP.md`](PHASE-35-ROADMAP.md) | COMPLETE (2026-09-28) — declared boundaries closed; tokeniser decision taken (DEFER, with triggers). |
 | [`PHASE-34-ROADMAP.md`](PHASE-34-ROADMAP.md) | COMPLETE (2026-09-28) — sub-agent streaming visibility during team runs. |
 | [`PHASE-33-ROADMAP.md`](PHASE-33-ROADMAP.md) | COMPLETE (2026-09-28) — advertised capability audit: every self-claim derived or verified. |
