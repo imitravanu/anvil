@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { WorkspaceSymbolIndex } from "../symbolIndex.js";
 
 const AUTH = `
@@ -69,6 +72,68 @@ describe("WorkspaceSymbolIndex.findSymbol ranking", () => {
   it("returns nothing for an empty query", () => {
     const idx = indexWith([["auth.ts", AUTH]]);
     expect(idx.findSymbol("   ")).toEqual([]);
+  });
+});
+
+describe("WorkspaceSymbolIndex freshness (external edits)", () => {
+  it("drops a symbol whose file was externally deleted", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "anvil-fresh-"));
+    try {
+      await fs.writeFile(path.join(dir, "a.ts"), "export function alpha() {}\n");
+      await fs.writeFile(path.join(dir, "extra.ts"), "export function gamma() {}\n");
+      const idx = new WorkspaceSymbolIndex(dir);
+      await idx.buildIndex();
+      expect(idx.findSymbol("gamma", { exact: true })).toHaveLength(1);
+
+      await fs.rm(path.join(dir, "extra.ts"));
+      await idx.validateFreshness();
+      expect(idx.findSymbol("gamma", { exact: true })).toEqual([]);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("repairs a ghost and a confidently-empty result after an external rewrite", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "anvil-fresh-"));
+    try {
+      await fs.writeFile(path.join(dir, "calc.ts"), "export function alpha() { return 1; }\n");
+      const idx = new WorkspaceSymbolIndex(dir);
+      await idx.buildIndex();
+
+      // External rewrite — as an editor save or `git checkout` performs it.
+      await fs.writeFile(path.join(dir, "calc.ts"), "export function beta() { return 2; }\n");
+      // A same-millisecond rewrite can collide with the recorded mtime; force
+      // a strictly newer mtime so the test tests drift, not the clock.
+      const st = await fs.stat(path.join(dir, "calc.ts"));
+      await fs.utimes(path.join(dir, "calc.ts"), st.atime, new Date(st.mtimeMs + 5));
+
+      await idx.validateFreshness();
+      expect(idx.findSymbol("alpha", { exact: true })).toEqual([]);
+      expect(idx.findSymbol("beta", { exact: true })).toHaveLength(1);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not re-read files that have not changed", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "anvil-fresh-"));
+    try {
+      await fs.writeFile(path.join(dir, "a.ts"), "export function alpha() {}\n");
+      const idx = new WorkspaceSymbolIndex(dir);
+      await idx.buildIndex();
+
+      const first = await idx.validateFreshness();
+      const second = await idx.validateFreshness();
+      // Two validations over one unchanged file: nothing re-parsed, nothing removed.
+      expect(first.reindexed).toBe(0);
+      expect(first.removed).toBe(0);
+      expect(second.reindexed).toBe(0);
+      expect(second.removed).toBe(0);
+      // And the lookup still works.
+      expect(idx.findSymbol("alpha", { exact: true })).toHaveLength(1);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
   });
 });
 

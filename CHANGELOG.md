@@ -4,6 +4,14 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Code intelligence — `find_symbol` no longer answers from a stale world (2026-09-28)
+
+The workspace symbol index is a per-process cache, but it was built **once** and thereafter updated only by Anvil's own `write_file`/`edit_file`. External mutations — an editor save, `git checkout`, another agent, or this agent's own `run_command` (`sed`, `git mv`, codegen) — never touched it. Reproduced live before the fix: after an external rewrite, `find_symbol` still returned the renamed-away symbol (a ghost) and returned **nothing** for the new name (confidently empty); after an external delete, the dead file's symbols kept resolving.
+
+- `WorkspaceSymbolIndex.validateFreshness()` re-validates every indexed file against the filesystem: missing files are dropped, moved-mtime files are re-read and re-parsed, unchanged files are skipped. Cost is one stat per indexed file — the "instant lookup" contract holds, and a re-parse happens only when a file actually changed.
+- `find_symbol` validates on every call, so a lookup never answers from a world that no longer exists.
+- **Declared boundary:** an externally **added** file is not discovered until a full `buildIndex` walk. The lies this repairs — ghosts and stale content — are the ones an agent branches on; discovery of additions is a different trade-off and is recorded rather than smuggled in.
+
 ### Documentation truth — every self-claim now derived or verified (2026-09-28)
 
 A full sweep of the README, the docs index and the TUI's launch surfaces found two falsehoods and five unguarded truths. Everything else verified true against code.

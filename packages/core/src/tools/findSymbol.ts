@@ -64,9 +64,13 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   }
 
   const index = getProjectSymbolIndex(ctx.projectRoot);
-  // Lazily build index if empty
   if (index.size === 0) {
+    // Lazily build index if empty.
     await index.buildIndex();
+  } else {
+    // Editor saves, git checkout and run_command mutate files without touching
+    // this index; validate so a lookup never answers from a stale world.
+    await index.validateFreshness();
   }
 
   const matches = index.findSymbol(query, {

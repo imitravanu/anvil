@@ -53,6 +53,8 @@ function normalizePath(relPath: string): string {
 export class WorkspaceSymbolIndex {
   private fileSymbols: Map<string, IndexedSymbol[]> = new Map();
   private symbolMap: Map<string, IndexedSymbol[]> = new Map();
+  /** Last-seen mtime per indexed file; absence means freshness is unknown. */
+  private mtimes: Map<string, number> = new Map();
   private projectRoot: string;
 
   constructor(projectRoot: string) {
@@ -61,10 +63,18 @@ export class WorkspaceSymbolIndex {
 
   /**
    * Indexes a single file into the symbol tables.
+   *
+   * `mtimeMs` is recorded when the caller knows it (a disk walk). Callers that
+   * index without one — in-memory tests, or a tool that just wrote the file —
+   * leave the entry freshness-unknown, and `validateFreshness` re-reads such an
+   * entry once on its next run to pin an mtime.
    */
-  public indexFile(relPath: string, content: string): void {
+  public indexFile(relPath: string, content: string, mtimeMs?: number): void {
     const rel = normalizePath(relPath);
     this.removeFile(rel);
+    if (mtimeMs !== undefined) {
+      this.mtimes.set(rel, mtimeMs);
+    }
 
     const ast = parseFileAst(content, rel);
     const symbols: IndexedSymbol[] = [];
@@ -120,6 +130,7 @@ export class WorkspaceSymbolIndex {
         }
       }
     }
+    this.mtimes.delete(rel);
     this.fileSymbols.delete(rel);
   }
 
@@ -129,6 +140,7 @@ export class WorkspaceSymbolIndex {
   public async buildIndex(): Promise<number> {
     this.fileSymbols.clear();
     this.symbolMap.clear();
+    this.mtimes.clear();
 
     let count = 0;
     const walk = async (dir: string): Promise<void> => {
@@ -142,9 +154,10 @@ export class WorkspaceSymbolIndex {
           const ext = path.extname(entry.name).toLowerCase();
           if (CODE_EXTENSIONS.has(ext)) {
             const rel = normalizePath(path.relative(this.projectRoot, full));
+            const st = await fs.stat(full).catch(() => null);
             const content = await fs.readFile(full, "utf8").catch(() => "");
             if (content) {
-              this.indexFile(rel, content);
+              this.indexFile(rel, content, st?.mtimeMs);
               count++;
             }
           }
@@ -191,6 +204,51 @@ export class WorkspaceSymbolIndex {
     });
 
     return scored.slice(0, limit).map((m) => m.entry);
+  }
+
+  /**
+   * Re-validates every indexed file against the filesystem and repairs drift.
+   *
+   * External edits — the user's editor, `git checkout`, another agent, even this
+   * agent's own `run_command` — bypass the write tools that keep the index
+   * current, so without this check `find_symbol` answers from a world that no
+   * longer exists: symbols that were renamed still resolve, and their new names
+   * resolve to nothing. Both were reproduced live before this existed.
+   *
+   * Cost is one stat per indexed file, which keeps `find_symbol`'s "instant"
+   * contract: a re-read happens only for a file whose mtime actually moved.
+   * Files indexed without a recorded mtime are re-read once to pin one.
+   *
+   * Known boundary (declared, not hidden): a file ADDED externally is not
+   * discovered here — that needs a full walk, i.e. `buildIndex`. The lies this
+   * repairs (ghosts, stale content) are the ones an agent branches on.
+   */
+  public async validateFreshness(): Promise<{ reindexed: number; removed: number }> {
+    let reindexed = 0;
+    let removed = 0;
+
+    for (const rel of [...this.fileSymbols.keys()]) {
+      const full = path.join(this.projectRoot, rel);
+      const st = await fs.stat(full).catch(() => null);
+      if (!st) {
+        this.removeFile(rel);
+        removed++;
+        continue;
+      }
+      const known = this.mtimes.get(rel);
+      if (known !== undefined && st.mtimeMs === known) continue;
+
+      const content = await fs.readFile(full, "utf8").catch(() => "");
+      if (!content) {
+        this.removeFile(rel);
+        removed++;
+        continue;
+      }
+      this.indexFile(rel, content, st.mtimeMs);
+      reindexed++;
+    }
+
+    return { reindexed, removed };
   }
 
   /** Total symbols indexed across workspace. */

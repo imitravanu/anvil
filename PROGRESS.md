@@ -2,6 +2,32 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-28 (Buffy chief-engineer session, symbol-index staleness fixed — correctness before the streaming phase):**
+> owns `packages/core/src/ast/symbolIndex.ts`, `packages/core/src/tools/findSymbol.ts`,
+> `packages/core/src/ast/__tests__/symbolIndex.test.ts`, `CHANGELOG.md`, plus this
+> file. Re-prioritized AGAINST my own roadmap: Phase 34 (sub-agent streaming) is a
+> visibility nicety, but the symbol index still had an open CORRECTNESS hole in the
+> exact phantom-symbol class this session has been eliminating — the cache built
+> once and was updated only by our own write tools, so editor saves, git checkout,
+> and even our own run_command produced stale lookups with zero signal. Proven
+> live before the fix (probe): ghost symbol after external rewrite, confidently
+> empty for the new name, ghost after external delete.
+> **Fix:** `validateFreshness()` — one stat per indexed file ("instant" contract
+> holds; re-parse only on moved mtime), missing files dropped, moved files re-read.
+> `find_symbol` validates every call. **Declared boundary:** external ADDITIONS are
+> not discovered (needs a full walk); recorded, not hidden.
+> **Tests:** 3 new, all FAIL against the stashed old implementation, 9 pre-existing
+> pass on both sides. Same-millisecond mtime collision handled by forcing a newer
+> mtime in the test.
+> **False start worth recording:** I first wrote tests against an API I had
+> INVENTED (`idx.reindexCount`) and used `as never` again — the same slop the
+> pre-commit hook rejected earlier. The returned counts from `validateFreshness`
+> were the right design; no new API was needed. Catch: inventing an API in a test
+> means the test was driving, not the design.
+> Gate Steps 0-5 green, 1271 tests (122 cli / 819 core / 330 tui), 25/25 evals.
+> No protected artifact touched. Phase 34 (streaming) intentionally NOT started —
+> correctness first; it is next unless something outranks it again.
+>
 > **DONE 2026-09-28 (Buffy chief-engineer session, Phase 33 COMPLETE / Phase 34 opened):**
 > owns `packages/tui/src/components/MessageList.tsx`, `packages/cli/src/__tests__/docTruth.test.ts`,
 > `README.md`, `docs/PHASE-33-ROADMAP.md`, NEW `docs/PHASE-34-ROADMAP.md`,
