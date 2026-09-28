@@ -59,6 +59,89 @@ function callsForTask(provider: FakeProvider, task: string) {
   });
 }
 
+describe("Phase 34 — live cross-member streaming (delegate_task team run)", () => {
+  it("interleaves members: member B starts before member A finishes", async () => {
+    const file = path.join(root, "b.txt");
+    const { session } = makeSession([
+      teamTurn({
+        strategy: "parallel",
+        totalIterations: 2, // split [1, 1]
+        members: [
+          { id: "a", task: "task-a" },
+          { id: "b", task: "task-b" },
+        ],
+      }),
+      // Member A's single tool turn.
+      readTurn(file, "a0"),
+      // Member B's single tool turn.
+      readTurn(file, "b0"),
+      textTurn(),
+    ]);
+
+    const events = await collect(session.send("go"));
+    const starts = events.filter((e) => e.type === "subagent_started");
+    const finishes = events.filter((e) => e.type === "subagent_finished");
+    expect(starts.length).toBe(2);
+    expect(finishes.length).toBe(2);
+
+    // THE discriminator, grounded in the mechanism. The old code buffered each
+    // member's events and drained them per member AFTER the team settled, so
+    // the stream grouped by member: A-start … A-finish … B-start … B-finish.
+    // Live streaming emits both starts while both members are still in flight,
+    // so member B's start must now appear BEFORE member A's finish. The first
+    // start is member A's (its task text matches the first member spec).
+    const firstStart = events.findIndex((e) => e.type === "subagent_started");
+    const firstFinish = events.findIndex((e) => e.type === "subagent_finished");
+    const secondStart = events.findIndex(
+      (e, i) => e.type === "subagent_started" && i > firstStart
+    );
+    expect(
+      secondStart,
+      "expected two subagent_started events"
+    ).toBeGreaterThan(firstStart);
+    expect(
+      secondStart < firstFinish,
+      "member B started only after member A finished — streaming is still batched"
+    ).toBe(true);
+  });
+
+  it("a member whose provider script is exhausted fails without laundering success", async () => {
+    const file = path.join(root, "c.txt");
+    // Deliberately ONE member turn short: member b's sub-session throws
+    // FakeProvider: script exhausted, and its report names that failure. The
+    // tool result must carry it — isError true, no laundered success.
+    const { session } = makeSession([
+      teamTurn({
+        strategy: "parallel",
+        totalIterations: 2,
+        members: [
+          { id: "a", task: "task-a" },
+          { id: "b", task: "task-b" },
+        ],
+      }),
+      readTurn(file, "a0"),
+      // no script left for member b → its sub-session errors
+    ]);
+
+    const events: AgentEvent[] = [];
+    for await (const ev of session.send("go")) events.push(ev);
+
+    // Both members announced — a failed member is not silently dropped.
+    expect(events.filter((e) => e.type === "subagent_started").length).toBe(2);
+    expect(events.filter((e) => e.type === "subagent_finished").length).toBe(2);
+
+    // delegate_task is a session tool: its result reaches the model via the
+    // tool_result in history, NOT a tool_finished event (phase-8 contract).
+    // The honest observable for failure is the run ledger.
+    const ledger = session.getRunLedger();
+    expect(
+      ledger.some((e) => e.eventType === "subagent_finished" && e.outcome === "error"),
+      "a member's failure must surface as an errored subagent_finished ledger entry"
+    ).toBe(true);
+    expect(ledger.some((e) => e.eventType === "subagent_finished" && e.outcome === "ok")).toBe(true);
+  });
+});
+
 describe("team budget enforcement (delegate_task → runTeam → sub-agents)", () => {
   // Note: all members share one FakeProvider script queue (consumed in call
   // order), so each member's script is exactly its budget size — leftovers

@@ -1,5 +1,6 @@
 import { getErrorMessage } from "../../errors.js";
 import { TEAM_DEFAULT_ITERATIONS, TEAM_MAX_AGENTS, SUB_AGENT_REPORT_MAX_CHARS } from "../../config/constants.js";
+import { instrumentRunner } from "./types.js";
 import type { TeamMemberResult, TeamMemberSpec, TeamRunnerDeps, TeamRunResult, TeamSpec } from "./types.js";
 
 /**
@@ -51,6 +52,10 @@ export async function runTeam(spec: TeamSpec, deps: TeamRunnerDeps, signal: Abor
   }
   const budgets = splitBudget(spec);
   const members: TeamMemberResult[] = [];
+  // Lifecycle events fire inside the runner's own sequencing (parallel fan-out,
+  // pipeline handoff), not after the whole team settles. With no listener this
+  // is the identity wrapper — zero behavior change for existing callers.
+  const instrumented = instrumentRunner(deps);
 
   if (spec.strategy === "parallel" || spec.strategy === "review") {
     // Parallel fan-out: independent histories, shared filesystem.
@@ -69,7 +74,7 @@ export async function runTeam(spec: TeamSpec, deps: TeamRunnerDeps, signal: Abor
           };
         }
         try {
-          return await deps.runMember(member, budgets[i] ?? TEAM_DEFAULT_ITERATIONS, signal);
+          return await instrumented.runMember(member, budgets[i] ?? TEAM_DEFAULT_ITERATIONS, signal);
         } catch (err: unknown) {
           return {
             id: member.id,
@@ -103,7 +108,7 @@ export async function runTeam(spec: TeamSpec, deps: TeamRunnerDeps, signal: Abor
       const handoff: TeamMemberSpec =
         prior.length > 0 ? { ...member, task: `${member.task}\n\nPrior work:\n${prior}` } : member;
       try {
-        const result = await deps.runMember(handoff, budgets[i] ?? TEAM_DEFAULT_ITERATIONS, signal);
+        const result = await instrumented.runMember(handoff, budgets[i] ?? TEAM_DEFAULT_ITERATIONS, signal);
         members.push(result);
         prior = result.report;
       } catch (err: unknown) {

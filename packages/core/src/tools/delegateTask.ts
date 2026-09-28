@@ -2,7 +2,14 @@ import { ToolDefinition, ToolExecutionResult, ToolSessionContext } from "./types
 import { runSubAgentLive, MAX_DELEGATIONS_PER_TURN, capReport } from "../agent/subagent.js";
 import { runTeam } from "../agent/team/index.js";
 import { TEAM_DEFAULT_ITERATIONS } from "../config/constants.js";
-import type { TeamSpec, TeamMemberSpec, TeamMemberResult, TeamRunnerDeps } from "../agent/team/types.js";
+import type {
+  TeamSpec,
+  TeamMemberSpec,
+  TeamMemberResult,
+  TeamRunnerDeps,
+  TeamMemberEvent,
+  TeamRunResult,
+} from "../agent/team/types.js";
 import type { AgentEvent } from "../agent/types.js";
 
 export const definition: ToolDefinition = {
@@ -117,13 +124,47 @@ export async function* executeSession(
     }
   }
 
-    // runTeam awaits runMember per-strategy. To surface subagent_started /
-    // subagent_finished events in this turn's stream, runMember collects the
-    // events it would have yielded and stashes them; executeSession drains any
-    // collected events per member after runTeam resolves. Tradeoff: cross-
-    // member streaming isn't live — the parent still sees each member's
-    // start and finish in order.
+    // Phase 34 — live cross-member streaming. Per-member AgentEvents are
+    // buffered while that member runs, then yielded through this generator as
+    // soon as the runner announces the member's finished/failed transition, so
+    // member B's activity appears while member A is still working instead of
+    // everything arriving in one batch after the whole team settles. The runner
+    // emits transitions from its own sequencing (parallel fan-out, pipeline
+    // handoff); this adapter owns only the buffer. Failure semantics are
+    // unchanged: a failed member still flushes what it produced, its
+    // failureReason still lands in the tool result, nothing is laundered.
     const collected: Map<string, AgentEvent[]> = new Map();
+    const pending: AgentEvent[] = [];
+    const memberTaskById = new Map(spec.members.map((m) => [m.id, m.task]));
+    // The pipeline strategy starts member N only after member N-1's runMember
+    // resolves, i.e. after its member_finished has been queued. A runner that
+    // awaited the consumer instead of queueing would deadlock on handoff; the
+    // event-driven queue never blocks the emitter.
+    let settled = false;
+    let wake: (() => void) | null = null;
+    const onMemberEvent: TeamRunnerDeps["onMemberEvent"] = (memberId, event) => {
+      if (event.type === "member_started") {
+        pending.push({ type: "subagent_started", task: memberTaskById.get(memberId) ?? "" });
+      } else {
+        const buffered = collected.get(memberId);
+        if (buffered) {
+          pending.push(...buffered);
+          collected.delete(memberId);
+        } else {
+          // The member failed before producing any events. Mirror the runner's
+          // own report convention so the member's stream still terminates.
+          pending.push({
+            type: "subagent_finished",
+            toolCalls: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            report: event.type === "member_failed" ? `member failed: ${event.reason}` : "",
+          });
+        }
+      }
+      wake?.();
+    };
+    const waitForEvent = (): Promise<void> => new Promise((resolve) => { wake = resolve; });
     // Enforce the budget the team runner computed: the sub-session is created
     // with exactly the passed iteration cap, so splitBudget is a real bound,
     // not a decorative number. A per-member override clamps to [1, total].
@@ -143,7 +184,8 @@ export async function* executeSession(
         outcome: "ok",
         elapsedMs: 0,
       });
-      events.push({ type: "subagent_started", task: member.task });
+      // subagent_started is emitted by the runner's member_started transition
+      // (see onMemberEvent); buffering one here would duplicate it.
       const startedAt = Date.now();
       const gen = runSubAgentLive({
         provider: ctx.provider,
@@ -192,13 +234,37 @@ export async function* executeSession(
       };
     };
 
-    const deps: TeamRunnerDeps = { projectRoot: ctx.projectRoot, runMember: runMemberAdapter };
-    const result = await runTeam(spec, deps, ctx.signal);
-    ctx.onTeamRunResult?.(result);
-    for (const member of result.members) {
-      const evs = collected.get(member.id);
-      if (evs) for (const ev of evs) yield ev;
+    const deps: TeamRunnerDeps = { projectRoot: ctx.projectRoot, runMember: runMemberAdapter, onMemberEvent };
+    let settledResult: TeamRunResult | undefined;
+    let settledError: unknown;
+    const runPromise = runTeam(spec, deps, ctx.signal).then(
+      (result) => {
+        settledResult = result;
+        settled = true;
+        wake?.();
+        return result;
+      },
+      (err: unknown) => {
+        settledError = err;
+        settled = true;
+        wake?.();
+        throw err;
+      }
+    );
+    // Drain between generator suspensions: events surface as members
+    // transition rather than after the whole team settles. The loop exits only
+    // once the run has settled AND every buffered event has been yielded.
+    while (!(settled && pending.length === 0)) {
+      const ev = pending.shift();
+      if (ev) {
+        yield ev;
+      } else {
+        await waitForEvent();
+      }
     }
+    const result = await runPromise;
+    if (settledError !== undefined) throw settledError;
+    ctx.onTeamRunResult?.(result);
     return {
       output: { report: result.combinedReport, members: result.members },
       isError: result.members.some((m) => m.failureReason !== undefined),

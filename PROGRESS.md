@@ -2,6 +2,37 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-28 (Buffy chief-engineer session, Phase 34 — live cross-member team streaming):**
+> owns `packages/core/src/agent/team/types.ts`, `packages/core/src/agent/team/runner.ts`,
+> `packages/core/src/tools/delegateTask.ts`, `packages/core/src/agent/__tests__/teamBudget.test.ts`,
+> `docs/PHASE-34-ROADMAP.md`, `CHANGELOG.md`, plus this file.
+> **The design:** `instrumentRunner` wraps `runMember` (opt-in `onMemberEvent` —
+> identity wrapper without a listener, so existing callers/tests unchanged) and
+> `delegate_task` flushes each member's buffered events on its transition instead
+> of after the whole team settles. The queue is event-driven with a one-shot wake
+> resolve; the emitter never blocks, which is also what keeps the PIPELINE
+> strategy deadlock-free (member N starts after N-1's member_finished is queued).
+> **The discriminator:** "member B starts before member A finishes" — grounded in
+> the mechanism, because the old drain grouped events by member after the run.
+> Reverting ONLY delegateTask.ts makes it fail with "streaming is still batched";
+> the 3 other tests pass on both sides (semantics that did not change).
+> **My failure mode this task, recorded plainly:** my first edit to delegateTask
+> introduced `mather = 0`, `void this`, and an undefined `memberTasks` — corrupted
+> paste while thinking ahead. I caught it by re-reading my own diff and rewrote
+> the section cleanly instead of patching. Then I wrote tests against APIs I had
+> NOT read (`session.run`, invented `reindexCount`-style fields, `readTurn` arity)
+> — three rounds of typecheck/test failures that were all the same root cause:
+> WRITING BEFORE READING. The fix was boring: read the existing tests, read the
+> fake provider, read types.ts, then write. And when the failure test kept
+> failing on an assertion I "knew" was right, a deliberate-diff probe printed the
+> real event sequence and showed session tools emit NO tool_finished (phase-8
+> contract: results reach the model via history). Probe when surprised.
+> **TUI:** eventReducer already rendered all three subagent_* events live —
+> 34.3 needed zero TUI code; what changed is WHEN the rows appear.
+> Gate Steps 0-5 green, 1273 tests (122/821/330), 25/25 evals. No protected
+> artifact touched. Per-member granularity only; per-tool streaming recorded as
+> future work in the roadmap.
+>
 > **DONE 2026-09-28 (Buffy chief-engineer session, symbol-index staleness fixed — correctness before the streaming phase):**
 > owns `packages/core/src/ast/symbolIndex.ts`, `packages/core/src/tools/findSymbol.ts`,
 > `packages/core/src/ast/__tests__/symbolIndex.test.ts`, `CHANGELOG.md`, plus this

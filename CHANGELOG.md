@@ -4,6 +4,16 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Agent teams — sub-agent work is now visible while it happens (2026-09-28)
+
+During a multi-agent team run the TUI previously showed one spinner for the entire duration: `runTeam` reported only the merged end state, and `delegate_task` buffered every member's events and drained them after the whole team settled — the code's own comment admitted "cross-member streaming isn't live". A member failing at second 10 of a 5-minute run was silent until the end.
+
+- `runTeam` now emits per-member lifecycle transitions (`member_started` / `member_finished` / `member_failed`) from its own sequencing via an opt-in `onMemberEvent` channel; with no listener, behavior is unchanged.
+- `delegate_task` flushes each member's buffered events the moment its transition arrives, so member B's activity streams while member A is still running. The flush queue is event-driven and never blocks the emitter, which also keeps the pipeline strategy deadlock-free.
+- A failed member still flushes what it produced and its failure still lands in the run ledger as `outcome: "error"` — never laundered into a green team.
+- Granularity is per-member: intra-member tool-by-tool progress still arrives with that member's flush; streaming `subagent_progress` across members is recorded as future work.
+- Evidence: a discriminator test fails against the old batching with "member B started only after member A finished — streaming is still batched", and passes with live streaming.
+
 ### Code intelligence — `find_symbol` no longer answers from a stale world (2026-09-28)
 
 The workspace symbol index is a per-process cache, but it was built **once** and thereafter updated only by Anvil's own `write_file`/`edit_file`. External mutations — an editor save, `git checkout`, another agent, or this agent's own `run_command` (`sed`, `git mv`, codegen) — never touched it. Reproduced live before the fix: after an external rewrite, `find_symbol` still returned the renamed-away symbol (a ghost) and returned **nothing** for the new name (confidently empty); after an external delete, the dead file's symbols kept resolving.
