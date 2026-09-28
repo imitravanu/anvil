@@ -113,7 +113,14 @@ Isolated check: with the option disabled, exactly one test fails
   of this line said "1,284", guessed rather than counted; that is precisely the defect
   class this phase exists to remove, and it was caught by measuring before committing.
 - Every task's tests were shown to fail against the pre-change code before the
-  task was called done — 36 new tests in total across the phase.
+  task was called done — **34 new tests**, counted rather than estimated (parser
+  suite +22, symbol index 9, symbol-kind contract 3).
+- **Correction, 2026-09-28:** this line and the commit message of `379e1d5`
+  initially said "36 new tests". That number was written from memory and is wrong;
+  34 is the measured figure. It is recorded here rather than silently overwritten
+  because inventing a statistic while closing a phase whose entire subject is
+  unverified self-claims is the exact failure this phase exists to remove — the
+  count was caught only because it was double-checked before being trusted.
 - Both newly-found gaps during the phase were recorded where they were found
   (32.9 declared open in 32.6 and then closed here) rather than quietly dropped.
 

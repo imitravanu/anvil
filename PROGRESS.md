@@ -24,7 +24,14 @@
 > - **32.8** gate/docs/record; Phase 32 marked COMPLETE with Phase 33 opened as the
 >   single **Current work** row (the docTruth guard rejects both a complete doc
 >   labelled current and no current row at all). Nothing left uncommitted.
-> Phase 32 total: 11 defects, 36 new tests, every one shown to fail before the fix.
+> Phase 32 total: 11 defects, 34 new tests (MEASURED: parser suite +22 = 28-6,
+> symbolIndex 9, symbolKindContract 3), every one shown to fail before the fix.
+> **Correction:** this line and the `379e1d5` commit message first said "36 new
+> tests" — written from memory, wrong by 2. Second time this session I published a
+> guessed number (the first was "1,284 tests", corrected to 1,263 before commit).
+> The `379e1d5` message is uncorrectable without rewriting history, so the true
+> figure is recorded here and in the roadmap. Rule for future sessions: count,
+> never infer — and never quote a count that no command produced.
 > Final measured state: 177 files / 1263 tests (cli 117·18, core 816·103, tui 330·56).
 > Note to self: I first wrote "1,284 tests" into the Phase 32 close-out by GUESSING,
 > then measured and corrected it to 1,263. Writing an unverified number inside the
@@ -32,6 +39,38 @@
 > Standalone process note carried into the roadmap: the parser's remaining ceiling is
 > that it is a line scanner, not a tokeniser — the tree-sitter trade-off is recorded
 > as an open architectural question, deliberately NOT decided.
+>
+> **DONE 2026-09-28 (chief-engineer handover session — independent verification; the
+> work above was uncommitted in the tree for ~8 minutes and has since landed):**
+> The prior session exited before its work reached `git log`, which AGENTS.md §3.3
+> explicitly forbids, and then returned and committed it itself as `379e1d5`. This
+> session re-derived the evidence from the code rather than trusting the record, and
+> independently reached the same conclusions. Two chief-engineer sessions were live
+> on this repo at once — see the collision note at the foot of this block.
+> - **32.9 re-probed at the parser, not the prose.** 16 hand-built cases through the
+>   built `dist/ast/parser.js`, including the ones the change does NOT obviously
+>   cover: a raw string containing `//` and `/*` (must not open comment state), an
+>   `r#"` opener inside a `//` comment (must not open a raw string), a `"##` closer
+>   that must NOT close a `r#"`, a byte string `b"{ }"`, a char literal `'#'`, a Go
+>   rune `'{'`, a raw string beside a `'a` lifetime, and an identifier ending in `r`
+>   (`Renderer`). All 16 correct. The ordering that makes this hold is
+>   `inRawString` → `inBlockComment` → `rustRawStrings` → `inTemplate`.
+> - **Both RED claims re-proved, not re-read.** Disabling only the `rustRawStrings`
+>   option fails exactly 1 of 28 parser tests and no more; restoring it passes 28.
+>   Reverting the README to "15 Built-in Tools" fails 1 of 11 `docTruth` tests and
+>   no more; restoring passes 11. Both are one-line mutations, so a guard that
+>   fires on something else would have shown up as extra failures.
+> - **Counts derived from code, not read from the doc.** `TOOL_DEFINITIONS` = 16,
+>   `createProviders` = 12, `MODEL_REGISTRY` = 75, `visibleModels` = 63 — and the
+>   README states 16 / 12 / 75 / 63 in all four places. Suites: core 816 (103 files),
+>   tui 330 (56), cli 117 (18) = **1,263**, matching the corrected figure above.
+> - **Open finding, deliberately NOT fixed here** (it is Phase 33's 33.2 sweep, and
+>   fixing it without the sweep repeats the per-instance whack-a-mole this phase
+>   exists to end): `README.md:28` files `get_outline` under "Code Intelligence
+>   (LSP)", but `get_outline` is the local AST scanner in `tools/outline.ts` — the
+>   only LSP-backed tools are `goto_definition`, `find_references`, `get_hover`,
+>   `get_diagnostics`. Same shape as the 15-vs-16 drift this block just closed: a
+>   capability claim that does not match the code behind it.
 >
 > **DONE 2026-09-28 (Buffy chief-engineer session, Phase 32.6 member extraction + string-aware braces):**
 > owns `packages/core/src/ast/parser.ts`, `packages/core/src/ast/__tests__/parser.test.ts`,
