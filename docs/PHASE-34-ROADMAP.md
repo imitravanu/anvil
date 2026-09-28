@@ -4,7 +4,7 @@
 > **Date:** 2026-09-28  
 > **Author:** Chief Engineer  
 > **Core Mandate:** *"We are not making some cheap copy here; we are building frontier coding tools."*  
-> **Status:** COMPLETE (2026-09-28) — per-member granularity, the pre-authorized first step; per-tool-call streaming recorded as future work  
+> **Status:** COMPLETE (2026-09-28) — successor: [`PHASE-35-ROADMAP.md`](PHASE-35-ROADMAP.md)  
 > **Scope:** During a multi-agent team run, the user currently stares at a spinning `delegate_task` card for the entire duration. This phase makes sub-agent work *visible while it happens* — per-member lifecycle events surfaced through the same event stream the TUI already consumes — without breaking the permission model, checkpoints, or the guardian.
 
 ---

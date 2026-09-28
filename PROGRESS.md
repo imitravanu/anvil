@@ -2,6 +2,14 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-28 (Buffy chief-engineer session, Phase 34 closed / Phase 35 opened):**
+> owns `docs/PHASE-35-ROADMAP.md` (NEW), `docs/PHASE-34-ROADMAP.md`, `docs/README.md`,
+> plus this file. Phase 34 marked COMPLETE (per-member granularity — the
+> pre-authorized first step — landed; per-tool streaming, addition discovery, and
+> the tokeniser decision are the three declared boundaries now collected in
+> Phase 35 rather than scattered across three documents). Single **Current work**
+> row maintained for docTruth. No protected artifact touched.
+>
 > **DONE 2026-09-28 (Buffy chief-engineer session, Phase 34 — live cross-member team streaming):**
 > owns `packages/core/src/agent/team/types.ts`, `packages/core/src/agent/team/runner.ts`,
 > `packages/core/src/tools/delegateTask.ts`, `packages/core/src/agent/__tests__/teamBudget.test.ts`,
