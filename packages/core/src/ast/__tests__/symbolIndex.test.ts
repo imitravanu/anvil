@@ -154,6 +154,44 @@ describe("WorkspaceSymbolIndex freshness (external edits)", () => {
     }
   });
 
+  it("skips build output and dependency trees that are never source (Phase 37)", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "anvil-excl2-"));
+    try {
+      await fs.writeFile(path.join(dir, "main.rs"), "pub fn real_entry() {}\n");
+      const hidden: [string, string, string][] = [
+        ["target", "deps/generated.rs", "pub fn gen_fn_7() {}\n"],
+        ["vendor", "dep.go", "func VendorDep() {}\n"],
+        [".venv", "lib/site.py", "def venv_dep():\n    pass\n"],
+        ["__pycache__", "cache.py", "def cached_fn():\n    pass\n"],
+      ];
+      for (const [top, rel, body] of hidden) {
+        const full = path.join(dir, top, rel);
+        await fs.mkdir(path.dirname(full), { recursive: true });
+        await fs.writeFile(full, body);
+      }
+      // Tripwire: a similarly named REAL directory must stay indexed — the
+      // exclusion is exact-name, not a pattern.
+      await fs.mkdir(path.join(dir, "targets"), { recursive: true });
+      await fs.writeFile(path.join(dir, "targets", "ok.ts"), "export function legitTargetsDir() {}\n");
+
+      const idx = new WorkspaceSymbolIndex(dir);
+      await idx.buildIndex();
+
+      for (const query of ["gen_fn_7", "VendorDep", "venv_dep", "cached_fn"]) {
+        expect(idx.findSymbol(query, { exact: true }), `${query} must not be indexed`).toEqual([]);
+      }
+      expect(idx.findSymbol("real_entry", { exact: true })).toHaveLength(1);
+      expect(idx.findSymbol("legitTargetsDir", { exact: true })).toHaveLength(1);
+
+      // The freshness walk (addition discovery) honours the same set.
+      await fs.writeFile(path.join(dir, "target", "deps", "late.rs"), "pub fn late_comer() {}\n");
+      await idx.validateFreshness();
+      expect(idx.findSymbol("late_comer", { exact: true })).toEqual([]);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("does not re-read files that have not changed", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "anvil-fresh-"));
     try {

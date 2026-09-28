@@ -14,8 +14,22 @@ export class PathEscapeError extends Error {
  * The union is canonical: skipping `build`/`.next` everywhere is the intent
  * (generated output, no source value, multi-MB scans).
  */
+/**
+ * Directories that are build output, dependency trees, or bytecode caches —
+ * never the user's source. Every walk shares this one set: the symbol index
+ * (build + freshness discovery), grep, list_files, get_outline, goal awareness.
+ *
+ * Phase 37 added the Rust/Go/Python entries from a measured probe: a
+ * non-excluded Rust build tree put 200 generated files / 400 symbols into a
+ * fixture index (`gen_fn_7` resolvable by find_symbol), and a real project on
+ * this machine holds 17,997 files / 15 GB under `target/` — currently skipped
+ * only by luck, because its generated `.rs` files happen to live under an
+ * already-excluded `build/` name. A generated symbol that outranks the user's
+ * code is exactly the confidently-wrong answer the index exists to prevent.
+ */
 export const EXCLUDED_DIRS: ReadonlySet<string> = new Set([
   "node_modules", ".git", "dist", ".anvil", "build", ".next",
+  "target", "vendor", "__pycache__", ".venv", "venv",
 ]);
 
 // Resolves `requested` against `root`, and throws if the result is not inside `root`.

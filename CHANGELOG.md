@@ -4,6 +4,24 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Build output and dependency trees are no longer walked or indexed (2026-09-28)
+
+- **Found by the Phase 36 §4 trigger firing.** A fixture with a non-excluded
+  Rust build tree (`target/debug/deps/`, 200 generated files) put **402 symbols**
+  into the index and resolved `gen_fn_7`; a real project on this machine holds
+  **17,997 files / 15 GB** under `target/` and was skipped today only because its
+  generated `.rs` files happen to live under the already-excluded `build/` name.
+  `target/debug/deps`, Go's `vendor/`, and Python's `.venv/` were the same class,
+  uncovered.
+- `EXCLUDED_DIRS` — the single set shared by the symbol index (initial build and
+  the freshness addition walk), `grep`, `list_files`, `get_outline`, and goal
+  awareness — now also excludes `target`, `vendor`, `__pycache__`, `.venv`, and
+  `venv`.
+- Evidence: the new test fails against the pre-change set (generated symbols are
+  indexed, and the freshness walk discovers a late file under `target/`) and
+  passes after; an exact-name tripwire asserts that a real `targets/` directory
+  stays indexed.
+
 ### A backtick inside a regex literal can no longer hide declarations from `find_symbol` (2026-09-28)
 
 - **Found by a live probe on this repo's own code, not by the mock lane.** A

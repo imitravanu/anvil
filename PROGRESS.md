@@ -2,6 +2,34 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-28 (Chief-engineer session — Phase 37: walk hygiene from the fired trigger; live baseline measured; collision demonstrated):**
+> owns `packages/core/src/tools/paths.ts`, `packages/core/src/ast/__tests__/symbolIndex.test.ts`,
+> NEW `docs/PHASE-37-ROADMAP.md`, `docs/README.md`, `docs/CURRENT-FOCUS.md`,
+> `CHANGELOG.md`, plus this file.
+> **Baseline:** full gate Steps 0–5 green before any change (1,281 tests; 25/25 mock evals).
+> **Probe D (exclusion gap, the Phase 36 §4 trigger — fired):** a fixture with a
+> non-excluded Rust build tree (`target/debug/deps/`, 200 generated files) indexed
+> 402 symbols and resolved `gen_fn_7`; a real project on this machine holds
+> 17,997 files / 15 GB under `target/`, skipped today only because its generated
+> `.rs` live under an already-excluded `build/`. Fix: `EXCLUDED_DIRS` gains
+> `target`, `vendor`, `__pycache__`, `.venv`, `venv` (one set feeds the symbol
+> index build + freshness walk, grep, list_files, get_outline, goal awareness).
+> First collision probe was INVALID (fake-provider script shape wrong, zero tool
+> calls) — discarded and rebuilt from the real harness before any conclusion.
+> **Probe E (full live lane, first full-suite live run):** `inception/mercury-2.5`
+> 24/25 (96%), 259 s, 4,69,001 in / 25,621 out, $0.00; the one failure is task 16
+> (model broke tsconfig → TS5095). Recorded: the suite is at the ceiling for this
+> model class — harder tasks are the next measurement investment.
+> **Probe F (collision, demonstrated):** two sessions wrote the same file in the
+> same turn; both said ok; only one content survived — silent loss. Not fixed
+> here (optimistic concurrency or worktrees is its own design phase); recorded
+> with the operational rule: parallel teams partition paths, mutating
+> collaboration uses `pipeline`.
+> **Gate Steps 0–5 green** after the change: 1,282 tests (122 cli / 830 core / 330
+> tui), 25/25 mock evals. Mutation receipt: the new exclusion test fails against
+> the pre-change set (1 failed | 14 passed) and passes after (166 tests green
+> across ast + tools dirs). No protected artifact touched.
+>
 > **DONE 2026-09-28 (Chief-engineer session — Phase 36 wave 1: two live-probe defects found and fixed, gate green):**
 > owns `packages/core/src/ast/parser.ts`, `packages/core/src/ast/__tests__/parser.test.ts`,
 > `packages/core/src/providers/freeModels.ts`, `packages/core/src/agent/turnStream.ts`,

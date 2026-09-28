@@ -1,11 +1,19 @@
 # Current Focus — standing state
 
-> **Status:** ACTIVE (standing) — this doc is the docs index's Current-work row
-> while no phase is open. It is deliberately small: what is true right now, and
-> what reopens work.
+> **Status:** ACTIVE (standing) — this doc is the docs index's Current-work row:
+> what is true right now, kept current alongside any open phase, and what
+> reopens work.
 
 ## Where the project stands (2026-09-28)
 
+- Phase 37 landed (2026-09-28): the Phase 36 §4 trigger fired — a
+  non-excluded Rust build tree put 402 generated symbols into a fixture index,
+  so `target`, `vendor`, `__pycache__`, `.venv`, and `venv` are now excluded
+  from every walk (fail-first test + mutation receipt). Two receipts recorded
+  alongside it: the first full live lane (`inception/mercury-2.5`,
+  **24/25 = 96%**, $0.00) and a demonstrated parallel team write collision
+  (both members told ok, one content survived) — the collision is declared
+  with options, not patched.
 - Phase 36 landed (2026-09-28): two live-probe defects fixed — the symbol scanner
   masked every declaration after a regex literal holding a backtick, and
   window-less quota exhaustion stalled turns for their full budget instead of
