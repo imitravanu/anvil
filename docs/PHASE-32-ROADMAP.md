@@ -37,9 +37,10 @@ Note on method: an earlier probe of this same file was **invalid** and its concl
 | **32.3** | Comment / template / docstring masking (`buildCodeLineMask`, `buildPythonCodeLineMask`) feeding both symbol detection and brace matching | Phantom symbols and desynchronised brace scanning | **P0** | **COMPLETE** |
 | **32.4** | Python nested-class collection | Nested classes absent from the index | **P1** | **COMPLETE** |
 | **32.5** | Deterministic ranked `find_symbol` + Windows-safe path canonicalization | Same query, different answer per machine; duplicate index entries on Windows | **P1** | **COMPLETE** |
-| **32.6** | Remaining extraction surfaces — Rust enum variants and trait methods, Go interface method sets, TS class arrow properties, raw-string literals in Rust/Go | Known gaps, honestly declared rather than claimed as covered | **P2** | **PENDING** |
+| **32.6** | Member extraction — Rust trait methods and enum variants, Go interface method sets, TS enum members, class arrow properties and abstract methods; string-aware brace counting in the Rust/Go scanners | Containers were indexed, their searchable members were not | **P0** | **COMPLETE** |
 | **32.7** | `AstSymbolKind` coverage guard — a test asserting every kind the tool advertises can actually be produced by the parser | Makes defect class #1/#2 mechanical instead of discovered | **P1** | **COMPLETE** |
 | **32.8** | Guardian gate, docs sync, record | — | **P0** | **IN PROGRESS** |
+| **32.9** | Brace counting across a MULTI-LINE string literal — Go's backtick form is covered by the code mask, a multi-line Rust raw string (`r#"…` opened on one line and closed on another) is not | Narrow remaining gap in the same class as 32.6 | **P2** | **PENDING** |
 
 ---
 
@@ -58,6 +59,32 @@ and `module` were added to the advertised enum to fix it. Three assertions:
 1. the advertised enum is exactly the set of kinds the index can hold (both directions),
 2. every advertised kind is producible by a supported language's parser,
 3. no declared kind is silently dropped by the corpus.
+
+### 32.6 — Member extraction and string-aware braces
+
+Two defects of the same shape: a container was indexed while the things declared
+*inside* it were not, and a scanner counted characters that were not syntax.
+
+**Members.** Rust trait methods (`fn run(&self);`) and enum variants, Go interface
+method sets, TypeScript enum members, and callable class properties
+(`onClick = () => {}`) were absent from `find_symbol`. Plain data fields are
+deliberately excluded — a class field is a value, not a declaration an agent
+looks up by name, and indexing them would flood the symbol table.
+
+The tests caught two bugs in the first version of this work, both the *same* bug:
+a declaration with **no body** whose scanner then adopted the next declaration's
+braces. An abstract TypeScript method (`public abstract compute(): number;`) and a
+signature-only Rust trait method each silently dropped the method that followed
+them. Both are now guarded by detecting a signature that ends in `;`.
+
+**Braces in strings.** Neither the Rust nor the Go scanner skipped string
+literals, so one brace inside a string left depth permanently unbalanced, the real
+closing brace never returned depth to zero, and the symbol's line range collapsed
+to a single line. Measured before the fix: a Rust function spanning lines 1–4
+reported `L1-1`, a Go function spanning 3–6 reported `L3-3`. The TypeScript
+scanner was already string-aware, which is why only these two languages were
+affected. Rust lifetimes (`&'a str`) are matched precisely so they are not read as
+char literals.
 
 ## 3. Acceptance
 

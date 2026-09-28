@@ -364,6 +364,150 @@ describe("parseFileAst - Python string masking and nesting", () => {
   });
 });
 
+describe("parseFileAst - container members", () => {
+  it("indexes arrow-function class properties, but not plain data fields", () => {
+    const src = [
+      "export class Panel {",
+      "  private count: number = 0;",
+      "  public onClick = (e: Event): void => {",
+      "    this.count++;",
+      "  };",
+      "  private handler: (e: Event) => void = (e) => this.log(e);",
+      "  public log(e: Event): void {",
+      "    void e;",
+      "  }",
+      "}",
+    ].join("\n");
+    const cls = parseFileAst(src, "panel.ts").symbols.find((s) => s.name === "Panel");
+    const childNames = (cls?.children ?? []).map((c) => c.name);
+
+    expect(childNames).toContain("onClick");
+    expect(childNames).toContain("handler");
+    expect(childNames).toContain("log");
+    // A plain value field is not a declaration to look up by name.
+    expect(childNames).not.toContain("count");
+    expect(cls?.children?.find((c) => c.name === "onClick")?.kind).toBe("method");
+  });
+
+  it("indexes an abstract method without swallowing the method after it", () => {
+    const src = [
+      "export abstract class Base {",
+      "  public abstract compute(): number;",
+      "  public run(): void {",
+      "    void this.compute();",
+      "  }",
+      "}",
+    ].join("\n");
+    const cls = parseFileAst(src, "base.ts").symbols.find((s) => s.name === "Base");
+    expect(cls?.children?.map((c) => c.name)).toEqual(["compute", "run"]);
+    expect(cls?.children?.[0]?.bodyStartLine).toBeUndefined();
+  });
+
+  it("indexes TypeScript enum members", () => {
+    const src = "export enum Status {\n  Active = 1,\n  Suspended = 2,\n}\n";
+    const status = parseFileAst(src, "status.ts").symbols.find((s) => s.name === "Status");
+    expect(status?.children?.map((c) => c.name)).toEqual(["Active", "Suspended"]);
+    expect(status?.children?.[0]?.kind).toBe("constant");
+  });
+
+  it("indexes Rust trait methods, including signature-only ones", () => {
+    const src = [
+      "pub trait Service {",
+      "    fn run(&self) -> bool;",
+      "    fn stop(&self) {",
+      "        println!(\"stop\");",
+      "    }",
+      "}",
+    ].join("\n");
+    const trait = parseFileAst(src, "s.rs").symbols.find((s) => s.name === "Service");
+    expect(trait?.children?.map((c) => c.name)).toEqual(["run", "stop"]);
+    // A `;` signature has no body; a defaulted method does.
+    expect(trait?.children?.[0]?.bodyStartLine).toBeUndefined();
+    expect(trait?.children?.[1]?.bodyStartLine).toBeDefined();
+  });
+
+  it("indexes Rust enum variants, not the fields of a struct variant", () => {
+    const src = [
+      "pub enum Mode {",
+      "    Fast,",
+      "    Pair(u32, u32),",
+      "    Named {",
+      "        label: String,",
+      "    },",
+      "}",
+    ].join("\n");
+    const mode = parseFileAst(src, "m.rs").symbols.find((s) => s.name === "Mode");
+    expect(mode?.children?.map((c) => c.name)).toEqual(["Fast", "Pair", "Named"]);
+  });
+
+  it("indexes Go interface methods and skips embedded interfaces", () => {
+    const src = [
+      "package main",
+      "",
+      "import \"io\"",
+      "",
+      "type Runner interface {",
+      "\tio.Closer",
+      "\tRun() error",
+      "\tName() string",
+      "}",
+    ].join("\n");
+    const runner = parseFileAst(src, "r.go").symbols.find((s) => s.name === "Runner");
+    expect(runner?.children?.map((c) => c.name)).toEqual(["Run", "Name"]);
+    expect(runner?.children?.[0]?.kind).toBe("method");
+  });
+});
+
+describe("string-aware brace counting (Rust/Go)", () => {
+  it("keeps the real end line when a Rust body holds a brace in a string", () => {
+    const src = [
+      "pub fn first() {",
+      '    let s = "{";',
+      "    let _ = s;",
+      "}",
+      "",
+      "pub fn after() {}",
+    ].join("\n");
+    const ast = parseFileAst(src, "a.rs");
+    expect(ast.symbols.find((s) => s.name === "first")?.endLine).toBe(4);
+    expect(ast.symbols.find((s) => s.name === "after")?.startLine).toBe(6);
+  });
+
+  it("keeps the real end line when a Go body holds a brace in a string", () => {
+    const src = [
+      "package main",
+      "",
+      "func First() {",
+      '\ts := "{ "',
+      "\t_ = s",
+      "}",
+      "",
+      "func After() {}",
+    ].join("\n");
+    const ast = parseFileAst(src, "a.go");
+    expect(ast.symbols.find((s) => s.name === "First")?.endLine).toBe(6);
+    expect(ast.symbols.find((s) => s.name === "After")?.startLine).toBe(8);
+  });
+
+  it("survives a Rust raw string, a char literal, and a lifetime", () => {
+    const src = [
+      "pub fn raw() {",
+      '    let s = r#"{ "#;',
+      "    let c = '{';",
+      "    let _ = (s, c);",
+      "}",
+      "",
+      "pub fn generic<'a>(x: &'a str) -> &'a str {",
+      "    x",
+      "}",
+    ].join("\n");
+    const ast = parseFileAst(src, "a.rs");
+    expect(ast.symbols.find((s) => s.name === "raw")?.endLine).toBe(5);
+    // A lifetime is not a char literal — mis-reading it would hide the body's brace.
+    expect(ast.symbols.find((s) => s.name === "generic")?.endLine).toBe(9);
+  });
+});
+
 describe("comment and template masking", () => {
   it("does not index commented-out code as live symbols", () => {
     const ast = parseFileAst("/*\nexport function ghost() {}\n*/\nexport function real() {}\n", "a.ts");

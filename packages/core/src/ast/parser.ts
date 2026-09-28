@@ -118,6 +118,58 @@ function buildCodeLineMask(lines: string[]): boolean[] {
 }
 
 /**
+ * Length of the string literal starting at `j`, or 0 if the character there does
+ * not open one.
+ *
+ * The Rust and Go brace scanners counted every brace on a line, so `let s = "{";`
+ * left depth permanently unbalanced: the declaration's real closing brace never
+ * brought it back to zero, the scan returned null, and the symbol's line range
+ * collapsed to a single line — wrong `read_file` folds and wrong `find_symbol`
+ * coordinates for any function holding a brace in a string. The TypeScript
+ * scanner already skipped literals; Rust and Go did not.
+ *
+ * An unterminated literal skips to end of line. A literal spanning lines is the
+ * remaining gap: Go's backtick form is covered by `buildCodeLineMask`, a
+ * multi-line Rust raw string is not (Phase 32, task 32.9).
+ */
+function stringLiteralLength(line: string, j: number): number {
+  const char = line[j];
+
+  // Rust raw string: r"…", r#"…"#, r##"…"##
+  if (char === "r" && (line[j + 1] === '"' || line[j + 1] === "#")) {
+    const opener = /^r(#+)?"/.exec(line.slice(j));
+    if (opener) {
+      const closer = `"${opener[1] ?? ""}`;
+      const close = line.indexOf(closer, j + opener[0].length);
+      return close === -1 ? line.length - j : close + closer.length - j;
+    }
+  }
+
+  if (char === '"') {
+    let k = j + 1;
+    while (k < line.length) {
+      if (line[k] === "\\") {
+        k += 2;
+        continue;
+      }
+      if (line[k] === '"') return k + 1 - j;
+      k++;
+    }
+    return line.length - j;
+  }
+
+  // Rust char literal, matched precisely so a lifetime (`&'a str`) is not
+  // mistaken for one — a bare `'` search would swallow everything to the next
+  // apostrophe and hide real braces.
+  if (char === "'") {
+    const literal = /^'(?:\\.|[^'\\])'/.exec(line.slice(j));
+    if (literal) return literal[0].length;
+  }
+
+  return 0;
+}
+
+/**
  * Re-bases symbol line numbers after parsing a slice of a file, so recursively
  * parsed declarations keep file-absolute coordinates rather than slice-relative
  * ones (which would point at the wrong lines in `read_file` and `find_symbol`).
@@ -274,12 +326,33 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
       continue;
     }
 
-    // Enum definition
+    // Enum definition. Members are indexed as `constant` children: `Color.Red`
+    // is a real thing to search for and was previously invisible.
     const enumMatch = /^enum\s+([A-Za-z0-9_$]+)/.exec(decl);
     if (enumMatch) {
       const name = enumMatch[1];
       const brace = findMatchingBrace(i);
       const endLine = brace ? brace.endIdx + 1 : i + 1;
+
+      const members: AstSymbol[] = [];
+      if (brace) {
+        for (let k = brace.bodyStart - 1; k <= brace.endIdx; k++) {
+          if (!codeLines[k]) continue;
+          const memberLine = lines[k].trim();
+          const memberMatch = /^([A-Za-z0-9_$]+|"[^"]+"|'[^']+')\s*(?:=|,|$)/.exec(memberLine);
+          if (memberMatch) {
+            members.push({
+              name: memberMatch[1].replace(/^["']|["']$/g, ""),
+              kind: "constant",
+              startLine: k + 1,
+              endLine: k + 1,
+              signature: memberLine.replace(/,\s*$/, ""),
+              isExported,
+            });
+          }
+        }
+      }
+
       symbols.push({
         name,
         kind: "enum",
@@ -289,6 +362,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
         docstring: extractDocstring(i),
         bodyStartLine: brace?.bodyStart,
         bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        children: members.length > 0 ? members : undefined,
         isExported,
       });
       i = endLine;
@@ -313,26 +387,59 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
           if (innerLine && codeLines[childIdx - 1]) {
             // Method or constructor pattern
             const methodMatch =
-              /^(?:public\s+|private\s+|protected\s+|static\s+|async\s+)*(constructor|[A-Za-z0-9_$]+)\s*(\([^{]*\))/.exec(
+              /^(?:public\s+|private\s+|protected\s+|static\s+|async\s+|abstract\s+|override\s+|declare\s+)*(constructor|[A-Za-z0-9_$]+)\s*(\([^{]*\))/.exec(
                 innerLine
               );
             if (methodMatch) {
               const methodName = methodMatch[1];
-              const methodBrace = findMatchingBrace(childIdx - 1);
-              if (methodBrace) {
+              // An abstract/declared method ends in `;` and has no body. Scanning
+              // ahead for a brace would adopt the NEXT method's body and drop it.
+              const signatureOnly = innerLine.trimEnd().endsWith(";");
+              const methodBrace = signatureOnly ? null : findMatchingBrace(childIdx - 1);
+              if (methodBrace || signatureOnly) {
                 children.push({
                   name: methodName,
                   kind: "method",
                   startLine: childIdx,
-                  endLine: methodBrace.endIdx + 1,
-                  signature: innerLine.split("{")[0]?.trim(),
+                  endLine: methodBrace ? methodBrace.endIdx + 1 : childIdx,
+                  signature: (innerLine.split("{")[0] ?? "").replace(/;\s*$/, "").trim(),
                   docstring: extractDocstring(childIdx - 1),
-                  bodyStartLine: methodBrace.bodyStart,
-                  bodyEndLine: methodBrace.endIdx + 1,
+                  bodyStartLine: methodBrace?.bodyStart,
+                  bodyEndLine: methodBrace ? methodBrace.endIdx + 1 : undefined,
                 });
-                childIdx = methodBrace.endIdx + 2;
+                childIdx = methodBrace ? methodBrace.endIdx + 2 : childIdx + 1;
                 continue;
               }
+            }
+
+            // Arrow-function class property: `onClick = () => { … }`. The method
+            // pattern above demands `name(`, so every callable class property was
+            // invisible — a pattern modern TypeScript uses constantly. Plain data
+            // fields are deliberately NOT indexed here: they are values, not
+            // declarations an agent looks up by name, and indexing them would
+            // flood the symbol table.
+            const arrowPropMatch =
+              /^(?:public\s+|private\s+|protected\s+|static\s+|readonly\s+|async\s+|declare\s+|abstract\s+|override\s+)*([A-Za-z0-9_$]+)\s*(?:[!:][\s\S]*?)?=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z0-9_$]+)\s*(?::[^=]*)?=>/.exec(
+                innerLine
+              );
+            if (arrowPropMatch) {
+              // Only a `{` after the arrow opens a body. `(e) => this.log(e);` is a
+              // complete single-line expression, and scanning ahead for a brace
+              // would adopt the next method's body and drop it from the index.
+              const afterArrow = innerLine.slice(arrowPropMatch[0].length);
+              const propBrace = afterArrow.includes("{") ? findMatchingBrace(childIdx - 1) : null;
+              children.push({
+                name: arrowPropMatch[1],
+                kind: "method",
+                startLine: childIdx,
+                endLine: propBrace ? propBrace.endIdx + 1 : childIdx,
+                signature: `${innerLine.split("=>")[0]?.trim()} =>`,
+                docstring: extractDocstring(childIdx - 1),
+                bodyStartLine: propBrace?.bodyStart,
+                bodyEndLine: propBrace ? propBrace.endIdx + 1 : undefined,
+              });
+              childIdx = propBrace ? propBrace.endIdx + 2 : childIdx + 1;
+              continue;
             }
           }
           childIdx++;
@@ -656,6 +763,11 @@ function parseRust(lines: string[]): AstSymbol[] {
       if (!codeLines[i]) continue;
       const line = lines[i];
       for (let j = 0; j < line.length; j++) {
+        const literalLength = stringLiteralLength(line, j);
+        if (literalLength > 0) {
+          j += literalLength - 1;
+          continue;
+        }
         const char = line[j];
         if (char === "{") {
           depth++;
@@ -672,6 +784,80 @@ function parseRust(lines: string[]): AstSymbol[] {
       }
     }
     return null;
+  }
+
+  /**
+   * Collects `fn` declarations inside a braced body as `method` children.
+   *
+   * A trait method is usually just a signature ending in `;`, so a missing brace
+   * is normal and must not abort the scan (or the pass would stop at the first
+   * signature). `bounded` also refuses a brace that closes past the container,
+   * which keeps a malformed body from swallowing the rest of the file.
+   */
+  function collectFnMethods(bodyStart: number, bodyEnd: number): AstSymbol[] {
+    const methods: AstSymbol[] = [];
+    let k = bodyStart;
+    while (k <= bodyEnd) {
+      const line = lines[k].trim();
+      if (codeLines[k] && line) {
+        const innerPub = line.startsWith("pub ");
+        const innerDecl = innerPub ? line.replace(/^pub(?:\([^)]*\))?\s+/, "") : line;
+        const methodMatch = /^(?:async\s+)?fn\s+([A-Za-z0-9_]+)/.exec(innerDecl);
+        if (methodMatch) {
+          // A trait signature ends in `;` and has no body. Without this check the
+          // scanner would treat the NEXT method's braces as its body, consume
+          // them, and drop every method after the first signature-only one.
+          const signatureOnly = (line.split("{")[0] ?? "").trimEnd().endsWith(";");
+          const methodBrace = signatureOnly ? null : findMatchingBrace(k);
+          const bounded = methodBrace !== null && methodBrace.endIdx <= bodyEnd;
+          methods.push({
+            name: methodMatch[1],
+            kind: "method",
+            startLine: k + 1,
+            endLine: bounded && methodBrace ? methodBrace.endIdx + 1 : k + 1,
+            signature: (line.split("{")[0] ?? "").replace(/;\s*$/, "").trim(),
+            bodyStartLine: bounded ? methodBrace?.bodyStart : undefined,
+            bodyEndLine: bounded && methodBrace ? methodBrace.endIdx + 1 : undefined,
+            isExported: innerPub,
+          });
+          k = bounded && methodBrace ? methodBrace.endIdx + 1 : k + 1;
+          continue;
+        }
+      }
+      k++;
+    }
+    return methods;
+  }
+
+  /**
+   * Collects enum variants, including those with tuple or struct payloads.
+   * Depth is tracked so a struct variant's own fields are not mistaken for
+   * further variants (`E::C { x: u32 }` must yield `C`, not `x`).
+   */
+  function collectEnumVariants(bodyStart: number, bodyEnd: number, exported: boolean): AstSymbol[] {
+    const variants: AstSymbol[] = [];
+    let depth = 0;
+    for (let k = bodyStart; k <= bodyEnd; k++) {
+      const line = lines[k].trim();
+      if (line && codeLines[k] && depth === 0 && !line.startsWith("#[")) {
+        const variantMatch = /^([A-Za-z0-9_]+)/.exec(line);
+        if (variantMatch) {
+          variants.push({
+            name: variantMatch[1],
+            kind: "constant",
+            startLine: k + 1,
+            endLine: k + 1,
+            signature: line.replace(/,\s*$/, ""),
+            isExported: exported,
+          });
+        }
+      }
+      for (const ch of line) {
+        if (ch === "{") depth++;
+        else if (ch === "}") depth--;
+      }
+    }
+    return variants;
   }
 
   let i = 0;
@@ -705,12 +891,13 @@ function parseRust(lines: string[]): AstSymbol[] {
       continue;
     }
 
-    // Trait
+    // Trait — its methods are the interface an agent searches for by name.
     const traitMatch = /^trait\s+([A-Za-z0-9_]+)/.exec(decl);
     if (traitMatch) {
       const name = traitMatch[1];
       const brace = findMatchingBrace(i);
       const endLine = brace ? brace.endIdx + 1 : i + 1;
+      const children = brace ? collectFnMethods(i + 1, brace.endIdx) : [];
       symbols.push({
         name,
         kind: "trait",
@@ -719,18 +906,20 @@ function parseRust(lines: string[]): AstSymbol[] {
         signature: trimmed.split("{")[0]?.trim(),
         bodyStartLine: brace?.bodyStart,
         bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        children: children.length > 0 ? children : undefined,
         isExported: isPub,
       });
       i = endLine;
       continue;
     }
 
-    // Enum
+    // Enum — variants are indexed so `Mode::Fast` is findable by name.
     const enumMatch = /^enum\s+([A-Za-z0-9_]+)/.exec(decl);
     if (enumMatch) {
       const name = enumMatch[1];
       const brace = findMatchingBrace(i);
       const endLine = brace ? brace.endIdx + 1 : i + 1;
+      const variants = brace ? collectEnumVariants(i + 1, brace.endIdx, isPub) : [];
       symbols.push({
         name,
         kind: "enum",
@@ -739,6 +928,7 @@ function parseRust(lines: string[]): AstSymbol[] {
         signature: trimmed.split("{")[0]?.trim(),
         bodyStartLine: brace?.bodyStart,
         bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        children: variants.length > 0 ? variants : undefined,
         isExported: isPub,
       });
       i = endLine;
@@ -802,34 +992,7 @@ function parseRust(lines: string[]): AstSymbol[] {
       const target = (header.split(/\bfor\b/).pop() ?? "").replace(/\{.*$/, "").trim();
       const name = (target.replace(/<.*$/, "").split("::").pop() ?? target).trim() || target;
 
-      const children: AstSymbol[] = [];
-      if (brace) {
-        let k = i + 1;
-        while (k <= brace.endIdx) {
-          const innerLine = lines[k].trim();
-          if (innerLine && codeLines[k]) {
-            const innerPub = innerLine.startsWith("pub ");
-            const innerDecl = innerPub ? innerLine.replace(/^pub(?:\([^)]*\))?\s+/, "") : innerLine;
-            const methodMatch = /^(?:async\s+)?fn\s+([A-Za-z0-9_]+)/.exec(innerDecl);
-            if (methodMatch) {
-              const methodBrace = findMatchingBrace(k);
-              children.push({
-                name: methodMatch[1],
-                kind: "method",
-                startLine: k + 1,
-                endLine: methodBrace ? methodBrace.endIdx + 1 : k + 1,
-                signature: innerLine.split("{")[0]?.trim(),
-                bodyStartLine: methodBrace?.bodyStart,
-                bodyEndLine: methodBrace ? methodBrace.endIdx + 1 : undefined,
-                isExported: innerPub,
-              });
-              k = methodBrace ? methodBrace.endIdx + 1 : k + 1;
-              continue;
-            }
-          }
-          k++;
-        }
-      }
+      const children = brace ? collectFnMethods(i + 1, brace.endIdx) : [];
 
       symbols.push({
         name,
@@ -934,6 +1097,11 @@ function parseGo(lines: string[]): AstSymbol[] {
       if (!codeLines[k]) continue;
       const line = lines[k];
       for (let j = 0; j < line.length; j++) {
+        const literalLength = stringLiteralLength(line, j);
+        if (literalLength > 0) {
+          j += literalLength - 1;
+          continue;
+        }
         const char = line[j];
         if (char === "{") {
           depth++;
@@ -948,6 +1116,31 @@ function parseGo(lines: string[]): AstSymbol[] {
       }
     }
     return null;
+  }
+
+  /**
+   * Method signatures an interface declares: `Name(args) result`. An embedded
+   * interface (`io.Reader`) carries no parameter list and is skipped — it is a
+   * reference to another type, not a declaration made here.
+   */
+  function collectInterfaceMethods(bodyStartIdx: number, bodyEndIdx: number): AstSymbol[] {
+    const methods: AstSymbol[] = [];
+    for (let k = bodyStartIdx; k <= bodyEndIdx; k++) {
+      if (!codeLines[k]) continue;
+      const line = lines[k].trim();
+      const methodMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*\(/.exec(line);
+      if (methodMatch) {
+        methods.push({
+          name: methodMatch[1],
+          kind: "method",
+          startLine: k + 1,
+          endLine: k + 1,
+          signature: line,
+          isExported: isExported(methodMatch[1]),
+        });
+      }
+    }
+    return methods;
   }
 
   let i = 0;
@@ -974,6 +1167,8 @@ function parseGo(lines: string[]): AstSymbol[] {
           const brace = isStruct || isIface ? findMatchingBrace(k) : null;
           const kind: AstSymbolKind =
             keyword === "const" ? "constant" : isStruct ? "struct" : isIface ? "interface" : "type";
+          const members =
+            isIface && brace ? collectInterfaceMethods(brace.bodyStart - 1, brace.endIdx) : [];
           symbols.push({
             name,
             kind,
@@ -982,6 +1177,7 @@ function parseGo(lines: string[]): AstSymbol[] {
             signature: entry,
             bodyStartLine: brace?.bodyStart,
             bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+            children: members.length > 0 ? members : undefined,
             isExported: isExported(name),
           });
           k = brace ? brace.endIdx + 1 : k + 1;
@@ -1029,6 +1225,10 @@ function parseGo(lines: string[]): AstSymbol[] {
           ? "interface"
           : "type";
       const brace = kind === "type" ? null : findMatchingBrace(i);
+      const members =
+        kind === "interface" && brace
+          ? collectInterfaceMethods(brace.bodyStart - 1, brace.endIdx)
+          : [];
       symbols.push({
         name,
         kind,
@@ -1037,6 +1237,7 @@ function parseGo(lines: string[]): AstSymbol[] {
         signature: trimmed,
         bodyStartLine: brace?.bodyStart,
         bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        children: members.length > 0 ? members : undefined,
         isExported: isExported(name),
       });
       i = brace ? brace.endIdx + 1 : i + 1;

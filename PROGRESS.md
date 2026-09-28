@@ -2,6 +2,35 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-28 (Buffy chief-engineer session, Phase 32.6 member extraction + string-aware braces):**
+> owns `packages/core/src/ast/parser.ts`, `packages/core/src/ast/__tests__/parser.test.ts`,
+> `docs/PHASE-32-ROADMAP.md`, `CHANGELOG.md`, plus this file. Nine new tests, ALL
+> confirmed to fail against the pre-change parser (stashed `parser.ts`: 9 fail,
+> 17 pre-existing pass on both sides). Containers were indexed but their members
+> were not: Rust trait methods and enum variants, Go interface method sets, TS
+> enum members, and callable class properties (`onClick = () => {}`). Plain data
+> fields deliberately excluded — a field is a value, not a declaration to look
+> up by name, and indexing them would flood the symbol table.
+> **My own tests caught two bugs in the first version of this work, both the SAME
+> bug** — a declaration with NO body whose scanner adopted the next declaration's
+> braces: an abstract TS method (`public abstract compute(): number;`) and a
+> signature-only Rust trait method each silently dropped the method that followed.
+> Fixed by detecting a signature ending in `;`. Worth remembering: in this file
+> "no body" is the dangerous case, not "has body".
+> Second defect, found by probing rather than reading: neither the Rust nor the Go
+> brace scanner skipped string literals, so ONE brace inside a string left depth
+> permanently unbalanced and the symbol's range collapsed to a single line
+> (measured: Rust spans 1-4 but reported L1-1; Go spans 3-6 but reported L3-3; the
+> TS scanner was already string-aware, which is why only these two were hit).
+> Rust lifetimes (`&'a str`) are matched precisely so they are not read as char
+> literals. Also: `abstract`/`override`/`declare` added to the class-member
+> qualifier list. Remaining narrow gap recorded as **32.9** — brace counting
+> across a MULTI-LINE Rust raw string (Go's backtick form is already masked).
+> No protected artifact touched. Full gate Steps 0-5 green, 1258 tests, 25/25 evals.
+> **Process note:** I ran tests before typecheck on the first attempt and shipped a
+> `ReferenceError` (`isPub` is block-scoped inside the parse loop and invisible to
+> a helper); typecheck would have caught it instantly. Run typecheck first.
+>
 > **DONE 2026-09-28 (Buffy chief-engineer session, Phase 32.7 symbol-kind contract guard):**
 > owns `packages/core/src/tools/findSymbol.ts`, NEW
 > `packages/core/src/ast/__tests__/symbolKindContract.test.ts`,
