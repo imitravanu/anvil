@@ -4,6 +4,43 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Frontier agent brain: reasoning and caching probed live (2026-09-29)
+
+Documentation-only; no production code changed. Four probes were run against the
+live Gemini and OpenRouter APIs. **Two hypotheses were wrong and are recorded as
+wrong** in [`PHASE-38-ROADMAP.md`](docs/PHASE-38-ROADMAP.md) §1 rather than
+quietly dropped.
+
+- **Gemini under-reports output tokens by up to 328×.** On a one-line question,
+  `gemini-3.6-flash` returned `candidatesTokenCount: 1` alongside
+  `thoughtsTokenCount: 327`. The adapter reads only the first
+  (`providers/gemini.ts:17-20`), so `/context` and the compaction calibration
+  both work from a number that excludes reasoning — on the registry's default
+  free model. (An initial hypothesis that reasoning text *leaks into the answer*
+  was disproved: the SDK strips thought parts unless `includeThoughts` is set.)
+- **The OpenAI-style path discards live reasoning.** Against `openrouter/free`,
+  a 68-character answer arrived alongside 2,026 characters of `delta.reasoning`.
+  `translateChatCompletionsChunkStream` reads only `delta.content`. The token
+  count on this path is *correct* (`completion_tokens` already includes
+  reasoning), so the accounting asymmetry is Gemini-only.
+- **Cache hit rates are unmeasured and are large.** `space-bunny-alpha` returned
+  `prompt_tokens_details.cached_tokens: 149` of 198 prompt tokens — a 75% hit
+  that Anvil prices at full rate. Anvil's own request prefix measures **4,177
+  tokens** (2,261 system + 1,916 tool schemas), re-sent every assistant round:
+  **4.1× the Anthropic cache minimum**. Correcting the record: existing cost
+  figures therefore **overstate** spend, because most cached input is billed as
+  if it were fresh.
+- **Two shipped models fail for every user.** `thinkingmachines/inkling:free`
+  and `thinkingmachines/inkling-small:free` return HTTP 403 ("only available on
+  agentic harnesses") — verified with Anvil's exact attribution headers, since a
+  bare request 403s too and the first probe could not separate the two causes.
+  Both are user-visible in the model picker and both are labelled
+  `certified: "live"` from a `certifiedMode: "mock"` run.
+- **Ranked backlog revised** (same doc, §2). Two new P0 items outrank the
+  previously-first A/B harness: the Gemini token accounting and the unreachable
+  models. Both are user-visible today and neither requires new measurement
+  infrastructure to fix.
+
 ### The eval lane no longer measures a different agent than the one that ships (2026-09-29)
 
 - **Found by a source probe, not by the mock lane — which is the receipt.** The

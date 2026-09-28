@@ -5,8 +5,10 @@
 > **Author:** Chief Engineer
 > **Core Mandate:** *"We are not making some cheap copy here; we are building frontier coding tools."*
 > **Status:** IN PROGRESS — wave 1 landed (38.1, measurement parity, with a
-> fail-first mutation receipt). Waves 2–4 are scoped and OPEN: the harness that
-> will justify a prompt change does not exist yet, so 38.2 is deliberately blocked.
+> fail-first mutation receipt). Wave 2 probes ran live against Gemini and
+> OpenRouter and produced four receipts, two of which **corrected** an earlier
+> hypothesis; the ranking below changed as a result. The prompt rewrite (38.5)
+> is deliberately blocked on the A/B harness (38.4).
 > **Scope:** Anvil's agent loop, guardian, compaction, rewind, LSP, and permission
 > surfaces are at or past frontier engineering. The instruction layer driving all
 > of it is eleven words, and the harness that is supposed to detect a bad
@@ -71,20 +73,133 @@ the prompt tells the model it exists.
 describe prompt *assembly order* (`ENGINEERING-MEMORY.md:53`,
 `ANVIL-COMPLETE-ROADMAP.md:651-653`) and never prompt *content*.
 
+### Wave 2 probes — reasoning and caching (2026-09-29, live)
+
+Run against the live APIs with the machine's configured keys. Two of the four
+probes were **discarded or corrected**; both corrections are recorded, because a
+corrected probe is the receipt and a quietly-dropped one is a lie.
+
+**Probe K — Gemini token accounting (CORRECTED; the first hypothesis was wrong).**
+
+- K1 predicted a reasoning-text leak: that `RawGeminiChunk` has no `thought`
+  field (`gemini.ts:9-14`) while `gemini.ts:73` yields every `part.text` as a
+  `text_delta`, so a thinking model's private reasoning would render as the
+  answer. **Disproved.** The `@google/genai` SDK strips thought parts unless
+  `includeThoughts` is set, and Anvil never sets it. Measured: **0 thought
+  parts** on `gemini-3.6-flash`. There is no leak, and the finding that
+  motivated it is withdrawn.
+- What K1 actually measured is worse. On a one-line question, usage returned
+  `candidatesTokenCount: 1` alongside **`thoughtsTokenCount: 327`**. Anvil reads
+  only the first (`gemini.ts:17-20`). A trivial turn is recorded as **1 output
+  token when 328 were spent — a 328× undercount.**
+- Full `usageMetadata` keys returned: `promptTokenCount`, `candidatesTokenCount`,
+  `totalTokenCount`, `promptTokensDetails`, **`thoughtsTokenCount`**, `serviceTier`.
+  Anvil reads two.
+- The second probe (part shapes under `includeThoughts: true`) was cut short by
+  the Gemini free tier's 20-requests-per-day cap, already spent by K1. Recorded
+  as incomplete, not as a result.
+- Consequence: `/context` under-reports, and the calibration loop
+  (`agent/session.ts:690`) learns from a count that excludes reasoning. On a
+  thinking model, compaction fires late — the opposite of the
+  fail-fast intent of Phase 36.
+
+**Probe L — the OpenAI-style path (9 of 12 providers).**
+
+`translateChatCompletionsChunkStream` (`openai.ts:65-67`) reads only
+`delta.content`. Against `openrouter/free` (a registry default):
+
+| Field | Measured | Anvil's handling |
+| :--- | ---: | :--- |
+| `delta.reasoning` | **2,026 chars** | **discarded** |
+| `delta.content` (the answer) | 68 chars | rendered |
+| `completion_tokens` | 641 | read — **correct**, includes reasoning |
+| `completion_tokens_details.reasoning_tokens` | **515** (80% of output) | discarded |
+| `prompt_tokens` | 55 | read |
+| `prompt_tokens_details.cached_tokens` | 0 | discarded |
+
+- The token count on this path is **correct** — `completion_tokens` already
+  includes reasoning, unlike Gemini. The asymmetry between the two adapters is
+  the defect, not a shared one.
+- The loss here is content, not accounting: the model emits 2,026 characters of
+  deliberation and Anvil discards every byte of it. The user never sees the
+  reasoning and history never stores it.
+- Against `stealth/space-bunny-alpha`, `prompt_tokens_details.cached_tokens`
+  was **149 of 198 prompt tokens — a 75% cache hit rate that Anvil cannot
+  observe.** OpenRouter caches automatically; Anvil is already being paid for
+  the cache and is accounting for it at full price.
+
+**Probe M — the request prefix is already 4× over the cache minimum.**
+
+Measured on this repo with the production prompt assembly
+(`buildSystemPrompt` + `TOOL_DEFINITIONS`):
+
+```
+system prompt   : 2,261 tokens
+tool schemas    : 1,916 tokens   (16 tools)
+PREFIX TOTAL    : 4,177 tokens   re-sent on every assistant round
+```
+
+Against vendor minimums: **4.1×** Anthropic Sonnet/Opus (1,024) and OpenAI
+automatic (1,024); **2.0×** Anthropic Haiku (2,048); **0.1×** Gemini implicit
+(32,768 — not reachable without conversation history).
+
+At an illustrative $3/1M input, the prefix alone costs **$2.51 over 200 rounds**
+uncached versus **$0.25** cached. The multiplier is *rounds*, not turns:
+`DEFAULT_MAX_INNER_ITERATIONS = 20`, so one user turn with five tool calls
+re-sends it six times. Note the system prompt is 2,261 tokens and the base
+prompt is eleven words — `AGENTS.md` dominates it. Whatever 38.2 writes, the
+cache breakpoint belongs *before* the volatile tail, and a longer behavioral
+prompt makes caching more valuable, not less.
+
+**Probe N — two shipped models are unreachable (found while probing, not sought).**
+
+`thinkingmachines/inkling:free` and `thinkingmachines/inkling-small:free` are
+both in `MODEL_REGISTRY` (`registry.ts:367,379`) with `isFree: true` and
+`certified: "live"`. Both return **HTTP 403 "only available on agentic
+harnesses"** — measured with Anvil's exact attribution headers
+(`openrouter.ts:50-53`), because a bare request 403s too and the first probe
+could not distinguish "Anvil cannot reach it" from "my probe lacked headers".
+Verified, not inferred.
+
+`visibleModels()` (`registry.ts:1033-1035`) filters on `isFree !== false`, so
+**both appear in the user's model picker, labelled live-certified, and fail for
+everyone who picks them.** The cause is the certification system's blind spot
+rather than the model list: `certified: "live"` was recorded from a run whose
+`certifiedMode` is `"mock"`. `types.ts:199-210` rationalizes that pairing as
+"coherent" — and it is coherent as a *verdict* while still being useless as a
+*user-facing label*, because the picker shows the verdict and not the mode.
+
 ## 2. Wave sequence
 
 | Task | Focus Area | Impact | Priority | Status |
 | :--- | :--- | :---: | :---: | :---: |
-| **38.1** | One owner for the agent profile (prompt, output budget, verify flag); CLI, headless, and the eval lane all route through it; fail-first parity guard | Probes G, H, I | **P0** | **COMPLETE** |
-| **38.2** | The real system prompt — tool-use policy, search-before-edit, verification, conventions | Probe J | **P1** | **OPEN — blocked on 38.3** |
-| **38.3** | A prompt A/B harness on a live model: fixed tasks, N trials, pass rate / cost / tool calls / edit-error rate | Probe H | **P0** | **OPEN** |
-| **38.4** | Measure closed-loop verification inside the harness; resolve the `autoVerify: false` boundary with data | §4 | **P2** | **OPEN** |
-| **38.5** | Guardian gate, docs sync, record | — | **P0** | **OPEN** |
+| **38.1** | One owner for the agent profile (prompt, output budget, verify flag); CLI, headless, and the eval lane all route through it; fail-first parity guard | Probe G, H, I | **P0** | **COMPLETE** |
+| **38.2** | Count reasoning tokens in Gemini usage (`thoughtsTokenCount`) so `/context` and compaction stop under-reporting by up to 328× | Probe K | **P0** | **OPEN** |
+| **38.3** | Retire or re-label the two unreachable `inkling` models the picker offers as live-certified | Probe N | **P0** | **OPEN** |
+| **38.4** | A prompt A/B harness on a live model: fixed tasks, N trials, pass rate / cost / tool calls / edit-error rate | Probe H | **P0** | **OPEN** |
+| **38.5** | The real system prompt — tool-use policy, search-before-edit, verification, conventions | Probe J, M | **P1** | **OPEN — blocked on 38.4** |
+| **38.6** | Reasoning deltas as a first-class `StreamEvent`; surface `reasoning_tokens` and `cached_tokens` in usage | Probe L | **P1** | **OPEN** |
+| **38.7** | Prompt caching (`cache_control` breakpoints) for the 4,177-token prefix | Probe M, L | **P1** | **OPEN** |
+| **38.8** | Measure closed-loop verification inside the harness; resolve the `autoVerify: false` boundary with data | §4 | **P2** | **OPEN** |
+| **38.9** | Guardian gate, docs sync, record | — | **P0** | **OPEN** |
 
-**38.2 is blocked on 38.3 by this phase's own rule.** Writing a better prompt
+**38.5 is blocked on 38.4 by this phase's own rule.** Writing a better prompt
 before a harness can measure it would be an unevidenced change to the only
 input that determines agent behavior — the exact defect class this phase exists
 to close. The prompt is the payload; the measurement is what lets us ship it.
+
+**38.2 and 38.3 jumped the queue** because the probes turned two hypotheses
+into measured defects, and both are user-visible now: a context display that
+under-reports by two orders of magnitude, and two models in the picker that
+fail for every user who selects them. Neither needs 38.4 to fix, and both are
+cheaper than the work they outrank.
+
+**Note on ordering 38.5 vs 38.7:** they are complementary, not exclusive. A longer
+behavioral prompt *raises* the value of caching, because Probe M measured the
+prefix at 4,177 tokens of which only 11 words are Anvil's own instruction. If
+both land, the cache breakpoint must be placed after the static prompt block and
+before the volatile conversation tail — 38.7's placement decision depends on
+38.5's output, so 38.7 is sequenced after it deliberately.
 
 ## 3. Task detail
 
@@ -132,28 +247,45 @@ saturated for this model class.
 
 ## 4. Declared boundaries (recorded, not hidden)
 
+- **Anvil discards 2,026 characters of live reasoning per turn** (Probe L) and
+  offers no way to see it. This is a *missing capability*, not a defect: the
+  models work, the answers are correct, and the token count is honest on the
+  OpenAI-style path. 38.6 makes reasoning a first-class event. What Anvil does
+  **not** do today is let a user or a model condition on it, and no claim is
+  made that reasoning is being used — it is generated and thrown away.
+- **Cache hit rates are invisible on every provider.** Probe L measured a real
+  75% hit on `space-bunny-alpha` and Probe M measured a 4,177-token prefix that
+  is 4.1× the Anthropic minimum. Until 38.6/38.7 land, the cost figures in
+  `eval/report.ts` are an **upper bound that overstates spend**, because
+  `prompt_tokens` is priced at full rate while most of it was cached. This
+  corrects the record rather than flattering it: earlier cost comparisons that
+  treated input tokens as uniformly full-price are wrong in Anvil's favour.
 - **The eval lane keeps `autoVerify: false`.** A repair loop changes the
   trajectory and can mask the exact failure a task asserts, so disabling it is
   a deliberate harness choice, not a leftover. It is now explicit and sourced
   from the shared profile instead of being a silent divergence. The cost is
   real and named: **the harness does not exercise closed-loop verification**,
-  which shipping treats as core product behavior. 38.4 measures whether that
+  which shipping treats as core product behavior. 38.8 measures whether that
   omission hides failures. It is not fixed in this phase.
 - **The base prompt is still eleven words after 38.1.** 38.1 fixed *measurement
   validity*, not the prompt. Anyone reading this doc as "the prompt is now
-  good" has misread it: the prompt is unchanged and 38.2 is blocked on evidence.
-- **No prompt caching and no reasoning-model support.** Zero `cache_control`
-  and zero thinking/reasoning surface in `providers/`; the docs treat reasoning
-  tokens purely as a budget nuisance. Both are real frontier gaps with real
-  cost/latency impact and are **not** addressed in this phase. The full deep
-  dive and their ranking are recorded in `PROGRESS.md`.
+  good" has misread it: the prompt is unchanged and 38.5 is blocked on evidence.
+- **Gemini implicit caching is not reachable.** Probe M measured the Anvil
+  prefix at 0.1× Gemini's 32,768-token implicit-cache floor, so Gemini needs
+  conversation history to become cacheable at all. 38.7's design must treat
+  Gemini as a different case from Anthropic/OpenAI rather than assuming one
+  breakpoint strategy fits all three.
 - **`goalEngine.ts:406` runs `maxTokens: 4096`**, half the chat budget, in the
   autonomous-mission mode. It is outside the three call sites 38.1 unified
   because goal mode is a deliberately different agent. It is recorded as
-  suspicious, not fixed — a phase should not silently change the budget of a
-  mode it is not measuring.
+  suspicious, not fixed — and Probe K sharpens it: if a reasoning model spends
+  its budget on `thoughtsTokenCount` inside a 4,096 ceiling, goal mode is the
+  first surface to starve. It is not fixed in this phase.
 - **The suite still cannot differentiate frontier models** (carried from Phase
-  37 §4). 38.3's harder tier is the first move against it.
+  37 §4). 38.4's harder tier is the first move against it.
+- **Two registry models are unreachable and this phase does not yet fix it**
+  (Probe N). Recorded here as well as as task 38.3 so the boundary is visible
+  to anyone reading the probe receipts before the task lands.
 
 ## 5. Method (unchanged, it keeps proving itself)
 

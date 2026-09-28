@@ -20,10 +20,24 @@
   including the one 38.1 created and did not fix.
 - The instruction layer driving an otherwise frontier-grade agent is eleven
   words: `"You are Anvil, a terminal coding agent. Be concise."` — no tool-use
-  policy, no search-before-edit discipline, no verification expectation. Two
-  further frontier gaps are recorded and unaddressed: **no prompt caching**
-  (zero `cache_control` in `providers/`) and **no reasoning-model support**
-  (zero thinking/reasoning surface). Both are ranked in `PROGRESS.md`.
+  policy, no search-before-edit discipline, no verification expectation. Wave 2
+  probed the reasoning and caching layers live and **corrected two hypotheses**:
+  - **Gemini under-reports output tokens by up to 328×** — `thoughtsTokenCount`
+    (327) is discarded while `candidatesTokenCount` (1) is recorded alone, so
+    `/context` and compaction are working from a wrong number on the default
+    free model. (An earlier hypothesis that reasoning text *leaked* into the
+    answer was **disproved** — the SDK strips thought parts by default.)
+  - **The OpenAI-style path discards live reasoning** — 2,026 characters of
+    `delta.reasoning` per turn against a 68-character answer, with
+    `reasoning_tokens` (80% of output) and `cached_tokens` (a measured 75% hit
+    rate) both dropped.
+  - **The request prefix is 4,177 tokens — 4.1× the Anthropic cache minimum**,
+    re-sent every assistant round. It is already being cache-hit and is being
+    accounted for at full price.
+  - **Two shipped models 403 for every user.** `thinkingmachines/inkling:free`
+    and `inkling-small:free` are in the picker labelled `certified: "live"`,
+    recorded from a **mock** run. Verified with Anvil's exact headers.
+  Receipts and the corrected ranking: [`PHASE-38-ROADMAP.md`](PHASE-38-ROADMAP.md) §1.
 - Phase 37 landed (2026-09-28): the Phase 36 §4 trigger fired — a
   non-excluded Rust build tree put 402 generated symbols into a fixture index,
   so `target`, `vendor`, `__pycache__`, `.venv`, and `venv` are now excluded

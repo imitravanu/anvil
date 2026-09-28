@@ -37,25 +37,77 @@
 > **Gate Steps 0–5 green** after: **1,294 tests** (126 cli / 838 core / 330 tui),
 > 25/25 mock evals. No protected artifact touched. Committed; no work held.
 >
-> **The frontier backlog this deep dive produced (ranked, none of it started).
-> Recorded here so the ranking survives the session — the ordering is by
-> leverage x evidence-available, NOT by effort:**
-> 1. **38.3 A/B harness** (P0) — a live lane that can FAIL and distinguishes a
->    provider error from a task failure. Everything below is unprovable without
->    it, and `docs/ROADMAP.md:37-38` already promised it and never delivered.
-> 2. **38.2 the real system prompt** (P1) — currently eleven words driving a
->    16-tool agent. Blocked on 1 by this phase's own rule.
-> 3. **Reasoning-model support** (P1) — zero thinking/reasoning surface in
->    `providers/`; `CompletionRequest` has no field for it. Docs treat reasoning
->    tokens purely as a budget nuisance. Note `goalEngine.ts:406` runs
->    `maxTokens: 4096`, HALF the chat budget, in the autonomous mode.
-> 4. **Prompt caching** (P1) — zero `cache_control`. The loop re-sends the whole
->    history every iteration, so this is the largest recurring cost/latency lever
->    available and it is orthogonal to the prompt content.
-> 5. **Semantic retrieval** (P3) — deliberately CLOSED. The tree-sitter DEFER
->    (`PHASE-35-ROADMAP.md:52-82`) already carries a measured cost table and
->    three adoption triggers; lexical + LSP is a defensible position. Reopens
->    only on a trigger, per the same discipline.
+> **DONE 2026-09-29 (Chief-engineer session — Phase 38 wave 2 probes: reasoning and caching, run live):**
+> owns `docs/PHASE-38-ROADMAP.md` (§1 wave-2 receipts, §2 revised ranking, §4
+> revised boundaries), `docs/CURRENT-FOCUS.md`, plus this file. No production
+> code changed — this was a probe session; the receipts are the deliverable.
+> **Probes run against the live APIs** with the machine's configured keys
+> (gemini, openrouter). Two of four were **corrected**, and both corrections are
+> recorded in the docs as corrections rather than applied silently:
+> **K** Gemini usage — hypothesis "reasoning leaks as answer text" DISPROVED
+> (SDK strips thought parts unless `includeThoughts` is set); the raw output
+> exposed the real defect, `thoughtsTokenCount: 327` vs
+> `candidatesTokenCount: 1`, a 328× undercount on the default free model.
+> Second sub-probe was cut short by the Gemini 20/day free-tier cap and is
+> recorded as incomplete, not as a result. **L** OpenAI-style path —
+> `openrouter/free` emitted 2,026 chars of `delta.reasoning` against a 68-char
+> answer; `reasoning_tokens` (515 = 80% of output) and `cached_tokens` (149/198
+> = 75% hit on space-bunny-alpha) both discarded; `completion_tokens` itself is
+> correct, so the accounting asymmetry is Gemini-only. **M** prefix measurement —
+> 4,177 tokens (2,261 system + 1,916 tool schemas) re-sent every round, 4.1× the
+> Anthropic minimum, ~$2.51 per 200 rounds uncached vs ~$0.25 cached. **N** found
+> while probing, not sought — `thinkingmachines/inkling:free` and
+> `inkling-small:free` both HTTP 403 for every user, verified with Anvil's exact
+> attribution headers after a bare probe could not distinguish the two causes;
+> both are user-visible in the picker as `certified: "live"` from a
+> `certifiedMode: "mock"` run.
+> **Ranking changed as a result:** 38.2 (Gemini token accounting) and 38.3
+> (unreachable models) are new P0 items that outrank the previously-first A/B
+> harness, because both are user-visible today and neither needs a harness.
+> **Cost-record correction worth stating plainly:** because `prompt_tokens` is
+> priced at full rate while most of it is cached, existing Anvil cost figures
+> OVERSTATE spend. Earlier comparisons treating input tokens as uniformly
+> full-price are wrong in Anvil's favour — recorded in §4 rather than left to
+> flatter the numbers.
+> **Probe hygiene:** the probe scripts were written to `scratch/` (untracked,
+> not gitignored) and **deleted** after the receipts were recorded — two of them
+> used the banned `err instanceof Error ? … : String(err)` form and would have
+> tripped the gate's residual slop scan. No residue; `git status` clean.
+>
+> **The frontier backlog, REVISED by the 2026-09-29 live probes. The first
+> ranking was wrong in two places and both corrections are recorded rather than
+> quietly applied. Ranked by evidence + user-visible severity, not effort:**
+> 1. **38.2 Gemini `thoughtsTokenCount`** (P0, NEW — was not on the list) —
+>    measured 327 reasoning tokens against 1 recorded on a trivial turn, a 328×
+>    undercount on the DEFAULT free model. `/context` and the compaction
+>    calibration are both wrong today. Cheapest high-severity item found.
+> 2. **38.3 Unreachable models** (P0, NEW) — `thinkingmachines/inkling:free` and
+>    `inkling-small:free` 403 for every user (verified with Anvil's own
+>    headers) while the picker shows them as `certified: "live"`, recorded from
+>    a `certifiedMode: "mock"` run. The cert system records a verdict and the
+>    UI shows the verdict instead of the mode.
+> 3. **38.4 A/B harness** (P0) — a live lane that can FAIL. Everything about
+>    the prompt is unprovable without it.
+> 4. **38.5 the real system prompt** (P1) — eleven words driving a 16-tool
+>    agent. Blocked on 3 by this phase's own rule.
+> 5. **38.6 Reasoning as a first-class event** (P1) — 2,026 chars/turn discarded
+>    on the path serving 9 of 12 providers; `reasoning_tokens` and
+>    `cached_tokens` unmeasured.
+> 6. **38.7 Prompt caching** (P1) — 4,177-token prefix at 4.1× the Anthropic
+>    minimum, already cache-hit and billed at full price. Largest recurring
+>    cost lever. Sequenced after 5 because the breakpoint placement depends on
+>    the prompt 5 produces.
+> 7. **Semantic retrieval** (P3) — deliberately CLOSED. The tree-sitter DEFER
+>    (`PHASE-35-ROADMAP.md:52-82`) carries a measured cost table and three
+>    adoption triggers; lexical + LSP is defensible. Reopens only on a trigger.
+>
+> **Two hypotheses of mine were WRONG and are recorded as wrong, per §5:**
+> (a) "Gemini reasoning leaks into the answer" — DISPROVED, the SDK strips
+> thought parts unless `includeThoughts` is set, which Anvil never does;
+> (b) "OpenAI-style output tokens are undercounted like Gemini's" — DISPROVED,
+> `completion_tokens` already includes `reasoning_tokens`; the asymmetry is
+> Gemini-only. The first probe's raw output is what exposed the real defect, so
+> it was kept and re-read rather than discarded.
 >
 > **DONE 2026-09-28 (Chief-engineer session — Phase 37: walk hygiene from the fired trigger; live baseline measured; collision demonstrated):**
 > owns `packages/core/src/tools/paths.ts`, `packages/core/src/ast/__tests__/symbolIndex.test.ts`,
