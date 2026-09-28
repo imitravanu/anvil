@@ -489,6 +489,38 @@ describe("string-aware brace counting (Rust/Go)", () => {
     expect(ast.symbols.find((s) => s.name === "After")?.startLine).toBe(8);
   });
 
+  it("survives a MULTI-LINE Rust raw string with an unbalanced brace", () => {
+    const src = [
+      "pub fn raw() {",
+      '    let s = r#"',
+      "        {",
+      '    "#;',
+      "    let _ = s;",
+      "}",
+      "",
+      "pub fn after() {}",
+    ].join("\n");
+    const ast = parseFileAst(src, "a.rs");
+    // The stray `{` on line 3 lives inside the literal and must not be counted.
+    expect(ast.symbols.find((s) => s.name === "raw")?.endLine).toBe(6);
+    expect(ast.symbols.find((s) => s.name === "after")?.startLine).toBe(8);
+  });
+
+  it("does not mistake an identifier ending in r for a raw string", () => {
+    const src = [
+      "pub struct Renderer {",
+      "    pub id: u32,",
+      "}",
+      "",
+      "pub fn build() -> Renderer {",
+      "    Renderer { id: 1 }",
+      "}",
+    ].join("\n");
+    const ast = parseFileAst(src, "a.rs");
+    expect(ast.symbols.find((s) => s.name === "Renderer")?.kind).toBe("struct");
+    expect(ast.symbols.find((s) => s.name === "build")?.endLine).toBe(7);
+  });
+
   it("survives a Rust raw string, a char literal, and a lifetime", () => {
     const src = [
       "pub fn raw() {",

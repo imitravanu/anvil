@@ -2,6 +2,37 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-28 (Buffy chief-engineer session, Phase 32 COMPLETE / Phase 33 opened):**
+> owns `packages/core/src/ast/parser.ts`, `packages/core/src/ast/__tests__/parser.test.ts`,
+> `packages/cli/src/__tests__/docTruth.test.ts`, `README.md`,
+> `docs/PHASE-32-ROADMAP.md`, NEW `docs/PHASE-33-ROADMAP.md`, `docs/README.md`,
+> `CHANGELOG.md`, plus this file. Closed Phase 32's last two items and the phase:
+> - **32.9** multi-line Rust raw strings. `buildCodeLineMask` now takes a
+>   `rustRawStrings` option (opted into by `parseRust` only) and carries the `"#`
+>   closer across lines like a block comment. Isolated mutation check rather than a
+>   full stash: disabling JUST the option fails exactly one test (`expected 1 to be
+>   6`), enabling it passes all 28. Also added a false-positive guard — an
+>   identifier merely ending in `r` (`Renderer`) must not read as a raw-string
+>   opener; that test passes with the feature on AND off by design, because it guards
+>   the new code against over-matching rather than reproducing an old bug, and it is
+>   labelled that way in the roadmap instead of being dressed up as bug-fix evidence.
+> - **33.1** README architecture box read "15 Built-in Tools" while the registry and
+>   the README's own headline both said 16. The provider count in the ADJACENT line
+>   was already guarded by `docTruth.test.ts` and the tool count beside it was not —
+>   guarding one of two identical claims is exactly how it drifted. Fixed and guarded
+>   (guard verified to FAIL against the old README text, 1 failed / 10 passed).
+> - **32.8** gate/docs/record; Phase 32 marked COMPLETE with Phase 33 opened as the
+>   single **Current work** row (the docTruth guard rejects both a complete doc
+>   labelled current and no current row at all). Nothing left uncommitted.
+> Phase 32 total: 11 defects, 36 new tests, every one shown to fail before the fix.
+> Final measured state: 177 files / 1263 tests (cli 117·18, core 816·103, tui 330·56).
+> Note to self: I first wrote "1,284 tests" into the Phase 32 close-out by GUESSING,
+> then measured and corrected it to 1,263. Writing an unverified number inside the
+> phase about unverified numbers is the exact failure mode — measure, never infer.
+> Standalone process note carried into the roadmap: the parser's remaining ceiling is
+> that it is a line scanner, not a tokeniser — the tree-sitter trade-off is recorded
+> as an open architectural question, deliberately NOT decided.
+>
 > **DONE 2026-09-28 (Buffy chief-engineer session, Phase 32.6 member extraction + string-aware braces):**
 > owns `packages/core/src/ast/parser.ts`, `packages/core/src/ast/__tests__/parser.test.ts`,
 > `docs/PHASE-32-ROADMAP.md`, `CHANGELOG.md`, plus this file. Nine new tests, ALL

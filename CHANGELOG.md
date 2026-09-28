@@ -4,6 +4,11 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Documentation truth — the README no longer contradicts itself (2026-09-28)
+
+- **The architecture box said "15 Built-in Tools" while the registry and the README's own headline both said 16.** The provider count in the adjacent line was already asserted against the registry by `docTruth.test.ts`; the tool count beside it was not, so it drifted unwatched. The number is corrected and the box phrasing is now guarded too — guarding one of two identical claims is what let this happen.
+- **Brace counting now handles a multi-line Rust raw string.** `r#"…"#` has no escapes, so the closing `"#` has to be carried across lines like a block comment; without it a stray `{` inside the literal collapsed the enclosing declaration's line range. Go's backtick form was already covered.
+
 ### Code intelligence — the advertised language support is now real (2026-09-28)
 
 `.go` and `.rs` files were already walked by the symbol indexer, and `find_symbol` already advertised `struct`/`trait` kinds, but the extraction behind them was incomplete or absent. `find_symbol` told an agent it had searched the whole workspace while silently missing entire languages.

@@ -84,7 +84,7 @@
 ┌──────────────────────────▼─────────────────────────────┐
 │                   @anvil/core                          │
 │    Autonomous Agent Loop · Provider Adapters (12)      │
-│    15 Built-in Tools · LSP Client · Checkpoint Ring    │
+│    16 Built-in Tools · LSP Client · Checkpoint Ring    │
 │    Context Compaction · Session Store · MCP Client     │
 └────────────────────────────────────────────────────────┘
 ```

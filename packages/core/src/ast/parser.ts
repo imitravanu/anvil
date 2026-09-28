@@ -41,10 +41,16 @@ export function detectLanguage(filePath: string): string {
  * template literal can no longer desynchronise the scanner and swallow every
  * declaration after it.
  */
-function buildCodeLineMask(lines: string[]): boolean[] {
+function buildCodeLineMask(
+  lines: string[],
+  options: { rustRawStrings?: boolean } = {}
+): boolean[] {
   const mask = new Array<boolean>(lines.length).fill(true);
   let inBlockComment = false;
   let inTemplate = false;
+  // Rust raw strings have no escapes and can span lines, so the closing `"#`
+  // sequence has to be carried across lines the way block comments are.
+  let inRawString: string | null = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -55,12 +61,36 @@ function buildCodeLineMask(lines: string[]): boolean[] {
       const char = line[j];
       const next = line[j + 1];
 
+      if (inRawString) {
+        const closer = inRawString;
+        const close = line.indexOf(closer, j);
+        if (close === -1) break;
+        inRawString = null;
+        j = close + closer.length;
+        continue;
+      }
+
       if (inBlockComment) {
         const close = line.indexOf("*/", j);
         if (close === -1) break;
         inBlockComment = false;
         j = close + 2;
         continue;
+      }
+
+      if (options.rustRawStrings && char === "r") {
+        const opener = /^r(#+)?"/.exec(line.slice(j));
+        if (opener) {
+          const closer = `"${opener[1] ?? ""}`;
+          hasCode = true;
+          const close = line.indexOf(closer, j + opener[0].length);
+          if (close === -1) {
+            inRawString = closer;
+            break;
+          }
+          j = close + closer.length;
+          continue;
+        }
       }
 
       if (inTemplate) {
@@ -128,9 +158,9 @@ function buildCodeLineMask(lines: string[]): boolean[] {
  * coordinates for any function holding a brace in a string. The TypeScript
  * scanner already skipped literals; Rust and Go did not.
  *
- * An unterminated literal skips to end of line. A literal spanning lines is the
- * remaining gap: Go's backtick form is covered by `buildCodeLineMask`, a
- * multi-line Rust raw string is not (Phase 32, task 32.9).
+ * An unterminated literal skips to end of line; multi-line literals are handled
+ * by `buildCodeLineMask`, which carries raw-string and template state across
+ * lines (Go backticks, Rust `r#"…"#`).
  */
 function stringLiteralLength(line: string, j: number): number {
   const char = line[j];
@@ -752,7 +782,7 @@ function parsePython(lines: string[]): AstSymbol[] {
 function parseRust(lines: string[]): AstSymbol[] {
   const symbols: AstSymbol[] = [];
   const total = lines.length;
-  const codeLines = buildCodeLineMask(lines);
+  const codeLines = buildCodeLineMask(lines, { rustRawStrings: true });
 
   function findMatchingBrace(startIdx: number): { endIdx: number; bodyStart: number } | null {
     let depth = 0;

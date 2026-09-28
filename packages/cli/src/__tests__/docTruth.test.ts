@@ -86,7 +86,13 @@ describe("doc truth", () => {
   });
 
   it("README tool count matches the tool registry", () => {
-    expect(read("README.md")).toContain(`${TOOL_DEFINITIONS.length} autonomous tools`);
+    const readme = read("README.md");
+    expect(readme).toContain(`${TOOL_DEFINITIONS.length} autonomous tools`);
+    // The architecture box states the same number in different words, and it is
+    // the copy that drifted (it read "15 Built-in Tools" while the registry had
+    // 16). The box's provider count was already guarded; this closes the same
+    // hole for tools rather than fixing one instance and waiting for the next.
+    expect(readme).toContain(`${TOOL_DEFINITIONS.length} Built-in Tools`);
   });
 
   it("README Node badge matches package.json engines", () => {
