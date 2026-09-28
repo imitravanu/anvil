@@ -11,6 +11,7 @@ import { AUTO_APPROVE_BROKER } from "../agent/types.js";
 import { ModelProvider } from "../providers/types.js";
 import { createProviders } from "../providers/index.js";
 import { loadCredentials } from "../config/index.js";
+import { buildAnvilAgentProfile } from "../config/agentProfile.js";
 import { getErrorMessage, sleepAbortable } from "../errors.js";
 import { scanTextForSlop } from "../guardian/scanner.js";
 import { EVAL_CONCURRENCY_DEFAULT, EVAL_CONCURRENCY_MAX, EVAL_TASK_TIMEOUT_MS } from "../config/constants.js";
@@ -150,13 +151,21 @@ export async function runEvalTask(
 
     // 3. Run AgentSession against tempDir — seeded with the guardian toggle so
     // the 26.3 matrix can measure the same task with only the interceptor off.
+    // The profile is shared with the shipping surfaces so the lane measures the
+    // agent users actually run. autoVerify stays OFF here on purpose: a repair
+    // loop changes the trajectory and can mask the failure the task asserts
+    // (declared boundary, PHASE-38-ROADMAP.md §4).
+    const profile = buildAnvilAgentProfile(tempDir, {
+      maxTokens: task.maxTokens,
+      autoVerify: false,
+    });
     const session = new AgentSession(provider, {
       projectRoot: tempDir,
       model: modelId,
-      maxTokens: task.maxTokens || 4096,
-      systemPrompt: "You are Anvil, an expert coding agent. Fulfill the user request accurately.",
+      maxTokens: profile.maxTokens,
+      systemPrompt: profile.systemPrompt,
       permissionBroker: AUTO_APPROVE_BROKER,
-      autoVerify: false,
+      autoVerify: profile.autoVerify,
       ...(options.guardian === undefined ? {} : { guardian: options.guardian }),
     });
 

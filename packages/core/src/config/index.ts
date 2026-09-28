@@ -10,6 +10,7 @@ export * from "./mcp.js";
 export * from "./rules.js";
 export * from "./memory.js";
 export * from "./constants.js";
+export * from "./agentProfile.js";
 export { anvilHome }; // single home-dir resolver (see atomicWrite.ts)
 
 

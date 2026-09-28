@@ -1,6 +1,6 @@
 import {
   AgentSession,
-  buildSystemPrompt,
+  buildAnvilAgentProfile,
   MAX_STDIN_BYTES,
   MAX_STDIN_WAIT_MS,
   type ModelProvider,
@@ -115,25 +115,23 @@ export async function readStdin(
  */
 export async function runHeadless(opts: HeadlessOptions): Promise<number> {
   const broker = new HeadlessPermissionBroker(opts.autoApprove, opts.raw);
-  const basePrompt = "You are Anvil, a terminal coding agent. Be concise.";
-  // Plugin prompts arrive pre-joined from the shared boot context; a broken
-  // plugin never blocks the run (problems were reported there).
-  const systemPrompt = buildSystemPrompt(
-    opts.pluginPrompts && opts.pluginPrompts.length > 0
-      ? `${basePrompt}\n\n${opts.pluginPrompts.join("\n\n")}`
-      : basePrompt,
-    opts.projectRoot
-  );
+  // Shared with the TUI and the eval lane: one base prompt, one output budget,
+  // one verify flag. Plugin prompts arrive pre-joined from the shared boot
+  // context; a broken plugin never blocks the run (problems were reported
+  // there).
+  const profile = buildAnvilAgentProfile(opts.projectRoot, {
+    pluginPrompts: opts.pluginPrompts,
+  });
 
   const session = new AgentSession(opts.provider, {
-    systemPrompt,
+    systemPrompt: profile.systemPrompt,
     model: opts.model,
-    maxTokens: 8192,
+    maxTokens: profile.maxTokens,
     projectRoot: opts.projectRoot,
     permissionBroker: broker,
     // Closed-loop verification is a core product behavior, not a goal-mode
     // extra: after mutations, the detected test runner gates the turn.
-    autoVerify: true,
+    autoVerify: profile.autoVerify,
     ...(opts.sessionTools !== undefined ? { tools: opts.sessionTools } : {}),
   });
 

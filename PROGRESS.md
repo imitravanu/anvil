@@ -2,6 +2,61 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-29 (Chief-engineer session — Phase 38 wave 1: measurement parity. The eval lane scored a different agent than the one that ships):**
+> owns NEW `packages/core/src/config/agentProfile.ts`,
+> NEW `packages/core/src/config/__tests__/agentProfile.test.ts`,
+> NEW `packages/cli/src/__tests__/agentProfileParity.test.ts`,
+> `packages/core/src/config/constants.ts`, `packages/core/src/config/index.ts`,
+> `packages/core/src/eval/runner.ts`, `packages/cli/src/index.tsx`,
+> `packages/cli/src/headless.ts`, NEW `docs/PHASE-38-ROADMAP.md`,
+> `docs/README.md`, `docs/CURRENT-FOCUS.md`, `docs/ANVIL-COMPLETE-ROADMAP.md`
+> (stale "current phase = Phase 28" banner), `CHANGELOG.md`, plus this file.
+> **Baseline:** full gate Steps 0–5 green before any change (25/25 mock evals;
+> every task 1 tool call / 645 tokens — the mock signature, which is itself the
+> receipt for 38.1: the lane that gates every commit cannot observe the prompt).
+> **Probe G (measurement validity, the finding that opened this phase):** the eval
+> lane assembled a DIFFERENT agent than the shipping surfaces in three ways —
+> system prompt (`eval/runner.ts:157` "You are Anvil, an expert coding agent.
+> Fulfill the user request accurately." vs the shipping literal at
+> `cli/src/index.tsx:347`), output budget (`maxTokens: task.maxTokens || 4096`
+> vs `8192` at both shipping sites), and `autoVerify: false` vs `true`. The
+> recorded live 24/25 is therefore a score of an agent no user runs.
+> **Compounding:** `DEFAULT_MAX_TOKENS` (`config/constants.ts:23`) was exported
+> with ZERO callers while two call sites hardcoded their own numbers — a direct
+> instance of rule 2.8 (no dead production exports) that had gone unnoticed.
+> **38.1 fix:** one `buildAnvilAgentProfile` owner for the base prompt, the token
+> budget, and the verify flag; CLI chat, headless, and the eval lane all call it,
+> so drift becomes structurally impossible. A fail-first parity guard asserts no
+> call site re-hardcodes a prompt or a token number.
+> **Mutation receipt:** the parity guard was run against the pre-change call
+> sites (`git checkout` of all three, tests kept) — **4 of 4 assertions failed**,
+> naming each offender (`index.tsx:358/387`, `headless.ts:131` hardcoded
+> `maxTokens: 8192`; `eval/runner.ts:157` the divergent prompt literal). 4/4 pass
+> after. The mock lane still reports 25/25 — now a RECORDED property, not a
+> surprise.
+> **Gate Steps 0–5 green** after: **1,294 tests** (126 cli / 838 core / 330 tui),
+> 25/25 mock evals. No protected artifact touched. Committed; no work held.
+>
+> **The frontier backlog this deep dive produced (ranked, none of it started).
+> Recorded here so the ranking survives the session — the ordering is by
+> leverage x evidence-available, NOT by effort:**
+> 1. **38.3 A/B harness** (P0) — a live lane that can FAIL and distinguishes a
+>    provider error from a task failure. Everything below is unprovable without
+>    it, and `docs/ROADMAP.md:37-38` already promised it and never delivered.
+> 2. **38.2 the real system prompt** (P1) — currently eleven words driving a
+>    16-tool agent. Blocked on 1 by this phase's own rule.
+> 3. **Reasoning-model support** (P1) — zero thinking/reasoning surface in
+>    `providers/`; `CompletionRequest` has no field for it. Docs treat reasoning
+>    tokens purely as a budget nuisance. Note `goalEngine.ts:406` runs
+>    `maxTokens: 4096`, HALF the chat budget, in the autonomous mode.
+> 4. **Prompt caching** (P1) — zero `cache_control`. The loop re-sends the whole
+>    history every iteration, so this is the largest recurring cost/latency lever
+>    available and it is orthogonal to the prompt content.
+> 5. **Semantic retrieval** (P3) — deliberately CLOSED. The tree-sitter DEFER
+>    (`PHASE-35-ROADMAP.md:52-82`) already carries a measured cost table and
+>    three adoption triggers; lexical + LSP is a defensible position. Reopens
+>    only on a trigger, per the same discipline.
+>
 > **DONE 2026-09-28 (Chief-engineer session — Phase 37: walk hygiene from the fired trigger; live baseline measured; collision demonstrated):**
 > owns `packages/core/src/tools/paths.ts`, `packages/core/src/ast/__tests__/symbolIndex.test.ts`,
 > NEW `docs/PHASE-37-ROADMAP.md`, `docs/README.md`, `docs/CURRENT-FOCUS.md`,

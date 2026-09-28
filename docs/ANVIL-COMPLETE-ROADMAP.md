@@ -1,7 +1,7 @@
 # Anvil — Complete Roadmap & Agent Build Guide
 
 > **Status:** ⚠️ SUPERSEDED (2026-09-26) — retained for historical reference only; this document is **not** the source of truth for current work.
-> **Active guides:** [`docs/PHASE-28-ROADMAP.md`](PHASE-28-ROADMAP.md) (current phase) and [`PROGRESS.md`](../PROGRESS.md) (live engineering record).
+> **Active guides:** [`docs/PHASE-38-ROADMAP.md`](PHASE-38-ROADMAP.md) (current phase) and [`PROGRESS.md`](../PROGRESS.md) (live engineering record).
 > **Last Updated:** 2026-09-11 (frozen)
 
 ---

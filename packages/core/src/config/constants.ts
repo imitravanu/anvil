@@ -20,7 +20,10 @@ export const FALLBACK_CONTEXT_WINDOW = getEnvNumber("ANVIL_FALLBACK_CONTEXT_WIND
 export const COMPACTION_TOKEN_THRESHOLD = 80_000;
 export const COMPACTION_THRESHOLD = Number(process.env.ANVIL_COMPACTION_THRESHOLD) || 0.75;
 export const KEEP_RECENT_MESSAGES = getEnvNumber("ANVIL_KEEP_RECENT_MESSAGES", 6);
-export const DEFAULT_MAX_TOKENS = 4096;
+// Output-token ceiling for one assistant round. Was 4096 with zero callers
+// while both shipping surfaces hardcoded 8192 (rule 2.8). Now the single
+// owner, read by buildAnvilAgentProfile; the value is what Anvil actually ran.
+export const DEFAULT_MAX_TOKENS = 8192;
 
 // Streaming "thinking" indicator tick (Phase 28.4). One second is the smallest
 // interval that reads as a clock rather than a jitter, and it bounds the

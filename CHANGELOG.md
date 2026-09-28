@@ -4,6 +4,47 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### The eval lane no longer measures a different agent than the one that ships (2026-09-29)
+
+- **Found by a source probe, not by the mock lane — which is the receipt.** The
+  eval harness assembled its own agent configuration in three respects, and it
+  matched neither the TUI nor headless:
+
+  | Input | Eval lane (before) | Shipping surfaces |
+  |---|---|---|
+  | System prompt | `"You are Anvil, an expert coding agent. Fulfill the user request accurately."` | `"You are Anvil, a terminal coding agent. Be concise."` |
+  | Output budget | `task.maxTokens \|\| 4096` | `8192` |
+  | Closed-loop verify | `autoVerify: false` | `autoVerify: true` |
+
+  Every score on record — including the Phase 37 live 24/25 — described an agent
+  **no user ever runs**.
+- **Why the gate never caught it:** gate Step 5 runs the mock lane, where every
+  task reports 1 tool call and 645 tokens because `mockProvider.ts` copies
+  `assertions/expected/` into place. A change to the system prompt cannot move
+  the gate at all. `docs/ROADMAP.md:37-38` states the opposite intent, which had
+  never been met.
+- `config/agentProfile.ts` is now the single owner of the base prompt, the output
+  budget, and the verify flag. CLI chat, headless, and the eval lane all call
+  `buildAnvilAgentProfile()`, so drift is structurally impossible rather than
+  merely fixed.
+- `DEFAULT_MAX_TOKENS` was exported with **zero callers** while two call sites
+  hardcoded `8192` and a third hardcoded `4096` — a standing instance of the
+  "no dead production exports" rule. It now has real callers and carries the
+  value Anvil actually ran.
+- **Mutation receipt:** the new parity guard
+  (`cli/src/__tests__/agentProfileParity.test.ts`) was run against the
+  pre-change call sites — **4 of 4 assertions failed**, naming each hardcoded
+  offender; 4/4 pass after the change.
+- **The system prompt is unchanged and still eleven words.** This release fixes
+  *measurement validity*, not the prompt. The prompt rewrite is deliberately
+  blocked on an A/B harness that can fail on a live model, so the improvement
+  can be evidenced rather than asserted. See
+  [`PHASE-38-ROADMAP.md`](docs/PHASE-38-ROADMAP.md).
+- **Declared boundary:** the eval lane keeps `autoVerify: false` on purpose — a
+  repair loop changes the trajectory and can mask the failure a task asserts. It
+  is now explicit rather than a silent divergence, and the omission (the harness
+  does not exercise closed-loop verification) is recorded for measurement.
+
 ### Build output and dependency trees are no longer walked or indexed (2026-09-28)
 
 - **Found by the Phase 36 §4 trigger firing.** A fixture with a non-excluded

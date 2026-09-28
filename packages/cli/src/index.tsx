@@ -30,7 +30,7 @@ import {
   MCP_TOOL_PREFIX,
   ProviderSelectionError,
   resolveProviderSelection,
-  buildSystemPrompt,
+  buildAnvilAgentProfile,
   getLatestCertificationDate,
   type ModelProvider,
   type ProviderId,
@@ -344,23 +344,23 @@ async function bootChat(flags: Record<string, string>): Promise<void> {
 
   const broker = new TuiPermissionBroker();
   const projectRoot = process.cwd();
-  const baseSystemPrompt = "You are Anvil, a terminal coding agent. Be concise.";
+  // One owner for prompt + output budget + verify flag, shared with headless
+  // and the eval lane so none of them can measure a different agent.
   // Plugin prompts ride the shared boot context (loaded once in
   // resolveBootContext); sessionTools already carries built-ins + plugins + MCP.
-  const systemPrompt =
-    ctx.pluginPrompts.length > 0
-      ? buildSystemPrompt(`${baseSystemPrompt}\n\n${ctx.pluginPrompts.join("\n\n")}`, projectRoot)
-      : buildSystemPrompt(baseSystemPrompt, projectRoot);
+  const profile = buildAnvilAgentProfile(projectRoot, {
+    pluginPrompts: ctx.pluginPrompts,
+  });
 
   const session = new AgentSession(provider, {
-    systemPrompt,
+    systemPrompt: profile.systemPrompt,
     model,
-    maxTokens: 8192,
+    maxTokens: profile.maxTokens,
     projectRoot,
     permissionBroker: broker,
     // Closed-loop verification is a core product behavior, not a goal-mode
     // extra: after mutations, the detected test runner gates the turn.
-    autoVerify: true,
+    autoVerify: profile.autoVerify,
     ...(ctx.sessionTools !== undefined ? { tools: ctx.sessionTools } : {}),
   });
 
@@ -383,10 +383,10 @@ async function bootChat(flags: Record<string, string>): Promise<void> {
       model={model}
       initialTheme={initialTheme}
       sessionOptions={{
-        systemPrompt,
-        maxTokens: 8192,
+        systemPrompt: profile.systemPrompt,
+        maxTokens: profile.maxTokens,
         projectRoot,
-        autoVerify: true,
+        autoVerify: profile.autoVerify,
         ...(ctx.sessionTools !== undefined ? { tools: ctx.sessionTools } : {}),
       }}
       mcp={{
