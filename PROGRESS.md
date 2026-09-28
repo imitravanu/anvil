@@ -2,6 +2,20 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-28 (Buffy chief-engineer session, Phase 35.3/35.4 — tokeniser decision, phase closed):**
+> owns `docs/PHASE-35-ROADMAP.md`, `docs/README.md`, plus this file. 35.3 decided
+> DEFER with written adoption triggers, not a shrug: measured baseline (390 ms
+> startup, 7.17 MB zero-dep bundle, 1,333-line scanner) against a published spike
+> of the same bridge (web-tree-sitter ~5.8 MB + ~10-12 MB grammars, 12-14 ms WASM
+> startup ~3.5% of ours, 0.5 ms/file, a real version-pinning footgun, per-tree
+> WASM heap needing tree.delete()). The deciding argument is the session's own
+> method: every fix since Phase 32 came from a failing probe, and NO failing probe
+> today needs a real parser. Triggers written so the deferral is a decision, not
+> an omission; spike plan included. **No successor phase declared** — the backlog
+> of declared boundaries is empty, and a manufactured roadmap would be the doc
+> bloat the constitution forbids. docs/README index updated; no protected
+> artifact touched.
+>
 > **DONE 2026-09-28 (Buffy chief-engineer session, Phase 35.1 + 35.2 — boundaries #1 and #2 closed):**
 > owns `packages/core/src/ast/symbolIndex.ts`, `packages/core/src/ast/__tests__/symbolIndex.test.ts`,
 > `packages/core/src/tools/delegateTask.ts`, `packages/core/src/agent/__tests__/teamBudget.test.ts`,

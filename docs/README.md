@@ -11,7 +11,8 @@ comments cite the exact bug each rule replaces), not because it is a to-do list.
 |---|---|
 | [`../AGENTS.md`](../AGENTS.md) | The engineering constitution. Law: violations fail the gate. |
 | [`../PROGRESS.md`](../PROGRESS.md) | The live engineering record (dated session entries, evidence per change). |
-| [`PHASE-35-ROADMAP.md`](PHASE-35-ROADMAP.md) | **Current work** — closing the boundaries declared in Phases 32–34. |
+| [`CURRENT-FOCUS.md`](CURRENT-FOCUS.md) | **Current work** — standing state: where the project is, and the triggers that reopen work. |
+| [`PHASE-35-ROADMAP.md`](PHASE-35-ROADMAP.md) | COMPLETE (2026-09-28) — declared boundaries closed; tokeniser decision taken (DEFER, with triggers). |
 | [`PHASE-34-ROADMAP.md`](PHASE-34-ROADMAP.md) | COMPLETE (2026-09-28) — sub-agent streaming visibility during team runs. |
 | [`PHASE-33-ROADMAP.md`](PHASE-33-ROADMAP.md) | COMPLETE (2026-09-28) — advertised capability audit: every self-claim derived or verified. |
 | [`PHASE-32-ROADMAP.md`](PHASE-32-ROADMAP.md) | COMPLETE (2026-09-28) — code-intelligence integrity: the advertised language support is now real. |
