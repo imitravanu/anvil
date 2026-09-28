@@ -34,6 +34,19 @@ export interface SymbolQueryOptions {
 }
 
 /**
+ * Canonicalize a project-relative path to forward slashes so a file indexed
+ * from the filesystem walk (`path.relative`, OS-native separators) and the
+ * same file indexed from a tool call (model-supplied, usually `/`) collapse to
+ * ONE key. Without this they diverge on Windows and the file is indexed twice
+ * (a stale duplicate the later edit can never remove). Also drops a leading
+ * `./` so `./src/a.ts` and `src/a.ts` are not two entries.
+ */
+function normalizePath(relPath: string): string {
+  const unified = relPath.replace(/\\/g, "/");
+  return unified.startsWith("./") ? unified.slice(2) : unified;
+}
+
+/**
  * In-memory symbol topology index mapping symbol names to file locations.
  * Enables microsecond cross-file symbol resolution across the monorepo.
  */
@@ -50,9 +63,10 @@ export class WorkspaceSymbolIndex {
    * Indexes a single file into the symbol tables.
    */
   public indexFile(relPath: string, content: string): void {
-    this.removeFile(relPath);
+    const rel = normalizePath(relPath);
+    this.removeFile(rel);
 
-    const ast = parseFileAst(content, relPath);
+    const ast = parseFileAst(content, rel);
     const symbols: IndexedSymbol[] = [];
 
     const collect = (list: AstSymbol[]): void => {
@@ -60,7 +74,7 @@ export class WorkspaceSymbolIndex {
         symbols.push({
           name: s.name,
           kind: s.kind,
-          path: relPath,
+          path: rel,
           line: s.startLine,
           signature: s.signature,
           docstring: s.docstring,
@@ -73,7 +87,7 @@ export class WorkspaceSymbolIndex {
     };
 
     collect(ast.symbols);
-    this.fileSymbols.set(relPath, symbols);
+    this.fileSymbols.set(rel, symbols);
 
     for (const sym of symbols) {
       const lower = sym.name.toLowerCase();
@@ -90,14 +104,15 @@ export class WorkspaceSymbolIndex {
    * Removes a file from the symbol index.
    */
   public removeFile(relPath: string): void {
-    const existing = this.fileSymbols.get(relPath);
+    const rel = normalizePath(relPath);
+    const existing = this.fileSymbols.get(rel);
     if (!existing) return;
 
     for (const sym of existing) {
       const lower = sym.name.toLowerCase();
       const entries = this.symbolMap.get(lower);
       if (entries) {
-        const filtered = entries.filter((e) => e.path !== relPath);
+        const filtered = entries.filter((e) => e.path !== rel);
         if (filtered.length > 0) {
           this.symbolMap.set(lower, filtered);
         } else {
@@ -105,7 +120,7 @@ export class WorkspaceSymbolIndex {
         }
       }
     }
-    this.fileSymbols.delete(relPath);
+    this.fileSymbols.delete(rel);
   }
 
   /**
@@ -126,7 +141,7 @@ export class WorkspaceSymbolIndex {
         } else if (entry.isFile()) {
           const ext = path.extname(entry.name).toLowerCase();
           if (CODE_EXTENSIONS.has(ext)) {
-            const rel = path.relative(this.projectRoot, full);
+            const rel = normalizePath(path.relative(this.projectRoot, full));
             const content = await fs.readFile(full, "utf8").catch(() => "");
             if (content) {
               this.indexFile(rel, content);
@@ -143,36 +158,39 @@ export class WorkspaceSymbolIndex {
 
   /**
    * Searches the workspace symbol table.
+   *
+   * Results are RANKED (exact name → prefix → substring) and then ordered
+   * deterministically by name and path. The previous implementation returned
+   * Map-insertion order, which for a filesystem build is `readdir` order — so
+   * the same query produced a different ordering per machine and filesystem.
+   * A symbol lookup an agent branches on must be stable.
    */
   public findSymbol(query: string, options: SymbolQueryOptions = {}): IndexedSymbol[] {
     const limit = options.limit ?? 25;
     const lowerQuery = query.toLowerCase().trim();
-    const results: IndexedSymbol[] = [];
+    if (lowerQuery.length === 0) return [];
 
-    if (options.exact) {
-      const exactMatches = this.symbolMap.get(lowerQuery) ?? [];
-      for (const match of exactMatches) {
-        if (options.kind && match.kind !== options.kind) continue;
-        if (options.exportedOnly && !match.isExported) continue;
-        results.push(match);
-        if (results.length >= limit) break;
-      }
-      return results;
-    }
-
-    // Substring / fuzzy prefix matches
+    const scored: { entry: IndexedSymbol; score: number }[] = [];
     for (const [key, entries] of this.symbolMap.entries()) {
-      if (key.includes(lowerQuery)) {
-        for (const entry of entries) {
-          if (options.kind && entry.kind !== options.kind) continue;
-          if (options.exportedOnly && !entry.isExported) continue;
-          results.push(entry);
-          if (results.length >= limit) return results;
-        }
+      // exact mode is the score-0 slice, so the same rank function serves both.
+      if (!key.includes(lowerQuery)) continue;
+      const score = key === lowerQuery ? 0 : key.startsWith(lowerQuery) ? 1 : 2;
+      if (options.exact && score !== 0) continue;
+      for (const entry of entries) {
+        if (options.kind && entry.kind !== options.kind) continue;
+        if (options.exportedOnly && !entry.isExported) continue;
+        scored.push({ entry, score });
       }
     }
 
-    return results;
+    scored.sort((a, b) => {
+      if (a.score !== b.score) return a.score - b.score;
+      const byName = a.entry.name.toLowerCase().localeCompare(b.entry.name.toLowerCase());
+      if (byName !== 0) return byName;
+      return a.entry.path.localeCompare(b.entry.path);
+    });
+
+    return scored.slice(0, limit).map((m) => m.entry);
   }
 
   /** Total symbols indexed across workspace. */

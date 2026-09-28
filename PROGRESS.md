@@ -2,6 +2,23 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-28 (Buffy chief-engineer session, code-intelligence hardening):**
+> owns `packages/core/src/ast/symbolIndex.ts`, NEW
+> `packages/core/src/ast/__tests__/symbolIndex.test.ts`, `CHANGELOG.md`, plus this
+> file. Two real defects found by reading the live code (not assumed):
+> (1) `findSymbol` returned Map-insertion order, i.e. `readdir` order for a
+> filesystem build — nondeterministic per machine/filesystem; now ranked
+> (exact → prefix → substring) then name/path ordered. (2) `buildIndex` stored
+> `path.relative` (OS-native `\\` on Windows) while tool-driven `indexFile` stored
+> the caller's `/` path, so the same file became two keys on Windows — a stale
+> duplicate later edits could not remove; both entry points now normalise to
+> forward slashes (and `./` is stripped), and `removeFile` matches any separator.
+> **Two P1 assumptions were DISPROVED before writing code** and are recorded so
+> nobody re-chases them: `lsp/sensor.ts` already covers py/rs/go (via
+> `serverForPath`), and cold-write indexing is already correct (a cold write
+> leaves `size === 0`, and `find_symbol` then builds from disk). No protected
+> artifact touched. 9 new tests; core symbol suites 13/13 green.
+>
 > **DONE 2026-09-28 (Buffy chief-engineer session, Node baseline truth fix — PROTECTED):**
 > owns `.github/workflows/ci.yml`, `.github/workflows/live-eval.yml`,
 > `.github/workflows/release.yml`, `.github/workflows/visual-regression.yml`

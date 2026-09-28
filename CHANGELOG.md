@@ -4,6 +4,11 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Code intelligence — deterministic symbol lookup & Windows-safe paths (2026-09-28)
+
+- **`find_symbol` now returns ranked, deterministic results.** The workspace symbol index iterated its name map in insertion order, which for a filesystem build is `readdir` order — so the same query produced a different ordering per machine and filesystem. Results are now ranked (exact name → prefix → substring) and then ordered by name and path, so an agent branching on a lookup gets a stable answer.
+- **Paths are canonicalized to forward slashes in the symbol index.** `buildIndex` stored `path.relative(...)` (OS-native separators) while tool-driven indexing stored the caller's path (usually `/`), so on Windows the same file became two keys — a stale duplicate a later edit could never remove. Both entry points now normalise (and drop a leading `./`), and `removeFile` matches any separator spelling.
+
 ### Phase 31 — Frontier TUI craftsmanship (2026-09-28)
 
 - **The cockpit header no longer collides at exactly 100 columns** — the package-manager and model badges each carry calibrated cell reserves, pinned by the regenerated `header-cockpit-100` visual baseline.
