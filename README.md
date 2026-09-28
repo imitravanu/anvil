@@ -157,20 +157,26 @@ Type `/` at any prompt to open the autocomplete menu:
 
 | Command | Description |
 | :--- | :--- |
-| `/help` | Display command help and usage guide |
-| `/connect` | Hot-swap or configure a provider API key without restarting |
-| `/model` | Open the interactive model picker with type-to-filter |
-| `/diff` | Review all files modified during the current session as unified diffs |
-| `/rewind [n]` | Inspect file checkpoints or rollback to snapshot `n` |
-| `/goal <prompt>` | Launch an autonomous multi-step mission (Plan → Execute → Verify) |
-| `/mcp` | Check status, tools, and health of connected MCP servers |
-| `/mcp reconnect` | Refresh connections and hot-load new tools from MCP servers |
-| `/theme <name>` | Switch theme (`dark`, `light`, `highContrast`, `midnight`, `hacker`, `forge`, or custom) |
-| `/ledger` | Review session token spending, tools executed, and status |
-| `/session list` | View, resume, or rename saved conversation sessions |
-| `/context` | Inspect token budget breakdown and compaction forecasts |
-| `/image <path>` | Attach an image (`png`, `jpeg`, `webp`) to vision-capable models |
+| `/help` | List available commands with examples |
 | `/clear` | Start a fresh transcript (previous session remains saved) |
+| `/model` | Open the interactive model picker with type-to-filter |
+| `/sync` | Sync live free models (auto-catches pricing & model changes) |
+| `/session` | Sessions: `list` \| `new` \| `resume [id]` \| `rename <title>` \| `search <text>` |
+| `/image <path>` | Attach an image (`png`, `jpg`, `jpeg`, `webp`, or `gif`) to vision-capable models |
+| `/connect` | Hot-swap or configure a provider API key without restarting |
+| `/ledger` | Show this session's run ledger (what ran, tokens spent) |
+| `/expand` | Toggle full tool output on/off |
+| `/retry [message]` | Re-run your last message (drops the previous answer first) |
+| `/diff` | Review file changes: `/diff` (session changes) or `/diff <branch>` |
+| `/pr` | Create a GitHub pull request for the current branch (via `gh`) |
+| `/rewind [n]` | List file checkpoints, or restore one: `/rewind <n>` |
+| `/mcp` | MCP servers: status, or refresh all: `/mcp reconnect` |
+| `/theme <name>` | Switch theme (`dark`, `light`, `highContrast`, `midnight`, `hacker`, `forge`, or custom) |
+| `/goal <prompt>` | Launch an autonomous mission (Plan → Execute → Verify) |
+| `/team` | Multi-agent teams: `/team status` |
+| `/plugin` | Plugins: `/plugin list` |
+| `/context` | Show token budget breakdown and compaction forecast |
+| `/copy` | Copy the newest code block to the clipboard (OSC 52) |
 
 ---
 
@@ -204,7 +210,7 @@ Server tools are exposed as `mcp_<server>__<tool>` and undergo the same strict p
 
 - **Path Containment:** All file operations are strictly confined to the project directory where Anvil was initiated, with symlink resolution.
 - **Destructive Command Guard:** Catastrophic operations (`rm -rf /`, `rm -rf ~`, fork bombs, raw device writes) are refused automatically.
-- **Size Capping:** File reads/writes are capped at 512 KiB; command outputs are capped at 20 KiB with a 2-minute timeout.
+- **Size Capping:** File reads/writes are capped at 512 KiB; command outputs are capped at 20 KiB with a 2-minute default timeout (each overridable via `ANVIL_MAX_READ_BYTES` / `ANVIL_MAX_STREAM_BYTES` / `ANVIL_RUN_COMMAND_TIMEOUT_MS`).
 - **Rollback Snapshots:** Pre-mutation snapshots persist in `$ANVIL_HOME/checkpoints/` (mode `0600`) for non-destructive `/rewind`.
 - **Zero Telemetry:** All sessions, settings, and credentials remain 100% local on your workstation.
 

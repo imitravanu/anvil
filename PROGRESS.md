@@ -2,6 +2,36 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-28 (Buffy chief-engineer session, Phase 33 COMPLETE / Phase 34 opened):**
+> owns `packages/tui/src/components/MessageList.tsx`, `packages/cli/src/__tests__/docTruth.test.ts`,
+> `README.md`, `docs/PHASE-33-ROADMAP.md`, NEW `docs/PHASE-34-ROADMAP.md`,
+> `docs/README.md`, `CHANGELOG.md`, plus this file.
+> **The sweep (33.2):** every README/docs/TUI self-claim checked against the code
+> that backs it — 2 falsehoods, 5 unguarded truths, 9 verified. Falsehoods:
+> (1) the slash-command table documented 13 of 20 registry commands (7 invisible:
+> sync, expand, retry, pr, team, plugin, copy) — table rewritten FROM the registry;
+> (2) `/image` accepts gif + jpg but the README said png/jpeg/webp only.
+> Unguarded truths now derived: size caps (512 KiB / 20 KiB / 2-min, plus the
+> ANVIL_* override names), the /theme row vs THEMES keys, and the TUI pill's
+> HARDCODED "16 tools" — now rendering TOOL_DEFINITIONS.length, the same drift
+> trap as the README's "15 Built-in Tools".
+> **The guards (33.3):** docTruth 11 → 16 tests, all expected values read from
+> code; format/theme guards are BIDIRECTIONAL so a format removed from code cannot
+> leave a stale README advertisement. **Mutation check:** old README + old pill
+> stashed → 4 of 5 new guards fail; the /theme guard passes both sides BY DESIGN
+> (true, only unguarded) and is labelled a tripwire, not bug-fix evidence.
+> **Verified true, no action:** 16 tool names (exact vs built dist), 12 provider
+> names, LSP server list 4/4 vs lsp/detector.ts, mcp_<server>__<tool> naming,
+> init --guarded 4-language claim, /rewind //mcp reconnect //session semantics.
+> **Gate lesson recorded in the roadmap:** a targeted docTruth run passed while
+> the full build FAILED — `expect().toBeDefined()` does not narrow for tsc strict
+> mode; fixed with `if (!row) expect.fail(...)`. Targeted runs are for speed;
+> only the gate is verdict. Final: gate Steps 0-5 green, 1268 tests (122 cli /
+> 816 core / 330 tui), 25/25 evals. No protected artifact touched.
+> **Phase 34 opened** on a VERIFIED finding: `runTeam` awaits Promise.all and
+> reports once at the end, so a team run shows one spinner for its whole life and
+> a member failing at second 10 of 5 minutes is silent until the end.
+>
 > **DONE 2026-09-28 (Buffy chief-engineer session, Phase 32 COMPLETE / Phase 33 opened):**
 > owns `packages/core/src/ast/parser.ts`, `packages/core/src/ast/__tests__/parser.test.ts`,
 > `packages/cli/src/__tests__/docTruth.test.ts`, `README.md`,

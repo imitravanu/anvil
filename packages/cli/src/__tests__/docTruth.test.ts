@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CORE_VERSION, TOOL_DEFINITIONS, createProviders, MODEL_REGISTRY, visibleModels } from "@anvil/core";
+import { CORE_VERSION, TOOL_DEFINITIONS, createProviders, MODEL_REGISTRY, visibleModels, MAX_READ_FILE_BYTES, MAX_STREAM_BYTES, RUN_COMMAND_TIMEOUT_MS } from "@anvil/core";
 
 /**
  * DOC TRUTH GUARD
@@ -66,6 +66,26 @@ function coreEnvVars(): Set<string> {
   return names;
 }
 
+/** Source of a file in the TUI package, for deriving claims from code. */
+const readTui = (rel: string): string => read(path.join("packages/tui/src", rel));
+
+/** Command names registered in the TUI command registry (the `/` commands). */
+function registryCommands(): string[] {
+  return [...readTui("commands/registry.ts").matchAll(/^ {4}name: "([a-z]+)",$/gm)].map((m) => m[1]!);
+}
+
+/** Built-in theme names, from the `THEMES` record keys. */
+function builtinThemeNames(): string[] {
+  return [...readTui("theme/themes.ts").matchAll(/^ {2}([A-Za-z]+): makeTheme\(/gm)].map((m) => m[1]!);
+}
+
+/** Image extensions the `/image` handler accepts, from its media-type map. */
+function mediaExtensions(): string[] {
+  return [...readTui("commands/handlers/media.ts").matchAll(/"(\.[a-z0-9]+)": "image\//g)].map(
+    (m) => m[1]!.slice(1)
+  );
+}
+
 // "Ollama (Local)" is the runtime label; the README's provider column is the
 // product name. Normalize the parenthetical rather than loosen the match.
 const productName = (displayName: string): string =>
@@ -126,6 +146,79 @@ describe("doc truth", () => {
     for (const name of documented) {
       expect(known, `README documents ${name}, which core never reads`).toContain(name);
     }
+  });
+
+  it("the README slash-command table documents exactly the command registry", () => {
+    const section = read("README.md").split("## ⌨️ Slash Commands")[1] ?? "";
+    const table = section.split(/^---$/m)[0] ?? "";
+    const documented = [...table.matchAll(/^\| `\/([a-z]+)/gm)].map((m) => m[1]!);
+    expect(documented.length, "the README command table looks empty").toBeGreaterThan(0);
+
+    // Parity both ways, like the provider table: a command added without a row
+    // ships invisible to users, and a stale row documents a command that no
+    // longer exists. (7 of 20 commands were missing when this was written.)
+    const registered = registryCommands();
+    const missing = registered.filter((c) => !documented.includes(c));
+    const stale = documented.filter((c) => !registered.includes(c));
+    expect(missing, `registry commands the README omits: ${missing.join(", ")}`).toEqual([]);
+    expect(stale, `README rows for commands that no longer exist: ${stale.join(", ")}`).toEqual([]);
+  });
+
+  it("the README size-cap paragraph matches the centralized constants", () => {
+    const readme = read("README.md");
+    expect(readme).toContain(`${MAX_READ_FILE_BYTES / 1024} KiB`);
+    expect(readme).toContain(`${MAX_STREAM_BYTES / 1024} KiB`);
+    expect(readme).toContain(`${RUN_COMMAND_TIMEOUT_MS / 60_000}-minute`);
+    // The override knobs are part of the claim: a reader tuning a cap must find
+    // the same names the constants module actually reads.
+    for (const envName of ["ANVIL_MAX_READ_BYTES", "ANVIL_MAX_STREAM_BYTES", "ANVIL_RUN_COMMAND_TIMEOUT_MS"]) {
+      expect(readme).toContain(envName);
+    }
+  });
+
+  it("the README /theme row lists exactly the built-in themes", () => {
+    const themes = builtinThemeNames();
+    expect(themes.length).toBeGreaterThanOrEqual(5);
+    const row = read("README.md").split("\n").find((l) => l.includes("/theme"));
+    if (!row) expect.fail("no /theme row in the README");
+    for (const t of themes) {
+      expect(row, `README /theme row omits built-in theme ${t}`).toContain(t);
+    }
+    // Reverse parity: a backticked single word in the row must be a real theme,
+    // so a renamed or deleted theme cannot leave a stale name behind. Tokens
+    // with spaces are command syntax like `/theme <name>`, not theme names.
+    const tokens = [...row.matchAll(/`([^`]+)`/g)]
+      .map((m) => m[1]!)
+      .filter((t) => !t.includes(" ") && t !== "custom");
+    const stale = tokens.filter((t) => !themes.some((th) => th === t));
+    expect(stale, `README /theme row names non-existent themes: ${stale.join(", ")}`).toEqual([]);
+  });
+
+  it("the README /image row lists every format the media handler accepts", () => {
+    const extensions = mediaExtensions();
+    expect(extensions.length).toBeGreaterThanOrEqual(3);
+    const row = read("README.md").split("\n").find((l) => l.includes("/image"));
+    if (!row) expect.fail("no /image row in the README");
+    // `gif` was accepted by the handler but absent from the README.
+    for (const ext of extensions) {
+      expect(row, `README /image row omits .${ext}`).toContain(ext);
+    }
+    // Reverse parity: a backticked single word in the row must be a format the
+    // handler still accepts, so dropping a format from code cannot leave the
+    // README advertising it.
+    const tokens = [...row.matchAll(/`([^`]+)`/g)]
+      .map((m) => m[1]!)
+      .filter((t) => !t.includes(" "));
+    const stale = tokens.filter((t) => !extensions.includes(t));
+    expect(stale, `README /image row advertises unsupported formats: ${stale.join(", ")}`).toEqual([]);
+  });
+
+  it("the TUI capability pill derives its tool count instead of hardcoding it", () => {
+    const source = readTui("components/MessageList.tsx");
+    expect(source).toContain("TOOL_DEFINITIONS.length");
+    // A literal count here drifts exactly the way the README's "15 Built-in
+    // Tools" did; the pill must render the registry's number.
+    expect(source).not.toMatch(/◈ \d+ tools/);
   });
 
   it("the stabilization roadmap header agrees with its own checkboxes", () => {

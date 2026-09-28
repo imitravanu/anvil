@@ -11,7 +11,8 @@ comments cite the exact bug each rule replaces), not because it is a to-do list.
 |---|---|
 | [`../AGENTS.md`](../AGENTS.md) | The engineering constitution. Law: violations fail the gate. |
 | [`../PROGRESS.md`](../PROGRESS.md) | The live engineering record (dated session entries, evidence per change). |
-| [`PHASE-33-ROADMAP.md`](PHASE-33-ROADMAP.md) | **Current work** — advertised capability audit: derive or delete every self-claim. |
+| [`PHASE-34-ROADMAP.md`](PHASE-34-ROADMAP.md) | **Current work** — sub-agent streaming visibility during team runs. |
+| [`PHASE-33-ROADMAP.md`](PHASE-33-ROADMAP.md) | COMPLETE (2026-09-28) — advertised capability audit: every self-claim derived or verified. |
 | [`PHASE-32-ROADMAP.md`](PHASE-32-ROADMAP.md) | COMPLETE (2026-09-28) — code-intelligence integrity: the advertised language support is now real. |
 | [`PHASE-31-ROADMAP.md`](PHASE-31-ROADMAP.md) | COMPLETE (2026-09-28) — frontier TUI craftsmanship & UX elevation (Ink 7 + React 19). |
 | [`PHASE-30-ROADMAP.md`](PHASE-30-ROADMAP.md) | COMPLETE (2026-09-28) — deep workspace AST & semantic code graph. |

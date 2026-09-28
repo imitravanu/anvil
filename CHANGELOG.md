@@ -4,6 +4,17 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Documentation truth — every self-claim now derived or verified (2026-09-28)
+
+A full sweep of the README, the docs index and the TUI's launch surfaces found two falsehoods and five unguarded truths. Everything else verified true against code.
+
+- **The slash-command table documented 13 of the 20 registered commands.** `/sync`, `/expand`, `/retry`, `/pr`, `/team`, `/plugin` and `/copy` shipped invisible to the README reader. The table is rewritten from the command registry — same order, same wording — and a new `docTruth` guard now asserts bidirectional parity, so a command can neither ship undocumented nor leave a stale row behind.
+- **`/image` accepts `gif` (and `jpg`), but the README said png/jpeg/webp.** The row is now derived from the media handler's extension map, in both directions.
+- **The empty-state pill's "16 tools" was hardcoded** — the same drift trap as the README's "15 Built-in Tools". It now renders `TOOL_DEFINITIONS.length`, and a structural guard fails if a literal count returns.
+- **The size-cap paragraph is now derived from the centralized constants**, including the `ANVIL_*` env override names, and the `/theme` row is checked against the built-in theme registry (both directions).
+- `docTruth.test.ts` grows 11 → 16 tests. With the old README and old pill stashed, 4 of the 5 new guards fail; the `/theme` guard passes on both sides by design — that list was true, only unguarded — and is labelled a regression tripwire rather than bug-fix evidence.
+- Evidence note from this phase: a targeted `npm test -w @anvil/cli -- docTruth` passed while the full **build failed** — `expect(x).toBeDefined()` does not narrow types for `tsc` under strict mode. Only Step 2 caught it. Targeted runs are for speed; only the gate is verdict.
+
 ### Documentation truth — the README no longer contradicts itself (2026-09-28)
 
 - **The architecture box said "15 Built-in Tools" while the registry and the README's own headline both said 16.** The provider count in the adjacent line was already asserted against the registry by `docTruth.test.ts`; the tool count beside it was not, so it drifted unwatched. The number is corrected and the box phrasing is now guarded too — guarding one of two identical claims is what let this happen.

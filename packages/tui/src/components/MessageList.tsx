@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Box, Text, useStdout } from "ink";
-import { CORE_VERSION } from "@anvil/core";
+import { CORE_VERSION, TOOL_DEFINITIONS } from "@anvil/core";
 import type { DisplayMessage } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { MessageView } from "./MessageView.js";
@@ -40,7 +40,9 @@ function EmptyState({ model, providerId }: { model: string; providerId?: string 
             {provider ? providerLabel(provider) : "Anvil"} · {displayModelLabel(model, providerId)}
           </Text>
           <Box marginTop={1} gap={1}>
-            <Text color={theme.colors.brand}>◈ 16 tools</Text>
+            {/* Derived from the registry so the advertised count cannot drift the way
+                the README's hardcoded "15 Built-in Tools" did (Phase 33). */}
+            <Text color={theme.colors.brand}>◈ {TOOL_DEFINITIONS.length} tools</Text>
             <Text color={theme.colors.textMuted}>·</Text>
             <Text color={theme.colors.accent}>⚡ AST code graph</Text>
             <Text color={theme.colors.textMuted}>·</Text>
