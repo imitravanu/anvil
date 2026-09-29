@@ -4,6 +4,39 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### A prompt A/B harness that can actually fail (Phase 38.4)
+
+- The gate has never been able to detect a prompt regression. Gate Step 5 runs
+  the mock lane, and the mock provider ignores the prompt entirely — proven this
+  session, where a deliberately crippled arm ("do not read files, do not run
+  tests, guess and stop") scored **identically to the honest arm, 100% vs 100%**.
+  `docs/ROADMAP.md:37-38` promised the opposite and never delivered.
+- `runPromptExperiment` runs the same task set against the same model under two
+  agent profiles, and closes three ways the earlier lanes lied:
+  - **Failures are attributed.** `classifyTrialFailure` separates provider
+    failures (rate limit, quota, 402 credits, 403 model-refused) from task
+    failures, so an environmental wall no longer reads as a capability gap.
+    Derived from real observations this session, not imagination: the Gemini
+    20/day quota, the OpenRouter credit wall, and the inkling 403.
+  - **A single trial is never significant.** With one trial the verdict says so
+    explicitly: *"1 trial(s) cannot separate signal from noise. Re-run with more
+    trials before believing this."*
+  - **A mock run can never be quoted as evidence.** The verdict line for a mock
+    run is `MOCK RUN — this measured the scripted provider, not a model.`
+- `EvalRunnerOptions.profile` is the seam: an arm supplies the agent's prompt and
+  budget, and the default path is untouched, so every score recorded before
+  38.4 remains comparable.
+- The 38.5 candidate prompt lives in `evals/ab.ts` as a **measured variant, not
+  a shipped change.** Landing it in the shipping prompt first would be the
+  unevidenced edit this phase exists to prevent.
+- **First live run (`inception/mercury-2.5`, 5 diagnose tasks, 1 trial):**
+  baseline 80% vs candidate 60% — and the harness correctly refused to call it
+  significant, because one trial cannot. A 2-trial rerun with a 420s timeout is
+  in flight; its result is recorded in the phase doc, not assumed.
+- `npm run ab -- --provider <id> --model <id> [--trials N] [--filter X] [--baseline-only]`
+- Exit code is 0 when the run **completes**, not when an arm wins. A harness that
+  failed the build whenever an arm lost would train everyone to distrust it.
+
 ### Two models that 403 for every user are no longer offered as working (Phase 38.3)
 
 - `thinkingmachines/inkling:free` and `thinkingmachines/inkling-small:free`

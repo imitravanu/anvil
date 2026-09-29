@@ -155,17 +155,24 @@ export async function runEvalTask(
     // agent users actually run. autoVerify stays OFF here on purpose: a repair
     // loop changes the trajectory and can mask the failure the task asserts
     // (declared boundary, PHASE-38-ROADMAP.md §4).
+    //
+    // `options.profile` is the Phase 38.4 A/B seam: an experiment arm supplies
+    // the agent's own prompt and budget so two arms of the SAME task set differ
+    // only in the thing under test. Undefined keeps the shipping profile, so the
+    // default path is unchanged.
+    const overrides = options.profile;
     const profile = buildAnvilAgentProfile(tempDir, {
       maxTokens: task.maxTokens,
       autoVerify: false,
     });
+    const systemPrompt = overrides?.systemPrompt ?? profile.systemPrompt;
     const session = new AgentSession(provider, {
       projectRoot: tempDir,
       model: modelId,
-      maxTokens: profile.maxTokens,
-      systemPrompt: profile.systemPrompt,
+      maxTokens: overrides?.maxTokens ?? profile.maxTokens,
+      systemPrompt,
       permissionBroker: AUTO_APPROVE_BROKER,
-      autoVerify: profile.autoVerify,
+      autoVerify: overrides?.autoVerify ?? profile.autoVerify,
       ...(options.guardian === undefined ? {} : { guardian: options.guardian }),
     });
 

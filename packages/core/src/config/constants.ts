@@ -88,6 +88,16 @@ export const EVAL_FAILURE_DIFF_MAX_CHARS = getEnvNumber("ANVIL_EVAL_FAILURE_DIFF
 // HTTP 429 before the model can work. Mock runs ignore it entirely (0).
 export const EVAL_RATE_LIMIT_DELAY_MS = getEnvNumber("ANVIL_EVAL_RATE_LIMIT_DELAY_MS", 2_000);
 
+// Phase 38.4 A/B harness. The output budget is a FLOOR, not a cap: Mercury
+// burns ~646 reasoning tokens before emitting any content (measured live
+// 2026-09-29), so an arm budget below that returns empty length-cutoff turns
+// and the arm scores zero for a reason no prompt can fix.
+export const EVAL_AB_MAX_TOKENS = getEnvNumber("ANVIL_EVAL_AB_MAX_TOKENS", 4_096);
+// Per-arm delay, so a free-tier lane does not trip its own rate limit between
+// tasks. Separate from EVAL_RATE_LIMIT_DELAY_MS because an A/B run is N times
+// longer and paces differently.
+export const EVAL_AB_TASK_DELAY_MS = getEnvNumber("ANVIL_EVAL_AB_TASK_DELAY_MS", 1_500);
+
 // Checkpoint & History Retention Limits
 export const CHECKPOINT_KEEP = getEnvNumber("ANVIL_CHECKPOINT_KEEP", 5);
 

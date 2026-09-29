@@ -78,6 +78,17 @@ export interface EvalRunnerOptions {
    */
   guardian?: boolean;
   /**
+   * Phase 38.4 A/B seam: replace the agent's own prompt and budget for this
+   * run. Undefined keeps the shipping profile (the default path, unchanged), so
+   * an experiment arm differs from a normal eval task only in the thing under
+   * test.
+   */
+  profile?: {
+    systemPrompt?: string;
+    maxTokens?: number;
+    autoVerify?: boolean;
+  };
+  /**
    * 26.3 free-tier pacing: milliseconds to sleep BETWEEN tasks (never after
    * the last one). 0/undefined keeps the run instant (mock/CI default).
    * Under concurrency (27.1) each worker paces its OWN tasks.
