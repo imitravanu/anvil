@@ -2,6 +2,20 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-30 (OpenCode chief-engineer deep-dive audit — full-tree adversarial review; findings only, no code changed):**
+> owns NEW `docs/AUDIT-2026-09-30.md`, `docs/README.md` (index row + file count), plus this file.
+> **Baseline:** full gate Steps 0–5 green on the audited tree `1b78a63` (1,338 tests; 25/25 mock evals).
+> **Method:** six parallel read-only sweeps + direct re-verification of every P1 with lines quoted from
+> this session, plus live probes of the built AST parser (`packages/core/dist/ast/parser.js`).
+> **Result: 79 findings — 9 × P1, 29 × P2, 41 × P3.** Headlines: the 38.4 A/B harness still forces 4,096
+> tokens over task budgets (A1) and can misattribute "unanimous" wins (A2); mock cert runs default to
+> live provenance (B1); the prompted `YES — however` hedge reads as milestone satisfied (C2); six AST
+> parser defects reproduced with probe receipts (D1); gate blind spots with live slop already in them
+> (G1/G2); headless exits 0 after every mutation was denied (G4); live phase docs still call 38.4
+> OPEN/next while it is committed (G5).
+> **Next:** remediation proposed as Phase 39 workstreams W1–W8 in the audit; W1 (measurement integrity)
+> must land before 38.5. **No code will change until the owner approves the remediation wave.**
+>
 > **DONE 2026-09-29 (Chief-engineer session — Phase 38 wave 1: measurement parity. The eval lane scored a different agent than the one that ships):**
 > owns NEW `packages/core/src/config/agentProfile.ts`,
 > NEW `packages/core/src/config/__tests__/agentProfile.test.ts`,

@@ -1,6 +1,6 @@
 # Anvil docs — start here
 
-84 files, one active phase. This index exists so nobody has to read all of it to know what
+86 files, one active phase. This index exists so nobody has to read all of it to know what
 is current. Rule of thumb: **if a document is not listed as ACTIVE or CONTRACT, it is
 history** — kept because the engineering record is genuinely valuable (it is why the code
 comments cite the exact bug each rule replaces), not because it is a to-do list.
@@ -47,7 +47,7 @@ comments cite the exact bug each rule replaces), not because it is a to-do list.
 - **UI/UX waves:** `DW-1…DW-4-PROGRESS`, `UI-ROADMAP`, `UI-UX-EVOLUTION-ROADMAP`,
   `UI-CLOSEOUT-RECORD`, `UI-ADVANCEMENT-AUDIT`, `TRUST-UI-RECORD`, `PRODUCT-POLISH-RECORD`,
   `U10-RECORD`, `U12-U13-RECORD`, `SHOWCASE-AUDIT-2026-09-08`.
-- **Audits and reviews:** `AUDIT-2026-09-06`, `AUDIT-2026-09-14`, `CODE-REVIEW-RECORD`,
+- **Audits and reviews:** `AUDIT-2026-09-06`, `AUDIT-2026-09-14`, `AUDIT-2026-09-30`, `CODE-REVIEW-RECORD`,
   `REFINEMENT-RECORD-2026-09-09`.
 - **Hardening and maintenance:** `P0-RECORD`, `P1-RECORD`, `P2-RECORD`, `P3-RECORD`,
   `HARDENING-RECORD`, `MAINTENANCE-RECORD`, `REWIND-RECORD`, `ROADMAP`.
