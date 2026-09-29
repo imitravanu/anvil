@@ -131,6 +131,14 @@ async function main(): Promise<void> {
   console.log(`\n${"=".repeat(74)}`);
   console.log(`VERDICT: ${result.verdict}`);
   console.log(`SIGNIFICANT: ${result.significant ? "yes" : "no — do not act on this yet"}`);
+  if (result.significance) {
+    console.log(`  consistent tasks : ${result.significance.consistentTasks.join(", ") || "(none)"}`);
+    console.log(`  unstable tasks   : ${result.significance.unstableTasks.join(", ") || "(none)"}`);
+    if (!result.significant) {
+      console.log("  -> a task is 'unstable' when an arm gave different answers across trials;");
+      console.log("     it contributes noise, and no prompt conclusion follows from it.");
+    }
+  }
   console.log("=".repeat(74));
   process.exit(0);
 }

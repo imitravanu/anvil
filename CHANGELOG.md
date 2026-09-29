@@ -4,6 +4,34 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### The A/B harness rejected its own first "significant" result (Phase 38.4)
+
+- The first live A/B run (`inception/mercury-2.5`, 5 diagnose tasks, 2 trials)
+  printed **`baseline beats candidate by 20 points … SIGNIFICANT: yes`**. That
+  verdict was **wrong**, and the run is the receipt: on a five-task fixture,
+  **one flipped task IS twenty points**. The rule behind it asked only
+  `trials >= 2`, so the aggregate was reporting the size of the fixture rather
+  than a property of either prompt.
+- Significance is now decided **per task, not on the aggregate.** A task counts
+  toward a difference only if the *same* arm won *every* trial on it; a task
+  where an arm gave different answers across trials is reported as **unstable**
+  and contributes noise. A gap needs `EVAL_AB_MIN_SIGNIFICANT_TASKS` (2)
+  consistent tasks before it is called significant.
+- Under the corrected rule that same run is **not significant**: it rests on one
+  consistent task. The candidate arm — the 38.5 prompt — therefore has **no
+  demonstrated benefit**, which is the honest state and the reason 38.5 stays
+  blocked.
+- A coin-flipping task is classified as unstable *even when both arms tie on
+  it*, because an arm that answered differently on two trials tells you nothing
+  either way; the first cut dropped those tasks silently.
+- The report now prints which tasks were consistent and which were unstable, so
+  a reader can see what a verdict rests on rather than trusting a number.
+- **Mutation receipt:** `significance.test.ts` reconstructed the exact shape of
+  the bad run; against the previous rule **8 of 8 cases failed**, 8/8 after.
+- One assertion in that file also caught a **bug in its own fixture helper**,
+  which had made every task the baseline lost into a candidate *win* — the
+  assertions were passing over nonsense until the helper was rewritten.
+
 ### A prompt A/B harness that can actually fail (Phase 38.4)
 
 - The gate has never been able to detect a prompt regression. Gate Step 5 runs

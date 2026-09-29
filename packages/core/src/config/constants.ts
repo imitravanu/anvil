@@ -97,6 +97,18 @@ export const EVAL_AB_MAX_TOKENS = getEnvNumber("ANVIL_EVAL_AB_MAX_TOKENS", 4_096
 // tasks. Separate from EVAL_RATE_LIMIT_DELAY_MS because an A/B run is N times
 // longer and paces differently.
 export const EVAL_AB_TASK_DELAY_MS = getEnvNumber("ANVIL_EVAL_AB_TASK_DELAY_MS", 1_500);
+// Trials per arm before a difference may be called significant. Below 2, a task
+// the model coin-flips on is indistinguishable from one it reliably gets wrong.
+export const EVAL_AB_MIN_TRIALS = getEnvNumber("ANVIL_EVAL_AB_MIN_TRIALS", 2);
+// How many tasks must flip the SAME way on EVERY trial before an aggregate gap
+// is treated as a property of the prompts rather than of the fixture size. The
+// first live run declared a 20-point lead "significant" on 5 tasks, where one
+// flipped task IS 20 points — so the bar is expressed in consistent tasks, not
+// in trial count.
+export const EVAL_AB_MIN_SIGNIFICANT_TASKS = getEnvNumber(
+  "ANVIL_EVAL_AB_MIN_TASKS",
+  2
+);
 
 // Checkpoint & History Retention Limits
 export const CHECKPOINT_KEEP = getEnvNumber("ANVIL_CHECKPOINT_KEEP", 5);

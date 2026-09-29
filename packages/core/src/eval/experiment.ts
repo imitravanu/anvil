@@ -23,7 +23,11 @@
 import type { EvalResult, EvalRunnerOptions } from "./types.js";
 import { runEvalTask, loadEvalTasks } from "./runner.js";
 import { getErrorMessage } from "../errors.js";
-import { EVAL_AB_MAX_TOKENS } from "../config/constants.js";
+import {
+  EVAL_AB_MAX_TOKENS,
+  EVAL_AB_MIN_TRIALS,
+  EVAL_AB_MIN_SIGNIFICANT_TASKS,
+} from "../config/constants.js";
 
 /** The agent-shape overrides an arm may vary (see EvalRunnerOptions.profile). */
 export interface AbProfileOverride {
@@ -75,8 +79,10 @@ export interface AbResult {
   taskIds: string[];
   trials: AbTrial[];
   arms: AbArmSummary[];
-  /** True when the arms' pass rates differ by more than the observed spread. */
+  /** True when the arms differ reproducibly — see `significance` for how. */
   significant: boolean;
+  /** The full reasoning behind `significant`, including which tasks counted. */
+  significance: SignificanceVerdict;
   /** The one-sentence honest summary a reviewer reads first. */
   verdict: string;
 }
@@ -177,11 +183,7 @@ export async function runPromptExperiment(
   }
 
   const summaries = arms.map((arm) => summarizeArm(arm.name, trialsOut, selected.length));
-  const rates = summaries.map((s) => s.passRate);
-  const spread = rates.length > 1 ? Math.max(...rates) - Math.min(...rates) : 0;
-  // A single-trial difference is not evidence; require a real gap before
-  // calling anything significant, and say so plainly when it is not.
-  const significant = spread > 0 && rounds >= 2;
+  const gate = assessSignificance(trialsOut, arms.map((a) => a.name), selected.length, rounds);
 
   return {
     date: new Date().toISOString(),
@@ -191,8 +193,147 @@ export async function runPromptExperiment(
     taskIds: selected.map((t) => t.id),
     trials: trialsOut,
     arms: summaries,
-    significant,
-    verdict: buildVerdict(summaries, significant, rounds, baseOptions.providerId),
+    significant: gate.significant,
+    significance: gate,
+    verdict: buildVerdict(summaries, gate, rounds, baseOptions.providerId),
+  };
+}
+
+export interface SignificanceVerdict {
+  significant: boolean;
+  /** Why the verdict came out the way it did — quoted verbatim in the report. */
+  reason: string;
+  /** The arm with the higher pass rate, if any. */
+  leader?: string;
+  /** Pass-rate gap in points, 0–100. */
+  leadPoints: number;
+  /**
+   * Tasks whose outcome FLIPPED between the two arms. A gap built from tasks
+   * that also flip run-to-run is noise, however large the aggregate looks.
+   */
+  unstableTasks: string[];
+  /** Tasks that flipped the same way every trial — a reproducible difference. */
+  consistentTasks: string[];
+}
+
+/**
+ * Is the difference between arms real, or is it one flaky task?
+ *
+ * The first cut of this used `trials >= 2`, and the very first live run
+ * (mercury-2.5, 5 diagnose tasks, 2 trials) declared "SIGNIFICANT: yes" on a
+ * 20-point gap. That was wrong, and the run itself is the receipt: with 5
+ * tasks, ONE task flipping is a 20-point swing on its own. The aggregate was
+ * reporting the fixture size, not a property of either prompt.
+ *
+ * So significance is now decided PER TASK, not on the aggregate:
+ *
+ *  - A task counts toward the difference only if the SAME arm won EVERY trial
+ *    on it. A task that flipped between arms is unstable — the model is
+ *    coin-flipping on it, and no prompt conclusion follows.
+ *  - The gap must be reproduced across at least EVAL_AB_MIN_SIGNIFICANT_TASKS
+ *    such tasks. One consistent task is a single observation.
+ *  - A minimum trial count still applies, because per-task consistency over one
+ *    trial is indistinguishable from "graded once".
+ */
+export function assessSignificance(
+  trials: AbTrial[],
+  armNames: string[],
+  taskCount: number,
+  rounds: number
+): SignificanceVerdict {
+  const byTask = new Map<string, Map<string, boolean[]>>();
+  for (const t of trials) {
+    if (t.providerError) continue;
+    const armsForTask = byTask.get(t.taskId) ?? new Map<string, boolean[]>();
+    const outcomes = armsForTask.get(t.arm) ?? [];
+    outcomes.push(t.passed);
+    armsForTask.set(t.arm, outcomes);
+    byTask.set(t.taskId, armsForTask);
+  }
+
+  const consistent: string[] = [];
+  const unstable: string[] = [];
+  for (const [taskId, armsForTask] of byTask) {
+    // A task is only decidable if every arm was actually graded on it.
+    if (armNames.some((a) => !armsForTask.has(a))) continue;
+    // An arm that gave DIFFERENT answers across trials is coin-flipping on this
+    // task. That is noise regardless of how the two arms compare, so it is
+    // classified before the tie check below — otherwise a task both arms tied on
+    // 50/50 would be quietly dropped instead of reported as unstable.
+    const anyArmMixed = armNames.some((a) => {
+      const outcomes = armsForTask.get(a) ?? [];
+      return outcomes.length > 1 && outcomes.some(Boolean) && outcomes.some((o) => !o);
+    });
+    if (anyArmMixed) {
+      unstable.push(taskId);
+      continue;
+    }
+    const rates = armNames.map((a) => {
+      const outcomes = armsForTask.get(a) ?? [];
+      return outcomes.filter(Boolean).length / Math.max(outcomes.length, 1);
+    });
+    if (Math.max(...rates) === Math.min(...rates)) continue; // no difference
+    consistent.push(taskId);
+  }
+
+  const rates = armNames.map((name) => {
+    const mine = trials.filter((t) => t.arm === name && !t.providerError);
+    return mine.length === 0 ? 0 : mine.filter((t) => t.passed).length / mine.length;
+  });
+  const leadPoints = rates.length > 1 ? (Math.max(...rates) - Math.min(...rates)) * 100 : 0;
+  const leader = rates.length > 1 ? armNames[rates.indexOf(Math.max(...rates))] : undefined;
+
+  if (rounds < EVAL_AB_MIN_TRIALS) {
+    return {
+      significant: false,
+      reason: `only ${rounds} trial(s) per arm — a task the model coin-flips on cannot be told apart from one it reliably gets wrong. Run at least ${EVAL_AB_MIN_TRIALS}.`,
+      leadPoints,
+      unstableTasks: unstable,
+      consistentTasks: consistent,
+      ...(leader ? { leader } : {}),
+    };
+  }
+  if (taskCount === 0) {
+    return {
+      significant: false,
+      reason: "no tasks matched the filter, so there is nothing to compare.",
+      leadPoints: 0,
+      unstableTasks: unstable,
+      consistentTasks: consistent,
+    };
+  }
+  if (leadPoints === 0) {
+    return {
+      significant: false,
+      reason: "both arms scored the same.",
+      leadPoints: 0,
+      unstableTasks: unstable,
+      consistentTasks: consistent,
+      ...(leader ? { leader } : {}),
+    };
+  }
+  if (consistent.length < EVAL_AB_MIN_SIGNIFICANT_TASKS) {
+    return {
+      significant: false,
+      reason:
+        `the ${leadPoints.toFixed(0)}-point gap rests on ${consistent.length} task(s) that flipped the same way every trial, ` +
+        `below the ${EVAL_AB_MIN_SIGNIFICANT_TASKS} required. ` +
+        (unstable.length > 0
+          ? `${unstable.length} task(s) flipped between arms and contribute noise, not signal.`
+          : "Widen the task set or run more trials before concluding anything."),
+      leadPoints,
+      unstableTasks: unstable,
+      consistentTasks: consistent,
+      ...(leader ? { leader } : {}),
+    };
+  }
+  return {
+    significant: true,
+    reason: `${leader} wins ${consistent.length} task(s) unanimously across ${rounds} trials (${consistent.join(", ")}).`,
+    leadPoints,
+    unstableTasks: unstable,
+    consistentTasks: consistent,
+    ...(leader ? { leader } : {}),
   };
 }
 
@@ -218,21 +359,16 @@ function summarizeArm(name: string, trials: AbTrial[], totalTasks: number): AbAr
 
 function buildVerdict(
   arms: AbArmSummary[],
-  significant: boolean,
+  gate: SignificanceVerdict,
   rounds: number,
   providerId: string | undefined
 ): string {
   if (!providerId) {
     return "MOCK RUN — this measured the scripted provider, not a model. Not evidence about any prompt.";
   }
-  const byRate = [...arms].sort((a, b) => b.passRate - a.passRate);
-  const [best, ...rest] = byRate;
-  const lead = best.passRate - (rest[0]?.passRate ?? 0);
-  if (rounds < 2) {
-    return `${best.name} leads at ${(best.passRate * 100).toFixed(0)}%, but ${rounds} trial(s) cannot separate signal from noise. Re-run with more trials before believing this.`;
+  const rates = arms.map((a) => `${a.name} ${(a.passRate * 100).toFixed(0)}%`).join(", ");
+  if (!gate.significant) {
+    return `NOT SIGNIFICANT: ${rates}. ${gate.reason}`;
   }
-  if (!significant || lead === 0) {
-    return `No difference outside the spread: ${arms.map((a) => `${a.name} ${(a.passRate * 100).toFixed(0)}%`).join(", ")}. The prompt change did not measurably help.`;
-  }
-  return `${best.name} beats ${rest[0]?.name} by ${(lead * 100).toFixed(0)} points over ${rounds} trials — a real difference, not spread.`;
+  return `${gate.leader} leads by ${gate.leadPoints.toFixed(0)} points over ${rounds} trials. ${gate.reason}`;
 }
