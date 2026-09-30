@@ -21,8 +21,8 @@
  */
 
 import type { EvalResult, EvalRunnerOptions } from "./types.js";
-import { runEvalTask, loadEvalTasks } from "./runner.js";
-import { getErrorMessage } from "../errors.js";
+import { runEvalTask, loadEvalTasks, matchesTaskFilter } from "./runner.js";
+import { getErrorMessage, sleepAbortable } from "../errors.js";
 import {
   EVAL_AB_MAX_TOKENS,
   EVAL_AB_MIN_TRIALS,
@@ -121,6 +121,21 @@ function mean(values: number[]): number {
  * `providerId` this measures the mock, which is why the result records the
  * provider name so a mock run can never be mistaken for evidence.
  */
+
+/**
+ * The profile override ONE A/B run applies (the Phase 38.4 seam).
+ *
+ * maxTokens is a FLOOR, not a cap — but only when the arm EXPLICITLY sets a
+ * budget. Overriding an unset budget with EVAL_AB_MAX_TOKENS made every A/B
+ * run score a 4,096-token agent while the runner's own profile gives the task
+ * budget (8,192 on tasks 21–25) or DEFAULT_MAX_TOKENS: the harness measured a
+ * different agent than shipping (AUDIT-2026-09-30 A1).
+ */
+export function armProfileOverride(arm: AbArm): AbProfileOverride {
+  if (arm.profile.maxTokens === undefined) return { ...arm.profile };
+  return { ...arm.profile, maxTokens: Math.max(arm.profile.maxTokens, EVAL_AB_MAX_TOKENS) };
+}
+
 export async function runPromptExperiment(
   arms: AbArm[],
   baseOptions: EvalRunnerOptions & { tasksDir: string },
@@ -130,9 +145,19 @@ export async function runPromptExperiment(
   // empty result that reads as "no difference".
   const rounds = Math.max(1, Math.floor(trials) || 1);
   const tasks = loadEvalTasks(baseOptions.tasksDir);
-  const selected = baseOptions.taskFilter
-    ? tasks.filter((t) => t.id.includes(baseOptions.taskFilter ?? ""))
-    : tasks;
+  const filter = baseOptions.taskFilter;
+  const selected = filter ? tasks.filter((t) => matchesTaskFilter(t, filter)) : tasks;
+
+  // A3: live runs pace provider calls the way runAllEvalTasks does.
+  // `betweenTaskDelayMs` was spread into runEvalTask — whose only consumer is
+  // the batch runner — so A/B met rate limits and those trials were then
+  // EXCLUDED as provider errors, silently shrinking the evidence.
+  const delayMs =
+    baseOptions.betweenTaskDelayMs && baseOptions.betweenTaskDelayMs > 0
+      ? baseOptions.betweenTaskDelayMs
+      : 0;
+  const totalRuns = arms.length * rounds * selected.length;
+  let completedRuns = 0;
 
   const trialsOut: AbTrial[] = [];
   for (const arm of arms) {
@@ -143,13 +168,7 @@ export async function runPromptExperiment(
           const result: EvalResult = await runEvalTask(task, {
             ...baseOptions,
             // The A/B seam: the arm's profile replaces the runner's defaults.
-            // maxTokens is a FLOOR, not a cap — a reasoning model that burns
-            // its budget before answering returns an empty turn, and an arm
-            // scoring zero for that reason would be a harness artifact.
-            profile: {
-              ...arm.profile,
-              maxTokens: Math.max(arm.profile.maxTokens ?? 0, EVAL_AB_MAX_TOKENS),
-            },
+            profile: armProfileOverride(arm),
           });
           const classified = classifyTrialFailure(result.error);
           trialsOut.push({
@@ -177,6 +196,11 @@ export async function runPromptExperiment(
             toolCalls: 0,
             tokens: { input: 0, output: 0 },
           });
+        } finally {
+          completedRuns += 1;
+          // Exactly totalRuns - 1 sleeps, mirroring the batch runner: no
+          // trailing wait after the final task.
+          if (delayMs > 0 && completedRuns < totalRuns) await sleepAbortable(delayMs);
         }
       }
     }
@@ -253,6 +277,12 @@ export function assessSignificance(
 
   const consistent: string[] = [];
   const unstable: string[] = [];
+  /**
+   * Which arm won each consistent task. The aggregate `leader` is NOT it: 3
+   * tasks won by A and 2 by B are five "consistent" tasks and two directions
+   * (AUDIT-2026-09-30 A2).
+   */
+  const winnerByTask = new Map<string, string>();
   for (const [taskId, armsForTask] of byTask) {
     // A task is only decidable if every arm was actually graded on it.
     if (armNames.some((a) => !armsForTask.has(a))) continue;
@@ -274,6 +304,7 @@ export function assessSignificance(
     });
     if (Math.max(...rates) === Math.min(...rates)) continue; // no difference
     consistent.push(taskId);
+    winnerByTask.set(taskId, armNames[rates.indexOf(Math.max(...rates))] ?? "");
   }
 
   const rates = armNames.map((name) => {
@@ -327,13 +358,35 @@ export function assessSignificance(
       ...(leader ? { leader } : {}),
     };
   }
+  // A2: the quotable verdict must name the arm that won THE REPRODUCIBLE
+  // TASKS, and only if that is a single arm that also leads the aggregate. A
+  // mixed direction used to be reported as one unanimous winner.
+  const winnerCounts = new Map<string, number>();
+  for (const taskId of consistent) {
+    const winner = winnerByTask.get(taskId) ?? "unknown";
+    winnerCounts.set(winner, (winnerCounts.get(winner) ?? 0) + 1);
+  }
+  const unanimousWinner = winnerCounts.size === 1 ? [...winnerCounts.keys()][0] : undefined;
+  if (!unanimousWinner || unanimousWinner !== leader) {
+    const tally = [...winnerCounts].map(([arm, n]) => `${arm} won ${n}`).join(", ");
+    return {
+      significant: false,
+      reason: unanimousWinner
+        ? `every reproducible task favors ${unanimousWinner} (${tally}), but the aggregate gap favors ${leader} — the difference is carried by tasks that flip, so it is not quotable.`
+        : `the ${consistent.length} reproducible task(s) split between arms (${tally}) — opposite-direction wins do not add up to a lead for either prompt.`,
+      leadPoints,
+      unstableTasks: unstable,
+      consistentTasks: consistent,
+      ...(leader ? { leader } : {}),
+    };
+  }
   return {
     significant: true,
-    reason: `${leader} wins ${consistent.length} task(s) unanimously across ${rounds} trials (${consistent.join(", ")}).`,
+    reason: `${unanimousWinner} wins all ${consistent.length} task(s) that reproduced across ${rounds} trials (${consistent.join(", ")}).`,
     leadPoints,
     unstableTasks: unstable,
     consistentTasks: consistent,
-    ...(leader ? { leader } : {}),
+    leader: unanimousWinner,
   };
 }
 

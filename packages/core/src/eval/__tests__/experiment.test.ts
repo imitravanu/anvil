@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { classifyTrialFailure, runPromptExperiment, type AbArm } from "../experiment.js";
-import { runEvalTask } from "../runner.js";
+import { armProfileOverride, classifyTrialFailure, runPromptExperiment, type AbArm } from "../experiment.js";
+import { EVAL_AB_MAX_TOKENS } from "../../config/constants.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -152,6 +152,21 @@ describe("runPromptExperiment — a worse arm must score worse", () => {
     expect(result.trials).toHaveLength(1);
   });
 
+  it("matches the filter case-insensitively on id and name, like the batch runner (A5)", async () => {
+    const canonical = await runPromptExperiment(
+      [BASELINE],
+      { tasksDir: TASKS_DIR, useMock: true, fastOnly: true, taskFilter: "multifile" },
+      1
+    );
+    const shouted = await runPromptExperiment(
+      [BASELINE],
+      { tasksDir: TASKS_DIR, useMock: true, fastOnly: true, taskFilter: "MULTIFILE" },
+      1
+    );
+    expect(canonical.taskIds.length).toBeGreaterThan(0);
+    expect(shouted.taskIds).toEqual(canonical.taskIds);
+  });
+
   it("reports an unknown task filter as an empty set rather than a silent pass", async () => {
     const result = await runPromptExperiment(
       [BASELINE],
@@ -165,25 +180,17 @@ describe("runPromptExperiment — a worse arm must score worse", () => {
   });
 });
 
-describe("the runEvalTask profile seam", () => {
-  it("keeps the shipping profile when no override is supplied", async () => {
-    // The default path must be untouched: an A/B seam that changed normal evals
-    // would invalidate every score recorded before 38.4.
-    const result = await runEvalTask(
-      {
-        id: "probe",
-        name: "probe",
-        category: "bugfix",
-        prompt: "no-op",
-        timeoutMs: 5_000,
-        taskDir: "",
-        setupDir: "/nonexistent-38-4",
-        assertionScript: "",
-      },
-      { useMock: true }
-    ).catch((err: unknown) => ({ error: String(err) }));
-    // A missing fixture dir throws before any profile logic runs; the point is
-    // that it fails the same way with and without the seam.
-    expect(result).toBeDefined();
+describe("the A/B budget seam (A1): an arm without a budget gets the task's", () => {
+  it("leaves maxTokens ABSENT when the arm declares none, so the runner's task budget applies", () => {
+    const override = armProfileOverride(BASELINE);
+    expect("maxTokens" in override).toBe(false);
+    expect(override.systemPrompt).toBe(BASELINE.profile.systemPrompt);
+  });
+
+  it("floors an explicitly-set arm budget at EVAL_AB_MAX_TOKENS and never lowers a bigger one", () => {
+    expect(armProfileOverride({ name: "tiny", profile: { maxTokens: 1_000 } }).maxTokens).toBe(
+      EVAL_AB_MAX_TOKENS
+    );
+    expect(armProfileOverride({ name: "big", profile: { maxTokens: 32_000 } }).maxTokens).toBe(32_000);
   });
 });

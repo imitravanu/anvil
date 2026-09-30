@@ -84,6 +84,11 @@ describe("logger level gate (ANVIL_LOG)", () => {
     expect(resolveLogLevel()).toBe("warn");
   });
 
+  it("a prototype key is not a level either — no cast through Object.prototype (G14)", () => {
+    process.env.ANVIL_LOG = "constructor";
+    expect(resolveLogLevel()).toBe("warn");
+  });
+
   it("ANVIL_LOG=silent silences even errors", () => {
     process.env.ANVIL_LOG = "silent";
     log.error("e");

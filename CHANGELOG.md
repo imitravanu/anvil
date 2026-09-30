@@ -4,6 +4,32 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Audit remediation wave 1 — the measurement now tells the truth (Phase 39 W1)
+
+- **A/B budget parity (A1).** An arm without a declared budget now runs with
+  the task's own budget (8,192 where declared), not a hardcoded 4,096. Every
+  A/B run had been scoring a different agent than the one that ships.
+- **Split wins are no longer "unanimous" (A2).** Significance records each
+  reproducible task's winner and requires it to be a single arm matching the
+  aggregate leader; a 5-task split (3 baseline / 2 candidate) is now reported
+  as a split instead of crediting the leader with all five.
+- **Live pacing is real in the A/B lane (A3).** `betweenTaskDelayMs` sleeps
+  between runs there; the option had been spread into per-task calls that no
+  code consumed.
+- **One task filter everywhere (A5).** `--filter` matches task id or name,
+  case-insensitively, in both eval lanes — `--filter Multifile` no longer
+  silently selects zero A/B tasks.
+- **The A/B seam is observed, not merely asserted (A6).** A mocked
+  `AgentSession` captures the resolved session options, replacing a test that
+  accepted any thrown error.
+- **Certification provenance is fail-closed (B1).** Only an explicit
+  `mock: false` records `live`; an omitted flag records `mock`. The suite had
+  been stamping real registry rows `live` with mock evidence.
+- **`ANVIL_LOG=constructor` no longer shadows the level map (G14)** — own-key
+  check instead of prototype-chain `in`.
+- **Mutation receipt:** with the four production files reverted, **10 of 10
+  new assertions failed**, each naming its finding; 10/10 pass after.
+
 ### The A/B harness rejected its own first "significant" result (Phase 38.4)
 
 - The first live A/B run (`inception/mercury-2.5`, 5 diagnose tasks, 2 trials)
@@ -46,9 +72,10 @@ All notable changes to Anvil are documented here. The format follows
     failures, so an environmental wall no longer reads as a capability gap.
     Derived from real observations this session, not imagination: the Gemini
     20/day quota, the OpenRouter credit wall, and the inkling 403.
-  - **A single trial is never significant.** With one trial the verdict says so
-    explicitly: *"1 trial(s) cannot separate signal from noise. Re-run with more
-    trials before believing this."*
+  - **A single trial is never significant.** With fewer than
+    `EVAL_AB_MIN_TRIALS` the verdict says so explicitly: *"only 1 trial(s) per
+    arm — a task the model coin-flips on cannot be told apart from one it
+    reliably gets wrong. Run at least 2."*
   - **A mock run can never be quoted as evidence.** The verdict line for a mock
     run is `MOCK RUN — this measured the scripted provider, not a model.`
 - `EvalRunnerOptions.profile` is the seam: an arm supplies the agent's prompt and
@@ -59,8 +86,11 @@ All notable changes to Anvil are documented here. The format follows
   unevidenced edit this phase exists to prevent.
 - **First live run (`inception/mercury-2.5`, 5 diagnose tasks, 1 trial):**
   baseline 80% vs candidate 60% — and the harness correctly refused to call it
-  significant, because one trial cannot. A 2-trial rerun with a 420s timeout is
-  in flight; its result is recorded in the phase doc, not assumed.
+  significant, because one trial cannot. The announced 2-trial rerun was **never
+  recorded** — and AUDIT-2026-09-30 then showed its number would not have been
+  quotable anyway (A1: every run capped at 4,096 tokens; A2: split wins could
+  miscredit the leader). No prompt claim is drawn from that run; the closure
+  landed in Phase 39 W1 (2026-09-30).
 - `npm run ab -- --provider <id> --model <id> [--trials N] [--filter X] [--baseline-only]`
 - Exit code is 0 when the run **completes**, not when an arm wins. A harness that
   failed the build whenever an arm lost would train everyone to distrust it.

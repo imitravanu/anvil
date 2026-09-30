@@ -1,6 +1,6 @@
 # Anvil docs — start here
 
-86 files, one active phase. This index exists so nobody has to read all of it to know what
+87 files — Phase 39 is the active wave; Phase 38 stays open for 38.5+. This index exists so nobody has to read all of it to know what
 is current. Rule of thumb: **if a document is not listed as ACTIVE or CONTRACT, it is
 history** — kept because the engineering record is genuinely valuable (it is why the code
 comments cite the exact bug each rule replaces), not because it is a to-do list.
@@ -12,7 +12,8 @@ comments cite the exact bug each rule replaces), not because it is a to-do list.
 | [`../AGENTS.md`](../AGENTS.md) | The engineering constitution. Law: violations fail the gate. |
 | [`../PROGRESS.md`](../PROGRESS.md) | The live engineering record (dated session entries, evidence per change). |
 | [`CURRENT-FOCUS.md`](CURRENT-FOCUS.md) | **Current work** — standing state: where the project is, and the triggers that reopen work. |
-| [`PHASE-38-ROADMAP.md`](PHASE-38-ROADMAP.md) | **IN PROGRESS** (2026-09-29) — frontier agent brain: the eval lane measured a different agent than the one that ships. Wave 1 (measurement parity) landed; the prompt rewrite is blocked on the A/B harness. |
+| [`PHASE-39-ROADMAP.md`](PHASE-39-ROADMAP.md) | **IN PROGRESS** (2026-09-30) — remediation of the 79-finding audit. W1 (measurement integrity: A1/A2/A3/A5/A6, B1, G14) landed with a 10/10 fail-first receipt; W2–W8 open. |
+| [`PHASE-38-ROADMAP.md`](PHASE-38-ROADMAP.md) | **IN PROGRESS** (2026-09-29) — frontier agent brain. 38.1–38.4 landed (parity, token accounting, unreachable models, A/B harness + per-task significance; audit closure in Phase 39 W1). 38.5 (prompt rewrite) unblocked; the harder task tier is the recorded gap (A4). |
 | [`PHASE-36-ROADMAP.md`](PHASE-36-ROADMAP.md) | COMPLETE (2026-09-28) — two live-probe defects fixed: regex-literal masking in the symbol scanner; window-less quota fails fast. |
 | [`PHASE-37-ROADMAP.md`](PHASE-37-ROADMAP.md) | COMPLETE (2026-09-28) — workspace walk hygiene: build/dependency trees excluded from every walk; parallel-write collision recorded with its demonstration. |
 | [`PHASE-35-ROADMAP.md`](PHASE-35-ROADMAP.md) | COMPLETE (2026-09-28) — declared boundaries closed; tokeniser decision taken (DEFER, with triggers). |

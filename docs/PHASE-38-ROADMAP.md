@@ -5,11 +5,13 @@
 > **Author:** Chief Engineer
 > **Core Mandate:** *"We are not making some cheap copy here; we are building frontier coding tools."*
 > **Status:** IN PROGRESS — 38.1 (measurement parity), 38.2 (token accounting),
-> and 38.3 (unreachable models) landed, each with a fail-first mutation receipt.
-> Wave 2 probes ran live against Gemini and OpenRouter and produced four
-> receipts, two of which **corrected** an earlier hypothesis; the ranking below
-> changed as a result. Next is 38.4, the A/B harness, which unblocks the prompt
-> rewrite (38.5).
+> 38.3 (unreachable models), and 38.4 (the A/B harness + per-task significance)
+> landed, each with a fail-first mutation receipt. AUDIT-2026-09-30 then found
+> the harness still measured a 4,096-token agent and could name the wrong arm
+> as a "unanimous" winner; those closure fixes landed as Phase 39 W1
+> ([`PHASE-39-ROADMAP.md`](PHASE-39-ROADMAP.md)). Next is 38.5, the prompt
+> rewrite — unblocked by W1; one recorded open item remains: the harder task
+> tier (AUDIT A4).
 > **Scope:** Anvil's agent loop, guardian, compaction, rewind, LSP, and permission
 > surfaces are at or past frontier engineering. The instruction layer driving all
 > of it is eleven words, and the harness that is supposed to detect a bad
@@ -177,17 +179,20 @@ rather than the model list: `certified: "live"` was recorded from a run whose
 | **38.1** | One owner for the agent profile (prompt, output budget, verify flag); CLI, headless, and the eval lane all route through it; fail-first parity guard | Probe G, H, I | **P0** | **COMPLETE** |
 | **38.2** | Count reasoning tokens in Gemini usage (`thoughtsTokenCount`) so `/context` and compaction stop under-reporting by up to 328× | Probe K | **P0** | **COMPLETE** |
 | **38.3** | Mark the two unreachable `inkling` models broken, with live provenance and a guard on the picker contract | Probe N | **P0** | **COMPLETE** |
-| **38.4** | A prompt A/B harness on a live model: fixed tasks, N trials, pass rate / cost / tool calls / edit-error rate | Probe H | **P0** | **OPEN** |
-| **38.5** | The real system prompt — tool-use policy, search-before-edit, verification, conventions | Probe J, M | **P1** | **OPEN — blocked on 38.4** |
+| **38.4** | A prompt A/B harness on a live model: fixed tasks, N trials, pass rate / cost / tool calls / edit-error rate | Probe H | **P0** | **COMPLETE** — `6cc4a6d` + `1b78a63`; audit closure in Phase 39 W1; harder tier open (A4) |
+| **38.5** | The real system prompt — tool-use policy, search-before-edit, verification, conventions | Probe J, M | **P1** | **OPEN** — unblocked: harness landed + audit-closed (Phase 39 W1); pair with the harder tier (A4) |
 | **38.6** | Reasoning deltas as a first-class `StreamEvent`; surface `reasoning_tokens` and `cached_tokens` in usage | Probe L | **P1** | **OPEN** |
 | **38.7** | Prompt caching (`cache_control` breakpoints) for the 4,177-token prefix | Probe M, L | **P1** | **OPEN** |
 | **38.8** | Measure closed-loop verification inside the harness; resolve the `autoVerify: false` boundary with data | §4 | **P2** | **OPEN** |
 | **38.9** | Guardian gate, docs sync, record | — | **P0** | **OPEN** |
 
-**38.5 is blocked on 38.4 by this phase's own rule.** Writing a better prompt
-before a harness can measure it would be an unevidenced change to the only
-input that determines agent behavior — the exact defect class this phase exists
-to close. The prompt is the payload; the measurement is what lets us ship it.
+**38.5 was blocked on 38.4 by this phase's own rule, and that rule was honored.**
+Writing a better prompt before a harness could measure it would have been an
+unevidenced change to the only input that determines agent behavior — the exact
+defect class this phase exists to close. The harness landed (38.4) and its own
+audit defects were closed against it (Phase 39 W1, 10/10 fail-first), so 38.5
+is now executable. The prompt is the payload; the measurement is what lets us
+ship it.
 
 **38.2 and 38.3 jumped the queue** because the probes turned two hypotheses
 into measured defects, and both are user-visible now: a context display that
@@ -311,16 +316,27 @@ naming the defect in the message itself (`returned HTTP 403 in a live probe …
 but is still certified "live". A mock run cannot certify reachability.`). 7/7
 after.
 
-### 38.4 — The A/B harness (OPEN, next)
+### 38.4 — The A/B harness (COMPLETE; audit closure in Phase 39 W1)
 
-The requirement is a lane that can **fail on a real model and distinguish
-provider error from task failure**. `PHASE-36-ROADMAP.md:96` already recorded
-that the mock lane "measures the scripted provider, not a model"; this task
-makes that lane able to fail. It must report, per trial: pass/fail, whether the
-failure was a provider error or a task failure, tool-call count, tokens, and
-estimated cost. Tasks must come from the harder tier Phase 37 §4 already called
-for (longer horizon, multi-turn, real repo) — the current 25 short tasks are
-saturated for this model class.
+The requirement was a lane that can **fail on a real model and distinguish
+provider error from task failure**. Landed in `6cc4a6d` (a harness that can
+fail) and `1b78a63` (per-task significance): `runPromptExperiment` runs the
+same task set against the same model under two profiles, and the corrected
+rule rejected the first live run's 20-point "significant" verdict — on a
+five-task fixture one flipped task IS twenty points.
+
+AUDIT-2026-09-30 then measured the harness itself and found it violating this
+phase's own premise in two P1s: every run was force-capped at 4,096 tokens
+(A1), and split-direction wins could be reported as one "unanimous" winner
+(A2). The closure — with live pacing (A3), filter parity (A5), and a
+seam-observing regression test (A6) — landed as Phase 39 W1 with a 10/10
+fail-first mutation receipt.
+
+**Open item carried forward (AUDIT A4):** tasks must come from the harder tier
+Phase 37 §4 already called for (longer horizon, multi-turn, real repo) — the
+current 25 short tasks are saturated for this model class, and the tier is not
+yet authored. This is recorded as a named gap in
+[`PHASE-39-ROADMAP.md`](PHASE-39-ROADMAP.md), not implied by "COMPLETE".
 
 ## 4. Declared boundaries (recorded, not hidden)
 
@@ -373,7 +389,8 @@ saturated for this model class.
   its budget on `thoughtsTokenCount` inside a 4,096 ceiling, goal mode is the
   first surface to starve. It is not fixed in this phase.
 - **The suite still cannot differentiate frontier models** (carried from Phase
-  37 §4). 38.4's harder tier is the first move against it.
+  37 §4). 38.4 shipped without the harder tier; authoring it is the recorded
+  open item (AUDIT A4) in Phase 39.
 - **45 of the 69 rows labelled `certified: "live"` came from mock runs**, and
   38.3 fixed only the two Probe N measured. The remaining 43 are unverified,
   not wrong: the picker already renders them `[✅ mock]` rather than `[✅ live]`
@@ -397,5 +414,5 @@ against the pre-change code: 38.1's guard was run against reverted call sites
 and failed 4/4 before a line of the fix was trusted. Measure, never infer, a
 number: "the prompt is too thin" is a hypothesis; the 24/25 that described the
 wrong agent, and the 645-identical-token mock lane, are the receipts. Declare
-what remains open rather than implying it is handled: §4 lists four boundaries,
+what remains open rather than implying it is handled: §4 lists eleven boundaries,
 including the one this phase created and deliberately did not fix.

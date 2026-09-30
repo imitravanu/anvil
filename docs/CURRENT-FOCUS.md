@@ -4,8 +4,16 @@
 > what is true right now, kept current alongside any open phase, and what
 > reopens work.
 
-## Where the project stands (2026-09-29)
+## Where the project stands (2026-09-30)
 
+- **Phase 39 is OPEN** (2026-09-30) — remediation of the full-tree adversarial
+  audit [`AUDIT-2026-09-30.md`](AUDIT-2026-09-30.md) (79 findings). Wave 1
+  landed today: A/B budget parity (A1), honest split-win significance (A2),
+  live pacing (A3), one shared task filter (A5), a seam-observing test (A6),
+  fail-closed certification provenance (B1), and the prototype-key log level
+  (G14) — 10/10 fail-first on the mutation check. Workstreams W2–W8 remain
+  open; W3 touches protected artifacts. Roadmap:
+  [`PHASE-39-ROADMAP.md`](PHASE-39-ROADMAP.md).
 - **Phase 38 is OPEN** (2026-09-29) — the frontier agent brain. The founding
   probe found that the eval lane assembled a **different agent than the one
   that ships**: its own system prompt, half the output budget, and
@@ -13,10 +21,12 @@
   24/25 — described a configuration no user ever runs. Wave 1 (38.1) landed:
   one `buildAnvilAgentProfile` owner for prompt, budget, and verify flag, with
   a fail-first parity guard (4/4 assertions failed against the pre-change call
-  sites, 4/4 pass after). **The prompt rewrite (38.2) is deliberately blocked
-  on the A/B harness (38.3)** — a better prompt that nothing can measure is the
-  exact defect class this phase exists to close. Read
-  [`PHASE-38-ROADMAP.md`](PHASE-38-ROADMAP.md); its §4 lists four boundaries,
+  sites, 4/4 pass after). The A/B harness (38.4) and per-task significance
+  landed 2026-09-30, and the audit's closure fixes for them are Phase 39 W1
+  (above). **The prompt rewrite (38.5) is unblocked** — a better prompt that
+  nothing could measure was the defect class this phase exists to close, and
+  it is closed. Read
+  [`PHASE-38-ROADMAP.md`](PHASE-38-ROADMAP.md); its §4 lists eleven boundaries,
   including the one 38.1 created and did not fix.
 - The instruction layer driving an otherwise frontier-grade agent is eleven
   words: `"You are Anvil, a terminal coding agent. Be concise."` — no tool-use
@@ -74,8 +84,11 @@
 
 ## What reopens work (the standing triggers)
 
-Phase 38 is the active phase — the next move is **38.3, the A/B harness**, which
-unblocks 38.2. These triggers still stand alongside it:
+Two phases are open. The active remediation wave is **Phase 39** (W2–W8 next;
+W4's parser six-pack may trip the scanner trigger below — AUDIT D1 is already
+the 4th lexical patch family for Rust/TS). **Phase 38.5** (the prompt rewrite)
+is unblocked: after W1 the harness measures the agent it scores. These
+triggers still stand:
 
 1. **Scanner trigger** — a probe finds a parser defect that materially misleads
    `find_symbol` in shipped usage and it is the third patch to the same language's

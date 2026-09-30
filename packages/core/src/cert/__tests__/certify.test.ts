@@ -12,7 +12,7 @@ import type { ProviderId } from "../../providers/types.js";
 describe("Phase 18: Provider Certification Harness", () => {
   it("certifies a healthy provider as live with all 5 criteria passing", async () => {
     const mock = createMockCertificationProvider("gemini");
-    const result = await certifyProvider(mock, { timeoutMs: 5000 });
+    const result = await certifyProvider(mock, { timeoutMs: 5000, mock: true });
 
     expect(result.passed).toBe(true);
     expect(result.status).toBe("live");
@@ -40,7 +40,7 @@ describe("Phase 18: Provider Certification Harness", () => {
     const mock = createMockCertificationProvider("groq", {
       failCriteria: new Set(["streaming"]),
     });
-    const result = await certifyProvider(mock, { timeoutMs: 5000 });
+    const result = await certifyProvider(mock, { timeoutMs: 5000, mock: true });
 
     expect(result.passed).toBe(false);
     expect(result.status).toBe("broken");
@@ -55,7 +55,7 @@ describe("Phase 18: Provider Certification Harness", () => {
     const mock = createMockCertificationProvider("openai", {
       failCriteria: new Set(["toolCalls"]),
     });
-    const result = await certifyProvider(mock, { timeoutMs: 5000 });
+    const result = await certifyProvider(mock, { timeoutMs: 5000, mock: true });
 
     expect(result.passed).toBe(false);
     expect(result.status).toBe("broken");
@@ -68,7 +68,7 @@ describe("Phase 18: Provider Certification Harness", () => {
     const mock = createMockCertificationProvider("mistral", {
       failCriteria: new Set(["multiTurn"]),
     });
-    const result = await certifyProvider(mock, { timeoutMs: 5000 });
+    const result = await certifyProvider(mock, { timeoutMs: 5000, mock: true });
 
     expect(result.passed).toBe(false);
     expect(result.status).toBe("broken");
@@ -78,7 +78,7 @@ describe("Phase 18: Provider Certification Harness", () => {
 
   it("verifies error containment on 404/invalid model", async () => {
     const mock = createMockCertificationProvider("cerebras");
-    const result = await certifyProvider(mock, { timeoutMs: 5000 });
+    const result = await certifyProvider(mock, { timeoutMs: 5000, mock: true });
 
     expect(result.criteria.errorPath.passed).toBe(true);
     expect(result.criteria.errorPath.details).toContain("Clean error event");
@@ -100,7 +100,7 @@ describe("Phase 18: Provider Certification Harness", () => {
       qwencloud: createMockCertificationProvider("qwencloud"),
     };
 
-    const results = await certifyAllProviders(providers, { timeoutMs: 5000 });
+    const results = await certifyAllProviders(providers, { timeoutMs: 5000, mock: true });
 
     expect(Object.keys(results)).toHaveLength(12);
     for (const [id, res] of Object.entries(results)) {
@@ -135,5 +135,21 @@ describe("Phase 18: Provider Certification Harness", () => {
     await expect(
       certifyProvider(mock, { model: "not-a-registry-model", timeoutMs: 5000 })
     ).rejects.toThrow(/not in the model registry/);
+  });
+
+  it("records MOCK provenance when the mock flag is omitted (B1 fail-closed)", async () => {
+    const mock = createMockCertificationProvider("openai");
+    const model = PROVIDER_CERT_MODELS.openai;
+    // No `mock` flag: the old default read this as "live" and stamped a real
+    // registry row. Omission must record mock, never live.
+    await certifyProvider(mock, { timeoutMs: 5000 });
+    expect(getModel(model, "openai")?.certifiedMode).toBe("mock");
+  });
+
+  it("records LIVE provenance only on an explicit mock: false claim (B1)", async () => {
+    const mock = createMockCertificationProvider("groq");
+    const model = PROVIDER_CERT_MODELS.groq;
+    await certifyProvider(mock, { timeoutMs: 5000, mock: false });
+    expect(getModel(model, "groq")?.certifiedMode).toBe("live");
   });
 });

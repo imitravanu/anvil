@@ -172,3 +172,32 @@ describe("degenerate inputs report honestly", () => {
     expect(gate.reason).toMatch(/nothing to compare/);
   });
 });
+
+describe("A2: a split direction is not a unanimous win", () => {
+  it("rejects significance when the reproducible tasks were won by different arms", () => {
+    // The audit counterexample: baseline takes 3 tasks, candidate takes 2, both
+    // every trial. The aggregate favors baseline, but 2 of the 5 "consistent"
+    // wins belong to the candidate — the old rule reported "baseline wins 5
+    // task(s) unanimously".
+    const trials = fixture(6, {
+      baselineWins: ["task-1", "task-2", "task-3"],
+      candidateWins: ["task-4", "task-5"],
+    });
+    const gate = assessSignificance(trials, ["baseline", "candidate"], 6, 2);
+
+    expect(gate.consistentTasks).toHaveLength(5);
+    expect(gate.significant).toBe(false);
+    expect(gate.reason).toMatch(/split between arms/);
+    expect(gate.reason).toContain("baseline won 3, candidate won 2");
+  });
+
+  it("names only the winning arm's tasks when the direction IS unanimous", () => {
+    const trials = fixture(6, { baselineWins: ["task-1", "task-2"] });
+    const gate = assessSignificance(trials, ["baseline", "candidate"], 6, 2);
+
+    expect(gate.significant).toBe(true);
+    expect(gate.reason).toMatch(/^baseline wins all 2 task\(s\)/);
+    expect(gate.reason).toContain("task-1, task-2");
+    expect(gate.reason).not.toContain("candidate");
+  });
+});

@@ -27,7 +27,9 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
 
 export function resolveLogLevel(): LogLevel {
   const raw = (process.env.ANVIL_LOG ?? "").trim().toLowerCase();
-  if (raw in LEVEL_ORDER) return raw as LogLevel;
+  // hasOwnProperty, not `in`: Object.prototype keys ("constructor",
+  // "toString") are `in` every object and would be cast to a level (G14).
+  if (Object.prototype.hasOwnProperty.call(LEVEL_ORDER, raw)) return raw as LogLevel;
   // Legacy: ANVIL_DEBUG predates the level gate.
   if (process.env.ANVIL_DEBUG) return "debug";
   return "warn";

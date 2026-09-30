@@ -10,8 +10,8 @@ import { buildSystemPrompt } from "./rules.js";
  * prompt — see PHASE-38-ROADMAP.md §38.1.
  *
  * Thinness here is a real, measured open boundary, not an oversight: the
- * behavior this prompt is supposed to elicit is 38.2, gated behind a receipt
- * from the 38.3 A/B harness. Do not grow this string without one.
+ * behavior this prompt is supposed to elicit is 38.5, gated behind the 38.4
+ * A/B harness. Do not grow this string without a recorded harness receipt.
  */
 export const ANVIL_BASE_SYSTEM_PROMPT =
   "You are Anvil, a terminal coding agent. Be concise.";

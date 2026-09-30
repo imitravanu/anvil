@@ -541,7 +541,10 @@ export async function certifyProvider(
   const status = allPassed ? "live" : "broken";
 
   // Update in-memory registry status, recording HOW it was obtained so a mock
-  // pass is never badged as a live probe.
+  // pass is never badged as a live probe. Provenance is FAIL-CLOSED: only an
+  // explicit `mock: false` records "live". The old `options.mock ? "mock" :
+  // "live"` read live when the flag was omitted — the test suite's mock batch
+  // stamped real rows `live` that way (AUDIT-2026-09-30 B1).
   // AUDIT-03: the return value used to be ignored, so certifying a model that
   // is not a registry row ran the whole suite and silently changed nothing — a
   // full 5/5 report that recorded no verdict. An unrecordable result is a
@@ -551,7 +554,7 @@ export async function certifyProvider(
     provider.id,
     status,
     undefined,
-    options.mock ? "mock" : "live"
+    options.mock === false ? "live" : "mock"
   );
   if (!recorded) {
     throw new Error(

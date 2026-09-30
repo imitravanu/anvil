@@ -303,6 +303,17 @@ export async function runEvalTask(
 }
 
 /**
+ * Shared task-filter semantics for every eval lane: case-insensitive match on
+ * the task id OR its name. `--filter Multifile` used to select zero tasks in
+ * the A/B lane (id-only, case-sensitive) while the batch runner matched more
+ * (AUDIT-2026-09-30 A5).
+ */
+export function matchesTaskFilter(task: EvalTask, filter: string): boolean {
+  const needle = filter.toLowerCase();
+  return task.id.toLowerCase().includes(needle) || task.name.toLowerCase().includes(needle);
+}
+
+/**
  * Runs all discovered tasks and produces an aggregated EvalReport.
  */
 export async function runAllEvalTasks(
@@ -315,9 +326,9 @@ export async function runAllEvalTasks(
   if (options.fastOnly) {
     tasks = tasks.filter((t) => t.fast);
   }
-  if (options.taskFilter) {
-    const filter = options.taskFilter.toLowerCase();
-    tasks = tasks.filter((t) => t.id.toLowerCase().includes(filter) || t.name.toLowerCase().includes(filter));
+  const taskFilter = options.taskFilter;
+  if (taskFilter) {
+    tasks = tasks.filter((t) => matchesTaskFilter(t, taskFilter));
   }
 
   const results: EvalResult[] = new Array(tasks.length);

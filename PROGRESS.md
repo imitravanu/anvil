@@ -2,6 +2,35 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-09-30 (OpenCode chief-engineer session — Phase 39 wave 1: measurement integrity, owner-approved remediation):**
+> owned `packages/core/src/eval/experiment.ts`, `packages/core/src/eval/runner.ts`,
+> `packages/core/src/eval/__tests__/experiment.test.ts`, NEW `packages/core/src/eval/__tests__/profileSeam.test.ts`,
+> `packages/core/src/eval/__tests__/significance.test.ts`, `packages/core/src/cert/runner.ts`,
+> `packages/core/src/cert/__tests__/certify.test.ts`, `packages/core/src/logger.ts`,
+> `packages/core/src/__tests__/logger.test.ts`, `packages/core/src/config/agentProfile.ts` (comment
+> numbering only), NEW `docs/PHASE-39-ROADMAP.md`, `docs/PHASE-38-ROADMAP.md`, `docs/CURRENT-FOCUS.md`,
+> `docs/README.md`, `CHANGELOG.md`, this file.
+> **W1 fixes:** A1 — `armProfileOverride()` floors only an EXPLICIT arm budget; an unset budget keeps
+> the task's own budget (the harness had forced every A/B run to 4,096 tokens while shipping runs
+> 8,192). A2 — significance records each reproducible task's winner; a 3/2 split between arms is
+> reported as a split, not "unanimous" for the aggregate leader. A3 — `betweenTaskDelayMs` now sleeps
+> in the A/B lane (it had no consumer there). A5 — one `matchesTaskFilter` (id OR name,
+> case-insensitive) shared by both eval lanes. A6 — the accept-any-throw seam test is deleted;
+> `profileSeam.test.ts` mocks `AgentSession` and asserts the RESOLVED session options (budget
+> passthrough 1,234 / DEFAULT fallback / 4,096 floor on explicit 1,000 / prompt routing; 4 cases).
+> B1 — cert provenance is fail-closed: omitted `mock` records "mock"; live only on explicit
+> `mock: false`; the suite's mock calls now say so. G14 — own-key guard for `ANVIL_LOG`
+> (`constructor` no longer shadows the level map).
+> **Mutation receipt:** with the four production files stashed, **10 of 10 new assertions failed**
+> (A1 ×3, A2 ×2, A5, A6, B1, G14), each naming its finding; 10/10 pass after restore. Final full
+> gate: Steps 0–5 green — 1,349 tests (126 cli / 892 core / 331 tui), 25/25 mock evals.
+> **Closure (G5 partial):** 38.4 marked COMPLETE with hashes; CURRENT-FOCUS numbering corrected (
+> harness = 38.4, rewrite = 38.5 unblocked); CHANGELOG "rerun in flight" + an invented verdict quote
+> corrected; `agentProfile.ts` comment numbering fixed; PHASE-39-ROADMAP records the A4 harder-tier
+> gap and the W2–W8 plan. A4 itself (recorded harder tier) is open; count drift (G6) goes with W8.
+> **Next waves:** W4 parser six-pack (six reproduced defects + fixtures), then W2/W5; W3 touches
+> protected artifacts and needs the AGENTS.md §3.4 review path.
+>
 > **DONE 2026-09-30 (OpenCode chief-engineer deep-dive audit — full-tree adversarial review; findings only, no code changed):**
 > owns NEW `docs/AUDIT-2026-09-30.md`, `docs/README.md` (index row + file count), plus this file.
 > **Baseline:** full gate Steps 0–5 green on the audited tree `1b78a63` (1,338 tests; 25/25 mock evals).
