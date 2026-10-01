@@ -69,10 +69,10 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
     // Best-effort index update
   }
 
-  // Check post-mutation compiler diagnostics (bounded to 400ms)
+  // Check post-mutation compiler diagnostics (bounded to LSP_POST_MUTATION_DIAGNOSTICS_MS)
   let diagnostics: LspDiagnostic[] = [];
   try {
-    diagnostics = await checkPostMutationDiagnostics(ctx.projectRoot, abs, content, 400);
+    diagnostics = await checkPostMutationDiagnostics(ctx.projectRoot, abs, content);
   } catch {
     diagnostics = [];
   }

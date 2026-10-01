@@ -2,6 +2,27 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-02 (OpenCode chief-engineer session — Phase 39 W8: E7 remainder, magic constants centralized):**
+> owns `packages/core/src/config/constants.ts`, `packages/core/src/tools/grep.ts`,
+> `packages/core/src/tools/outline.ts`, `packages/core/src/tools/readFile.ts`,
+> `packages/core/src/tools/writeFile.ts`, `packages/core/src/tools/editFile.ts`,
+> `packages/core/src/lsp/tools.ts`, `packages/core/src/lsp/sensor.ts`,
+> `docs/PHASE-39-ROADMAP.md`, `docs/CURRENT-FOCUS.md`, `docs/README.md`,
+> `CHANGELOG.md`, plus this file.
+> **E7 remainder [P3]:** all flagged literals moved to `config/constants.ts`
+> (rule 2.4), values preserved verbatim: `GREP_MAX_FILE_BYTES` (1 MiB),
+> `GREP_DEFAULT_MAX_RESULTS` (200), `GREP_LINE_DISPLAY_MAX` (300),
+> `OUTLINE_MAX_FILES` (40), `OUTLINE_MAX_SYMBOLS` (250),
+> `READ_BINARY_SNIFF_BYTES` (8192), `LSP_POST_MUTATION_DIAGNOSTICS_MS` (400 —
+> sensor default AND cap AND the write_file/edit_file call sites, which now
+> rely on the default instead of passing the literal),
+> `LSP_DIAGNOSTICS_WAIT_MS` (1500), `LSP_TSC_TIMEOUT_MS` (30_000).
+> Behavior-preserving by construction; receipt is typecheck + full suite
+> (150 targeted tool/LSP tests green, residual-literal grep clean), not a
+> mutation probe — recorded as such. **E7 is now fully closed.**
+> **Gate:** Steps 0–5 green on the final tree (exit 0, 25/25 mock evals).
+> No protected artifact touched.
+>
 > **DONE 2026-10-02 (OpenCode chief-engineer session — Phase 39 W8: E9 tree-kill + truncation truth, E8 remainder, E7 duplicate bounds):**
 > owns `packages/core/src/tools/listFiles.ts`,
 > `packages/core/src/tools/__tests__/listFiles.test.ts`,

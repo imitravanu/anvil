@@ -261,6 +261,22 @@ export const MAX_FILES = 10_000;
 // write_file payload cap (tools/writeFile.ts).
 export const MAX_WRITE_BYTES = 512 * 1024;
 
+// E7 (AUDIT-2026-09-30): tool/LSP behavior caps, centralized (rule 2.4).
+// grep tool: skip files larger than this; default result cap; per-line display cap.
+export const GREP_MAX_FILE_BYTES = 1024 * 1024;
+export const GREP_DEFAULT_MAX_RESULTS = 200;
+export const GREP_LINE_DISPLAY_MAX = 300;
+// outline tool bounds (tools/outline.ts).
+export const OUTLINE_MAX_FILES = 40;
+export const OUTLINE_MAX_SYMBOLS = 250;
+// read_file binary sniff: null-byte scan of the first N bytes.
+export const READ_BINARY_SNIFF_BYTES = 8192;
+// LSP diagnostics: post-mutation poll window (sensor + write_file/edit_file),
+// the one-shot diagnostics wait, and the tsc fallback timeout (lsp/tools.ts).
+export const LSP_POST_MUTATION_DIAGNOSTICS_MS = 400;
+export const LSP_DIAGNOSTICS_WAIT_MS = 1500;
+export const LSP_TSC_TIMEOUT_MS = 30_000;
+
 // verify_tests runner bounds (tools/verifyTests.ts).
 export const RUN_TEST_TIMEOUT_MS = 60_000;
 export const MAX_TEST_OUTPUT_BYTES = 30 * 1024;

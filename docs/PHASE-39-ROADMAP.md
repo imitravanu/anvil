@@ -170,10 +170,13 @@ which that sweep repaired:
   `diagnostics()` + interface member (zero callers), and
   `isReadOnlyCommand` fails closed on non-strings (fail-first: red against
   stashed bash.ts). E7 — verifyTests's duplicate timeout bounds now import
-  the shared `MIN/MAX_COMMAND_TIMEOUT_MS`; the other E7 sites stay open.
+  the shared `MIN/MAX_COMMAND_TIMEOUT_MS`. **E7 remainder FIXED 2026-10-02:**
+  all flagged literals (grep/outline/readFile/LSP) centralized in
+  `config/constants.ts`, values preserved verbatim; behavior-preserving by
+  construction, receipt is typecheck + full suite (recorded as such).
+  E7 is now fully closed.
   **Still open:** H1 (scanner coverage extension —
   magic constants, non-empty silent catches, dead exports), C9–C19,
-  E7-remainder (grep/outline/readFile/lsp/writeFile/editFile constants),
   F8, G6 (spot-check 2026-10-02: `ENGINEERING-ROADMAP.md`'s `anvil
   1.1.0` line fixed in the sweep; remaining count drift unverified).
 

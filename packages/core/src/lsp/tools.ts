@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getErrorMessage } from "../errors.js";
-import { LSP_MAX_DIAGNOSTICS } from "../config/constants.js";
+import { LSP_MAX_DIAGNOSTICS, LSP_DIAGNOSTICS_WAIT_MS, LSP_TSC_TIMEOUT_MS } from "../config/constants.js";
 import { resolveWithinRoot } from "../tools/paths.js";
 import type { ToolContext, ToolDefinition, ToolExecutor } from "../tools/types.js";
 import { serverForPath } from "./detector.js";
@@ -206,7 +206,7 @@ export const getDiagnosticsExec: ToolExecutor = async (input, ctx: ToolContext) 
           const text = await fs.readFile(abs, "utf8").catch(() => "");
           if (text) client.ensureOpen(abs, server.language, text);
         }
-        const all = await client.waitForDiagnostics(1500);
+        const all = await client.waitForDiagnostics(LSP_DIAGNOSTICS_WAIT_MS);
         const scoped = all
           .filter((d) => d.path === abs || abs === ctx.projectRoot || d.path.startsWith(abs))
           .slice(0, LSP_MAX_DIAGNOSTICS);
@@ -223,7 +223,7 @@ export const getDiagnosticsExec: ToolExecutor = async (input, ctx: ToolContext) 
       try {
         await execFileAsync("npx", ["--no-install", "tsc", "--noEmit", "--pretty", "false"], {
           cwd: ctx.projectRoot,
-          timeout: 30_000,
+          timeout: LSP_TSC_TIMEOUT_MS,
         });
         return { output: { source: "tsc", diagnostics: [] }, isError: false, summary: "No diagnostics (tsc clean)" };
       } catch (err: unknown) {

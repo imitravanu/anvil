@@ -1,6 +1,7 @@
 import { serverForPath } from "./detector.js";
 import { getLspClient } from "./client.js";
 import type { LspDiagnostic } from "./types.js";
+import { LSP_POST_MUTATION_DIAGNOSTICS_MS } from "../config/constants.js";
 
 /**
  * Phase 30.4 — Continuous Post-Mutation LSP Diagnostic Sensor.
@@ -11,7 +12,7 @@ export async function checkPostMutationDiagnostics(
   projectRoot: string,
   absPath: string,
   content: string,
-  timeoutMs: number = 400
+  timeoutMs: number = LSP_POST_MUTATION_DIAGNOSTICS_MS
 ): Promise<LspDiagnostic[]> {
   try {
     const server = serverForPath(absPath);
@@ -28,7 +29,7 @@ export async function checkPostMutationDiagnostics(
       return diags.slice(0, 10);
     }
 
-    const all = await client.waitForDiagnostics(Math.min(timeoutMs, 400));
+    const all = await client.waitForDiagnostics(Math.min(timeoutMs, LSP_POST_MUTATION_DIAGNOSTICS_MS));
     return all
       .filter((d) => d.path === absPath || d.path.endsWith(absPath) || absPath.endsWith(d.path))
       .slice(0, 10);

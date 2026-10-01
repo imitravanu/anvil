@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 import { resolveWithinRoot } from "./paths.js";
-import { MAX_READ_FILE_BYTES } from "../config/constants.js";
+import { MAX_READ_FILE_BYTES, READ_BINARY_SNIFF_BYTES } from "../config/constants.js";
 import { generateSkeleton } from "../ast/folder.js";
 
 // Large-file guard: reading a multi-megabyte file would blow the model's context.
@@ -61,8 +61,8 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   } finally {
     await fh.close();
   }
-  // Binary detection: check first 8KB for null bytes
-  const checkLen = Math.min(buf.length, 8192);
+  // Binary detection: check first READ_BINARY_SNIFF_BYTES for null bytes
+  const checkLen = Math.min(buf.length, READ_BINARY_SNIFF_BYTES);
   if (buf.subarray(0, checkLen).includes(0)) {
     return {
       output: { path: relPath, totalBytes, error: "Binary file detected — cannot display as text." },

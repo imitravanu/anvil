@@ -64,7 +64,9 @@ All notable changes to Anvil are documented here. The format follows
   `run_command` instead of signalling only the direct child (E9). The LSP
   client's write-only `opened` set and dead `diagnostics()` method are gone,
   `isReadOnlyCommand` fails closed on non-string input, and `verify_tests`
-  shares `run_command`'s timeout bounds (E8 remainder, E7 partial).
+  shares `run_command`'s timeout bounds (E8 remainder, E7 partial). **Tool and
+  LSP magic constants are centralized** — grep/outline/read_file/LSP caps and
+  timeouts moved to `config/constants.ts` with values preserved verbatim (E7).
 
 ### Trust exits and consent (Phase 39 W2)
 

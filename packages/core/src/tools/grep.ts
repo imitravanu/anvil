@@ -4,8 +4,6 @@ import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 import { EXCLUDED_DIRS, resolveWithinRoot } from "./paths.js";
 import { getErrorMessage } from "../errors.js";
 
-const MAX_FILE_BYTES = 1024 * 1024;
-
 // Model-supplied patterns run in a synchronous regex engine that Esc/cancel
 // cannot interrupt: a pathological shape would freeze the whole app mid-turn.
 // Two independent bounds keep worst-case work sane:
@@ -19,7 +17,7 @@ const MAX_FILE_BYTES = 1024 * 1024;
 //    and plain alternation (a|b) without an outer repeat stay allowed.
 // Both caps are centralized in config/constants (§2.4); re-exported so the
 // public API is unchanged.
-import { GREP_PATTERN_MAX_LENGTH, GREP_LINE_TEST_MAX } from "../config/constants.js";
+import { GREP_PATTERN_MAX_LENGTH, GREP_LINE_TEST_MAX, GREP_MAX_FILE_BYTES, GREP_DEFAULT_MAX_RESULTS, GREP_LINE_DISPLAY_MAX } from "../config/constants.js";
 export { GREP_PATTERN_MAX_LENGTH, GREP_LINE_TEST_MAX };
 
 /**
@@ -151,7 +149,7 @@ export const definition: ToolDefinition = {
 };
 
 export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
-  const { pattern, path: relDir = ".", maxResults = 200 } = (input ?? {}) as {
+  const { pattern, path: relDir = ".", maxResults = GREP_DEFAULT_MAX_RESULTS } = (input ?? {}) as {
     pattern?: string;
     path?: string;
     maxResults?: number;
@@ -204,7 +202,7 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
     // spike the heap on every scan.
     try {
       const stat = await fs.stat(abs);
-      if (!stat.isFile() || stat.size > MAX_FILE_BYTES) continue;
+      if (!stat.isFile() || stat.size > GREP_MAX_FILE_BYTES) continue;
     } catch {
       continue; // raced unlink/permission — same policy as read failures below
     }
@@ -225,7 +223,7 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
         truncated = true;
         break scan; // one proven-omitted match is enough to know
       }
-      matches.push({ path: rel, line: i + 1, text: line.slice(0, 300) });
+      matches.push({ path: rel, line: i + 1, text: line.slice(0, GREP_LINE_DISPLAY_MAX) });
     }
   }
   return {

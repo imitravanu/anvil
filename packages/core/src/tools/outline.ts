@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 import { EXCLUDED_DIRS, resolveWithinRoot } from "./paths.js";
+import { OUTLINE_MAX_FILES, OUTLINE_MAX_SYMBOLS } from "../config/constants.js";
 
 // AUDIT-08: named distinctly from guardian/scanner.ts's own CODE_EXTENSIONS —
 // the two sets differ, and one shared name invited reading the wrong one.
@@ -238,9 +239,6 @@ export function extractSymbols(content: string, ext: string): OutlineSymbol[] {
   return symbols;
 }
 
-const MAX_OUTLINE_FILES = 40;
-const MAX_TOTAL_SYMBOLS = 250;
-
 async function collectFiles(targetAbs: string, projectRoot: string): Promise<string[]> {
   const stat = await fs.stat(targetAbs);
   if (stat.isFile()) {
@@ -249,7 +247,7 @@ async function collectFiles(targetAbs: string, projectRoot: string): Promise<str
 
   const results: string[] = [];
   async function walk(dir: string): Promise<void> {
-    if (results.length >= MAX_OUTLINE_FILES) return;
+    if (results.length >= OUTLINE_MAX_FILES) return;
     let entries;
     try {
       entries = await fs.readdir(dir, { withFileTypes: true });
@@ -264,7 +262,7 @@ async function collectFiles(targetAbs: string, projectRoot: string): Promise<str
         const ext = path.extname(e.name);
         if (OUTLINE_CODE_EXTENSIONS.has(ext)) {
           results.push(path.join(dir, e.name));
-          if (results.length >= MAX_OUTLINE_FILES) break;
+          if (results.length >= OUTLINE_MAX_FILES) break;
         }
       }
     }
@@ -304,7 +302,7 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
 
     for (const fileAbs of files) {
       if (ctx.signal.aborted) throw new Error("Aborted");
-      if (totalSymbols >= MAX_TOTAL_SYMBOLS) break;
+      if (totalSymbols >= OUTLINE_MAX_SYMBOLS) break;
 
       const fileRel = path.relative(ctx.projectRoot, fileAbs).split(path.sep).join("/");
       const ext = path.extname(fileAbs);
@@ -312,7 +310,7 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
         const content = await fs.readFile(fileAbs, "utf8");
         const symbols = extractSymbols(content, ext);
         if (symbols.length > 0) {
-          const slice = symbols.slice(0, Math.max(0, MAX_TOTAL_SYMBOLS - totalSymbols));
+          const slice = symbols.slice(0, Math.max(0, OUTLINE_MAX_SYMBOLS - totalSymbols));
           totalSymbols += slice.length;
           outlines.push({ path: fileRel, symbols: slice });
         }
