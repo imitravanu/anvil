@@ -40,7 +40,7 @@ import {
 import { App, FirstRunSetup, TuiPermissionBroker, detectTerminalTheme, isThemeName, loadCustomThemes } from "@anvil/tui";
 import { runHeadless, readStdin } from "./headless.js";
 import { runGoalHeadless } from "./goalRunner.js";
-import { runNativeGate, runNativeGateWatch } from "./gate.js";
+import { runNativeGate, runNativeGateWatch, isSignalClaimed } from "./gate.js";
 import { runGuardedInit } from "./initGuarded.js";
 import { runHealth } from "./health.js";
 import { enterAltScreen, exitAltScreen } from "./altScreen.js";
@@ -58,6 +58,11 @@ process.on("exit", () => {
 });
 for (const [sig, code] of [["SIGTERM", 143], ["SIGHUP", 129]] as const) {
   process.on(sig, () => {
+    // G8: defer to a runner that has explicitly CLAIMED this signal (e.g.
+    // `anvil gate --watch`) so it can record its final state and exit 0.
+    // Ownership is asserted, not inferred from listener counts — a foreign
+    // listener must never stop terminal restore / MCP cleanup.
+    if (isSignalClaimed(sig)) return;
     try {
       exitAltScreen();
       killAllMcpServers();
@@ -528,7 +533,7 @@ switch (invocation.kind) {
     // Phase 26.2 — --watch continuously re-scans the dirty-file diff.
     // Phase 26.4 — --staged scans staged additions only (pre-commit surface).
     if (invocation.watch) {
-      void runNativeGateWatch({ cwd: process.cwd() }).then((code) => process.exit(code));
+      void runNativeGateWatch({ cwd: process.cwd(), staged: invocation.staged }).then((code) => process.exit(code));
     } else {
       process.exit(runNativeGate({ full: invocation.full, staged: invocation.staged }));
     }

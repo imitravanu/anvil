@@ -1,11 +1,16 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { describe, expect, it, vi } from "vitest";
 import {
+  claimSignal,
   createDebouncer,
   formatWatchBanner,
+  isSignalClaimed,
+  releaseSignal,
   scanWorkingTree,
+  watchScan,
   watchTransitionMessage,
   type WorkingTreeScan,
 } from "../gate.js";
@@ -16,6 +21,14 @@ describe("formatWatchBanner", () => {
     expect(banner).toContain("/tmp/proj");
     expect(banner).toContain("working-tree diff vs HEAD");
     expect(banner).toContain("NOT full-tree coverage");
+  });
+
+  // G8 (AUDIT-2026-09-30): --staged used to be silently dropped; the banner
+  // must now say which surface is actually being scanned.
+  it("names the STAGED scope when --staged is in effect", () => {
+    const banner = formatWatchBanner("/tmp/proj", { staged: true });
+    expect(banner).toContain("STAGED diff");
+    expect(banner).not.toContain("working-tree diff vs HEAD");
   });
 });
 
@@ -38,6 +51,18 @@ describe("watchTransitionMessage", () => {
     expect(msg).toContain("1 violation");
     expect(msg).toContain("src/a.ts:3");
     expect(msg).toContain("no-as-any");
+  });
+
+  // G8 honesty: the transition line must name the surface actually scanned, so
+  // a --staged watch session never reports a working-tree result.
+  it("names the STAGED surface when scoped to staged", () => {
+    const scan: WorkingTreeScan = {
+      violations: [
+        { file: "src/a.ts", line: 3, rule: "no-as-any", family: "type-escape", detail: "type escape" },
+      ],
+    };
+    expect(watchTransitionMessage(0, scan, "staged")).toContain("in the staged diff");
+    expect(watchTransitionMessage(1, { violations: [] }, "staged")).toContain("staged diff is clean");
   });
 
   it("surfaces a scan error", () => {
@@ -104,6 +129,63 @@ describe("scanWorkingTree", () => {
       expect(scan.error).toBeDefined();
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("watchScan (G8: --staged is honored, not dropped)", () => {
+  it("scans the staged surface when staged=true and the working tree otherwise", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-watch-"));
+    try {
+      const git = (args: string[]): void => {
+        const res = spawnSync("git", args, { cwd: dir, encoding: "utf-8" });
+        if (res.status !== 0) throw new Error(res.stderr);
+      };
+      git(["init", "-q"]);
+      git(["config", "user.email", "t@t.t"]);
+      git(["config", "user.name", "t"]);
+      // A staged violation in a repo with NO commit: `git diff --cached` sees
+      // it, but `git diff HEAD` cannot (no HEAD) — so the two surfaces differ.
+      const file = path.join(dir, "packages", "core", "src", "evil.ts");
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, "export const x = data as any;\n", "utf-8");
+      git(["add", "packages/core/src/evil.ts"]);
+
+      const staged = watchScan(dir, true);
+      const working = watchScan(dir, false);
+      expect(staged.violations.length, "--staged must scan staged additions").toBeGreaterThan(0);
+      expect(working.error, "working-tree scan has no HEAD to diff against").toBeDefined();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("signal claim registry (G8: global handlers defer only to an OWNED runner)", () => {
+  it("is false until a runner claims the signal", () => {
+    expect(isSignalClaimed("SIGTERM")).toBe(false);
+  });
+
+  it("is true after claim and false again after release", () => {
+    claimSignal("SIGTERM");
+    try {
+      expect(isSignalClaimed("SIGTERM")).toBe(true);
+    } finally {
+      releaseSignal("SIGTERM");
+    }
+    expect(isSignalClaimed("SIGTERM")).toBe(false);
+  });
+
+  // The regression this replaces: a FOREIGN listener (a library, or the test
+  // runner) used to inflate the listener count and make the global SIGTERM
+  // handler wrongly defer, skipping terminal restore + MCP cleanup.
+  it("a foreign listener does NOT make a signal claimed", () => {
+    const foreign = (): void => {};
+    process.on("SIGTERM", foreign);
+    try {
+      expect(isSignalClaimed("SIGTERM")).toBe(false);
+    } finally {
+      process.removeListener("SIGTERM", foreign);
     }
   });
 });

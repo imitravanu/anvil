@@ -78,13 +78,21 @@ jobs:
         run: npm run build
 
       - name: Full live eval (non-mock, all 25 tasks)
+        # G16 (AUDIT-2026-09-30): dispatch inputs are untrusted. Interpolating
+        # them straight into this shell block — which runs with every provider
+        # secret in the environment — is a command-injection vector. Pass them
+        # via env instead and consume them as a quoted bash array so a value
+        # can never split into extra arguments.
+        env:
+          DISPATCH_PROVIDER: ${{ inputs.provider }}
+          DISPATCH_MODEL: ${{ inputs.model }}
         # provider/model resolve from ANVIL_PROVIDER/ANVIL_MODEL env when
-        # dispatch inputs are empty.
+        # dispatch inputs are empty (see the job-level env).
         run: |
-          FLAGS=""
-          if [ -n "${{ inputs.provider }}" ]; then FLAGS="$FLAGS --provider ${{ inputs.provider }}"; fi
-          if [ -n "${{ inputs.model }}" ]; then FLAGS="$FLAGS --model ${{ inputs.model }}"; fi
-          npm run eval -- $FLAGS
+          FLAGS=()
+          if [ -n "${DISPATCH_PROVIDER:-}" ]; then FLAGS+=(--provider "$DISPATCH_PROVIDER"); fi
+          if [ -n "${DISPATCH_MODEL:-}" ]; then FLAGS+=(--model "$DISPATCH_MODEL"); fi
+          npm run eval -- "${FLAGS[@]}"
 
       - name: Live certification matrix (configured providers)
         run: npm run certify -- --all --out ./cert-matrix.json

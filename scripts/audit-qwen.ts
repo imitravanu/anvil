@@ -16,6 +16,7 @@ import {
   loadCredentials,
   resolveCertificationCredentials,
   getModelsForProvider,
+  getErrorMessage,
   type CompletionRequest,
   type StreamEvent,
   type ToolDefinition,
@@ -91,7 +92,7 @@ async function auditModel(
   } catch (err: unknown) {
     result.streaming = {
       ok: false,
-      error: err instanceof Error ? err.message : String(err),
+      error: getErrorMessage(err),
       latencyMs: Date.now() - streamStart,
     };
   }
@@ -139,7 +140,7 @@ async function auditModel(
   } catch (err: unknown) {
     result.toolCall = {
       ok: false,
-      error: err instanceof Error ? err.message : String(err),
+      error: getErrorMessage(err),
       latencyMs: Date.now() - toolStart,
     };
   }

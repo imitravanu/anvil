@@ -150,7 +150,10 @@ async function main() {
         }
       }
       fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
-    } catch {}
+    } catch {
+      // Best-effort step summary: a write failure must never fail the visual
+      // gate (the diff report on disk is the source of truth).
+    }
   }
 
   if (failures > 0) {

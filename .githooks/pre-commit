@@ -35,7 +35,16 @@ if [ -n "$blocked" ]; then
 fi
 
 # --- Layer B: staged slop scan (context-free patterns; full scan = the gate) -
-added=$(git diff --cached -- 'packages/*/src/**/*.ts' 'packages/*/src/**/*.tsx' 'packages/*/src/**/*.js' 'packages/*/src/**/*.mjs' 'packages/*/scripts/**/*.ts' \
+# Pathspec mirrors the gate's scan roots and extensions (incl. *.cjs and
+# packages/*/scripts), so the hook no longer under-covers .cjs sources.
+added=$(git diff --cached -- \
+          ':(glob)packages/*/src/**/*.ts' ':(glob)packages/*/src/**/*.tsx' \
+          ':(glob)packages/*/src/**/*.js' ':(glob)packages/*/src/**/*.mjs' \
+          ':(glob)packages/*/src/**/*.cjs' \
+          ':(glob)packages/*/scripts/**/*.ts' ':(glob)packages/*/scripts/**/*.mjs' \
+          ':(glob)scripts/**/*.ts' ':(glob)scripts/**/*.mjs' \
+          ':(glob)evals/**/*.ts' ':(glob)evals/**/*.mjs' \
+          ':(glob,exclude)evals/tasks/**' \
         | grep -E '^\+' | grep -vE '^\+\+\+' || true)
 if [ -n "$added" ]; then
   # A comment line cannot execute, so the code rules below judge only code
@@ -60,15 +69,38 @@ if [ -n "$added" ]; then
   h=$(printf '%s\n' "$added" | grep -nE '\b(TODO|FIXME|XXX)\b' || true)
   [ -n "$h" ] && hits="$hits
 (hook) placeholder marker: $h"
-  h=$(printf '%s\n' "$code" | grep -nE '@anvil/(tui|cli)' || true)
-  [ -n "$h" ] && hits="$hits
-(hook) core->tui/cli import (check path is packages/core): $h"
   if [ -n "$hits" ]; then
     echo "🧟 SLOP PATTERNS DETECTED IN STAGED DIFF (context-free hook rules):" >&2
     printf '%s\n' "$hits" >&2
     echo "   Migrate to getErrorMessage() / typed casts etc. Full rules: npm run gate" >&2
     exit 1
   fi
+fi
+
+# --- Layer B2: core boundary (per-file, so legal imports are not blocked) ----
+# G7 (AUDIT-2026-09-30): the old grep ran over the WHOLE multi-package diff and
+# flagged `@anvil/(tui|cli)` anywhere, so a legal CLI->TUI import (cli/index.tsx
+# already does this) failed the hook. Only `packages/core/` files may never
+# import tui/cli, and tests are exempt exactly as the gate exempts them.
+core_hits=""
+for f in $(git diff --cached --name-only --diff-filter=ACM); do
+  case "$f" in
+    packages/core/*) ;;
+    *) continue ;;
+  esac
+  case "$f" in
+    *__tests__*|*.test.*) continue ;;
+  esac
+  h=$(git diff --cached -- "$f" \
+        | grep -E '^\+' | grep -vE '^\+\+\+' | grep -vE '^\+[[:space:]]*(//|\*|/\*)' \
+        | grep -nE '@anvil/(tui|cli)' || true)
+  [ -n "$h" ] && core_hits="$core_hits
+$f: $h"
+done
+if [ -n "$core_hits" ]; then
+  echo "🧟 CORE BOUNDARY VIOLATION (packages/core must never import tui/cli):" >&2
+  printf '%s\n' "$core_hits" >&2
+  exit 1
 fi
 
 exit 0

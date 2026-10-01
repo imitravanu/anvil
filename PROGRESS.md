@@ -2,6 +2,37 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-01 (Buffy chief-engineer session — W3 regression fix + W4 D1 parser six-pack + W5 E1/E2):**
+> owns `packages/cli/src/gate.ts`, `packages/cli/src/index.tsx`, `.githooks/pre-commit`,
+> `packages/cli/src/__tests__/gate.watch.test.ts`, `scripts/gate-manifest.json`,
+> `packages/core/src/ast/parser.ts`, `packages/core/src/ast/__tests__/parser.test.ts`,
+> `packages/core/src/tools/bash.ts`, `packages/core/src/tools/__tests__/bash.test.ts`,
+> `docs/PHASE-39-ROADMAP.md`, this file. (Completes the in-flight W3 protected-artifact
+> commit and lands its first two follow-on waves; the other W4/W5 findings stay open.)
+> **W3 regression (found red in the tree):** the W3 `hasOtherSignalListener` predicate inferred
+> runner ownership from `process.listenerCount(signal) > 1`, so ANY foreign listener (a library,
+> or the test runner) made the global SIGTERM/SIGHUP handler wrongly defer — it failed
+> `boot.test.tsx` (SIGHUP expected 129) and would skip terminal restore + MCP cleanup in
+> production. Replaced with an explicit `claimSignal` / `releaseSignal` / `isSignalClaimed`
+> registry; `gate --watch` claims SIGTERM and releases on stop. P3 nits: the hook excludes
+> `evals/tasks` (matching the gate); `watchTransitionMessage` names the staged surface;
+> watch stop records the real `scannedLines` instead of a hardcoded 0.
+> **W4 (D1a–f):** expression-arrow swallow, ASI-alias swallow, `pub(crate)` drop, `impl<T>`
+> garbage name, Go generic-receiver drop + body-var leak, Rust skeleton signature fold — all
+> fixed in `ast/parser.ts`.
+> **W4 mutation receipt:** 6/6 new parser assertions failed against HEAD's parser —
+> `g must be indexed`, `x must be indexed`, `pub(crate) fn must be indexed`,
+> `expected '<T> Foo<T>' to be 'Foo'`, `generic method must be indexed`,
+> `expected '/* ... 5 lines folded (L1-L5) ... */' to contain 'pub fn foo() {'` — 31 pre-existing
+> passed; 6/6 pass after.
+> **W5 (E1/E2):** the bash safe-list validates `--name=value` operands and resolves operands
+> through `resolveWithinRoot` (symlink-aware); root-wipe `deshell` strips (not space-replaces)
+> quotes and recognizes `/?` and `/{a,b}` root globs.
+> **W5 mutation receipt:** against HEAD's `bash.ts`, `r''m -rf ~` (expected not-null) and
+> `wc --files0-from=/etc/passwd` (expected false) failed; pass after.
+> **Gate:** `npm run gate -- --ack-protected-change` green — Steps 0–5, 1,381 tests, 25/25 mock
+> evals. **Still open:** W4 D2/E10, W5 E6/C5/C6/C8, W6–W8.
+>
 > **DONE 2026-10-01 (Cline chief-engineer deep-dive review — owner-requested verification of Phase 39 W1 and the open audit; findings only, no production code changed):**
 > owns NEW `docs/AUDIT-2026-10-01.md`, `docs/README.md` (index rows + file count), plus this file.
 > **Baseline:** full gate Steps 0–5 green on `83b3275` before this record, and re-run green with it

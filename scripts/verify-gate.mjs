@@ -58,6 +58,63 @@ function isValidSourceFilePath(file) {
 }
 
 /**
+ * G1 (AUDIT-2026-09-30): the single source of truth for what the scanners cover.
+ * Step 1 (diff) filters git with a pathspec derived from these roots; Step 1.5
+ * (residual) walks them. The two lists used to be written out separately and
+ * both omitted root `scripts`, `evals`, and the per-package `scripts` trees —
+ * a blind spot that hid live slop in `scripts/audit-qwen.ts` and
+ * `packages/tui/scripts/visual-diff.mjs`. One constant so they cannot drift.
+ */
+const SCAN_ROOTS = [
+  "packages/core/src",
+  "packages/core/scripts",
+  "packages/tui/src",
+  "packages/tui/scripts",
+  "packages/cli/src",
+  // Root-level tooling and the eval harness are real source that ships.
+  "scripts",
+  "evals",
+];
+
+/**
+ * Scenario data under `evals/tasks/**` (fixture RED/GREEN shape) is pinned by
+ * core's `fixtureIntegrity.test.ts` and is deliberately slop-shaped in places;
+ * it is not production source and must never be judged by the anti-slop scan.
+ */
+const SCAN_EXCLUDED_DIRS = ["evals/tasks"];
+
+/**
+ * The gate's own rule labels and sensor fixtures contain the scanned patterns
+ * as DATA (rule names, `/regex/` literals, fixture strings). This is the one
+ * file where a match is expected by construction, so it alone is exempt from
+ * the full-tree residual scan. Step 1 is unaffected — no version of this file
+ * is ever an "added line" to itself.
+ */
+const RESIDUAL_SELF_EXEMPT = ["scripts/verify-gate.mjs"];
+
+/**
+ * G3b (AUDIT-2026-09-30): a violation message is `${file}: detail`. Extract the
+ * file so allowlist suppression can compare PATH TO PATH. The old filter used
+ * `message.includes(entry.file)`, so an entry for `src/a.ts` also suppressed
+ * `src/a.tsx` — silent gate weakening waiting for the first allowlist entry.
+ */
+function fileOfViolation(message) {
+  const idx = message.indexOf(":");
+  return idx === -1 ? message : message.slice(0, idx);
+}
+
+/**
+ * G3c (AUDIT-2026-09-30): protected-path detection. Exact match for the
+ * enumerated artifacts, PLUS a directory-prefix rule for `.github/workflows/`,
+ * because the hash manifest can only enumerate the workflow files that exist —
+ * today a newly added workflow escapes both hashing and tamper detection.
+ * (PROTECTED_PATHS is defined below; this only runs after it.)
+ */
+function isProtectedPath(relPath) {
+  return PROTECTED_PATHS.some((p) => relPath === p) || relPath.startsWith(".github/workflows/");
+}
+
+/**
  * Pure violation scanner for diff lines.
  * Evaluates added lines and returns an array of violation messages.
  */
@@ -72,6 +129,17 @@ export function scanLinesForViolations(diffLines) {
     }
     // Only inspect newly added lines (starting with '+', not '+++')
     if (line.startsWith("+") && !line.startsWith("+++")) {
+      // G1 hardening (AUDIT-2026-09-30): the scan now covers scripts/ and the
+      // test tree is judged the same way Step 1.5 judges it. Test fixtures and
+      // the gate's own rule-data are exempt — they carry the forbidden patterns
+      // as DATA, not executable code. This mirrors the per-rule exemptions.
+      if (
+        currentFile.includes("__tests__") ||
+        currentFile.includes(".test.") ||
+        currentFile === "scripts/verify-gate.mjs"
+      ) {
+        continue;
+      }
       const addedText = line.slice(1).trim();
       const comment = isCommentLine(addedText);
 
@@ -86,7 +154,7 @@ export function scanLinesForViolations(diffLines) {
       // exemption (mock fixtures).
       // The (`(?<!\?)`) guard keeps `(?:any` non-capturing groups from
       // reading as a `: any` annotation.
-      if (!comment && /((?<!\?):\s*any\b|<\s*any\b|\bany\s*\[\])/.test(addedText) && !currentFile.includes("__tests__") && !currentFile.includes(".test.")) {
+      if (!comment && /((?<!\?):\s*any\b|<\s*any\b|,\s*any\b|\bany\s*\[\])/.test(addedText) && !currentFile.includes("__tests__") && !currentFile.includes(".test.")) {
         violations.push(`${currentFile}: Bare any type annotation "${addedText}" (Rule 2.2: use unknown + narrowing)`);
       }
 
@@ -132,23 +200,34 @@ export function scanLinesForViolations(diffLines) {
 // Step 0: Gate Sensor Self-Test (Gate-for-Gates Sensor, V4 Resolved)
 // ---------------------------------------------------------------------------
 logStep(0, "Verifying Gate Sensor detection integrity...");
-const sensorTestFixtures = [
-  "+++ b/packages/core/src/sensorFixture.ts",
-  "+ const x = data as any;",
-  "+ const y = data as never;",
-  "+ try { doSomething(); } catch {}",
-  "+ const msg = err instanceof Error ? err.message : String(err);",
-  "+ const msg2 = err instanceof Error ? err.message : JSON.stringify(err);",
-  "+ const msg3 = e.message ?? String(e);",
-  "+ import { TuiComponent } from '@anvil/tui';",
-  "+ // TODO: finish later",
-  "+ const z: any = 1;",
+// G2 (AUDIT-2026-09-30): the sensor used 9 fixtures with a `< 8` threshold, so
+// deleting ANY ONE rule family still passed. It is now a probe table where each
+// entry names the family it must trip; the gate fails per-probe by IDENTITY, so
+// a neutered rule (`if (false)`) fails the probe that exists to catch it. A
+// TUI-color probe is added (the rule had no coverage at all).
+const SENSOR_PROBES = [
+  { label: "as-any cast", line: "+ const x = data as any;" },
+  { label: "as-never cast", line: "+ const y = data as never;" },
+  { label: "empty catch", line: "+ try { doSomething(); } catch {}" },
+  { label: "raw error (String fallback)", line: "+ const msg = err instanceof Error ? err.message : String(err);" },
+  { label: "raw error (JSON fallback)", line: "+ const msg2 = err instanceof Error ? err.message : JSON.stringify(err);" },
+  { label: "raw error (?.message ?? String)", line: "+ const msg3 = e.message ?? String(e);" },
+  { label: "core imports tui", line: "+ import { TuiComponent } from '@anvil/tui';" },
+  { label: "bare any annotation", line: "+ const z: any = 1;" },
+  { label: "comma-position any (G3a)", line: "+ const m: Record<string, any> = {};" },
+  { label: "hardcoded TUI color", line: "+ <Box color=\"cyan\" />", file: "packages/tui/src/components/SensorProbe.tsx" },
 ];
-const sensorResults = scanLinesForViolations(sensorTestFixtures);
-if (sensorResults.length < 8) {
-  fail("STEP 0", `Gate sensor failed to detect intentional test slop (caught ${sensorResults.length}/8). Sensor integrity compromised.`);
+const sensorMisses = SENSOR_PROBES.filter(
+  (probe) => scanLinesForViolations([`+++ b/${probe.file ?? "packages/core/src/sensorFixture.ts"}`, probe.line]).length === 0
+);
+if (sensorMisses.length > 0) {
+  fail(
+    "STEP 0",
+    `Gate sensor failed to detect intentional slop probes: ${sensorMisses.map((p) => p.label).join(", ")} ` +
+      `(${SENSOR_PROBES.length - sensorMisses.length}/${SENSOR_PROBES.length} caught). Sensor integrity compromised.`
+  );
 } else {
-  pass("STEP 0", "Gate sensor successfully verified against all intentional violation fixtures.");
+  pass("STEP 0", `Gate sensor verified ${SENSOR_PROBES.length}/${SENSOR_PROBES.length} intentional violation probes by family.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -207,7 +286,17 @@ const args = process.argv.slice(2);
 const stagedOnly = args.includes("--staged");
 
 try {
-  const PATHSPEC = "'packages/*/src/**/*.ts' 'packages/*/src/**/*.tsx' 'packages/*/src/**/*.js' 'packages/*/src/**/*.mjs' 'packages/*/src/**/*.cjs' 'packages/*/scripts/**/*.ts'";
+  // G1: derive the diff pathspec from the same SCAN_ROOTS the residual walk
+  // uses, so the two scanners can never disagree about coverage. `evals/tasks`
+  // is excluded here for the same reason Step 1.5 excludes it (scenario data).
+  // `:(glob)` magic is required: without it git's fnmatch treats `**/` as "at
+  // least one directory", so a file directly under a root (e.g. src/x.ts) is
+  // silently missed.
+  const SCAN_EXTS = ["ts", "tsx", "js", "mjs", "cjs"];
+  const PATHSPEC = [
+    ...SCAN_ROOTS.flatMap((root) => SCAN_EXTS.map((ext) => `':(glob)${root}/**/*.${ext}'`)),
+    ...SCAN_EXCLUDED_DIRS.map((dir) => `':(glob,exclude)${dir}/**'`),
+  ].join(" ");
   const ciMode = process.env.CI === "true";
   const ackProtected = args.includes("--ack-protected-change");
 
@@ -294,7 +383,7 @@ try {
       { re: /instanceof\s*\n\s*Error\s*\?|instanceof\s+Error\s*\n\s*\?/, label: `Raw error formatting split across lines (Rule 2.1: use getErrorMessage(err))` },
     ];
     for (const [file, text] of perFile) {
-      if (file.includes("__tests__") || file.includes(".test.")) continue;
+      if (file.includes("__tests__") || file.includes(".test.") || file === "scripts/verify-gate.mjs") continue;
       for (const { re, label } of multi) {
         if (re.test(text) && !rawViolations.some((v) => v.startsWith(file + ":"))) {
           rawViolations.push(`${file}: ${label}`);
@@ -329,7 +418,12 @@ try {
       }
     }
     if (entries.length > 0) {
-      violations = rawViolations.filter((v) => !entries.some((e) => v.includes(e.file)));
+      // G3b: match the violation's FILE PATH exactly (path-to-path), never a
+      // substring of the whole message. A path-only comparison also means a
+      // legitimate `src/a.ts` entry can no longer suppress `src/a.tsx`.
+      violations = rawViolations.filter(
+        (v) => !entries.some((e) => fileOfViolation(v) === e.file)
+      );
     }
   }
 
@@ -367,7 +461,7 @@ try {
         // Strip the porcelain status prefix (" M ", "?? ", etc.) before matching
         // so tracked/untracked views of the same file don't double-report.
         .map((l) => l.replace(/^[ MADRCU?!]{1,2}\s+/, ""))
-        .filter((l) => l && PROTECTED_PATHS.some((p) => l.includes(p)))
+        .filter((l) => l && isProtectedPath(l))
     )];
     if (touched.length > 0) {
       console.warn(`\n${BOLD}${RED}🔴 PROTECTED ARTIFACT CHANGE DETECTED:${RESET} ${touched.join(", ")}`);
@@ -409,7 +503,7 @@ const RESIDUAL_RULES = [
   { name: "core self-import (@anvil/core inside packages/core)", re: /from\s+["']@anvil\/core["']/, onlyCore: true },
   { name: "core boundary breach (imports tui/cli)", re: /@anvil\/(tui|cli)/, onlyCore: true },
   { name: "type escape (as any/never)", re: /\bas\s+(any|never)\b/ },
-  { name: "type escape (bare any annotation)", re: /((?<!\?):\s*any\b|<\s*any\b|\bany\s*\[\])/ },
+  { name: "type escape (bare any annotation)", re: /((?<!\?):\s*any\b|<\s*any\b|,\s*any\b|\bany\s*\[\])/ },
   { name: "placeholder marker (TODO/FIXME/XXX)", re: /\b(TODO|FIXME|XXX)\b/ },
   { name: "empty catch block", re: /catch\s*(?:\([^)]*\))?\s*\{\s*\}/ },
   { name: "hardcoded color in TUI components", re: /\b(?:color|borderColor|backgroundColor)\s*=\s*["'](?:cyan|green|red|yellow|blue|magenta|white|black|gray)["']/, onlyTuiComponents: true },
@@ -427,13 +521,15 @@ function walkSourceFiles(dir, out) {
   }
 }
 {
-  const residualDirs = ["packages/core/src", "packages/core/scripts", "packages/tui/src", "packages/cli/src"];
   const files = [];
-  for (const d of residualDirs) walkSourceFiles(path.resolve(process.cwd(), d), files);
+  for (const d of SCAN_ROOTS) walkSourceFiles(path.resolve(process.cwd(), d), files);
   const hits = [];
   for (const file of files) {
     const rel = path.relative(process.cwd(), file);
     if (rel.includes("__tests__") || rel.includes("/dist/")) continue;
+    // G1: fixture scenario data and the gate's own rule-data are not judged.
+    if (SCAN_EXCLUDED_DIRS.some((ex) => rel.startsWith(ex))) continue;
+    if (RESIDUAL_SELF_EXEMPT.includes(rel)) continue;
     const isCore = rel.startsWith("packages/core/");
     const isTuiComponent = rel.startsWith("packages/tui/src/components/");
     const isTestFile = rel.includes(".test.");
@@ -463,7 +559,7 @@ function walkSourceFiles(dir, out) {
       `Full-tree residual scan found ${hits.length} legacy violations. Migrate them ONCE so agents stop re-copying the pattern (see docs/PHASE-21-25-AUDIT.md).`
     );
   } else {
-    pass("STEP 1.5", "Full-tree residual scan clean — zero legacy slop in packages/**/src (excl. tests).");
+    pass("STEP 1.5", "Full-tree residual scan clean — zero legacy slop in scripts/, evals/, and packages/** (excl. tests, fixtures, gate self).");
   }
 }
 

@@ -34,6 +34,8 @@ const STAGED_PATHSPEC =
 export interface WorkingTreeScan {
   violations: GuardianViolation[];
   error?: string;
+  /** Added lines observed by the scan (0 when the diff could not be read). */
+  scannedLines?: number;
 }
 
 /** Scan the working-tree diff vs HEAD (dirty files only). */
@@ -63,6 +65,8 @@ function scanGitDiff(cwd: string, command: string, label: string, recordTelemetr
   } catch (err: unknown) {
     return { violations: [], error: `cannot read git diff: ${getErrorMessage(err)}` };
   }
+  const scannedLines = diff.split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++"))
+    .length;
   // Scope by project identity: in a user's own project only the universal rules
   // apply, because the Anvil-specific families name APIs that live here. Project
   // rules apply everywhere — a project that writes a rule means it.
@@ -71,33 +75,84 @@ function scanGitDiff(cwd: string, command: string, label: string, recordTelemetr
     // 26.5: one observation per real scan. Watch-mode repeats are NOT recorded
     // (they re-scan the same diff, which would inflate the counters); the
     // final watch scan is recorded when the run stops.
-    const scannedLines = diff.split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++"))
-      .length;
     recordHealthScan(cwd, { scannedLines, violations });
   }
-  return { violations };
+  return { violations, scannedLines };
 }
 
 /** Honest banner: watch sees the diff vs HEAD only, not the full tree. */
-export function formatWatchBanner(cwd: string): string {
+export function formatWatchBanner(cwd: string, opts?: { staged?: boolean }): string {
+  const scope = opts?.staged
+    ? "Scope: STAGED diff (git diff --cached; node_modules and dist excluded)."
+    : "Scope: working-tree diff vs HEAD (dirty files only; node_modules and dist excluded).";
   return (
     `anvil gate --watch — guarding ${cwd}\n` +
-    "Scope: working-tree diff vs HEAD (dirty files only; node_modules and dist excluded).\n" +
+    `${scope}\n` +
     "This is NOT full-tree coverage — run `npm run gate` (Step 1.5) for the whole repo.\n" +
     "Watching for changes… (Ctrl+C to stop)\n"
   );
 }
 
 /**
+ * G8 (AUDIT-2026-09-30): the surface a watch session re-scans. `--staged` used
+ * to be silently dropped (watch always scanned the working tree), so a
+ * documented mode did nothing. Observed without per-rescan telemetry (the final
+ * state is recorded once at stop).
+ */
+export function watchScan(cwd: string, staged: boolean): WorkingTreeScan {
+  const command = staged ? `git ${STAGED_PATHSPEC}` : `git diff HEAD ${DIFF_PATHSPEC}`;
+  const label = staged ? "(staged)" : "(working tree)";
+  return scanGitDiff(cwd, command, label, false);
+}
+
+/**
+ * G8 (AUDIT-2026-09-30) — explicit signal ownership.
+ *
+ * The global SIGTERM/SIGHUP handlers defer their hard exit so an attached
+ * runner (e.g. `gate --watch`) can record its final state and exit 0 instead of
+ * being pre-empted by `process.exit(143)`. The first cut inferred ownership
+ * from `process.listenerCount(signal) > 1`, which is wrong: ANY foreign
+ * listener (a library, or the test runner) inflates the count, so the global
+ * handler wrongly skipped `exitAltScreen()` + `killAllMcpServers()` and never
+ * exited. Ownership is now asserted by the runner itself, so only a genuine
+ * Anvil runner can suppress the global handler.
+ *
+ * SIGINT still uses the entry point's listener-count guard: its consumers
+ * (headless/TUI) attach in-process listeners, so the count is reliable there.
+ */
+const claimedSignals = new Set<NodeJS.Signals>();
+
+/** Signal a runner now owns; the global handler will defer until release. */
+export function claimSignal(signal: NodeJS.Signals): void {
+  claimedSignals.add(signal);
+}
+
+/** Release ownership (e.g. when a watch session stops). */
+export function releaseSignal(signal: NodeJS.Signals): void {
+  claimedSignals.delete(signal);
+}
+
+/** True only when an Anvil runner has explicitly claimed the signal. */
+export function isSignalClaimed(signal: NodeJS.Signals): boolean {
+  return claimedSignals.has(signal);
+}
+
+/**
  * Message for one watch scan, or null to stay silent (a clean tree must not
  * spam the terminal). A clean scan after a dirty one reports the recovery.
+ * `scope` names the surface actually scanned so `--staged` cannot claim a
+ * working-tree result (or vice versa).
  */
-export function watchTransitionMessage(previousCount: number, scan: WorkingTreeScan): string | null {
+export function watchTransitionMessage(
+  previousCount: number,
+  scan: WorkingTreeScan,
+  scope = "working-tree"
+): string | null {
   if (scan.error) return `anvil gate --watch: ${scan.error}\n`;
   if (scan.violations.length === 0) {
-    return previousCount > 0 ? "✓ working-tree diff is clean again.\n" : null;
+    return previousCount > 0 ? `✓ ${scope} diff is clean again.\n` : null;
   }
-  const lines = [`⚠ ${scan.violations.length} violation(s) in the working-tree diff:`];
+  const lines = [`⚠ ${scan.violations.length} violation(s) in the ${scope} diff:`];
   for (const v of scan.violations.slice(0, 20)) {
     lines.push(`  ${v.file}:${v.line} [${v.rule}] ${v.detail}`);
   }
@@ -182,15 +237,17 @@ export function runNativeGate(opts: NativeGateOptions): number {
  */
 export function runNativeGateWatch(opts: NativeGateOptions): Promise<number> {
   const cwd = opts.cwd ?? process.cwd();
-  process.stdout.write(formatWatchBanner(cwd));
+  const staged = opts.staged === true;
+  process.stdout.write(formatWatchBanner(cwd, { staged }));
 
   let previousCount = 0;
   let lastScan: WorkingTreeScan | null = null;
   // Watch re-scans the same diff many times per minute; recording every one
   // would inflate the 26.5 counters. Observe silently; record ONCE at stop.
+  const scope = staged ? "staged" : "working-tree";
   const runScan = (): void => {
-    const scan = scanGitDiff(cwd, `git diff HEAD ${DIFF_PATHSPEC}`, "(working tree)", false);
-    const message = watchTransitionMessage(previousCount, scan);
+    const scan = watchScan(cwd, staged);
+    const message = watchTransitionMessage(previousCount, scan, scope);
     if (message) process.stdout.write(message);
     previousCount = scan.violations.length;
     lastScan = scan;
@@ -216,12 +273,19 @@ export function runNativeGateWatch(opts: NativeGateOptions): Promise<number> {
     const stop = (): void => {
       debouncer.cancel();
       watcher.close();
+      releaseSignal("SIGTERM");
       // Record the final observed state once, so watch sessions contribute
-      // freshness + a scan to the health snapshot without per-rescan spam.
-      recordHealthScan(cwd, { scannedLines: 0, violations: lastScan?.violations ?? [] });
+      // freshness + a real scan to the health snapshot without per-rescan spam.
+      recordHealthScan(cwd, {
+        scannedLines: lastScan?.scannedLines ?? 0,
+        violations: lastScan?.violations ?? [],
+      });
       process.stdout.write("anvil gate --watch: stopped.\n");
       resolve(0);
     };
+    // Claim SIGTERM so the entry-point global handler defers to this runner
+    // (SIGINT still leans on the entry point's listener-count guard).
+    claimSignal("SIGTERM");
     process.once("SIGINT", stop);
     process.once("SIGTERM", stop);
   });

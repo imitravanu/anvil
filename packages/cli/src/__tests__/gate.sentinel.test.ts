@@ -34,16 +34,42 @@ describe("gate integrity sentinel", () => {
     expect(gate.length).toBeGreaterThan(2000);
   });
 
-  it("every anti-slop rule regex is still enforced", () => {
+  it("every anti-slop rule family is ENFORCED (behavioral, not source text)", () => {
+    // G2 (AUDIT-2026-09-30): the old test asserted literal substrings
+    // (`toContain("borderColor|backgroundColor")`), so a rule neutered to
+    // `if (false)` still passed. Extract the real scanner and assert each
+    // family actually fires. A disabled rule now fails the probe that exists to
+    // catch it.
     const gate = read("scripts/verify-gate.mjs");
-    expect(gate).toContain("as\\s+(any|never)"); // rule: no `as any` / `as never`
-    expect(gate).toContain(":\\s*any\\b"); // rule: no bare `any` annotations
-    expect(gate).toContain("catch\\s*"); // rule: no silent catch blocks
-    expect(gate).toContain("@anvil/tui"); // rule: core must not import tui
-    expect(gate).toContain("tui|cli"); // rule: residual arch covers cli too
-    expect(gate).toContain("instanceof\\s+Error"); // rule: use getErrorMessage
-    expect(gate).toContain("TODO|FIXME|XXX"); // rule: no placeholders
-    expect(gate).toContain("borderColor|backgroundColor"); // rule: no hardcoded colors
+    const isCommentSrc = gate.match(/const isCommentLine = [^\n]+/)?.[0];
+    const scanSrc = gate.match(/function scanLinesForViolations\(diffLines\) \{[\s\S]*?\n\}/)?.[0];
+    expect(isCommentSrc, "gate must define isCommentLine").toBeTruthy();
+    expect(scanSrc, "gate must define scanLinesForViolations").toBeTruthy();
+    const scan = new Function(`${isCommentSrc}\n${scanSrc}\nreturn scanLinesForViolations;`)() as (
+      lines: string[]
+    ) => string[];
+
+    const CORE = "+++ b/packages/core/src/probe.ts";
+    const TUI = "+++ b/packages/tui/src/components/Probe.tsx";
+    const probes: Array<{ label: string; lines: string[] }> = [
+      { label: "as any", lines: [CORE, "+ const x = data as any;"] },
+      { label: "as never", lines: [CORE, "+ const y = data as never;"] },
+      { label: "empty catch", lines: [CORE, "+ try { a(); } catch {}"] },
+      { label: "raw error ternary", lines: [CORE, "+ const m = err instanceof Error ? err.message : String(err);"] },
+      { label: "?.message ?? String", lines: [CORE, "+ const m = e.message ?? String(e);"] },
+      { label: "bare any annotation", lines: [CORE, "+ const z: any = 1;"] },
+      { label: "comma-position any (G3a)", lines: [CORE, "+ const m: Record<string, any> = {};"] },
+      { label: "core imports tui", lines: [CORE, "+ import { App } from '@anvil/tui';"] },
+      { label: "placeholder marker", lines: [CORE, "+ // TODO: finish later"] },
+      { label: "hardcoded TUI color", lines: [TUI, '+ <Box color="cyan" />'] },
+    ];
+    for (const probe of probes) {
+      expect(scan(probe.lines).length, `gate must flag: ${probe.label}`).toBeGreaterThan(0);
+    }
+    // Negative controls: a clean line and a comment that merely names a pattern
+    // must NOT be flagged.
+    expect(scan([CORE, "+ const ok: string = 'hi';"])).toEqual([]);
+    expect(scan([CORE, "+ // this prose mentions as any but is not code"])).toEqual([]);
   });
 
   it("comment-awareness guard is present for the code rules (S5.3 precision)", () => {
@@ -76,11 +102,67 @@ describe("gate integrity sentinel", () => {
     expect(gate).not.toContain("Git diff scan skipped or no changes detected");
   });
 
+  // G1 (AUDIT-2026-09-30): the diff pathspec and the residual walk both omitted
+  // root scripts/, evals/ and packages/*/scripts/*.mjs — hiding live slop in
+  // scripts/audit-qwen.ts and packages/tui/scripts/visual-diff.mjs. Both lists
+  // are now derived from the same SCAN_ROOTS constant, so covering them is a
+  // property of the source, pinned behaviorally below.
+  it("both scanners cover scripts/, evals/ and packages/*/scripts (G1)", () => {
+    const gate = read("scripts/verify-gate.mjs");
+    const rootsSrc = gate.match(/const SCAN_ROOTS = \[[\s\S]*?\];/)?.[0];
+    expect(rootsSrc, "gate must define SCAN_ROOTS").toBeTruthy();
+    const roots = new Function(`${rootsSrc}\nreturn SCAN_ROOTS;`)() as string[];
+    for (const required of ["scripts", "evals", "packages/tui/scripts", "packages/cli/src"]) {
+      expect(roots, `SCAN_ROOTS must include ${required}`).toContain(required);
+    }
+    // The diff pathspec must be DERIVED from SCAN_ROOTS, not written out again.
+    expect(gate).toMatch(/PATHSPEC = \[[\s\S]*SCAN_ROOTS/);
+    // The residual walk must use the same constant.
+    expect(gate).toMatch(/for \(const d of SCAN_ROOTS\) walkSourceFiles/);
+    // Fixture scenario data and the gate's own rule-data must be exempt.
+    expect(gate).toContain("SCAN_EXCLUDED_DIRS");
+    expect(gate).toContain("RESIDUAL_SELF_EXEMPT");
+  });
+
+  // G3c (AUDIT-2026-09-30): a NEW workflow file used to escape tamper detection
+  // (the manifest/hook enumerate only today's files). Protected-path matching
+  // must treat `.github/workflows/` as a directory prefix.
+  it("protected-path detection covers any workflow via a directory prefix (G3c)", () => {
+    const gate = read("scripts/verify-gate.mjs");
+    const fnSrc = gate.match(/function isProtectedPath\(relPath\) \{[\s\S]*?\n\}/)?.[0];
+    expect(fnSrc, "gate must define isProtectedPath").toBeTruthy();
+    // PROTECTED_PATHS is referenced by the function; supply the real list.
+    const pathsSrc = gate.match(/const PROTECTED_PATHS = \[[\s\S]*?\];/)?.[0];
+    const isProtected = new Function(
+      `${pathsSrc}\n${fnSrc}\nreturn isProtectedPath;`
+    )() as (rel: string) => boolean;
+    expect(isProtected(".github/workflows/brand-new.yml")).toBe(true);
+    expect(isProtected(".github/workflows/ci.yml")).toBe(true);
+    expect(isProtected("scripts/verify-gate.mjs")).toBe(true);
+    expect(isProtected("packages/cli/src/index.tsx")).toBe(false);
+  });
+
   it("integrity manifest and protected-path gates are wired", () => {
     const gate = read("scripts/verify-gate.mjs");
     expect(gate).toContain("gate-manifest.json");
     expect(gate).toContain("--ack-protected-change");
     expect(gate).toContain("PROTECTED_PATHS");
+  });
+
+  // G3b (AUDIT-2026-09-30): allowlist suppression must compare the violation's
+  // FILE PATH exactly. The old filter used `message.includes(entry.file)`, so
+  // an entry for `src/a.ts` also suppressed `src/a.tsx`.
+  it("allowlist suppression is exact-path, not substring (G3b)", () => {
+    const gate = read("scripts/verify-gate.mjs");
+    const fnSrc = gate.match(/function fileOfViolation\(message\) \{[\s\S]*?\n\}/)?.[0];
+    expect(fnSrc, "gate must define fileOfViolation").toBeTruthy();
+    const fileOfViolation = new Function(`${fnSrc}\nreturn fileOfViolation;`)() as (
+      m: string
+    ) => string;
+    expect(fileOfViolation("src/a.ts: Bare any annotation \"x\" (Rule 2.2)")).toBe("src/a.ts");
+    expect(fileOfViolation("src/a.tsx: Bare any annotation \"x\"")).toBe("src/a.tsx");
+    // The obsolete substring form must be gone.
+    expect(gate).not.toContain("v.includes(e.file)");
   });
 
   it("allowlist cannot be weaponized (entry shape is validated)", () => {
@@ -206,5 +288,18 @@ describe("gate integrity sentinel", () => {
     expect(ci).toContain("npm test");
     expect(ci).toContain("npm run gate");
     expect(ci).toContain("fetch-depth: 0");
+  });
+
+  // G16 (AUDIT-2026-09-30): dispatch inputs must not be interpolated into the
+  // secret-bearing shell block. They arrive via env and are consumed as a
+  // quoted bash array.
+  it("live-eval workflow passes dispatch inputs via env, not shell interpolation (G16)", () => {
+    const wf = read(".github/workflows/live-eval.yml");
+    expect(wf).not.toMatch(/--provider \$\{\{\s*inputs\.provider/);
+    expect(wf).not.toMatch(/--model \$\{\{\s*inputs\.model/);
+    expect(wf).toContain("DISPATCH_PROVIDER: ${{ inputs.provider }}");
+    expect(wf).toContain("DISPATCH_MODEL: ${{ inputs.model }}");
+    expect(wf).toContain('FLAGS+=(--provider "$DISPATCH_PROVIDER")');
+    expect(wf).toContain('FLAGS+=(--model "$DISPATCH_MODEL")');
   });
 });
