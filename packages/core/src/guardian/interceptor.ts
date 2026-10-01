@@ -74,7 +74,15 @@ export function interceptTurn(
       let i = 0;
       while (i < found.length) {
         const v = found[i];
-        if (v.rule === "no-raw-error-format" && fixesUsed < GUARDIAN_MAX_AUTO_FIXES) {
+        if (
+          v.rule === "no-raw-error-format" &&
+          fixesUsed < GUARDIAN_MAX_AUTO_FIXES &&
+          // C6 (AUDIT-2026-09-30): only rewrite when `getErrorMessage` is
+          // already resolvable in this body. Otherwise the "fix" introduces a
+          // call to an undefined identifier — a compile error dressed as a
+          // repair. The violation then blocks and the model adds the import.
+          canResolveGetErrorMessage(diff)
+        ) {
           const repaired = autoFixRawErrorFormat(diff);
           if (repaired !== diff) {
             diff = repaired;
@@ -108,6 +116,15 @@ export function interceptTurn(
   }
 
   return { violations, autofixed, fixed, allowed: violations.length === 0 };
+}
+
+/**
+ * C6 (AUDIT-2026-09-30): true when the body can already resolve
+ * `getErrorMessage` — it references the helper, or imports `@anvil/core` (the
+ * shipped module that exports it). Anything else must NOT be auto-fixed.
+ */
+function canResolveGetErrorMessage(diff: string): boolean {
+  return /\bgetErrorMessage\b/.test(diff) || /from\s+["']@anvil\/core["']/.test(diff);
 }
 
 /** Safe auto-fix: common raw-error ternary → getErrorMessage call. */

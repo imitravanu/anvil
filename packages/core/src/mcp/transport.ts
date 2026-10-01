@@ -657,6 +657,22 @@ export async function createSseTransport(
   throw new Error(lastErr);
 }
 
+/**
+ * Answer one failed POST with a JSON-RPC error, correlated by the request id, so
+ * only that call errors while the transport stream stays up.
+ */
+function deliverHttpError(pump: TransportPump, request: string, status: number): void {
+  let id: unknown = null;
+  try {
+    id = (JSON.parse(request) as { id?: unknown }).id ?? null;
+  } catch {
+    // intentional: a non-JSON body has no id to correlate; deliver id:null
+  }
+  pump.deliver(
+    JSON.stringify({ jsonrpc: "2.0", id, error: { code: -32000, message: `HTTP ${status}` } })
+  );
+}
+
 function bindSseTransport(
   pump: TransportPump,
   streamCtrl: AbortController,
@@ -692,7 +708,14 @@ function bindSseTransport(
             redirect: "error",
           });
           if (res.status === 202) return; // accepted — answer arrives on the stream
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          if (!res.ok) {
+            // E6 (AUDIT-2026-09-30): an HTTP status failure answers THIS request
+            // with a JSON-RPC error. It must not call pump.finish(), which fails
+            // every in-flight call and forces a reconnect while the stream is
+            // alive and usable.
+            deliverHttpError(pump, msg, res.status);
+            return;
+          }
           const contentType = res.headers.get("content-type") ?? "";
           const text = await readBodyBounded(res, MAX_MCP_LINE_BYTES);
           const trimmed = text.trim();

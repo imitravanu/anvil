@@ -99,14 +99,16 @@ describe("guardianInterceptCalls", () => {
   });
 
   it("applies an auto-fix to each call's OWN input by position (same path, two edits)", () => {
+    // C6: the body must establish getErrorMessage before the auto-fix applies.
+    const importLine = 'import { getErrorMessage } from "@anvil/core";';
     const first = prepared(
       "edit_file",
-      { path: "src/a.ts", old_str: "a", new_str: `one = ${RAW_ERR_A};` },
+      { path: "src/a.ts", old_str: "a", new_str: `${importLine}\none = ${RAW_ERR_A};` },
       { id: "e0" }
     );
     const second = prepared(
       "edit_file",
-      { path: "src/a.ts", old_str: "c", new_str: `two = ${RAW_ERR_E2};` },
+      { path: "src/a.ts", old_str: "c", new_str: `${importLine}\ntwo = ${RAW_ERR_E2};` },
       { id: "e1" }
     );
     const { opts } = deps();
@@ -120,6 +122,39 @@ describe("guardianInterceptCalls", () => {
     // feed the second edit's fixed text to the first call's input.
     expect((first.call.input as { new_str: string }).new_str).toContain("one = getErrorMessage(err);");
     expect((second.call.input as { new_str: string }).new_str).toContain("two = getErrorMessage(e2);");
+  });
+
+  // C5 (AUDIT-2026-09-30): a body under a non-content field must be repaired IN
+  // THAT FIELD, not scanned-then-dropped while the call ran on with the slop.
+  it("writes a repair back to a non-content body field (C5)", () => {
+    const importLine = 'import { getErrorMessage } from "@anvil/core";';
+    const call = prepared(
+      "mcp_probe__write_file",
+      { path: "src/a.ts", new_content: `${importLine}\nconst m = ${RAW_ERR_A};` },
+      { id: "e5" }
+    );
+    const { opts } = deps();
+    const result = guardianInterceptCalls([call], opts);
+    expect(result.blocked.size).toBe(0);
+    expect((call.call.input as { new_content: string }).new_content).toContain(
+      "getErrorMessage(err)"
+    );
+  });
+
+  // A body spread across several recognized fields has no single writer; the
+  // honest behavior is to leave it unscanned rather than report it "fixed"
+  // while the original slop still executes.
+  it("does not claim to fix a body spread across several fields (C5)", () => {
+    const call = prepared(
+      "mcp_probe__write_file",
+      { path: "src/a.ts", content: `const m = ${RAW_ERR_A};`, text: "helper" },
+      { id: "e6" }
+    );
+    const { opts } = deps();
+    const result = guardianInterceptCalls([call], opts);
+    expect(result.blocked.size).toBe(0);
+    expect(result.event).toBeNull();
+    expect((call.call.input as { content: string }).content).not.toContain("getErrorMessage");
   });
 
   it("universal families fire in foreign scope, anvil-only families do not", () => {

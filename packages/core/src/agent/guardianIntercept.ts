@@ -15,16 +15,32 @@ import type { AgentEvent } from "./types.js";
  */
 const GUARDIAN_CONTENT_KEYS = ["content", "new_str", "new_content", "text", "body", "data"];
 
-/** Concatenate the recognized file-body fields of an external tool's input. */
-function externalToolBody(input: unknown): string {
-  if (input === null || typeof input !== "object" || Array.isArray(input)) return "";
+/** A scannable body and the writer that puts a repair back in the SAME field. */
+interface WritableBody {
+  body: string;
+  writeBack: (text: string) => void;
+}
+
+/**
+ * C5 (AUDIT-2026-09-30): return the body AND a writer for the field it came
+ * from, so an auto-fix lands where the body lived. A body assembled from
+ * several keys has no single writer — returning null leaves the call unscanned
+ * rather than reporting it "fixed" while the original slop still executes.
+ */
+function singleBodyField(input: unknown): WritableBody | null {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) return null;
   const record = input as Record<string, unknown>;
-  const parts: string[] = [];
-  for (const key of GUARDIAN_CONTENT_KEYS) {
-    const value = record[key];
-    if (typeof value === "string" && value.length > 0) parts.push(value);
-  }
-  return parts.join("\n");
+  const present = GUARDIAN_CONTENT_KEYS.filter(
+    (key) => typeof record[key] === "string" && (record[key] as string).length > 0
+  );
+  if (present.length !== 1) return null;
+  const key = present[0];
+  return {
+    body: record[key] as string,
+    writeBack: (text: string) => {
+      record[key] = text;
+    },
+  };
 }
 
 /** Literal text rendered as the added-line form the diff scanner expects. */
@@ -79,29 +95,34 @@ export function guardianInterceptCalls(
   const handled = new Map<string, ToolExecutionResult>();
   if (!deps.enabled) return { blocked, handled, event: null, repairPrompt: null };
   const fileWriteTools = new Set(["write_file", "edit_file"]);
-  const pending: { call: PreparedCall; path: string; diff: string }[] = [];
+  const pending: {
+    call: PreparedCall;
+    path: string;
+    diff: string;
+    writeBack: (text: string) => void;
+  }[] = [];
   for (const p of prepared) {
     if (!p.def?.mutating) continue;
-    const input = (p.call.input ?? {}) as { path?: unknown; content?: unknown; new_str?: unknown };
+    const input = (p.call.input ?? {}) as { path?: unknown };
     const relPath = typeof input.path === "string" ? input.path : undefined;
     if (!relPath) continue;
     // write_file/edit_file declare their body explicitly; external (MCP /
-    // plugin) tools are scanned through their known file-body fields, because
-    // their input is not a diff and the permission-prompt preview is prose
-    // with no `+` lines — scanning that could never match anything.
-    let body: string;
+    // plugin) tools are scanned through a SINGLE recognized file-body field,
+    // because their input is not a diff and the permission-prompt preview is
+    // prose with no `+` lines — scanning that could never match anything.
+    let writable: WritableBody | null = null;
     if (fileWriteTools.has(p.def.name)) {
-      body =
-        typeof input.content === "string"
-          ? input.content
-          : typeof input.new_str === "string"
-            ? input.new_str
-            : "";
+      const record = p.call.input as { content?: unknown; new_str?: unknown } | null;
+      if (typeof record?.content === "string") {
+        writable = { body: record.content, writeBack: (t) => { (record as { content?: string }).content = t; } };
+      } else if (typeof record?.new_str === "string") {
+        writable = { body: record.new_str, writeBack: (t) => { (record as { new_str?: string }).new_str = t; } };
+      }
     } else {
-      body = externalToolBody(p.call.input);
+      writable = singleBodyField(p.call.input);
     }
-    if (body.length === 0) continue;
-    pending.push({ call: p, path: relPath, diff: asAddedLines(body) });
+    if (!writable || writable.body.length === 0) continue;
+    pending.push({ call: p, path: relPath, diff: asAddedLines(writable.body), writeBack: writable.writeBack });
   }
 
   if (pending.length === 0) return { blocked, handled, event: null, repairPrompt: null };
@@ -111,17 +132,14 @@ export function guardianInterceptCalls(
     deps.rules
   );
   if (intercept.fixed.length > 0) {
-    // Auto-fix: raw-error ternary → getErrorMessage, applied back to each
-    // call's OWN input BY POSITION (fix.index). A path-keyed map is wrong
-    // when one turn carries two pending edits to the same file: the second
-    // edit would reuse the first's repaired text.
+    // Auto-fix: raw-error ternary → getErrorMessage, applied back through the
+    // writer for the field the body came from, BY POSITION (fix.index). A
+    // path-keyed map is wrong when one turn carries two pending edits to the
+    // same file: the second edit would reuse the first's repaired text.
     for (const fix of intercept.fixed) {
       const p = pending[fix.index];
       if (!p) continue;
-      const fixedText = guardianFixedText(fix.diff);
-      const input = (p.call.call.input ?? {}) as { content?: string; new_str?: string };
-      if (typeof input.content === "string") input.content = fixedText;
-      else if (typeof input.new_str === "string") input.new_str = fixedText;
+      p.writeBack(guardianFixedText(fix.diff));
     }
   }
   if (intercept.allowed) return { blocked, handled, event: null, repairPrompt: null };

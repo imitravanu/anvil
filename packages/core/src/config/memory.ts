@@ -139,6 +139,12 @@ function splitMemorySections(content: string): string[] {
       current = line;
     } else if (current !== null) {
       current += "\n" + line;
+    } else if (line.trim().length > 0) {
+      // C8 (AUDIT-2026-09-30): content before the first header (a preamble, or a
+      // hand-edited headerless file) is its own section. The old loop began
+      // collecting only at the first `### [` line, so the cap rewrite silently
+      // destroyed everything above it.
+      current = line;
     }
   }
   if (current !== null && current.trim().length > 0) sections.push(current);

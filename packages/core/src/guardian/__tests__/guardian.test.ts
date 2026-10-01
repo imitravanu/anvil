@@ -12,6 +12,9 @@ import { guardedInit } from "../init.js";
 // literal slop pattern (the gate scans added lines); runtime values are exact.
 const FIX_AS_ANY = "const x = foo as " + "any;";
 const FIX_RAW_ERROR = "const m = err instanceof " + "Error ? err.message : String(err);";
+// C6: an auto-fix may only rewrite when getErrorMessage is already resolvable
+// in the same body — a shown import is the honest signal for that.
+const GET_ERROR_MESSAGE_IMPORT = '+import { getErrorMessage } from "@anvil/core";\n';
 // The scanner flags this raw-error ternary shape, but the safe auto-fix
 // cannot rewrite it — its fallback is not String(...).
 const FIX_RAW_ERROR_UNFIXABLE =
@@ -178,14 +181,27 @@ describe("interceptTurn", () => {
     expect(result.violations).toEqual([]);
   });
 
-  it("auto-fixes raw error formatting", () => {
-    const result = interceptTurn([{ path: "src/a.ts", diff: `+${FIX_RAW_ERROR}\n` }], "anvil");
+  it("auto-fixes raw error formatting when getErrorMessage is resolvable", () => {
+    const result = interceptTurn(
+      [{ path: "src/a.ts", diff: `${GET_ERROR_MESSAGE_IMPORT}+${FIX_RAW_ERROR}\n` }],
+      "anvil"
+    );
     expect(result.allowed).toBe(true);
     expect(result.fixed).toHaveLength(1);
     expect(result.fixed[0].diff).toContain("getErrorMessage(err)");
     // The repaired violation is reported as autofixed, not silently dropped.
     expect(result.autofixed).toHaveLength(1);
     expect(result.autofixed[0].autofixed).toBe(true);
+  });
+
+  // C6 (AUDIT-2026-09-30): a raw-error edit whose body does NOT establish
+  // getErrorMessage must block — the old auto-fix rewrote it into a call to an
+  // undefined identifier and reported the turn clean.
+  it("blocks a raw-error edit it cannot resolve getErrorMessage for", () => {
+    const result = interceptTurn([{ path: "src/a.ts", diff: `+${FIX_RAW_ERROR}\n` }], "anvil");
+    expect(result.fixed).toHaveLength(0);
+    expect(result.allowed).toBe(false);
+    expect(result.violations.some((v) => v.rule === "no-raw-error-format")).toBe(true);
   });
 
   it("enforces project-declared custom rules", () => {
@@ -216,8 +232,8 @@ describe("interceptTurn", () => {
     const B = "const msg = e instanceof " + "Error ? e.message : String(e);";
     const result = interceptTurn(
       [
-        { path: "src/a.ts", diff: `+${A}\n` },
-        { path: "src/a.ts", diff: `+${B}\n` },
+        { path: "src/a.ts", diff: `${GET_ERROR_MESSAGE_IMPORT}+${A}\n` },
+        { path: "src/a.ts", diff: `${GET_ERROR_MESSAGE_IMPORT}+${B}\n` },
       ],
       "anvil"
     );
