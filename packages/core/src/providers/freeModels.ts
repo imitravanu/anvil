@@ -60,6 +60,24 @@ export interface OpenRouterModel {
   };
 }
 
+/**
+ * B4 (AUDIT-2026-09-30): parse a price field strictly. Only a finite number or
+ * a non-empty numeric string is a price; `null`, `""`, and `{}` are NaN so a
+ * malformed row is never ingested as free.
+ */
+function priceValue(raw: unknown): number {
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : NaN;
+  if (typeof raw === "string" && raw.trim() !== "") return Number(raw);
+  return NaN;
+}
+
+/** B8 (AUDIT-2026-09-30): refresh catalog-derived fields on a matched row. */
+function refreshModelMetadata(row: ModelInfo, liveModel: ModelInfo): void {
+  row.contextWindow = liveModel.contextWindow;
+  row.supportsTools = liveModel.supportsTools;
+  row.supportsVision = liveModel.supportsVision;
+}
+
 /** OpenRouter deliberately mimics chat-completions; its /models endpoint is public. */
 export async function fetchOpenRouterFreeModels(apiKey?: string): Promise<ModelInfo[]> {
   const controller = new AbortController();
@@ -81,15 +99,13 @@ export async function fetchOpenRouterFreeModels(apiKey?: string): Promise<ModelI
     const freeModels: ModelInfo[] = [];
     for (const m of json.data) {
       // Pricing may arrive as "0", "0.0", or 0 depending on the API version.
-      const promptPrice = Number(m.pricing?.prompt);
-      const completionPrice = Number(m.pricing?.completion);
+      // B4 (AUDIT-2026-09-30): parse strictly — `Number(null)`/`Number("")` are
+      // 0, which ingested malformed rows as $0 free models.
       const hasPricing = m.pricing != null && typeof m.pricing === "object";
+      const promptPrice = priceValue(hasPricing ? m.pricing?.prompt : undefined);
+      const completionPrice = priceValue(hasPricing ? m.pricing?.completion : undefined);
       const isZeroPrice =
-        hasPricing &&
-        !isNaN(promptPrice) &&
-        promptPrice === 0 &&
-        !isNaN(completionPrice) &&
-        completionPrice === 0;
+        !isNaN(promptPrice) && promptPrice === 0 && !isNaN(completionPrice) && completionPrice === 0;
       const isFreeId =
         typeof m.id === "string" && (m.id.endsWith(":free") || m.id === "openrouter/free");
       if (!isZeroPrice && !isFreeId) continue;
@@ -493,11 +509,16 @@ function mergeFreeModels(
     return { newlyFree: [], noLongerFree: [] };
   }
   const liveIds = new Set(live.map((m) => m.id));
+  // B8 (AUDIT-2026-09-30): index the live entries so a MATCHED registry row can
+  // refresh its display metadata instead of keeping stale contextWindow /
+  // capabilities forever.
+  const liveById = new Map(live.map((m) => [m.id, m]));
   const newlyFree: string[] = [];
   const noLongerFree: string[] = [];
 
   for (const m of MODEL_REGISTRY) {
     if (m.providerId !== providerId) continue;
+    const liveModel = liveById.get(m.id);
     if (m.isFree && !liveIds.has(m.id)) {
       m.isFree = false;
       m.displayName = m.displayName
@@ -514,7 +535,11 @@ function mergeFreeModels(
     } else if (m.isFree === false && liveIds.has(m.id)) {
       m.isFree = true;
       m.displayName = m.displayName.replace(/\s*\(Paid\)\s*$/i, "").trim() + " (Free)";
+      if (liveModel) refreshModelMetadata(m, liveModel);
       newlyFree.push(m.id);
+    } else if (liveModel) {
+      // Already free and still listed: refresh the catalog-derived fields.
+      refreshModelMetadata(m, liveModel);
     }
   }
 
@@ -523,7 +548,9 @@ function mergeFreeModels(
     // on both OpenAI and GitHub) must not suppress registration — each
     // provider owns its own row.
     if (!MODEL_REGISTRY.some((m) => m.id === liveModel.id && m.providerId === liveModel.providerId)) {
-      registerModel({ ...liveModel, isFree: true });
+      // B8: a synced row has never been probed — badge it honestly rather than
+      // leaving `certified` undefined (the picker rendered no badge at all).
+      registerModel({ ...liveModel, isFree: true, certified: liveModel.certified ?? "untested" });
       newlyFree.push(liveModel.id);
     }
   }

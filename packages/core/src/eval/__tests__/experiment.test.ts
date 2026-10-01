@@ -142,6 +142,23 @@ describe("runPromptExperiment — a worse arm must score worse", () => {
     expect(seen.map((s) => s.prompt)).toEqual(["PROMPT_A", "PROMPT_B"]);
   });
 
+  // A7 (AUDIT-2026-09-30): arms are interleaved WITHIN each trial so provider
+  // drift cannot track one arm. Arm-major order would emit a,a,…,b,b,…
+  it("interleaves arms within a trial (A7)", async () => {
+    const arms: AbArm[] = [
+      { name: "a", profile: { systemPrompt: "P" } },
+      { name: "b", profile: { systemPrompt: "P" } },
+    ];
+    const result = await runPromptExperiment(
+      arms,
+      { tasksDir: TASKS_DIR, useMock: true, fastOnly: true },
+      1
+    );
+    expect(result.taskIds.length).toBeGreaterThan(1);
+    // Per task, both arms run back-to-back: a, b, a, b, …
+    expect(result.trials.map((t) => t.arm)).toEqual(result.taskIds.flatMap(() => ["a", "b"]));
+  }, 30_000);
+
   it("honours a zero or negative trial request as one round, never zero", async () => {
     const result = await runPromptExperiment(
       [BASELINE],

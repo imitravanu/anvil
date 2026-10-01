@@ -251,4 +251,37 @@ describe("Phase 8 (B) — free-model coordinator", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  // B4 (AUDIT-2026-09-30): a null/empty price coerced to 0 via Number(), so a
+  // malformed row was ingested as a $0 free model.
+  it("rejects a row whose pricing is null or empty instead of treating it as free (B4)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          data: [
+            { id: "n/null", name: "Null", pricing: { prompt: null, completion: null }, supported_parameters: [], architecture: { modality: "text" }, context_length: 1000 },
+            { id: "n/empty", name: "Empty", pricing: { prompt: "", completion: "" }, supported_parameters: [], architecture: { modality: "text" }, context_length: 1000 },
+          ],
+        }),
+      }))
+    );
+    try {
+      const models = await fetchOpenRouterFreeModels();
+      expect(models.map((m) => m.id)).toEqual([]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  // B8 (AUDIT-2026-09-30): a synced row was registered with `certified`
+  // undefined, so the picker rendered no badge at all.
+  it("badges a newly synced row as untested, never undefined (B8)", async () => {
+    const src = fakeSource("p8b-b8", [freeModel("p8b-b8/model", "openrouter")]);
+    await syncFreeModels({ sources: [src], ttlMs: 0 });
+    const row = MODEL_REGISTRY.find((m) => m.id === "p8b-b8/model");
+    expect(row, "row registered").toBeDefined();
+    expect(row!.certified).toBe("untested");
+  });
 });

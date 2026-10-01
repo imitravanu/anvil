@@ -35,6 +35,16 @@ async function* openaiOf(items: RawOpenAIChunk[]): AsyncGenerator<RawOpenAIChunk
   yield* items;
 }
 
+/** A stream that reports usage, then fails — the B3 shape. */
+async function* geminiThenThrow(chunk: RawGeminiChunk): AsyncGenerator<RawGeminiChunk> {
+  yield chunk;
+  throw new Error("upstream stream broke");
+}
+async function* openaiThenThrow(chunk: RawOpenAIChunk): AsyncGenerator<RawOpenAIChunk> {
+  yield chunk;
+  throw new Error("upstream stream broke");
+}
+
 function usageOf(events: StreamEvent[]): { inputTokens: number; outputTokens: number; reasoningTokens?: number; cachedInputTokens?: number } {
   const u = events.find((e) => e.type === "usage");
   if (!u || u.type !== "usage") throw new Error("no usage event emitted");
@@ -55,6 +65,20 @@ describe("Gemini usage — reasoning is ADDED (measured: 327 outside the count)"
     );
     // The real receipt: 328 tokens were spent, not 1.
     expect(usageOf(events).outputTokens).toBe(328);
+  });
+
+  // B3 (AUDIT-2026-09-30): usage reported before a mid-stream failure must not
+  // be discarded — the catch used to return before the trailing usage yield.
+  it("emits accumulated usage before an error ends the stream (B3)", async () => {
+    const events = await collect(
+      translateGeminiChunkStream(
+        geminiThenThrow({ usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 } })
+      )
+    );
+    const usageIdx = events.findIndex((e) => e.type === "usage");
+    const errorIdx = events.findIndex((e) => e.type === "error");
+    expect(usageIdx, "usage must be emitted").toBeGreaterThanOrEqual(0);
+    expect(errorIdx, "error must follow the usage event").toBeGreaterThan(usageIdx);
   });
 
   it("breaks reasoning out separately for display", async () => {
@@ -154,6 +178,18 @@ describe("OpenAI usage — reasoning is a BREAKDOWN, not an addition", () => {
     const u = usageOf(events);
     expect(u.outputTokens).toBe(641);
     expect(u.reasoningTokens).toBe(515);
+  });
+
+  it("emits accumulated usage before an error ends the stream (B3)", async () => {
+    const events = await collect(
+      translateChatCompletionsChunkStream(
+        openaiThenThrow({ usage: { prompt_tokens: 10, completion_tokens: 5 } })
+      )
+    );
+    const usageIdx = events.findIndex((e) => e.type === "usage");
+    const errorIdx = events.findIndex((e) => e.type === "error");
+    expect(usageIdx, "usage must be emitted").toBeGreaterThanOrEqual(0);
+    expect(errorIdx, "error must follow the usage event").toBeGreaterThan(usageIdx);
   });
 
   it("surfaces cached input tokens measured at 75% of the prompt", async () => {

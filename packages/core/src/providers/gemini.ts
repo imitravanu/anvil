@@ -122,6 +122,9 @@ export async function* translateGeminiChunkStream(
       if (candidate?.finishReason) finishReason = candidate.finishReason;
     }
   } catch (err) {
+    // B3 (AUDIT-2026-09-30): emit accumulated usage before the error; the
+    // trailing `if (usage)` below is unreachable once we return here.
+    if (usage) yield { type: "usage", ...usage };
     yield { type: "error", message: geminiErrorMessage(err) };
     return;
   }

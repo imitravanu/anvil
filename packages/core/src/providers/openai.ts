@@ -108,6 +108,10 @@ export async function* translateChatCompletionsChunkStream(
       }
     }
   } catch (err) {
+    // B3 (AUDIT-2026-09-30): usage the provider already reported before the
+    // failure must not be lost — emit it before the error so session/A-B
+    // accounting stays correct exactly when things go wrong.
+    if (usage) yield { type: "usage", ...usage };
     yield { type: "error", message: getErrorMessage(err) };
     return;
   }

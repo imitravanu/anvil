@@ -160,9 +160,12 @@ export async function runPromptExperiment(
   let completedRuns = 0;
 
   const trialsOut: AbTrial[] = [];
-  for (const arm of arms) {
-    for (let trial = 0; trial < rounds; trial++) {
-      for (const task of selected) {
+  // A7 (AUDIT-2026-09-30): interleave arms WITHIN each trial. Arm-major order
+  // ran one arm's whole task set back-to-back, so provider drift (a rate-limit
+  // window, a warming gateway) correlated with arm identity.
+  for (let trial = 0; trial < rounds; trial++) {
+    for (const task of selected) {
+      for (const arm of arms) {
         const started = Date.now();
         try {
           const result: EvalResult = await runEvalTask(task, {
