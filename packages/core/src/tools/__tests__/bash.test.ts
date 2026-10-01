@@ -178,6 +178,11 @@ describe("run_command destructive-command guard", () => {
       "rm -rf~",
       "rm -fr/",
       "rm -rf/etc",
+      // E2 (AUDIT-2026-09-30): quote-splicing and non-`*` root globs.
+      "r''m -rf ~",
+      "r\"\"m -rf /",
+      "rm -rf /?",
+      "rm -rf /{etc,usr}",
     ]) {
       expect(isBlockedCommand(cmd), cmd).not.toBeNull();
     }
@@ -283,6 +288,23 @@ describe("run_command read-only safe-list", () => {
     expect(isReadOnlyCommand("cat '/etc/shadow'", root)).toBe(false);
     expect(isReadOnlyCommand('cat ./README.md', root)).toBe(true);
     expect(isReadOnlyCommand('cat "README.md"', root)).toBe(true);
+  });
+
+  it("gates path-valued flag operands and symlink escapes (E1)", async () => {
+    const { isReadOnlyCommand } = await import("../bash.js");
+    // A fused `--name=value` operand is a path: the old blanket flag-skip let a
+    // reader name any host file with no prompt (`wc --files0-from=/etc/passwd`).
+    for (const cmd of [
+      "wc --files0-from=/etc/passwd",
+      "du --files0-from=/etc/passwd",
+      "head --file=/etc/shadow",
+    ]) {
+      expect(isReadOnlyCommand(cmd, root), cmd).toBe(false);
+    }
+    // A project symlink pointing outside the root must not become readable.
+    await fs.symlink("/etc", path.join(root, "escape-link"));
+    expect(isReadOnlyCommand("cat escape-link/passwd", root)).toBe(false);
+    expect(isReadOnlyCommand("ls escape-link", root)).toBe(false);
   });
 
   it("contains subcommand arguments to the project root", async () => {

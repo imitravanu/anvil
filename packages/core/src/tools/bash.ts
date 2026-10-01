@@ -1,6 +1,7 @@
 import { spawn, spawnSync, execSync } from "node:child_process";
 import * as path from "node:path";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
+import { resolveWithinRoot } from "./paths.js";
 import { log } from "../logger.js";
 import {
   MAX_STREAM_BYTES,
@@ -145,7 +146,10 @@ function segments(command: string): string[] {
  */
 function deshell(rawSegment: string): string {
   return rawSegment
-    .replace(/["'`]/g, " ")
+    // E2 (AUDIT-2026-09-30): STRIP quotes rather than replace them with spaces.
+    // `r''m -rf ~` previously became `r  m -rf ~`, so `\brm\b` never matched and
+    // the wipe slipped through. Removing them restores the word the shell runs.
+    .replace(/["'`]/g, "")
     .replace(/\$\(|\)/g, " ")
     .replace(/\$\{IFS\b[^}]*\}?|\$IFS\b/g, " ");
 }
@@ -174,9 +178,12 @@ function isRootWipe(segment: string): boolean {
   // token, or the flag parse above would miss it), and a cluster with nothing
   // after it is left alone.
   const spaced = rest.replace(/(-[a-zA-Z-]+)(?=[^a-zA-Z-\s])/g, "-$1 ");
-  // Block: bare root (/), root glob (/*), home (~, $HOME), AND any top-level
-  // system directory. A project-local `rm -rf ./build` stays allowed.
-  const SYSTEM_PATHS = /(?:^|\s)(?:\/(?:\s|$|\*)|~|\$HOME|\$\{HOME\}|\/(?:usr|etc|var|dev|boot|lib|lib64|bin|sbin|opt|proc|sys|run|srv|tmp|root|mnt|media)(?:\s|\/|$))/;
+  // Block: bare root (/), root globs (/*, /?, /{a,b}, /[abc]), home (~,
+  // $HOME), AND any top-level system directory. The `?`/`{`/`[` forms are
+  // brace/glob expansions that still resolve to `/` — the old `*`-only class
+  // let `rm -rf /?` and `rm -rf /{etc,usr}` pass. A project-local
+  // `rm -rf ./build` stays allowed.
+  const SYSTEM_PATHS = /(?:^|\s)(?:\/(?:\s|$|\*|\?|\{|\[)|~|\$HOME|\$\{HOME\}|\/(?:usr|etc|var|dev|boot|lib|lib64|bin|sbin|opt|proc|sys|run|srv|tmp|root|mnt|media)(?:\s|\/|$))/;
   return SYSTEM_PATHS.test(spaced);
 }
 
@@ -236,18 +243,40 @@ function stripShellQuotes(s: string): string {
 function pathsInsideRoot(args: readonly string[], projectRoot: string): boolean {
   const root = path.resolve(projectRoot);
   for (const rawArg of args) {
-    if (rawArg.startsWith("-")) continue; // flags and their attached values
     const arg = stripShellQuotes(rawArg);
-    // bash expands these before the binary sees them — `~/.ssh/id_rsa` and
-    // `$HOME/...` resolve OUTSIDE the project no matter what path.resolve says.
-    if (arg.startsWith("~") || arg.startsWith("$")) return false;
-    // Also reject any remaining unmatched quotes — sign of shell trickery
-    if (/['"]/.test(arg)) return false;
-    const resolved = path.isAbsolute(arg) ? path.resolve(arg) : path.resolve(root, arg);
-    const rel = path.relative(root, resolved);
-    if (rel !== "" && (rel === ".." || rel.startsWith(`..${path.sep}`))) return false;
+    if (arg.startsWith("-")) {
+      // E1 (AUDIT-2026-09-30): a flag is inert EXCEPT when it carries a value
+      // (`--files0-from=/etc/passwd`). The old blanket `continue` skipped the
+      // flag AND its fused operand, so a reader could name any host file with
+      // no prompt. Validate a `--name=value` operand as a path; skip switches.
+      const eq = arg.indexOf("=");
+      if (eq === -1) continue;
+      if (!isOperandInsideRoot(root, arg.slice(eq + 1))) return false;
+      continue;
+    }
+    if (!isOperandInsideRoot(root, arg)) return false;
   }
   return true;
+}
+
+/**
+ * Containment for one argument/operand. Uses `resolveWithinRoot` so the check
+ * is symlink-aware (a project link pointing at `/etc` cannot be read without a
+ * prompt) rather than the lexical `path.relative` comparison it replaced.
+ */
+function isOperandInsideRoot(root: string, arg: string): boolean {
+  // bash expands these before the binary sees them — `~/.ssh/id_rsa` and
+  // `$HOME/...` resolve OUTSIDE the project no matter what path.resolve says.
+  if (arg.startsWith("~") || arg.startsWith("$")) return false;
+  // Also reject any remaining unmatched quotes — sign of shell trickery
+  if (/['"]/.test(arg)) return false;
+  try {
+    resolveWithinRoot(root, arg);
+    return true;
+  } catch {
+    // Escape, missing path, or symlink loop — fail closed (prompt the user).
+    return false;
+  }
 }
 
 // For multi-mode binaries, only these subcommands are considered read-only —
