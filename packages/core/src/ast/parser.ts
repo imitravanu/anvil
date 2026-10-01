@@ -311,6 +311,13 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
     return undefined;
   }
 
+  /** True when `text` starts a new TypeScript/JS declaration (ASI guard). */
+  function isTsDeclarationStart(text: string): boolean {
+    return /^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:const|let|var|function|class|interface|type|enum|import|namespace|declare)\b/.test(
+      text
+    );
+  }
+
   // Find matching closing brace given an opening line index
   function findMatchingBrace(startIdx: number): { endIdx: number; bodyStart: number } | null {
     let depth = 0;
@@ -413,11 +420,24 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
     const typeMatch = /^type\s+([A-Za-z0-9_$]+)/.exec(decl);
     if (typeMatch) {
       const name = typeMatch[1];
-      let endIdx = i;
-      while (endIdx < total && !lines[endIdx].includes(";")) {
-        endIdx++;
+      // D1b (AUDIT-2026-09-30): an object alias is brace-matched on its OWN
+      // line; a non-object alias (union/intersection/primitive) may span lines,
+      // so scan for `;` but STOP at a line that starts a new declaration.
+      // Scanning blindly forward for ANY `;` let an ASI-terminated
+      // `type Foo = { a: string }` swallow the following `const`/`function`.
+      let actualEnd: number;
+      if (lines[i].includes("{")) {
+        const brace = findMatchingBrace(i);
+        actualEnd = brace ? brace.endIdx : i;
+      } else {
+        let endIdx = i;
+        while (endIdx < total) {
+          if (lines[endIdx].includes(";")) break;
+          if (endIdx > i && codeLines[endIdx] && isTsDeclarationStart(lines[endIdx].trim())) break;
+          endIdx++;
+        }
+        actualEnd = Math.min(endIdx, total - 1);
       }
-      const actualEnd = Math.min(endIdx, total - 1);
       symbols.push({
         name,
         kind: "type",
@@ -594,23 +614,25 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
     );
     if (arrowMatch) {
       const name = arrowMatch[1];
-      const brace = findMatchingBrace(i);
-      if (brace) {
-        const endLine = brace.endIdx + 1;
-        symbols.push({
-          name,
-          kind: "function",
-          startLine: i + 1,
-          endLine,
-          signature: trimmed.split("=>")[0]?.trim() + " =>",
-          docstring: extractDocstring(i),
-          bodyStartLine: brace.bodyStart,
-          bodyEndLine: endLine,
-          isExported,
-        });
-        i = endLine;
-        continue;
-      }
+      // D1a (AUDIT-2026-09-30): brace-match ONLY when this declaration's own
+      // line opens the block. An expression-bodied arrow (`const f = (x) => x +
+      // 1;`) has no brace, and the old unconditional findMatchingBrace adopted
+      // the NEXT declaration's braces — swallowing it whole.
+      const brace = lines[i].includes("{") ? findMatchingBrace(i) : null;
+      const endLine = brace ? brace.endIdx + 1 : i + 1;
+      symbols.push({
+        name,
+        kind: "function",
+        startLine: i + 1,
+        endLine,
+        signature: trimmed.split("=>")[0]?.trim() + " =>",
+        docstring: extractDocstring(i),
+        bodyStartLine: brace?.bodyStart,
+        bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        isExported,
+      });
+      i = endLine;
+      continue;
     }
 
     // Exported const/let/var variable
@@ -852,6 +874,25 @@ function parsePython(lines: string[]): AstSymbol[] {
 }
 
 /**
+ * Removes a leading balanced `<...>` group from `s` — e.g. the impl generics in
+ * `impl<T: Into<U>> Foo`. Braces are depth-counted, so a generic bound that
+ * itself contains `>` does not end the group early.
+ */
+function stripLeadingGenericGroup(s: string): string {
+  const t = s.trimStart();
+  if (!t.startsWith("<")) return t;
+  let depth = 0;
+  for (let k = 0; k < t.length; k++) {
+    if (t[k] === "<") depth++;
+    else if (t[k] === ">") {
+      depth--;
+      if (depth === 0) return t.slice(k + 1).trimStart();
+    }
+  }
+  return t;
+}
+
+/**
  * Parses a Rust source file.
  */
 function parseRust(lines: string[]): AstSymbol[] {
@@ -878,7 +919,11 @@ function parseRust(lines: string[]): AstSymbol[] {
           depth++;
           if (!foundOpen) {
             foundOpen = true;
-            bodyStart = i + 1;
+            // D1f (AUDIT-2026-09-30): bodyStart is the line AFTER the brace's
+            // line, matching TS (`i + 2`) and Go (`k + 2`). It was `i + 1`, so
+            // the skeleton started on the signature line and deleted
+            // `pub fn foo() {` from the outline.
+            bodyStart = i + 2;
           }
         } else if (char === "}") {
           depth--;
@@ -973,8 +1018,12 @@ function parseRust(lines: string[]): AstSymbol[] {
       continue;
     }
 
-    const isPub = trimmed.startsWith("pub ");
-    const decl = isPub ? trimmed.replace(/^pub(?:\([^)]*\))?\s+/, "") : trimmed;
+    // D1c (AUDIT-2026-09-30): `pub(crate)` / `pub(super)` are public and must be
+    // stripped before declaration matching — `startsWith("pub ")` is false for
+    // them, so the `fn` rule never matched and the function vanished entirely.
+    const pubMatch = /^pub(?:\([^)]*\))?\s+/.exec(trimmed);
+    const isPub = pubMatch !== null;
+    const decl = pubMatch ? trimmed.slice(pubMatch[0].length) : trimmed;
 
     // Struct
     const structMatch = /^struct\s+([A-Za-z0-9_]+)/.exec(decl);
@@ -1093,8 +1142,14 @@ function parseRust(lines: string[]): AstSymbol[] {
       const header = implMatch[1].trim();
       const brace = findMatchingBrace(i);
       const endLine = brace ? brace.endIdx + 1 : i + 1;
-      // `impl Trait for Type` → the implementing type is the last segment.
-      const target = (header.split(/\bfor\b/).pop() ?? "").replace(/\{.*$/, "").trim();
+      // D1d (AUDIT-2026-09-30): `impl<T> Foo<T>` produced the garbage name
+      // `<T> Foo<T>`. Strip the impl's own leading generic group (balanced
+      // `<...>`) and any `where` clause first, then take the last `for` segment
+      // and drop the target's trailing generics.
+      const withoutImplGenerics = stripLeadingGenericGroup(header)
+        .replace(/\bwhere\b[\s\S]*$/, "")
+        .trim();
+      const target = (withoutImplGenerics.split(/\bfor\b/).pop() ?? "").replace(/\{.*$/, "").trim();
       const name = (target.replace(/<.*$/, "").split("::").pop() ?? target).trim() || target;
 
       const children = brace ? collectFnMethods(i + 1, brace.endIdx) : [];
@@ -1297,7 +1352,7 @@ function parseGo(lines: string[]): AstSymbol[] {
     // Function or method. The optional receiver group `(r *Type)` is what
     // distinguishes a method from a free function.
     const funcMatch =
-      /^func\s+(?:\(\s*[A-Za-z_][A-Za-z0-9_]*\s+\*?([A-Za-z_][A-Za-z0-9_]*)\s*\)\s*)?([A-Za-z_][A-Za-z0-9_]*)/.exec(
+      /^func\s+(?:\(\s*[A-Za-z_][A-Za-z0-9_]*\s+\*?([A-Za-z_][A-Za-z0-9_]*)(?:\[[^\]]*\])?\s*\)\s*)?([A-Za-z_][A-Za-z0-9_]*)/.exec(
         trimmed
       );
     if (funcMatch) {
@@ -1316,6 +1371,15 @@ function parseGo(lines: string[]): AstSymbol[] {
         isExported: isExported(name),
       });
       i = endLine;
+      continue;
+    }
+    // D1e (AUDIT-2026-09-30): a `func` this regex cannot read (e.g. a generic
+    // receiver) must still consume its BODY. Otherwise the `var`/`const` lines
+    // inside it match the package-level rule and leak as top-level symbols —
+    // the `Stack[T]` receiver both dropped `Push` and promoted `x`.
+    if (/^func\b/.test(trimmed)) {
+      const brace = findMatchingBrace(i);
+      i = brace ? brace.endIdx + 1 : i + 1;
       continue;
     }
 

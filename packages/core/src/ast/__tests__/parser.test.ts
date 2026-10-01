@@ -687,3 +687,59 @@ class Service:
     expect(skeleton).toContain("lines folded");
   });
 });
+
+// AUDIT-2026-09-30 D1 — the six declaration-swallowing / naming defects. Each
+// assertion here fails against the pre-fix parser (receipt in PROGRESS.md).
+describe("declaration boundaries (D1 parser six-pack)", () => {
+  it("D1a: an expression-bodied arrow does not swallow the next declaration", () => {
+    const src = ["const f = (x: number) => x + 1;", "export function g() {", "  return 1;", "}"].join(
+      "\n"
+    );
+    const ast = parseFileAst(src, "a.ts");
+    const g = ast.symbols.find((s) => s.name === "g");
+    expect(g, "g must be indexed").toBeDefined();
+    expect(g!.startLine).toBe(2);
+    expect(ast.symbols.find((s) => s.name === "f")!.endLine, "f ends on its own line").toBe(1);
+  });
+
+  it("D1b: a semicolon-less object alias does not swallow the next export", () => {
+    const src = ["type Foo = { a: string }", "export const x = 1;"].join("\n");
+    const ast = parseFileAst(src, "b.ts");
+    expect(ast.symbols.find((s) => s.name === "x"), "x must be indexed").toBeDefined();
+    expect(ast.symbols.find((s) => s.name === "Foo")!.endLine).toBe(1);
+  });
+
+  it("D1c: pub(crate) functions are indexed", () => {
+    const src = ["pub(crate) fn bar() {}", "pub fn baz() {}"].join("\n");
+    const ast = parseFileAst(src, "c.rs");
+    expect(ast.symbols.find((s) => s.name === "bar"), "pub(crate) fn must be indexed").toBeDefined();
+    expect(ast.symbols.find((s) => s.name === "baz")).toBeDefined();
+  });
+
+  it("D1d: a generic impl yields the target type name, not the generics", () => {
+    const src = ["impl<T> Foo<T> {", "  fn m(&self) {}", "}"].join("\n");
+    const ast = parseFileAst(src, "d.rs");
+    expect(ast.symbols.find((s) => s.kind === "impl")?.name).toBe("Foo");
+  });
+
+  it("D1e: a generic receiver keeps the method and does not leak body vars", () => {
+    const src = ["package p", "func (s *Stack[T]) Push(v T) {", "  var x = 1", "}"].join("\n");
+    const ast = parseFileAst(src, "e.go");
+    expect(ast.symbols.find((s) => s.name === "Push"), "generic method must be indexed").toBeDefined();
+    expect(ast.symbols.find((s) => s.name === "x"), "body var must not leak").toBeUndefined();
+  });
+
+  it("D1f: the Rust skeleton keeps the signature line", () => {
+    const src = [
+      "pub fn foo() {",
+      "  let a = 1;",
+      "  let b = 2;",
+      "  let c = 3;",
+      "  let d = 4;",
+      "}",
+    ].join("\n");
+    const skeleton = generateSkeleton(src, "f.rs");
+    expect(skeleton).toContain("pub fn foo() {");
+    expect(skeleton).toContain("lines folded");
+  });
+});
