@@ -114,6 +114,26 @@ describe("TuiPermissionBroker", () => {
     await expect(pending).resolves.toBe(false);
   });
 
+  it("sanitizes the consent summary at the broker handoff (F1)", async () => {
+    // F1/AUDIT-2026-09-30: model-authored summaries reached the consent frame
+    // raw — a bare \r visually replaced what the user believed they were
+    // approving. Sanitize at the handoff so every renderer consumes safe text.
+    const broker = new TuiPermissionBroker();
+    let current: PendingPermissionRequest | null = null;
+    broker.subscribe((req) => {
+      current = req;
+    });
+    const pending = broker.requestPermission(
+      "run_command",
+      "Run command: npm test\rrm -rf /\u0007\u001b[31m"
+    );
+    // Terminal overwrite semantics: only the segment after \r was ever
+    // visible — and BEL/ANSI must not survive into the approval frame.
+    expect((current as PendingPermissionRequest | null)?.summary).toBe("rm -rf /");
+    (current as PendingPermissionRequest | null)?.resolve(false);
+    await expect(pending).resolves.toBe(false);
+  });
+
   it("clearSessionApprovals drops always-allow grants", async () => {
     const broker = new TuiPermissionBroker();
     broker.approveAlwaysForSession("edit_file");

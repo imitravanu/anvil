@@ -5,6 +5,7 @@ import { useTheme } from "../theme/theme.js";
 import { filterCommands } from "../commands/palette.js";
 import { COMMANDS } from "../commands/registry.js";
 import { CommandPalette } from "./CommandPalette.js";
+import { sanitizeTerminalText } from "../util/sanitize.js";
 
 interface InputBarProps {
   isBusy: boolean;
@@ -119,17 +120,23 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [], mruComm
   // accounting, and every later redraw lands on the wrong rows — the "lines
   // stack and interfere" corruption. Sanitize the value here and treat an
   // embedded return as submit (text after it becomes the new draft).
+  // F2/AUDIT-2026-09-30: CR/LF alone was only part of the C0 set — pasted
+  // tabs, BEL, FF, and ANSI sequences rendered raw too. CR/CRLF normalize to
+  // LF FIRST, because the sanitizer's lone-\r rule keeps only the
+  // terminal-visible overwrite segment (right for display, wrong for an input
+  // buffer); the whole chunk then goes through the same sanitizer every frame
+  // sink uses.
   const handleTextInputChange = (raw: string) => {
-    if (/[\r\n]/.test(raw)) {
-      const idx = raw.search(/[\r\n]/);
-      const before = raw.slice(0, idx);
-      const after = raw.slice(idx + 1).replace(/[\r\n]+/g, "");
+    const norm = sanitizeTerminalText(raw.replace(/\r\n?/g, "\n"));
+    if (norm.includes("\n")) {
+      const idx = norm.indexOf("\n");
+      const before = norm.slice(0, idx);
+      const after = norm.slice(idx + 1).replace(/\n+/g, "");
       // If there was text after the newline, the user pasted multiline content.
       // Do not prematurely submit the first line and corrupt the rest;
       // flatten newlines to spaces so the user sees the full draft.
       if (after.trim().length > 0) {
-        const sanitized = raw.replace(/[\r\n]+/g, " ");
-        setValue(sanitized);
+        setValue(norm.replace(/\n+/g, " "));
         historyIndex.current = -1;
         setRecalling(false);
         return;
@@ -144,11 +151,11 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [], mruComm
     }
     // Typing after recall starts a new draft; Up/Down then starts again
     // from the newest sent message instead of overwriting the draft.
-    if (raw !== value) {
+    if (norm !== value) {
       historyIndex.current = -1;
       setRecalling(false);
     }
-    setValue(raw);
+    setValue(norm);
   };
 
   return (

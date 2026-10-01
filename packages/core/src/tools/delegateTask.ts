@@ -361,11 +361,15 @@ export async function* executeSession(
   if (run.checkpoints.length > 0 && ctx.recordMutation) {
     ctx.recordMutation();
   }
+  // A crashed sub-run is an error, not a success — mirror the team adapter's
+  // outcome logic. C4/AUDIT-2026-09-30: the ledger used to say "ok" for a
+  // crash, and a thrown error still arrived here as `aborted` from the runner.
+  const subFailed = Boolean(run.failureReason);
   ctx.recordLedger({
     eventType: "subagent_finished",
     tool: "delegate_task",
     inputHash: inputKey,
-    outcome: "ok",
+    outcome: subFailed ? "error" : "ok",
     tokens: run.usage,
     elapsedMs: Date.now() - subStartedAt,
   });
@@ -376,7 +380,6 @@ export async function* executeSession(
     outputTokens: run.usage.out,
     report: run.report,
   };
-  const subFailed = Boolean(run.failureReason);
   return {
     output: subFailed
       ? { report: run.report, error: run.failureReason }

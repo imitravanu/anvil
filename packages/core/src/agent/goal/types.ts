@@ -37,6 +37,8 @@ export interface GoalMilestone {
 export interface GoalRunResult {
   goal: string;
   success: boolean;
+  /** True when the operator cancelled the mission (Ctrl+C) — never a success. */
+  cancelled?: boolean;
   milestones: GoalMilestone[];
   totalTurns: number;
   filesChanged: string[];
@@ -54,4 +56,4 @@ export type GoalEvent =
   | { type: "critique_started" }
   | { type: "critique_result"; verdict: string }
   | { type: "goal_completed"; result: GoalRunResult }
-  | { type: "goal_failed"; error: string };
+  | { type: "goal_failed"; error: string; cancelled?: boolean };

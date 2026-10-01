@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { renderCliEvent, EXIT_OK, EXIT_ERROR, EXIT_BUDGET_EXHAUSTED, EXIT_CANCELLED, EXIT_UNVERIFIED } from "../terminalRenderer.js";
+import { renderCliEvent, renderGoalEvent, EXIT_OK, EXIT_ERROR, EXIT_BUDGET_EXHAUSTED, EXIT_CANCELLED, EXIT_UNVERIFIED } from "../terminalRenderer.js";
 import type { AgentEvent } from "@anvil/core";
 
 describe("renderCliEvent (Phase 24.13)", () => {
@@ -111,5 +111,42 @@ describe("renderCliEvent (Phase 24.13)", () => {
     expect(code).toBe(EXIT_OK);
     stderrSpy.mockRestore();
     stdoutSpy.mockRestore();
+  });
+});
+
+describe("renderGoalEvent cancellation exit mapping (C3/AUDIT-2026-09-30)", () => {
+  it("maps a CANCELLED goal_completed to EXIT_CANCELLED, not a success", () => {
+    // A mission cancelled during the final critique used to still report
+    // success (0) when every milestone had completed. Cancelled is neither
+    // success nor a plain failure — it is 130.
+    const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    const res = renderGoalEvent({
+      type: "goal_completed",
+      result: {
+        goal: "g",
+        success: false,
+        cancelled: true,
+        milestones: [],
+        totalTurns: 1,
+        filesChanged: [],
+        summary: "cancelled",
+      },
+    });
+    expect(res).toEqual({ exitCode: EXIT_CANCELLED });
+    stdoutSpy.mockRestore();
+    stderrSpy.mockRestore();
+  });
+
+  it("maps a cancelled goal_failed to EXIT_CANCELLED; a real failure stays EXIT_ERROR", () => {
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    const cancelled = renderGoalEvent(
+      { type: "goal_failed", error: "Mission cancelled.", cancelled: true },
+      { raw: true }
+    );
+    expect(cancelled).toEqual({ exitCode: EXIT_CANCELLED });
+    const failed = renderGoalEvent({ type: "goal_failed", error: "boom" }, { raw: true });
+    expect(failed).toEqual({ exitCode: EXIT_ERROR });
+    stderrSpy.mockRestore();
   });
 });

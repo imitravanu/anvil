@@ -7,7 +7,7 @@ import {
   type PermissionBroker,
   type ToolDefinition,
 } from "@anvil/core";
-import { renderCliEvent } from "./terminalRenderer.js";
+import { renderCliEvent, EXIT_OK, EXIT_PERMISSION_DENIED } from "./terminalRenderer.js";
 
 export interface HeadlessOptions {
   prompt: string;
@@ -110,6 +110,32 @@ export async function readStdin(
 }
 
 /**
+ * Tracks whether a headless run ended blocked by permission denials (G4,
+ * AUDIT-2026-09-30). A denial arms it; only an EXECUTED (non-error) mutating
+ * tool result disarms it — a read-only success does not unblock a refused
+ * mutation. `isMutating` follows the orchestrator's convention: unknown tool
+ * names count as mutating (fail closed). Pure state machine so the exit
+ * contract is testable without driving a whole run.
+ */
+export class DenialTracker {
+  private pending = false;
+
+  constructor(private readonly isMutating: (name: string) => boolean) {}
+
+  onPermissionDenied(): void {
+    this.pending = true;
+  }
+
+  onToolFinished(name: string, isError: boolean): void {
+    if (!isError && this.isMutating(name)) this.pending = false;
+  }
+
+  get blocked(): boolean {
+    return this.pending;
+  }
+}
+
+/**
  * Execute a single agent turn in headless mode without React/Ink.
  * Streams text deltas to stdout, diagnostic messages to stderr.
  */
@@ -146,14 +172,33 @@ export async function runHeadless(opts: HeadlessOptions): Promise<number> {
   // Prepend: allows session.cancel() to run cleanly on the first SIGINT.
   process.prependListener("SIGINT", abortHandler);
 
+  const mutatingByName = new Map(session.getTools().map((t) => [t.name, t.mutating === true]));
+  const denials = new DenialTracker((name) => mutatingByName.get(name) ?? true);
+
   try {
     for await (const event of session.send(opts.prompt)) {
+      if (event.type === "tool_permission_denied") {
+        denials.onPermissionDenied();
+      } else if (event.type === "tool_finished") {
+        denials.onToolFinished(event.name, event.result.isError);
+      }
       const rendered = renderCliEvent(event, { raw: opts.raw });
       if (rendered?.exitCode !== undefined) {
+        if (rendered.exitCode === EXIT_OK && denials.blocked) {
+          // G4/AUDIT-2026-09-30: a run whose every mutation was refused must
+          // not report success — turn_complete's 0 used to win here and CI
+          // could not distinguish "done" from "blocked".
+          if (!opts.raw) {
+            process.stderr.write(
+              "\n[anvil] every mutating action was denied this run — reporting permission denied (exit 4), not success.\n"
+            );
+          }
+          return EXIT_PERMISSION_DENIED;
+        }
         return rendered.exitCode;
       }
     }
-    return 0;
+    return denials.blocked ? EXIT_PERMISSION_DENIED : 0;
   } finally {
     process.off("SIGINT", abortHandler);
   }

@@ -1,4 +1,5 @@
 import { PermissionBroker } from "@anvil/core";
+import { sanitizeTerminalText } from "../util/sanitize.js";
 
 export interface PendingPermissionRequest {
   toolName: string;
@@ -86,7 +87,11 @@ export class TuiPermissionBroker implements PermissionBroker {
   async requestPermission(toolName: string, summary: string): Promise<boolean> {
     if (this.alwaysApprove.has(toolName)) return true;
     return new Promise<boolean>((resolve) => {
-      this.queue.push({ toolName, summary, resolve });
+      // F1/AUDIT-2026-09-30: the summary is model-authored; sanitize at this
+      // handoff so every consent renderer consumes terminal-safe text — a
+      // bare \r used to visually replace what the user believed they were
+      // approving.
+      this.queue.push({ toolName, summary: sanitizeTerminalText(summary), resolve });
       this.pump();
     });
   }

@@ -59,6 +59,53 @@ describe("live sub-agent progress", () => {
     expect(events.map((e) => e.type)).toContain("turn_complete");
   });
 
+  it("a crashed sub-run is reported as an ERROR with its reason, not as aborted (C4)", async () => {
+    // C4/AUDIT-2026-09-30: any thrown error in the sub-run used to set
+    // aborted=true, so delegate_task answered "aborted" and the real reason
+    // vanished (the team adapter already reported it correctly).
+    const parentStart: StreamEvent[] = [
+      { type: "tool_call_start", id: "d2", name: "delegate_task" },
+      { type: "tool_call_end", id: "d2", name: "delegate_task", input: { task: "do the thing" } },
+      { type: "turn_end", stopReason: "tool_use" },
+    ];
+    const crashing = (): never => {
+      throw new Error("sub provider exploded");
+    };
+    const parentFinal: StreamEvent[] = [
+      { type: "text_delta", text: "Handled the crash." },
+      { type: "turn_end", stopReason: "end_turn" },
+    ];
+    const provider = new FakeProvider([parentStart, crashing, parentFinal] as ScriptEntry[]);
+    const session = new AgentSession(provider, {
+      systemPrompt: "test",
+      model: "fake-model",
+      maxTokens: 1024,
+      projectRoot: root,
+      permissionBroker: { async requestPermission() { return true; } },
+    });
+
+    const events: AgentEvent[] = [];
+    for await (const e of session.send("delegate")) events.push(e);
+
+    // A crash is not a cancellation: no cancelled event may be emitted.
+    expect(events.map((e) => e.type)).not.toContain("cancelled");
+    // Session tools report through HISTORY (they emit subagent events, not a
+    // tool_finished): the tool result must carry the real reason, flagged as
+    // an error — not "Sub-agent aborted."
+    const results = session
+      .getHistory()
+      .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
+      .filter(
+        (c): c is { type: "tool_result"; result: { toolCallId: string; content: string; isError: boolean } } =>
+          c.type === "tool_result"
+      )
+      .filter((c) => c.result.toolCallId === "d2");
+    expect(results).toHaveLength(1);
+    expect(results[0].result.isError).toBe(true);
+    expect(results[0].result.content).toContain("sub provider exploded");
+    expect(results[0].result.content).not.toContain("aborted");
+  });
+
   it("deletes the sub-session checkpoint file after handing the ring to the parent", async () => {
     const savedHome = process.env.ANVIL_HOME;
     const home = await fs.mkdtemp(path.join(os.tmpdir(), "anvil-sub-home-"));

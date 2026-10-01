@@ -27,6 +27,11 @@ describe("isSatisfiedVerdict (Phase 22.5)", () => {
       "Yes, although the tests still fail",
       "YES, unfortunately only partially complete",
       "YES, except the report is missing",
+      // C2/AUDIT-2026-09-30: the engine's own prompt teaches the "YES — …"
+      // separator, which the comma-only rule read as satisfaction.
+      "YES — however the criteria were not met",
+      "YES—but only partially",
+      "YES. Although nothing was verified",
     ]) {
       expect(isSatisfiedVerdict(verdict), verdict).toBe(false);
     }
@@ -468,10 +473,12 @@ Let's begin.`;
       const failed = events.find((e) => e.type === "goal_failed");
       expect(failed).toBeDefined();
       expect(String(failed?.error)).toContain("cancelled");
+      expect((failed as { cancelled?: boolean } | undefined)?.cancelled).toBe(true);
       expect(result.summary).toBe("Mission cancelled during planning.");
       expect(result.totalTurns).toBe(1);
       expect(result.milestones).toEqual([]);
       expect(result.success).toBe(false);
+      expect(result.cancelled).toBe(true);
     });
 
     it("aborts the mission when a MILESTONE turn is cancelled", async () => {
@@ -504,6 +511,7 @@ Let's begin.`;
       expect(result.summary).toBe("Mission cancelled during milestone 1.");
       expect(result.milestones[0].status).toBe("in_progress");
       expect(result.success).toBe(false);
+      expect(result.cancelled).toBe(true);
     });
 
     it("aborts the mission when the REVIEW turn is cancelled", async () => {
@@ -535,6 +543,47 @@ Let's begin.`;
       expect(events.map((e) => e.type)).toContain("goal_failed");
       expect(result.summary).toBe("Mission cancelled during milestone 1 review.");
       expect(result.success).toBe(false);
+      expect(result.cancelled).toBe(true);
+    });
+
+    it("returns a CANCELLED result when the mission is cancelled during the final critique", async () => {
+      // C3/AUDIT-2026-09-30: cancellation during the critique used to be
+      // cosmetic — the debrief still ran and a mission whose milestones had
+      // completed reported success:true, so Ctrl+C during the last turn could
+      // exit 0. The cancelled state must survive into the result (exit 130).
+      const planResponse: StreamEvent[] = [
+        {
+          type: "text_delta",
+          text: JSON.stringify([{ id: "1", title: "Only", criteria: "Do it" }]),
+        },
+        { type: "turn_end", stopReason: "end_turn" },
+      ];
+      const provider = new FakeProvider([
+        planResponse,
+        textTurn("Milestone 1 done."),
+        textTurn("YES — criteria met."),
+        (req) => stalledStream(req.signal ?? new AbortController().signal, { type: "text_delta", text: "critiquing..." }),
+      ]);
+      const engine = new GoalEngine({
+        provider,
+        model: "fake-model",
+        projectRoot: tmpDir,
+        permissionBroker: { async requestPermission() { return true; } },
+        autoVerify: false,
+      });
+
+      const runPromise = collect(engine, "Think only");
+      await waitForTurn(provider, 4);
+      engine.cancel();
+      const { events, result } = await runPromise;
+
+      expect(result.cancelled).toBe(true);
+      expect(result.success).toBe(false);
+      expect(result.summary).toContain("cancelled");
+      const completed = events.find((e) => e.type === "goal_completed");
+      expect(completed).toBeDefined();
+      expect((completed as { result: { cancelled?: boolean; success: boolean } }).result.cancelled).toBe(true);
+      expect((completed as { result: { cancelled?: boolean; success: boolean } }).result.success).toBe(false);
     });
 
     it("aborts the mission when the planning turn ERRORS", async () => {

@@ -46,6 +46,7 @@ export interface SubAgentRun {
   report: string;
   usage: { in: number; out: number };
   toolCalls: number;
+  /** True ONLY for a genuine cancellation (cancelled event / parent abort) — never for a crash. */
   aborted: boolean;
   /** Set when the sub-run crashed — surfaced to the parent turn, never swallowed. */
   failureReason?: string;
@@ -135,9 +136,10 @@ export async function* runSubAgentLive(opts: {
       }
     }
   } catch (err) {
-    // A crashed sub-run must not crash the main turn — but the reason must
-    // reach the user (it used to vanish, leaving a silent empty report).
-    aborted = true;
+    // A crashed sub-run must not crash the main turn — but it is NOT a
+    // cancellation: setting aborted here made delegate_task answer "aborted"
+    // and swallow the real reason (C4/AUDIT-2026-09-30). Only the cancelled
+    // event (or a parent abort, above) sets aborted.
     failureReason = getErrorMessage(err);
   } finally {
     opts.signal.removeEventListener("abort", onAbort);

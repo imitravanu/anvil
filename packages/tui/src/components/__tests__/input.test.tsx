@@ -121,4 +121,17 @@ describe("InputBar", () => {
     expect(frameText(app.lastFrame)).toContain("line one line two");
     app.unmount();
   });
+
+  it("expands tabs and strips other C0 controls from pasted input (F2)", async () => {
+    // F2/AUDIT-2026-09-30: only CR/LF were neutralized — a pasted \t, BEL, or
+    // FF reached the value and rendered raw, desyncing the frame.
+    const { app } = idleBar();
+    await tick();
+    app.stdin.write("a\tb\u0007c");
+    await tick();
+    const raw = app.lastFrame() ?? "";
+    expect(raw).not.toContain("\u0007");
+    expect(frameText(app.lastFrame)).toContain("a  bc");
+    app.unmount();
+  });
 });

@@ -45,6 +45,27 @@ describe("ToolCallView", () => {
     unmount();
   });
 
+  it("sanitizes LSP diagnostics so control characters cannot reach the frame (F1)", () => {
+    // F1/AUDIT-2026-09-30: diagnostic messages rendered raw while the summary
+    // above them was sanitized — a \r or ANSI sequence in a diagnostic could
+    // corrupt the frame the same way.
+    const diagCall: DisplayToolCall = {
+      id: "c3",
+      name: "get_diagnostics",
+      input: {},
+      status: "done",
+      summary: "1 diagnostic",
+      output: { diagnostics: [{ line: 3, severity: "error", message: "bad\u001b[31m\rthing\u0007" }] },
+    };
+    const { lastFrame, unmount } = renderThemed(<ToolCallView call={diagCall} />);
+    const raw = lastFrame() ?? "";
+    expect(raw).not.toContain("\r");
+    expect(raw).not.toContain("\u0007");
+    expect(raw).not.toContain("[31m");
+    expect(frameText(lastFrame)).toContain("thing");
+    unmount();
+  });
+
   it("stays collapsed by default; expands full output on demand", () => {
     const collapsed = renderThemed(<ToolCallView call={doneCall} />);
     expect(frameText(collapsed.lastFrame)).not.toContain("hello");

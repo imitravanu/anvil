@@ -51,6 +51,28 @@ describe("autoCommitMilestone (scoped staging)", () => {
     expect(status).toContain("?? leak.env");
   });
 
+  it("does not sweep a pre-staged user change into the milestone commit", async () => {
+    // C7/AUDIT-2026-09-30: `git add -- <scoped>` followed by a BARE `git commit`
+    // commits everything in the index, so an unrelated pre-staged change rode
+    // into the milestone commit. The commit must carry only the scoped paths.
+    fs.writeFileSync(path.join(dir, "initial.txt"), "user's staged edit");
+    git(dir, "git add initial.txt");
+    fs.writeFileSync(path.join(dir, "feature.txt"), "new feature");
+
+    const res = await autoCommitMilestone(dir, 7, "Scoped milestone", ["feature.txt"]);
+    expect(res.committed).toBe(true);
+
+    const files = git(dir, "git show --name-only --pretty=format:")
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    expect(files).toEqual(["feature.txt"]);
+
+    // The user's staged edit is STILL staged and was NOT committed.
+    expect(git(dir, "git diff --cached --name-only").trim()).toBe("initial.txt");
+    expect(git(dir, "git show HEAD:initial.txt").trim()).toBe("hello");
+  });
+
   it("refuses to commit when no paths are given (fail closed, stages nothing)", async () => {
     fs.writeFileSync(path.join(dir, "feature.txt"), "new feature");
 

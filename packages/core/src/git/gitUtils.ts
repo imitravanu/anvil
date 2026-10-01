@@ -46,8 +46,11 @@ export async function autoCommitMilestone(
     // path beginning with `-` can never be mistaken for a git flag.
     await execFileAsync("git", ["add", "--", ...scoped], { cwd: projectRoot });
 
-    // 2. Commit
-    const { stdout } = await execFileAsync("git", ["commit", "-m", commitMsg], {
+    // 2. Commit ONLY the scoped paths. A bare `git commit` commits the whole
+    // INDEX — an unrelated pre-staged user change rode into the milestone
+    // commit (C7/AUDIT-2026-09-30). The trailing pathspec keeps the commit to
+    // exactly what this session touched.
+    const { stdout } = await execFileAsync("git", ["commit", "-m", commitMsg, "--", ...scoped], {
       cwd: projectRoot,
     });
 

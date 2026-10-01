@@ -129,13 +129,18 @@ export function parseMilestones(rawText: string, goal: string): GoalMilestone[] 
  *
  * Any response starting with YES is accepted, but a hedge is not: "Yes, but the
  * criteria were not met" is a NO wearing a YES, and reading it as satisfaction
- * is how a mission marks itself complete on criteria it never met. Pure, so the
- * verdict rule is testable without driving a whole mission through the engine.
+ * is how a mission marks itself complete on criteria it never met. The
+ * separator before the hedge word is ANY run of whitespace/punctuation —
+ * C2/AUDIT-2026-09-30: the comma-only rule read the engine's OWN prompted form
+ * ("YES — however …", see the review prompt below) as satisfaction. Pure, so
+ * the verdict rule is testable without driving a whole mission through the
+ * engine.
  */
 export function isSatisfiedVerdict(verdict: string): boolean {
   const trimmed = verdict.trim();
   const startsYes = /^YES\b/i.test(trimmed);
-  const isHedge = /^YES\s*[,]\s*(but|however|although|except|unfortunately)/i.test(trimmed);
+  const isHedge =
+    /^YES\b[\s,;:.!—–-]*(?:but|however|although|except|unfortunately)\b/i.test(trimmed);
   return startsYes && !isHedge;
 }
 
@@ -178,10 +183,11 @@ export async function* runGoalMission(
   // through would run parseMilestones on an empty text (deterministic
   // fallback plan) and burn the whole turn budget against a dead provider.
   if (planning.cancelled) {
-    yield { type: "goal_failed", error: "Mission cancelled." };
+    yield { type: "goal_failed", error: "Mission cancelled.", cancelled: true };
     return {
       goal,
       success: false,
+      cancelled: true,
       milestones: [],
       totalTurns: 1,
       filesChanged: [],
@@ -231,10 +237,11 @@ export async function* runGoalMission(
     const outcome = yield* deps.sendTurn(milestonePrompt, milestone);
 
     if (outcome.cancelled) {
-      yield { type: "goal_failed", error: "Mission cancelled." };
+      yield { type: "goal_failed", error: "Mission cancelled.", cancelled: true };
       return {
         goal,
         success: false,
+        cancelled: true,
         milestones,
         totalTurns,
         filesChanged: [],
@@ -289,10 +296,11 @@ export async function* runGoalMission(
     totalTurns += 1;
 
     if (review.cancelled) {
-      yield { type: "goal_failed", error: "Mission cancelled." };
+      yield { type: "goal_failed", error: "Mission cancelled.", cancelled: true };
       return {
         goal,
         success: false,
+        cancelled: true,
         milestones,
         totalTurns,
         filesChanged: [],
@@ -351,7 +359,11 @@ export async function* runGoalMission(
     `Check for edge cases, security regressions, missing error handling, and verify if goal "${goal}" is completely fulfilled. Be critical and honest. Be concise (max 5 sentences).`;
   const critique = yield* deps.sendTurn(critiquePrompt, null);
   let criticVerdict = critique.text.trim();
-  if (!criticVerdict && !critique.cancelled) {
+  // C3/AUDIT-2026-09-30: the cancellation must survive into the result. It
+  // used to be read only to pick fallback TEXT, so a mission whose milestones
+  // had completed reported success even though the operator stopped it.
+  let cancelledAtCritique = critique.cancelled;
+  if (!criticVerdict && !cancelledAtCritique) {
     // The critique turn sometimes ends in tool calls with no prose (seen
     // live). Re-ask once; if still empty, state that honestly.
     const retry = yield* deps.sendTurn(
@@ -359,9 +371,10 @@ export async function* runGoalMission(
       null
     );
     criticVerdict = retry.text.trim();
+    cancelledAtCritique = retry.cancelled;
   }
   if (!criticVerdict) {
-    criticVerdict = critique.cancelled
+    criticVerdict = cancelledAtCritique
       ? "Mission cancelled before the critic could finish."
       : "The critic produced no verdict text; treat the run with suspicion and inspect the diffs manually.";
   }
@@ -371,6 +384,21 @@ export async function* runGoalMission(
   // 5. Final Mission Debriefing
   const changes = await deps.summarizeChanges();
   const filesChanged = changes.map((c) => c.path);
+  if (cancelledAtCritique) {
+    // The debrief still renders — but as a CANCELLED result, never success.
+    const result: GoalRunResult = {
+      goal,
+      success: false,
+      cancelled: true,
+      milestones,
+      totalTurns,
+      filesChanged,
+      summary: `Mission "${goal}" was cancelled during the final critique.`,
+      criticVerdict,
+    };
+    yield { type: "goal_completed", result };
+    return result;
+  }
   const allCompleted = milestones.every((m) => m.status === "completed");
   const completedCount = milestones.filter((m) => m.status === "completed").length;
   const budgetNote = budgetExhausted

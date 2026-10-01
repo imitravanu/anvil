@@ -79,7 +79,8 @@ export function ToolCallView({ call, expanded }: { call: DisplayToolCall; expand
         <Box flexDirection="column" paddingLeft={5}>
           {diagnostics.slice(0, 3).map((d, i) => (
             <Text key={i} color={d.severity === "error" ? theme.colors.error : theme.colors.warning}>
-              {d.severity === "error" ? "✖ " : "▲ "}line {d.line}: {curtail(d.message ?? "", Math.max(10, budget - 12))}
+              {d.severity === "error" ? "✖ " : "▲ "}line {d.line}:{" "}
+              {curtail(sanitizeTerminalText(d.message ?? ""), Math.max(10, budget - 12))}
             </Text>
           ))}
         </Box>

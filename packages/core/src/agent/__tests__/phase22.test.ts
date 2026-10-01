@@ -8,6 +8,7 @@ import { resolveProviderSelection } from "../../config/index.js";
 import { toOpenAIMessages } from "../../providers/openai.js";
 import { createGroqProvider } from "../../providers/groq.js";
 import { analyzeWorkspace } from "../goal/awareness.js";
+import { isSatisfiedVerdict } from "../goal/goalEngine.js";
 import { loadCheckpoints } from "../checkpointStore.js";
 import type { ConversationMessage } from "../../providers/types.js";
 
@@ -74,11 +75,9 @@ describe("Phase 22 Bug Fix Suite", () => {
 
   describe("22.5 - Goal Review Verdict Parsing", () => {
     it("accepts valid confirmations and rejects hedges", () => {
-      const isSatisfied = (reviewVerdict: string): boolean => {
-        const startsYes = /^YES\b/i.test(reviewVerdict);
-        const isHedge = /^YES\s*[,]\s*(but|however|although|except|unfortunately)/i.test(reviewVerdict);
-        return startsYes && !isHedge;
-      };
+      // The predicate is IMPORTED, not re-implemented: the inline copy kept
+      // passing after the real rule moved on (C2/AUDIT-2026-09-30).
+      const isSatisfied = isSatisfiedVerdict;
 
       expect(isSatisfied("YES")).toBe(true);
       expect(isSatisfied("YES — criteria met")).toBe(true);
@@ -88,6 +87,10 @@ describe("Phase 22 Bug Fix Suite", () => {
       expect(isSatisfied("NO — failed tests")).toBe(false);
       expect(isSatisfied("YES, but the tests failed")).toBe(false);
       expect(isSatisfied("YES, however there are errors")).toBe(false);
+      // The engine's own prompt teaches "YES — however …": a comma-only hedge
+      // rule read this as satisfaction and completed the milestone.
+      expect(isSatisfied("YES — however the criteria were not met")).toBe(false);
+      expect(isSatisfied("YES—but only partially")).toBe(false);
     });
   });
 

@@ -16,6 +16,14 @@ export interface RenderResult {
 export const EXIT_OK = 0;
 export const EXIT_ERROR = 1;
 export const EXIT_BUDGET_EXHAUSTED = 2;
+/**
+ * G4/AUDIT-2026-09-30: a headless run whose every mutating action was denied
+ * used to finish via turn_complete → EXIT_OK, so a CI wrapper could not tell
+ * "done" from "blocked". A denial that no later executed mutation cleared
+ * reports this distinct code, mirroring how EXIT_UNVERIFIED = 3 distinguishes
+ * an unrepaired verification failure from generic failure (1).
+ */
+export const EXIT_PERMISSION_DENIED = 4;
 /** Turn mutated files and automated verification gave up with tests failing. */
 export const EXIT_UNVERIFIED = 3;
 export const EXIT_CANCELLED = 130;
@@ -175,12 +183,22 @@ export function renderGoalEvent(event: GoalEvent, opts?: RenderCliOptions): Rend
           process.stdout.write(`  - ${f}\n`);
         }
       }
-      return { exitCode: event.result.success ? EXIT_OK : EXIT_ERROR };
+      // C3/AUDIT-2026-09-30: a mission cancelled before its final critique is
+      // neither success nor a plain failure — cancelled maps to 130.
+      return {
+        exitCode: event.result.cancelled
+          ? EXIT_CANCELLED
+          : event.result.success
+            ? EXIT_OK
+            : EXIT_ERROR,
+      };
     case "goal_failed":
       if (!raw) {
-        process.stderr.write(`\n✗ Goal failed: ${event.error}\n`);
+        process.stderr.write(
+          event.cancelled ? "\nCancelled.\n" : `\n✗ Goal failed: ${event.error}\n`
+        );
       }
-      return { exitCode: EXIT_ERROR };
+      return { exitCode: event.cancelled ? EXIT_CANCELLED : EXIT_ERROR };
     default:
       return undefined;
   }
