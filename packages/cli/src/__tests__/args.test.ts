@@ -97,6 +97,29 @@ describe("resolveInvocation", () => {
     expect(resolveInvocation(["config"], configured)).toEqual({ kind: "setup", thenChat: false });
   });
 
+  // G10 (AUDIT-2026-09-30): the subcommand is the first positional token, so
+  // leading flags must not hide it — and a flag's VALUE must not become one.
+  it("finds the subcommand after leading flags", () => {
+    expect(resolveInvocation(["--verbose", "gate"], configured)).toEqual({
+      kind: "gate",
+      watch: false,
+      full: false,
+      staged: false,
+    });
+    expect(resolveInvocation(["--no-mcp", "health"], configured)).toEqual({ kind: "health" });
+    expect(resolveInvocation(["--verbose", "init", "--guarded"], configured)).toEqual({
+      kind: "init",
+      lang: undefined,
+    });
+  });
+
+  it("never treats a flag's value as the subcommand", () => {
+    // `-p gate` is a prompt, not the gate subcommand.
+    expect(resolveInvocation(["-p", "gate"], configured).kind).toBe("run");
+    expect(resolveInvocation(["--provider", "gate"], configured).kind).toBe("run");
+    expect(resolveInvocation(["--model", "health", "--verbose"], configured).kind).toBe("run");
+  });
+
   it("collects the gate flags", () => {
     expect(resolveInvocation(["gate", "--watch"], configured)).toEqual({
       kind: "gate",

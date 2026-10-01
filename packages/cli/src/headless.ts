@@ -3,6 +3,7 @@ import {
   buildAnvilAgentProfile,
   MAX_STDIN_BYTES,
   MAX_STDIN_WAIT_MS,
+  STDIN_IDLE_TIMEOUT_MS,
   type ModelProvider,
   type PermissionBroker,
   type ToolDefinition,
@@ -56,7 +57,7 @@ export { MAX_STDIN_BYTES, MAX_STDIN_WAIT_MS };
  * Capped by maxBytes and hard timeout against infinite/slow streaming pipes.
  */
 export async function readStdin(
-  idleMs = 5_000,
+  idleMs = STDIN_IDLE_TIMEOUT_MS,
   maxBytes = MAX_STDIN_BYTES,
   maxWaitMs = MAX_STDIN_WAIT_MS
 ): Promise<string> {

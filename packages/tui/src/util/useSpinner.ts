@@ -19,8 +19,6 @@ export const SPINNERS = {
 
 export type SpinnerStyle = keyof typeof SPINNERS;
 
-export const SPINNER_FRAMES: readonly string[] = SPINNERS.dots.frames;
-
 /** Cycles the style's frames while `active`; freezes otherwise. */
 export function useSpinnerFrame(active: boolean, style: SpinnerStyle = "dots"): string {
   const { frames, interval } = SPINNERS[style];

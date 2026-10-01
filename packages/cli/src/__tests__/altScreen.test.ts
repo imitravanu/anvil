@@ -4,7 +4,6 @@ import {
   ALT_SCREEN_EXIT,
   enterAltScreen,
   exitAltScreen,
-  isAltScreenActive,
   isAltScreenSupported,
 } from "../altScreen.js";
 
@@ -37,7 +36,6 @@ describe("enter/exit pairing", () => {
     expect(stream.chunks).toEqual([ALT_SCREEN_ENTER]);
     exitAltScreen(stream);
     expect(stream.chunks).toEqual([ALT_SCREEN_ENTER, ALT_SCREEN_EXIT]);
-    expect(isAltScreenActive()).toBe(false);
   });
 
   it("enter is a no-op on unsupported streams", () => {
@@ -56,7 +54,6 @@ describe("enter/exit pairing", () => {
     expect(enterAltScreen(stream, { TERM: "dumb" })).toBe(false);
     expect(enterAltScreen(stream, { ANVIL_NO_ALT_SCREEN: "1" })).toBe(false);
     expect(stream.chunks).toEqual([]);
-    expect(isAltScreenActive()).toBe(false);
   });
 
   it("emits the smcup/rmcup sequences", () => {

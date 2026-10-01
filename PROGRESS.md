@@ -2,6 +2,53 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-02 (OpenCode chief-engineer session — Phase 39 W8: G10/G11/G12 CLI truth, F12 dead exports, F13 catch comments):**
+> owns `packages/cli/src/args.ts`, `packages/cli/src/__tests__/args.test.ts`,
+> `packages/cli/src/index.tsx`, `packages/cli/src/headless.ts`,
+> `packages/cli/src/gate.ts`, `packages/cli/src/altScreen.ts`,
+> `packages/cli/src/__tests__/altScreen.test.ts`,
+> `packages/core/src/config/constants.ts`,
+> `packages/tui/src/hooks/useTerminalSize.ts`, `packages/tui/src/util/useSpinner.ts`,
+> `packages/tui/src/hooks/eventReducer.ts`,
+> `docs/PHASE-39-ROADMAP.md`, `docs/CURRENT-FOCUS.md`, `docs/README.md`,
+> `CHANGELOG.md`, plus this file.
+> **G10 [P3]:** subcommands resolved only at `argv[0]`, so `anvil --verbose gate`
+> fell through to chat. `resolveInvocation` now finds the first POSITIONAL token,
+> skipping value-taking flags WITH their values (`-p "gate"` stays a prompt).
+> Mutation receipt: new "finds the subcommand after leading flags" test FAILS
+> against the stashed old args.ts (1 failed / 18 passed), passes after; the
+> "flag value is never a subcommand" cases pass on both sides BY DESIGN
+> (tripwires against the new scan over-matching), labelled here as such.
+> **G11 [P3]:** `readStdin()` was awaited before the `-p` check — an explicit
+> prompt paid the full 5 s idle window when a parent held an open, silent pipe.
+> With `--prompt`, stdin is now auxiliary context read with
+> `STDIN_CONTEXT_PEEK_MS` (150 ms, env-overridable); without it, stdin IS the
+> prompt and keeps the full idle window. Mechanism receipt (held-open silent
+> pipe, `sleep 8 | probe`): default 5,007 ms vs peek 152 ms. Probe script was
+> written to `scratch/` and DELETED after the receipt (probe hygiene).
+> **G12 [P3]:** gate pathspecs now double-quoted (single quotes are not quoting
+> under cmd.exe; the native gate runs `shell: true` on win32). POSIX parity
+> verified by negative control: injected `err instanceof Error ? … : String(err)`
+> into `health.ts`, `anvil gate` flagged it (`:58 [no-raw-error-format]`, exit 1),
+> file restored. Dead export `isAltScreenActive` removed (only its own test
+> called it; assertions dropped, chunk assertions kept). Inline `timeout: 30_000`
+> and `idleMs = 5_000` are the named `GATE_DIFF_SCAN_TIMEOUT_MS` /
+> `STDIN_IDLE_TIMEOUT_MS` (rule 2.4). The audit's `index.tsx:235,395` timeout
+> refs are STALE — no inline timeouts exist there now (verified by grep).
+> **F12 [P3]:** dead exports removed (§2.8) — `useTerminalSize` hook (only
+> `breakpointForWidth` has callers; the `TerminalSize` interface went with it)
+> and `SPINNER_FRAMES` (zero callers anywhere).
+> **F13 [P3]:** the two live silent catches in `eventReducer.ts` got §2.3
+> `// intentional:` comments. The audit's `hooks/toolOutput.ts` ref is STALE
+> (no such file; W8 already covered `util/toolOutput.ts`, `clipboard.ts`,
+> `notify.ts`).
+> **One wording nit noticed, not fixed** (message-only, no behavior):
+> `anvil gate` prints "clean tree — nothing to scan" when the scan ran and
+> found zero violations — misleading on a dirty tree; recorded here, left for
+> a future wording pass.
+> **Gate:** Steps 0–5 green on the final tree (exit 0, 25/25 mock evals).
+> No protected artifact touched.
+>
 > **DONE 2026-10-02 (OpenCode chief-engineer session — Phase 39 W8 quick wins: G9, G13, G15):**
 > owns NEW `packages/cli/src/help.ts`, NEW `packages/cli/src/__tests__/help.test.ts`,
 > `packages/cli/src/index.tsx`, `packages/tui/src/index.ts`,

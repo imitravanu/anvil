@@ -75,12 +75,16 @@ export function retainOutput(output: unknown): unknown {
           : value
       ) ?? String(output);
   } catch {
+    // intentional: a circular/unserializable tool payload falls back to a
+    // display note; the data exists only for rendering.
     return { note: "[output not serializable for display]" };
   }
   if (text.length <= OUTPUT_RETAIN_MAX) {
     try {
       return JSON.parse(text);
     } catch {
+      // intentional: re-parsing can fail on a string cut mid-escape by the
+      // retain cap; the truncated text is the intended fallback.
       return { truncated: text, note: "[output truncated for display]" };
     }
   }

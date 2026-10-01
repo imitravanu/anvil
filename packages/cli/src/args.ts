@@ -16,6 +16,16 @@
  * supplies (whether any provider is configured). Extracted from the entry point
  * so the whole mode matrix is unit-testable without spawning a process.
  */
+/** Flags that consume the following token as their value (see parseFlags). */
+const VALUE_FLAGS: ReadonlySet<string> = new Set([
+  "--provider",
+  "--model",
+  "--prompt",
+  "-p",
+  "--goal",
+  "-g",
+  "--lang",
+]);
 export type Invocation =
   | { kind: "version" }
   | { kind: "help" }
@@ -40,7 +50,22 @@ export function resolveInvocation(
   if (argv.includes("--version") || argv.includes("-v")) return { kind: "version" };
   if (argv.includes("--help") || argv.includes("-h")) return { kind: "help" };
 
-  const first = argv[0];
+  // G10 (AUDIT-2026-09-30): the subcommand is the first POSITIONAL token, not
+  // necessarily argv[0] — `anvil --verbose gate` must reach the gate. Flags
+  // that consume a value are skipped WITH their value, so `-p "gate"` is a
+  // prompt, never a subcommand.
+  let first: string | undefined;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (VALUE_FLAGS.has(a)) {
+      i++; // skip this flag's value
+      continue;
+    }
+    if (a.startsWith("-")) continue;
+    first = a;
+    break;
+  }
+
   if (first === "config") return { kind: "setup", thenChat: false };
   if (first === "gate") {
     return {

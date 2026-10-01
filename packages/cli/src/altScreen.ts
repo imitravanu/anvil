@@ -25,10 +25,6 @@ export function isAltScreenSupported(
 
 let active = false;
 
-export function isAltScreenActive(): boolean {
-  return active;
-}
-
 export interface AltScreenStream extends AltScreenCapable {
   write: (chunk: string) => void;
 }

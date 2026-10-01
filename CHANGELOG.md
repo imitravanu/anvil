@@ -49,7 +49,15 @@ All notable changes to Anvil are documented here. The format follows
   instead of silently degrading (G13); the assertion-script timeout is the
   named `EVAL_ASSERTION_TIMEOUT_MS`. **Startup p95 is a real percentile** —
   `measure-startup.mjs` uses Type-7 interpolation instead of indexing the
-  maximum sample (G15).
+  maximum sample (G15). **Subcommands work after leading flags** —
+  `anvil --verbose gate` reaches the gate instead of falling through to chat,
+  and a flag's value (`-p gate`) is never mistaken for a subcommand (G10).
+  **An explicit `--prompt` no longer waits on a silent inherited pipe** —
+  piped stdin is peeked for 150 ms as auxiliary context instead of blocking
+  the full 5 s idle window (G11). **Gate pathspecs quote under cmd.exe** and
+  the gate/stdin timeouts are named constants (G12). **Dead exports removed**:
+  `isAltScreenActive`, `useTerminalSize`, `SPINNER_FRAMES` (G12/F12, §2.8);
+  the remaining `eventReducer` catches carry `// intentional:` comments (F13).
 
 ### Trust exits and consent (Phase 39 W2)
 

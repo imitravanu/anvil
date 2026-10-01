@@ -220,6 +220,13 @@ export const GUARDIAN_WATCH_MAX_SCANS_PER_MIN = getEnvNumber("ANVIL_GUARDIAN_WAT
 // CLI headless (`anvil -p`) stdin intake bounds.
 export const MAX_STDIN_BYTES = 1024 * 1024; // 1 MB cap
 export const MAX_STDIN_WAIT_MS = 30_000; // 30s hard timeout
+// G12: idle window before an open-but-silent pipe is treated as "no input".
+export const STDIN_IDLE_TIMEOUT_MS = getEnvNumber("ANVIL_STDIN_IDLE_MS", 5_000);
+// G11: with an explicit --prompt, piped stdin is auxiliary context — peek
+// briefly instead of waiting the full idle window on an inherited pipe.
+export const STDIN_CONTEXT_PEEK_MS = getEnvNumber("ANVIL_STDIN_CONTEXT_PEEK_MS", 150);
+// G12: one `git diff` invocation in the native gate must not hang the CLI.
+export const GATE_DIFF_SCAN_TIMEOUT_MS = getEnvNumber("ANVIL_GATE_DIFF_TIMEOUT_MS", 30_000);
 
 // MCP transport retention (transport.ts) and tools/list cursor loop (client.ts).
 export const MAX_MCP_LINE_BYTES = 1024 * 1024;

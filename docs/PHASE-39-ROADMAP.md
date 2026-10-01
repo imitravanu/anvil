@@ -4,7 +4,8 @@
 > **Date:** 2026-09-30
 > **Author:** Chief Engineer (OpenCode session, owner-approved)
 > **Status:** IN PROGRESS — W1–W7 landed (verified against live code
-> 2026-10-02); W8 partially landed (E8, G17); W8 remainder open.
+> 2026-10-02); W8 partially landed (E8, G17, G9–G13, G15, F12, F13);
+> W8 remainder open (H1, C9–C19, E7/E9, F8, G6).
 > **Scope:** [`AUDIT-2026-09-30.md`](AUDIT-2026-09-30.md) recorded 79 findings
 > (9 × P1, 29 × P2, 41 × P3) from a full-tree adversarial review and grouped
 > them into eight workstreams (its §11). This phase executes them. Every wave
@@ -146,11 +147,24 @@ which that sweep repaired:
   timeout is `EVAL_ASSERTION_TIMEOUT_MS` (rule 2.4), not a bare `10_000`.
   G15 — `measure-startup.mjs` p95 uses Type-7 interpolation (fail-first:
   400.0 = the max before, 301.0 after, on a fixed 10-sample probe).
+  **G10, G11, G12, F12, F13 FIXED 2026-10-02** (OpenCode session): G10 —
+  subcommands resolve at the first positional token, not `argv[0]`
+  (`anvil --verbose gate` reaches the gate; `-p gate` stays a prompt;
+  fail-first: new test red against the old resolver, 1/19). G11 — with an
+  explicit `--prompt`, piped stdin is peeked for `STDIN_CONTEXT_PEEK_MS`
+  (150 ms) instead of blocking the full idle window (mechanism receipt:
+  5,007 ms → 152 ms on a held-open silent pipe). G12 — gate pathspecs
+  double-quoted for cmd.exe (POSIX parity verified by negative control:
+  injected slop flagged at `health.ts:58`, exit 1); dead export
+  `isAltScreenActive` removed; gate/stdin timeouts are named constants;
+  the audit's `index.tsx:235,395` refs verified STALE. F12 — dead exports
+  `useTerminalSize`/`SPINNER_FRAMES` removed (§2.8). F13 — remaining
+  `eventReducer.ts` catches carry `// intentional:`; the `hooks/toolOutput.ts`
+  ref verified STALE.
   **Still open:** H1 (scanner coverage extension —
   magic constants, non-empty silent catches, dead exports), C9–C19, E7/E9,
-  F8/F12/F13, G6 (spot-check 2026-10-02: `ENGINEERING-ROADMAP.md`'s `anvil
-  1.1.0` line fixed in the sweep; remaining count drift unverified),
-  G10–G12.
+  F8, G6 (spot-check 2026-10-02: `ENGINEERING-ROADMAP.md`'s `anvil
+  1.1.0` line fixed in the sweep; remaining count drift unverified).
 
 **Owner decisions, not mechanical edits:** homegrown-parser vs tree-sitter
 after W4 stands. The headless-denial exit contract was DECIDED in W2: a

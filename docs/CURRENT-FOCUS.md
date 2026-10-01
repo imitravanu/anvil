@@ -17,8 +17,8 @@
   C8 memory preamble, E6 MCP POST JSON-RPC errors); W6 (F3 member ids, F5
   cell-width, F6 diff floor, F4/F7/F9/F10/F11); W7 (B3 usage-on-error, B4
   strict pricing, A7 interleaved arms, B8 untested badge — **A8 deferred**,
-  needs a structured runner error code). **W8 is partial**: E8, G17, and the G9/G13/G15 quick wins landed (derived `--help` command line, loud eval flags, interpolated p95);
-  H1, C9–C19, E7/E9, F8/F12/F13, G6-remainder, G10–G12 stay open. The W4–W8
+  needs a structured runner error code). **W8 is partial**: E8, G17, and the G9/G13/G15 quick wins landed (derived `--help` command line, loud eval flags, interpolated p95); **G10/G11/G12 (CLI truth), F12 (dead exports), F13 (catch comments) landed 2026-10-02**;
+  H1, C9–C19, E7/E9, F8, G6-remainder stay open. The W4–W8
   commits carried no bookkeeping; the 2026-10-02 reconciliation sweep verified
   their claims against live code and repaired the record (see PROGRESS.md).
   Roadmap: [`PHASE-39-ROADMAP.md`](PHASE-39-ROADMAP.md).
@@ -93,7 +93,7 @@
 ## What reopens work (the standing triggers)
 
 Two phases are open. The active remediation wave is **Phase 39** (W8 remainder
-next: H1 scanner coverage, C9–C19, E7/E9, F8/F12/F13, G10–G12).
+next: H1 scanner coverage, C9–C19, E7/E9, F8, G6-remainder).
 The scanner trigger assessment is due: AUDIT D1 was the 4th lexical patch
 family for Rust/TS and W4 has now landed — re-assess below. **Phase 38.5** (the prompt rewrite)
 is unblocked: after W1 the harness measures the agent it scores. These

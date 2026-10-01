@@ -6,6 +6,7 @@ import {
   loadCustomGuardianRules,
   recordHealthScan,
   scanDiffForSlop,
+  GATE_DIFF_SCAN_TIMEOUT_MS,
   GUARDIAN_WATCH_INTERVAL_MS,
   GUARDIAN_WATCH_MAX_SCANS_PER_MIN,
   type GuardianViolation,
@@ -25,11 +26,13 @@ export interface NativeGateOptions {
 }
 
 /** Dirty files only — never a full-tree walk on keystrokes. */
-const DIFF_PATHSPEC = "-- . ':!node_modules' ':!dist'";
+// G12: double quotes — these pathspecs run through a shell, and single quotes
+// are not quoting under cmd.exe (shell: true on win32).
+const DIFF_PATHSPEC = '-- . ":!node_modules" ":!dist"';
 
 /** Staged additions only — the pre-commit surface (`anvil gate --staged`). */
 const STAGED_PATHSPEC =
-  "diff --cached --unified=0 --no-color -- . ':(exclude)node_modules' ':(exclude)dist'";
+  'diff --cached --unified=0 --no-color -- . ":(exclude)node_modules" ":(exclude)dist"';
 
 export interface WorkingTreeScan {
   violations: GuardianViolation[];
@@ -60,7 +63,7 @@ function scanGitDiff(cwd: string, command: string, label: string, recordTelemetr
       cwd,
       encoding: "utf8",
       maxBuffer: 8 * 1024 * 1024,
-      timeout: 30_000,
+      timeout: GATE_DIFF_SCAN_TIMEOUT_MS,
     });
   } catch (err: unknown) {
     return { violations: [], error: `cannot read git diff: ${getErrorMessage(err)}` };
