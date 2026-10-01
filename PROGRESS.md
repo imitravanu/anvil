@@ -2,6 +2,43 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-01 (Cline chief-engineer deep-dive review — owner-requested verification of Phase 39 W1 and the open audit; findings only, no production code changed):**
+> owns NEW `docs/AUDIT-2026-10-01.md`, `docs/README.md` (index rows + file count), plus this file.
+> **Baseline:** full gate Steps 0–5 green on `83b3275` before this record, and re-run green with it
+> present (1,349 tests: 126 cli / 892 core / 331 tui; 25/25 mock evals). `npm audit --omit=dev`:
+> 0 vulnerabilities. Type-escape census in production: 0.
+> **Method:** direct reads of the safety-critical surfaces with quoted lines; live number-taking
+> (`measure-startup`, `count-objects`, `npm audit`, LOC/test censuses); spot-verification of every W1
+> closure claim in live code. No live provider probes (mock lane only).
+> **Result:** all W1 closures hold in code (A1 seam `eval/experiment.ts:134-137`, B1 fail-closed
+> `cert/runner.ts:557`, G14 own-key `logger.ts:30-32`, A2/A5/A6 test files present). G4 and G1
+> re-confirmed OPEN live (`terminalRenderer.ts:44-48` + `headless.ts:150-156`; gate PATHSPEC
+> `verify-gate.mjs:210`). **NEW:** `.git` never packed (5,467 loose objects, 0 packs); 8 unpushed
+> commits with 6-day-old off-machine backups; startup/bundle drift vs M0 (398 ms / 7.17 MB vs
+> 323 ms / 6.51 MB); `PHASE-39-ROADMAP.md` header says v1.12.x vs shipped 1.2.0. Nothing re-opens
+> `AUDIT-2026-09-30`; W2–W8 remain the plan.
+> **Next:** owner review of this record's diff (left uncommitted), then the audit §8 ranking —
+> backup/push/gc first; W2 (trust exits, G4) as the top engineering item.
+>
+> **DONE 2026-10-01 (Cline chief-engineer session — Phase 39 W2: trust exits and consent; owner-directed, both flagged owner decisions taken):**
+> owns `packages/core/src/agent/goal/goalEngine.ts`, `packages/core/src/agent/goal/types.ts`,
+> `packages/core/src/agent/subagent.ts`, `packages/core/src/tools/delegateTask.ts`,
+> `packages/core/src/git/gitUtils.ts`, `packages/cli/src/headless.ts`,
+> `packages/cli/src/terminalRenderer.ts`, `packages/tui/src/permission/TuiPermissionBroker.ts`,
+> `packages/tui/src/components/ToolCallView.tsx`, `packages/tui/src/components/InputBar.tsx`,
+> their test files (`goalEngine.test.ts`, `phase22.test.ts`, `subagentProgress.test.ts`,
+> `gitUtils.test.ts`, `headless.test.ts`, `terminalRenderer.test.ts`, `broker.test.ts`,
+> `calls.test.tsx`, `input.test.tsx`), `docs/PHASE-39-ROADMAP.md`, `docs/CURRENT-FOCUS.md`,
+> `docs/README.md`, `CHANGELOG.md`, this file.
+> **Wave:** C2 (hedge separator), C3 (cancelled goal → 130), C4 (crash ≠ abort; reason + ledger),
+> C7 (scoped commit ignores pre-staged), F1 (consent sanitize at broker + diagnostics), F2
+> (InputBar C0/ANSI strip), G4 (EXIT_PERMISSION_DENIED = 4). Tests written first (fail-first).
+> **Mutation receipt:** before the fix, **17 new assertions failed across 9 test files**
+> (core 8 / cli 6 / tui 3), each naming its finding; after, the same suites pass and the full
+> guardian gate is green — Steps 0–5, **1,360 tests** (131 cli / 895 core / 334 tui), 25/25 mock
+> evals, exit 0. Decision recorded: `EXIT_PERMISSION_DENIED = 4` (a distinct code, not a reuse
+> of 1); crash ≠ cancel in the subagent runner.
+>
 > **DONE 2026-09-30 (OpenCode chief-engineer session — Phase 39 wave 1: measurement integrity, owner-approved remediation):**
 > owned `packages/core/src/eval/experiment.ts`, `packages/core/src/eval/runner.ts`,
 > `packages/core/src/eval/__tests__/experiment.test.ts`, NEW `packages/core/src/eval/__tests__/profileSeam.test.ts`,

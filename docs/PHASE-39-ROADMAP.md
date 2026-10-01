@@ -3,7 +3,7 @@
 > **Version:** v1.12.x
 > **Date:** 2026-09-30
 > **Author:** Chief Engineer (OpenCode session, owner-approved)
-> **Status:** IN PROGRESS — W1 landed 2026-09-30; W2–W8 open.
+> **Status:** IN PROGRESS — W1–W2 landed; W3–W8 open.
 > **Scope:** [`AUDIT-2026-09-30.md`](AUDIT-2026-09-30.md) recorded 79 findings
 > (9 × P1, 29 × P2, 41 × P3) from a full-tree adversarial review and grouped
 > them into eight workstreams (its §11). This phase executes them. Every wave
@@ -47,11 +47,28 @@ points at the 25 saturated short tasks. This is a named gap, not an implied
 one: authoring it is W1's remaining tail and doubles as 38.5's measurement
 carrier.
 
-## W2–W8 (open, per AUDIT §11)
+## W2 — Trust exits and consent (COMPLETE, 2026-10-01)
 
-- **W2 — Trust exits and consent:** C2, C3, C4, C7, F1, F2, G4. Headless runs
-  must exit non-zero when every mutation was denied (owner decision: new exit
-  code vs reuse `1`).
+Owner-directed wave; both flagged owner decisions were taken here (the exit
+contract now; the parser one stays with W4):
+
+| Finding | Fix | Pinned by |
+|---|---|---|
+| G4 [P1] | New named `EXIT_PERMISSION_DENIED = 4` (following `EXIT_UNVERIFIED = 3`): headless tracks denials in a pure `DenialTracker`; a run ending with a denial that no executed mutation cleared returns 4, not 0. Decision recorded: a distinct code, because CI must tell "blocked" from "broke" (1) and from "unverified" (3). | `headless.test.ts` (refusal → 4; read-only success after denial → 4; tracker unit pair) |
+| C2 [P1] | `isSatisfiedVerdict` accepts ANY separator before the hedge word — the engine's own prompted "YES — however …" form is a NO again. `phase22.test.ts` now imports the predicate instead of re-implementing it. | `goalEngine.test.ts`, `phase22.test.ts` |
+| C3 [P2] | Cancellation survives into the result: all four cancel paths set `cancelled: true`; the CLI maps cancelled → `EXIT_CANCELLED` (130) on both `goal_completed` and `goal_failed`. | `goalEngine.test.ts` (critique-cancel mission), `terminalRenderer.test.ts` |
+| C4 [P2] | A crash is not a cancellation: the subagent runner sets only `failureReason`; `delegate_task` surfaces the real reason and records `outcome: "error"` (mirrors the team adapter). | `subagentProgress.test.ts` (reason lands in history; no cancelled event) |
+| C7 [P2] | `autoCommitMilestone` commits with an explicit pathspec — an unrelated pre-staged user change no longer rides into the milestone commit. | `gitUtils.test.ts` (pre-staged fixture stays staged) |
+| F1 [P2] | Consent summaries sanitized at the broker handoff; LSP diagnostics sanitized at render. | `broker.test.ts`, `calls.test.tsx` |
+| F2 [P2] | InputBar routes every chunk through `sanitizeTerminalText` (CR/CRLF pre-normalized so overwrite semantics never eat input) — tabs/BEL/FF/ANSI cannot reach the value. | `input.test.tsx` |
+
+**Mutation receipt:** before the fix, **17 new assertions failed across 9 test
+files** (core 8 / cli 6 / tui 3), each naming its finding; after, the same
+suites pass and the full guardian gate is green — Steps 0–5, **1,360 tests**
+(131 cli / 895 core / 334 tui), 25/25 mock evals.
+
+## W3–W8 (open, per AUDIT §11)
+
 - **W3 — Gate and infra integrity:** G1–G3, G7, G8, G16. **Protected artifacts**
   — needs the AGENTS.md §3.4 path: declared purposes, manifest regen, sentinel
   in sync, explicit human review of the protected-path diff.
@@ -66,5 +83,6 @@ carrier.
 - **W8 — Slop debt + docs truth:** H1, C9–C19, E7–E9, F8/F12/F13, G6–G13, G15,
   G17. Mechanical sweep once the scanners exist (G1/G3 are in W3).
 
-**Owner decisions, not mechanical edits:** the headless-denial exit contract
-(W2/G4) and homegrown-parser vs tree-sitter after W4.
+**Owner decisions, not mechanical edits:** homegrown-parser vs tree-sitter
+after W4 stands. The headless-denial exit contract was DECIDED in W2: a
+dedicated `EXIT_PERMISSION_DENIED = 4`, not a reuse of `1`.

@@ -4,15 +4,18 @@
 > what is true right now, kept current alongside any open phase, and what
 > reopens work.
 
-## Where the project stands (2026-09-30)
+## Where the project stands (2026-10-01)
 
 - **Phase 39 is OPEN** (2026-09-30) — remediation of the full-tree adversarial
   audit [`AUDIT-2026-09-30.md`](AUDIT-2026-09-30.md) (79 findings). Wave 1
   landed today: A/B budget parity (A1), honest split-win significance (A2),
   live pacing (A3), one shared task filter (A5), a seam-observing test (A6),
   fail-closed certification provenance (B1), and the prototype-key log level
-  (G14) — 10/10 fail-first on the mutation check. Workstreams W2–W8 remain
-  open; W3 touches protected artifacts. Roadmap:
+  (G14) — 10/10 fail-first on the mutation check. Workstreams W3–W8 remain
+  open (W2 — trust exits and consent — landed 2026-10-01: headless denial
+  exit 4, cancelled goals 130, subagent crash reasons, pathspec-scoped
+  commits, sanitized consent/input; 17/17 fail-first); W3 touches protected
+  artifacts. Roadmap:
   [`PHASE-39-ROADMAP.md`](PHASE-39-ROADMAP.md).
 - **Phase 38 is OPEN** (2026-09-29) — the frontier agent brain. The founding
   probe found that the eval lane assembled a **different agent than the one
@@ -84,7 +87,7 @@
 
 ## What reopens work (the standing triggers)
 
-Two phases are open. The active remediation wave is **Phase 39** (W2–W8 next;
+Two phases are open. The active remediation wave is **Phase 39** (W3–W8 next;
 W4's parser six-pack may trip the scanner trigger below — AUDIT D1 is already
 the 4th lexical patch family for Rust/TS). **Phase 38.5** (the prompt rewrite)
 is unblocked: after W1 the harness measures the agent it scores. These

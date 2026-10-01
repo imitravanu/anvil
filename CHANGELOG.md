@@ -4,6 +4,46 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Trust exits and consent (Phase 39 W2)
+
+- **A fully-denied headless run no longer exits 0 (G4).** `anvil -p` without
+  `-y` denies every mutation; the run used to finish via `turn_complete` →
+  exit 0, so a CI wrapper could not distinguish "done" from "blocked". A new
+  named code `EXIT_PERMISSION_DENIED = 4` is returned when the run ends with a
+  denial that no executed mutation cleared — a read-only success does not
+  unblock a refused mutation. Decision recorded: a distinct code, mirroring
+  `EXIT_UNVERIFIED = 3`.
+- **A hedged milestone verdict is a NO again (C2).** The review prompt teaches
+  "YES — however …", and the comma-only hedge rule read exactly that form as
+  satisfaction — a milestone could complete, and auto-commit, on criteria it
+  never met. Any separator now precedes the hedge word, and `phase22.test.ts`
+  imports the predicate instead of re-implementing it.
+- **Cancelled missions exit 130 (C3).** Cancellation during the final critique
+  used to be cosmetic: the debrief ran and a mission whose milestones had
+  completed reported success, so Ctrl+C on the last turn could exit 0. All
+  four cancel paths set `cancelled: true` on the result, and both CLI paths
+  map it to `EXIT_CANCELLED`.
+- **A crashed sub-agent reports its real reason (C4).** Any thrown error set
+  `aborted`, so `delegate_task` answered "aborted" and swallowed the cause;
+  the ledger also recorded the crash as `ok`. Crash ≠ cancel: the runner sets
+  only the failure reason, the tool surfaces it, and the ledger mirrors the
+  team adapter's outcome logic.
+- **Milestone auto-commits can no longer sweep pre-staged user changes (C7).**
+  `autoCommitMilestone` staged the scoped paths but committed the whole index —
+  a bare `git commit`. The commit now carries an explicit pathspec.
+- **Consent and diagnostics render sanitized text (F1).** Permission summaries
+  are sanitized at the TUI broker handoff (a bare `\r` could visually replace
+  what the user believed they were approving), and LSP diagnostic messages are
+  sanitized at render.
+- **Pasted control characters no longer reach the input value (F2).** Only
+  CR/LF were neutralized; tabs, BEL, FF, and pasted ANSI sequences rendered
+  raw. Every chunk now routes through `sanitizeTerminalText` (CR/CRLF
+  pre-normalized so the sanitizer's overwrite rule cannot eat input).
+- **Fail-first receipt:** 17 of 17 new assertions failed against the pre-fix
+  code, each naming its finding (core 8 / cli 6 / tui 3); the full guardian
+  gate is green after — Steps 0–5, 1,360 tests (131 cli / 895 core / 334 tui),
+  25/25 mock evals.
+
 ### Audit remediation wave 1 — the measurement now tells the truth (Phase 39 W1)
 
 - **A/B budget parity (A1).** An arm without a declared budget now runs with
