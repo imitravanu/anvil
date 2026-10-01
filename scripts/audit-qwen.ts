@@ -1,14 +1,10 @@
 #!/usr/bin/env npx tsx
 /**
- * QwenCloud Model Audit Script for Anvil
- * 
- * Audits streaming deltas, tool-calling round-trips, and reasoning capabilities
- * across QwenCloud models using Anvil's native provider adapter.
+ * QwenCloud Model Audit Script for Anvil.
  *
- * Usage:
- *   npx tsx scripts/audit-qwen.ts
- *   npx tsx scripts/audit-qwen.ts --model qwen3.8-max
- *   npx tsx scripts/audit-qwen.ts --fast
+ * G17 (AUDIT-2026-09-30, closed here): imports `loadCredentials` +
+ * `getModelsForProvider` deliberately — this is itself a live audit script, not
+ * dead debt, so both are used below rather than dropped.
  */
 
 import {
