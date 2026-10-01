@@ -38,7 +38,17 @@ function runOnce() {
 const warmup = runOnce();
 const samples = Array.from({ length: RUNS }, runOnce).sort((a, b) => a - b);
 const median = samples[Math.floor(samples.length / 2)];
-const p95 = samples[Math.min(samples.length - 1, Math.floor(samples.length * 0.95))];
+
+// G15 (AUDIT-2026-09-30): nearest-rank p95 at RUNS=10 is floor(10*0.95)=9, the
+// MAXIMUM sample — the "p95" label was a lie. Type-7 linear interpolation (the
+// numpy/R default) estimates a real percentile from the two bracketing samples.
+function percentile(sorted, p) {
+  const q = (sorted.length - 1) * p;
+  const lo = Math.floor(q);
+  const hi = Math.min(lo + 1, sorted.length - 1);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (q - lo);
+}
+const p95 = percentile(samples, 0.95);
 
 /**
  * @param {string} dir

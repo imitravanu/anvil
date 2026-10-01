@@ -41,9 +41,17 @@ Work like a careful engineer, not a guesser:
 - If a tool reports an error, read the error and fix the cause rather than retrying the same call.
 - Say plainly what you did not do, and what you could not verify.`;
 
+// G13 (AUDIT-2026-09-30): fail loud on a valueless flag instead of silently
+// treating the next flag (or nothing) as its value — same contract as run.ts.
 function flag(args: string[], name: string): string | undefined {
   const i = args.indexOf(`--${name}`);
-  return i !== -1 ? args[i + 1] : undefined;
+  if (i === -1) return undefined;
+  const v = args[i + 1];
+  if (v === undefined || v.startsWith("--")) {
+    console.error(`[ab] --${name} requires a value.`);
+    process.exit(1);
+  }
+  return v;
 }
 
 async function main(): Promise<void> {
@@ -52,8 +60,13 @@ async function main(): Promise<void> {
   const providerId = flag(args, "provider") ?? process.env.ANVIL_PROVIDER;
   const modelId = flag(args, "model") ?? process.env.ANVIL_MODEL;
   const taskFilter = flag(args, "filter");
-  const trialsRaw = Number(flag(args, "trials") ?? "1");
-  const trials = Number.isFinite(trialsRaw) && trialsRaw > 0 ? Math.floor(trialsRaw) : 1;
+  const trialsFlag = flag(args, "trials");
+  // G13: `--trials banana` used to parse to NaN and silently degrade to 1.
+  if (trialsFlag !== undefined && !/^[1-9]\d*$/.test(trialsFlag)) {
+    console.error(`[ab] Invalid --trials value "${trialsFlag}" (expected a positive integer).`);
+    process.exit(1);
+  }
+  const trials = trialsFlag === undefined ? 1 : Number(trialsFlag);
   const baselineOnly = args.includes("--baseline-only");
 
   const baseline: AbArm = {

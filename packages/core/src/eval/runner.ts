@@ -14,7 +14,7 @@ import { loadCredentials } from "../config/index.js";
 import { buildAnvilAgentProfile } from "../config/agentProfile.js";
 import { getErrorMessage, sleepAbortable } from "../errors.js";
 import { scanTextForSlop } from "../guardian/scanner.js";
-import { EVAL_CONCURRENCY_DEFAULT, EVAL_CONCURRENCY_MAX, EVAL_TASK_TIMEOUT_MS } from "../config/constants.js";
+import { EVAL_ASSERTION_TIMEOUT_MS, EVAL_CONCURRENCY_DEFAULT, EVAL_CONCURRENCY_MAX, EVAL_TASK_TIMEOUT_MS } from "../config/constants.js";
 import { log } from "../logger.js";
 
 /**
@@ -241,7 +241,7 @@ export async function runEvalTask(
 
     const checkResult = spawnSync("bash", [task.assertionScript], {
       cwd: tempDir,
-      timeout: 10_000,
+      timeout: EVAL_ASSERTION_TIMEOUT_MS,
       env: {
         PATH: process.env.PATH ?? "",
         HOME: process.env.HOME ?? "",

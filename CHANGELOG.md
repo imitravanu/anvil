@@ -42,7 +42,14 @@ All notable changes to Anvil are documented here. The format follows
 - **Slop debt and docs truth (W8, partial).** The four `(err as Error)` casts
   in `grep.ts`/`editFile.ts` are `getErrorMessage` (E8); `audit-qwen.ts` is
   closed as live work, misclassified (G17); three safe-by-design silent
-  catches carry §2.3 `// intentional:` rationale comments.
+  catches carry §2.3 `// intentional:` rationale comments. **`--help` lists
+  every slash command** — the line is derived from the TUI command registry,
+  ending the 15-of-20 drift (G9). **The evals CLIs fail loud** on a valueless
+  `--provider`/`--model`/`--filter` and on non-positive-integer `--trials`
+  instead of silently degrading (G13); the assertion-script timeout is the
+  named `EVAL_ASSERTION_TIMEOUT_MS`. **Startup p95 is a real percentile** —
+  `measure-startup.mjs` uses Type-7 interpolation instead of indexing the
+  maximum sample (G15).
 
 ### Trust exits and consent (Phase 39 W2)
 

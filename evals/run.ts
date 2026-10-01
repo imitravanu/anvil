@@ -25,6 +25,23 @@ import { resolveConcurrency } from "../packages/core/src/eval/runner.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TASKS_DIR = path.join(__dirname, "tasks");
 
+/**
+ * G13 (AUDIT-2026-09-30): a valueless trailing flag (`--provider` with nothing
+ * after it, or another flag in its place) used to leave the value undefined
+ * while `useMock` stayed false — a silent live run with `Provider: undefined`.
+ * Fail loud instead, mirroring the `--concurrency` check below.
+ */
+function flagValue(args: string[], name: string): string | undefined {
+  const i = args.indexOf(`--${name}`);
+  if (i === -1) return undefined;
+  const v = args[i + 1];
+  if (v === undefined || v.startsWith("--")) {
+    console.error(`[eval] --${name} requires a value.`);
+    process.exit(1);
+  }
+  return v;
+}
+
 async function main() {
   const args = process.argv.slice(2);
 
@@ -41,21 +58,8 @@ async function main() {
   const fastOnly = args.includes("--fast");
   const useMock = args.includes("--mock") || (!args.includes("--provider") && !process.env.ANVIL_PROVIDER);
 
-  let providerId: string | undefined;
-  const pIdx = args.indexOf("--provider");
-  if (pIdx !== -1 && args[pIdx + 1]) {
-    providerId = args[pIdx + 1];
-  } else if (process.env.ANVIL_PROVIDER) {
-    providerId = process.env.ANVIL_PROVIDER;
-  }
-
-  let modelId: string | undefined;
-  const mIdx = args.indexOf("--model");
-  if (mIdx !== -1 && args[mIdx + 1]) {
-    modelId = args[mIdx + 1];
-  } else if (process.env.ANVIL_MODEL) {
-    modelId = process.env.ANVIL_MODEL;
-  }
+  const providerId = flagValue(args, "provider") ?? process.env.ANVIL_PROVIDER;
+  const modelId = flagValue(args, "model") ?? process.env.ANVIL_MODEL;
 
   let taskFilter: string | undefined;
   const fIdx = args.indexOf("--filter");

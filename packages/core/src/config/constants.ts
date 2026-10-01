@@ -79,6 +79,10 @@ export const EVAL_TASK_TIMEOUT_MS = getEnvNumber("ANVIL_EVAL_TIMEOUT_MS", 30_000
 // execution bounds (e.g. 15–20 tool turns + compilation/test execution).
 export const EVAL_LIVE_TASK_TIMEOUT_MS = getEnvNumber("ANVIL_EVAL_LIVE_TIMEOUT_MS", 120_000);
 
+// One task's assertion script run (G13). Deliberately tighter than the task
+// timeout: an assertion that hangs is a broken task, not a slow one.
+export const EVAL_ASSERTION_TIMEOUT_MS = getEnvNumber("ANVIL_EVAL_ASSERTION_TIMEOUT_MS", 10_000);
+
 // Phase 27.3 — failure diff capture: a failed task's unified diff is model-authored
 // and bounded so a runaway write cannot bloat the report or the persisted .diff.
 export const EVAL_FAILURE_DIFF_MAX_CHARS = getEnvNumber("ANVIL_EVAL_FAILURE_DIFF_CHARS", 8_000);

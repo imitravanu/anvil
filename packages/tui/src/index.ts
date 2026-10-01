@@ -10,3 +10,4 @@ export { FirstRunSetup } from "./components/FirstRunSetup.js";
 export { THEMES, isThemeName, type Theme, type ThemeName } from "./theme/themes.js";
 export { loadCustomThemes, customThemesPath } from "./theme/custom.js";
 export { detectTerminalTheme } from "./theme/adaptive.js";
+export { COMMANDS } from "./commands/registry.js";

@@ -45,6 +45,7 @@ import { runGuardedInit } from "./initGuarded.js";
 import { runHealth } from "./health.js";
 import { enterAltScreen, exitAltScreen } from "./altScreen.js";
 import { parseFlags, resolveInvocation } from "./args.js";
+import { buildHelpText } from "./help.js";
 
 // Detached MCP server children would outlive Anvil — SIGKILL them on exit.
 // `exit` alone misses real signals (kill, terminal close), so hook those too.
@@ -87,38 +88,7 @@ process.on("SIGINT", () => {
 
 const VERSION = CORE_VERSION;
 
-const HELP = `Anvil — a terminal coding agent (v${VERSION})
-
-Usage:
-  anvil                     Start an interactive chat session
-  anvil -p, --prompt <text> Run headless non-interactive turn (streams to stdout)
-  anvil -g, --goal <text>   Run autonomous multi-step engineering mission
-  anvil config              (Re)configure a provider API key
-  anvil gate [--full|--watch|--staged]  Guardian scan of the working-tree diff (--watch: continuous, --staged: staged additions only)
-  anvil health              Show codebase health: freshness, cleanliness, allowlist drain
-  anvil init --guarded      Provision AGENTS.md + .fresh-allowlist.json here
-  anvil --version           Print the version and exit
-  anvil --help              Show this help
-
-Options:
-  -p, --prompt <text>       Run headless turn and stream response to stdout
-  -g, --goal <text>         Autonomous mission mode (decomposes, executes, critiques)
-  -y, --yes                 Auto-approve mutating tools in headless mode
-  --raw                     Suppress tool diagnostic messages on stderr
-  --provider <id>           Override the provider for this run
-  --model <id>              Override the model for this run
-  --no-mcp                  Skip MCP server startup (fast boot)
-  --verbose                 Info-level diagnostics on stderr (ANVIL_LOG=info)
-  --watch                   (gate) continuously re-scan the working-tree diff
-
-Environment:
-  ANVIL_PROVIDER, ANVIL_MODEL — same as the flags, lower precedence
-  ANVIL_NO_ALT_SCREEN=1 — stay in the main screen buffer (no alt-screen)
-
-Config lives in ~/.anvil (credentials.json, settings.json, sessions/).
-Set ANVIL_HOME to relocate the data dir (credentials, settings, sessions, cache).
-Slash commands inside the app: /help /clear /connect /diff /expand /goal /image /ledger /mcp /model /retry /rewind /theme /session /sync.
-`;
+const HELP = buildHelpText(VERSION);
 
 // --- Startup crash guard: never leave the terminal in a broken raw-mode state. ---
 let appInstance: { unmount: () => void } | null = null;

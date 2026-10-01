@@ -135,13 +135,22 @@ which that sweep repaired:
   grep 2026-10-02); G17 — `scripts/audit-qwen.ts` is live work, closed as
   misclassified with a doc comment; three safe-by-design silent catches carry
   rationale comments (re-aligned to the §2.3 `// intentional:` form in the
-  reconciliation sweep). **Still open:** H1 (scanner coverage extension —
+  reconciliation sweep). **G9, G13, G15 FIXED 2026-10-02** (OpenCode session):
+  G9 — the `--help` slash-command line is DERIVED from the TUI `COMMANDS`
+  registry via `cli/src/help.ts` (no literal to drift; parity guard
+  `help.test.ts`; fail-first probe: registry 20 vs old literal 15, missing
+  `pr, team, plugin, context, copy`). G13 — both evals CLIs fail loud on a
+  valueless `--provider`/`--model`/`--filter` and on non-positive-integer
+  `--trials` (fail-first probes: `Provider: undefined` banner, `--trials
+  banana` → 1; both exit 1 with a named message after); the assertion-script
+  timeout is `EVAL_ASSERTION_TIMEOUT_MS` (rule 2.4), not a bare `10_000`.
+  G15 — `measure-startup.mjs` p95 uses Type-7 interpolation (fail-first:
+  400.0 = the max before, 301.0 after, on a fixed 10-sample probe).
+  **Still open:** H1 (scanner coverage extension —
   magic constants, non-empty silent catches, dead exports), C9–C19, E7/E9,
   F8/F12/F13, G6 (spot-check 2026-10-02: `ENGINEERING-ROADMAP.md`'s `anvil
-  1.1.0` line fixed in the sweep; remaining count drift unverified), G9
-  (`--help`/registry parity — no fix found in `index.tsx`), G10–G13, G15
-  (confirmed live 2026-10-02: `measure-startup.mjs:41` `floor(10*0.95)` still
-  indexes the maximum).
+  1.1.0` line fixed in the sweep; remaining count drift unverified),
+  G10–G12.
 
 **Owner decisions, not mechanical edits:** homegrown-parser vs tree-sitter
 after W4 stands. The headless-denial exit contract was DECIDED in W2: a

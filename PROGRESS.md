@@ -2,6 +2,34 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-02 (OpenCode chief-engineer session — Phase 39 W8 quick wins: G9, G13, G15):**
+> owns NEW `packages/cli/src/help.ts`, NEW `packages/cli/src/__tests__/help.test.ts`,
+> `packages/cli/src/index.tsx`, `packages/tui/src/index.ts`,
+> `packages/core/src/config/constants.ts`, `packages/core/src/eval/runner.ts`,
+> `evals/run.ts`, `evals/ab.ts`, `scripts/measure-startup.mjs`,
+> `docs/PHASE-39-ROADMAP.md`, `docs/CURRENT-FOCUS.md`, `docs/README.md`,
+> `CHANGELOG.md`, plus this file.
+> **G9 [P3]:** `--help` listed 15 of the registry's 20 slash commands (missing
+> `/pr /team /plugin /context /copy` — fail-first probe against HEAD's literal).
+> Fixed by DERIVATION, not a fresher literal: new `cli/src/help.ts` builds the
+> line from the TUI `COMMANDS` registry (exported from `@anvil/tui`), so drift
+> is structurally impossible (the 38.1 pattern). Guard: `help.test.ts` asserts
+> parity both ways. End-to-end receipt: built `dist/index.js --help` lists 20.
+> **G13 [P3]:** the evals CLIs silently degraded — a valueless trailing
+> `--provider` left `providerId` undefined while `useMock` stayed false
+> (fail-first: banner printed `Provider: undefined` and continued), and
+> `--trials banana` silently became 1 (fail-first: `trials   : 1 per arm`).
+> Both CLIs now fail loud with a named message and exit 1 (`--trials 0` too —
+> caught by MY OWN probe after the first fix passed `banana`; regex tightened
+> to `[1-9]\d*`). The assertion-script timeout is the named
+> `EVAL_ASSERTION_TIMEOUT_MS` (rule 2.4), no longer a bare `10_000`.
+> **G15 [P3]:** `measure-startup.mjs` "p95" was `floor(10*0.95)` = the MAXIMUM
+> sample. Now Type-7 linear interpolation (the numpy/R default). Fail-first on
+> a fixed 10-sample probe: 400.0 (= max) before, 301.0 after.
+> **Gate:** Steps 0–5 green on the final tree (exit 0, 25/25 mock evals).
+> No protected artifact touched. **Still open:** W8 remainder (H1, C9–C19,
+> E7/E9, F8/F12/F13, G6-remainder, G10–G12), A8 (deferred), A4 (harder tier).
+>
 > **DONE 2026-10-02 (OpenCode chief-engineer session — record reconciliation wave; docs + 3 comment fixes; claims verified against live code, no behavior changed):**
 > owns `docs/PHASE-39-ROADMAP.md`, `docs/CURRENT-FOCUS.md`, `docs/README.md`,
 > `docs/ENGINEERING-ROADMAP.md`, `CHANGELOG.md`, plus the comment-only edits in
