@@ -315,7 +315,11 @@ export class LspStdioClient implements LspClient {
 
     for (const [p, val] of this.pathDiagnostics.entries()) {
       if (p === targetPath || p.endsWith(targetPath) || targetPath.endsWith(p)) {
-        return [...val.diagnostics];
+        // E3 (AUDIT-2026-09-30): the post-deadline fallback honors the SAME
+        // freshness guard as the polling loop. Returning the cached entry
+        // unconditionally let a mutation report diagnostics that predate it —
+        // already-fixed errors looked live after a timeout.
+        if (val.timestamp >= sinceTimestamp) return [...val.diagnostics];
       }
     }
     return [];

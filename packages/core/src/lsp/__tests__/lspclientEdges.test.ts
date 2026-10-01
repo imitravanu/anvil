@@ -193,4 +193,18 @@ describe("LspStdioClient edge behavior", () => {
     const missing: LspServerCommand = { language: "typescript", command: "/definitely/not/a/real-lsp-binary", args: [] };
     expect(await LspStdioClient.start(missing, root)).toBeNull();
   });
+
+  it("does not resurrect STALE diagnostics after a timeout (E3/E10)", async () => {
+    const { root, server } = makeFixture(FAKE_PUSH_SERVER, "stale-server");
+    const client = await LspStdioClient.start(server, root);
+    expect(client).not.toBeNull();
+    // The fake server pushes diagnostics for /tmp/x.ts right after initialize.
+    const pushed = await client!.waitForDiagnostics(1500);
+    expect(pushed.length).toBeGreaterThan(0);
+    // Ask only for diagnostics NEWER than any that can exist: the deadline
+    // expires and the fallback must return nothing, never the stale entry.
+    const stale = await client!.diagnosticsForPath("/tmp/x.ts", Date.now() + 60_000, 60);
+    expect(stale).toEqual([]);
+    await client!.close();
+  });
 });

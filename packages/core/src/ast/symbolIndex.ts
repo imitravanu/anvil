@@ -1,8 +1,26 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { Dirent, Stats } from "node:fs";
 import { parseFileAst } from "./parser.js";
 import type { AstSymbol, AstSymbolKind } from "./types.js";
 import { EXCLUDED_DIRS } from "../tools/paths.js";
+
+// D2 (AUDIT-2026-09-30): the index's filesystem failsafes swallow errors by
+// design (a racing delete, an unreadable dir, a permission error must not abort
+// a whole-repo index). Named helpers with explicit intent replace the bare
+// `.catch(() => …)` expressions so the swallowing is documented, not implicit.
+/** `readdir` failsafe: an unreadable or absent directory simply has no entries. */
+async function readDirSafe(dir: string): Promise<Dirent[]> {
+  return fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+}
+/** `stat` failsafe: a missing or unreadable file is treated as absent. */
+async function statSafe(full: string): Promise<Stats | null> {
+  return fs.stat(full).catch(() => null);
+}
+/** `read` failsafe: a file that vanished or is unreadable contributes no symbols. */
+async function readFileSafe(full: string): Promise<string> {
+  return fs.readFile(full, "utf8").catch(() => "");
+}
 
 const CODE_EXTENSIONS = new Set([
   ".ts",
@@ -144,7 +162,7 @@ export class WorkspaceSymbolIndex {
 
     let count = 0;
     const walk = async (dir: string): Promise<void> => {
-      const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+      const entries = await readDirSafe(dir);
       for (const entry of entries) {
         if (EXCLUDED_DIRS.has(entry.name)) continue;
         const full = path.join(dir, entry.name);
@@ -154,8 +172,8 @@ export class WorkspaceSymbolIndex {
           const ext = path.extname(entry.name).toLowerCase();
           if (CODE_EXTENSIONS.has(ext)) {
             const rel = normalizePath(path.relative(this.projectRoot, full));
-            const st = await fs.stat(full).catch(() => null);
-            const content = await fs.readFile(full, "utf8").catch(() => "");
+            const st = await statSafe(full);
+            const content = await readFileSafe(full);
             if (content) {
               this.indexFile(rel, content, st?.mtimeMs);
               count++;
@@ -232,7 +250,7 @@ export class WorkspaceSymbolIndex {
 
     for (const rel of [...this.fileSymbols.keys()]) {
       const full = path.join(this.projectRoot, rel);
-      const st = await fs.stat(full).catch(() => null);
+      const st = await statSafe(full);
       if (!st) {
         this.removeFile(rel);
         removed++;
@@ -241,7 +259,7 @@ export class WorkspaceSymbolIndex {
       const known = this.mtimes.get(rel);
       if (known !== undefined && st.mtimeMs === known) continue;
 
-      const content = await fs.readFile(full, "utf8").catch(() => "");
+      const content = await readFileSafe(full);
       if (!content) {
         this.removeFile(rel);
         removed++;
@@ -255,7 +273,7 @@ export class WorkspaceSymbolIndex {
     // Directory mtimes alone miss files added to a subdirectory whose parent
     // did not change, so this walks the tree; only unseen files are parsed.
     const walkNew = async (dir: string): Promise<void> => {
-      const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+      const entries = await readDirSafe(dir);
       for (const entry of entries) {
         if (EXCLUDED_DIRS.has(entry.name)) continue;
         const full = path.join(dir, entry.name);
@@ -268,8 +286,8 @@ export class WorkspaceSymbolIndex {
         if (!CODE_EXTENSIONS.has(ext)) continue;
         const rel = normalizePath(path.relative(this.projectRoot, full));
         if (this.fileSymbols.has(rel)) continue;
-        const st = await fs.stat(full).catch(() => null);
-        const content = await fs.readFile(full, "utf8").catch(() => "");
+        const st = await statSafe(full);
+        const content = await readFileSafe(full);
         if (content) {
           this.indexFile(rel, content, st?.mtimeMs);
           added++;
