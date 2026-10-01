@@ -4,6 +4,7 @@ import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 import { MAX_WRITE_BYTES } from "./writeFile.js";
 import { resolveWithinRoot } from "./paths.js";
 import { atomicWriteText } from "../atomicWrite.js";
+import { getErrorMessage } from "../errors.js";
 import { getProjectSymbolIndex } from "./findSymbol.js";
 import { checkPostMutationDiagnostics } from "../lsp/sensor.js";
 import type { LspDiagnostic } from "../lsp/types.js";
@@ -120,9 +121,9 @@ export const execute: ToolExecutor = async (rawInput, ctx: ToolContext) => {
       return { output: { error: err.message }, isError: true, summary: err.summary };
     }
     return {
-      output: { error: (err as Error).message },
+      output: { error: getErrorMessage(err) },
       isError: true,
-      summary: `edit_file failed on ${input?.path ?? "file"}: ${(err as Error).message}`,
+      summary: `edit_file failed on ${input?.path ?? "file"}: ${getErrorMessage(err)}`,
     };
   }
   await atomicWriteText(result.abs, result.updated, { signal: ctx.signal });
@@ -187,6 +188,6 @@ export const describe = async (rawInput: unknown, ctx: ToolContext): Promise<str
     // cannot be read inside the catch — `describe` is called BEFORE the
     // orchestrator's mutation/permission branch, and a malformed mutating call
     // reaches here on its way to being rejected as malformed.
-    return `Edit ${fallbackPath} (preview unavailable: ${(err as Error).message})`;
+    return `Edit ${fallbackPath} (preview unavailable: ${getErrorMessage(err)})`;
   }
 };

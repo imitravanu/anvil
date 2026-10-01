@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 import { EXCLUDED_DIRS, resolveWithinRoot } from "./paths.js";
+import { getErrorMessage } from "../errors.js";
 
 const MAX_FILE_BYTES = 1024 * 1024;
 
@@ -176,7 +177,7 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
     regex = new RegExp(pattern);
   } catch (err) {
     return {
-      output: { error: `Invalid regular expression: ${(err as Error).message}` },
+      output: { error: `Invalid regular expression: ${getErrorMessage(err)}` },
       isError: true,
       summary: `grep failed: invalid pattern`,
     };

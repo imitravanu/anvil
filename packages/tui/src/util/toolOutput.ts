@@ -23,6 +23,7 @@ export function formatToolOutput(output: unknown): string[] {
     try {
       return capLines(JSON.stringify(output, null, 2).split("\n"));
     } catch {
+      // Outer handler only: the fallback is a diagnostic, never exceptional.
       return ["(output not serializable)"];
     }
   }

@@ -41,6 +41,8 @@ export function copyToClipboard(
     stream.write(osc52Sequence(text));
     return { ok: true, reason: "copied", bytes };
   } catch {
+    // OSC 52 is best-effort on the user's terminal and is properties of the
+    // clip pipe (piped redirect); the copy already failed cleanly.
     return { ok: false, reason: "write-failed", bytes };
   }
 }
