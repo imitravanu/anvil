@@ -4,19 +4,24 @@
 > what is true right now, kept current alongside any open phase, and what
 > reopens work.
 
-## Where the project stands (2026-10-01)
+## Where the project stands (2026-10-02)
 
 - **Phase 39 is OPEN** (2026-09-30) — remediation of the full-tree adversarial
-  audit [`AUDIT-2026-09-30.md`](AUDIT-2026-09-30.md) (79 findings). Wave 1
-  landed today: A/B budget parity (A1), honest split-win significance (A2),
-  live pacing (A3), one shared task filter (A5), a seam-observing test (A6),
-  fail-closed certification provenance (B1), and the prototype-key log level
-  (G14) — 10/10 fail-first on the mutation check. Workstreams W3–W8 remain
-  open (W2 — trust exits and consent — landed 2026-10-01: headless denial
-  exit 4, cancelled goals 130, subagent crash reasons, pathspec-scoped
-  commits, sanitized consent/input; 17/17 fail-first); W3 touches protected
-  artifacts. Roadmap:
-  [`PHASE-39-ROADMAP.md`](PHASE-39-ROADMAP.md).
+  audit [`AUDIT-2026-09-30.md`](AUDIT-2026-09-30.md) (79 findings). **W1–W7
+  have landed**: W1 (measurement integrity) with a 10/10 fail-first receipt;
+  W2 (trust exits and consent: G4 exit-4, C2 hedge, C3 cancel-130, C4
+  crash≠cancel, C7 pathspec commits, F1/F2 sanitizing) with a 17/17
+  fail-first receipt; W3 (gate and infra integrity, protected-artifact path);
+  W4 (D1a–f parser six-pack, D2 named failsafe helpers, E3/E10 LSP freshness);
+  W5 (E1/E2 bash containment, C5/C6 guardian write-back + resolvable auto-fix,
+  C8 memory preamble, E6 MCP POST JSON-RPC errors); W6 (F3 member ids, F5
+  cell-width, F6 diff floor, F4/F7/F9/F10/F11); W7 (B3 usage-on-error, B4
+  strict pricing, A7 interleaved arms, B8 untested badge — **A8 deferred**,
+  needs a structured runner error code). **W8 is partial**: E8 and G17 landed;
+  H1, C9–C19, E7/E9, F8/F12/F13, G6-remainder, G9–G15 stay open. The W4–W8
+  commits carried no bookkeeping; the 2026-10-02 reconciliation sweep verified
+  their claims against live code and repaired the record (see PROGRESS.md).
+  Roadmap: [`PHASE-39-ROADMAP.md`](PHASE-39-ROADMAP.md).
 - **Phase 38 is OPEN** (2026-09-29) — the frontier agent brain. The founding
   probe found that the eval lane assembled a **different agent than the one
   that ships**: its own system prompt, half the output budget, and
@@ -87,9 +92,10 @@
 
 ## What reopens work (the standing triggers)
 
-Two phases are open. The active remediation wave is **Phase 39** (W3–W8 next;
-W4's parser six-pack may trip the scanner trigger below — AUDIT D1 is already
-the 4th lexical patch family for Rust/TS). **Phase 38.5** (the prompt rewrite)
+Two phases are open. The active remediation wave is **Phase 39** (W8 remainder
+next: H1 scanner coverage, G9–G15 docs/CLI truth, C9–C19, E7/E9, F8/F12/F13).
+The scanner trigger assessment is due: AUDIT D1 was the 4th lexical patch
+family for Rust/TS and W4 has now landed — re-assess below. **Phase 38.5** (the prompt rewrite)
 is unblocked: after W1 the harness measures the agent it scores. These
 triggers still stand:
 

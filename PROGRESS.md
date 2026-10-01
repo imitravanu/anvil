@@ -2,6 +2,45 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-02 (OpenCode chief-engineer session — record reconciliation wave; docs + 3 comment fixes; claims verified against live code, no behavior changed):**
+> owns `docs/PHASE-39-ROADMAP.md`, `docs/CURRENT-FOCUS.md`, `docs/README.md`,
+> `docs/ENGINEERING-ROADMAP.md`, `CHANGELOG.md`, plus the comment-only edits in
+> `packages/tui/src/util/clipboard.ts`, `notify.ts`, `toolOutput.ts`, plus this file.
+> **The finding:** commits `a43427e`…`7818815` (7 commits, 2026-10-01 22:38–23:49)
+> landed Phase 39 W4-tail/W5/W6/W7/W8-partial code and touched ZERO bookkeeping
+> files — `PROGRESS.md`, `PHASE-39-ROADMAP.md`, `CURRENT-FOCUS.md`, and
+> `CHANGELOG.md` all still read "W3 in progress, W4–W8 open" while the code said
+> otherwise. The record drifted from the code: the exact failure mode G5/G6
+> exist to catch, on a wave scale.
+> **Method:** probe before believing — each commit's claims re-verified against
+> the live tree, not transcribed from messages. Verified present: D2 helpers
+> (`symbolIndex.ts:13-21`), E3 timestamp guard (`lsp/client.ts:320-322`), C6
+> resolvable-`getErrorMessage` gate (`guardian/interceptor.ts:80,123-127`), C8
+> preamble (`config/memory.ts:143`), E6 JSON-RPC POST errors
+> (`mcp/transport.ts:661-672`), F3 member ids (`SINGLE_SUBAGENT_ID`,
+> `subagent.ts`), F5 cell-width helpers (`tui/util/format.ts:127-158`), B3
+> usage-before-error (`gemini.ts:125`, `openai.ts:111`), B4 strict pricing
+> (`freeModels.ts:64-104`), A7 interleaved arms (`experiment.ts:177`), B8
+> "untested" certification (`freeModels.ts:553`), A2 `winnerByTask`
+> (`experiment.ts:302`), and zero raw-error-formatting hits in production
+> sources (grep, E8). Two probe misses were MY patterns, not the code
+> (`memberId` vs `id`; `intentional` vs prose comments) — re-probed, both
+> claims hold.
+> **Fixed in this wave:** the three W8 catch rationales re-aligned to the §2.3
+> `// intentional:` form (one was garbled English: "is properties of the clip
+> pipe"); `ENGINEERING-ROADMAP.md`'s `anvil 1.1.0` → `1.2.0` (matches
+> `CORE_VERSION`, verified); all four bookkeeping docs now record W1–W7 landed
+> and W8 partial.
+> **Confirmed still open (live probes, not assumptions):** G15 —
+> `measure-startup.mjs:41` `floor(10*0.95)` still indexes the maximum;
+> G9 — no `/pr`/`/team`/`/plugin`/`/copy` strings in `cli/src/index.tsx`;
+> G6 — remaining count drift unverified; H1, C9–C19, E7/E9, F8/F12/F13,
+> G10–G13 open per the audit; A8 deferred by its own commit (needs a
+> structured runner error code); A4 (harder eval tier) open per 38.x.
+> **Gate:** `npm run gate` green BEFORE this wave (fresh baseline, Steps 0–5,
+> 25/25 mock evals, exit 0) and re-run green after (below). No protected
+> artifact touched.
+>
 > **DONE 2026-10-01 (Buffy chief-engineer session — W3 regression fix + W4 D1 parser six-pack + W5 E1/E2):**
 > owns `packages/cli/src/gate.ts`, `packages/cli/src/index.tsx`, `.githooks/pre-commit`,
 > `packages/cli/src/__tests__/gate.watch.test.ts`, `scripts/gate-manifest.json`,

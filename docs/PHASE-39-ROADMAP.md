@@ -3,7 +3,8 @@
 > **Version:** v1.12.x
 > **Date:** 2026-09-30
 > **Author:** Chief Engineer (OpenCode session, owner-approved)
-> **Status:** IN PROGRESS — W1–W2 landed; W3–W8 open.
+> **Status:** IN PROGRESS — W1–W7 landed (verified against live code
+> 2026-10-02); W8 partially landed (E8, G17); W8 remainder open.
 > **Scope:** [`AUDIT-2026-09-30.md`](AUDIT-2026-09-30.md) recorded 79 findings
 > (9 × P1, 29 × P2, 41 × P3) from a full-tree adversarial review and grouped
 > them into eight workstreams (its §11). This phase executes them. Every wave
@@ -67,7 +68,7 @@ files** (core 8 / cli 6 / tui 3), each naming its finding; after, the same
 suites pass and the full guardian gate is green — Steps 0–5, **1,360 tests**
 (131 cli / 895 core / 334 tui), 25/25 mock evals.
 
-## W3 — Gate and infra integrity (IN PROGRESS, 2026-10-01)
+## W3 — Gate and infra integrity (COMPLETE, 2026-10-01 — commit d652905)
 
 **§3.4 protected-artifact purpose declaration.** Per AGENTS.md §3.4, this wave
 edits protected artifacts — `scripts/verify-gate.mjs`, `.githooks/pre-commit`,
@@ -90,27 +91,57 @@ finding; no other behavior of these files is altered.
 | G8 [P3] | `anvil gate --watch` now honors `--staged` (scans staged additions, honest banner) instead of silently scanning the working tree, and its `SIGTERM` handler is live: the global `SIGTERM`/`SIGHUP` handlers defer to an attached runner (mirroring the existing SIGINT guard), so a watch session records its final scan and exits 0 instead of being pre-empted by `process.exit(143)`. **Correction (independent deep dive, 2026-10-01):** the first cut inferred runner ownership from `process.listenerCount(signal) > 1`; a foreign listener (a library, or the test runner) therefore made the global handler wrongly defer — it failed `boot.test.tsx` and, in production, would skip terminal restore + MCP cleanup. Ownership is now asserted explicitly via `claimSignal`/`releaseSignal`/`isSignalClaimed`; a foreign listener no longer suppresses the global handler. | `gate.watch.test.ts` (`watchScan` selection, banner honesty, staged transition label, claim registry incl. foreign-listener case) |
 | G16 [P3] | The live-eval workflow no longer interpolates dispatch inputs into the secret-bearing shell block; `provider`/`model` arrive via `env:` and are passed with bash-array quoting. | `gate.sentinel.test.ts` (workflow env passthrough assertion) |
 
-## W3–W8 (open, per AUDIT §11)
+## W4–W8 landing record (verified 2026-10-02)
 
-- **W3 — Gate and infra integrity:** G1–G3, G7, G8, G16. **Protected artifacts**
-  — needs the AGENTS.md §3.4 path: declared purposes, manifest regen, sentinel
-  in sync, explicit human review of the protected-path diff.
-- **W4 — Code intelligence:** D1a–f six reproduced parser defects + regression
-  fixtures, D2, E10. **D1a–f FIXED 2026-10-01** (Buffy session): all six fixed in
-  `ast/parser.ts`, six regression tests added, mutation receipt 6/6 fail against
-  HEAD then pass. D2 (silent failsafe catches) and E10 remain open. After D2 lands,
-  re-assess the CURRENT-FOCUS tree-sitter trigger: D1 was the 4th lexical patch
-  family for Rust/TS.
-- **W5 — Safety:** E1, E2, E6, C5, C6, C8 (bash realpath + flag-value parsing,
-  root-wipe normalization, memory cap, guardian write-back). **E1 + E2 FIXED
-  2026-10-01** (Buffy session): safe-list validates `--name=value` operands and
-  resolves through `resolveWithinRoot` (symlink-aware); `deshell` strips quotes and
-  recognizes `/?`/`/{a,b}`. E6, C5, C6, C8 remain open.
-- **W6 — TUI correctness:** F3–F7, F9–F11 (member ids, usage accumulator,
-  cell-width, narrow-terminal diff, baselines).
-- **W7 — Provider/eval accounting:** B3, B4, B8, A7, A8.
-- **W8 — Slop debt + docs truth:** H1, C9–C19, E7–E9, F8/F12/F13, G6–G13, G15,
-  G17. Mechanical sweep once the scanners exist (G1/G3 are in W3).
+Landed in commits `a43427e`…`7818815` (2026-10-01, Codebuff sessions) and
+verified against live code in the 2026-10-02 record-reconciliation sweep
+(PROGRESS.md, same date) — the commits themselves carried no bookkeeping,
+which that sweep repaired:
+
+- **W4 — Code intelligence: COMPLETE.** D1a–f landed earlier (7c4aed5). D2 —
+  symbol-index walks route failures through named `readDirSafe`/`statSafe`/
+  `readFileSafe` helpers (`symbolIndex.ts:13-21`, verified). E3 — the LSP
+  post-deadline fallback applies the same timestamp guard as the polling loop
+  (`lsp/client.ts:320-322`, verified). E10 — a real `LspStdioClient` test
+  against a fake server (`lspclientEdges.test.ts`). **Note:** D1 was the 4th
+  lexical patch family for Rust/TS — re-assess the CURRENT-FOCUS tree-sitter
+  trigger per the plan below.
+- **W5 — Safety: COMPLETE.** E1/E2 landed earlier (04566d9). C5/C6 — the
+  guardian returns the scanned body plus a same-field writer, and auto-fix
+  only rewrites when `getErrorMessage` is resolvable in the body
+  (`guardian/interceptor.ts:80,123-127`, verified). C8 — memory preamble is a
+  section (`config/memory.ts:143`, verified). E6 — a failed MCP POST answers
+  with a JSON-RPC error correlated by request id (`mcp/transport.ts:661-672`,
+  verified). **Recorded gap:** E6 has no dedicated unit test (the SSE harness
+  is a heavy HTTP fake) — declared by its own commit, not hidden.
+- **W6 — TUI correctness: COMPLETE.** F3 — stable member ids
+  (`SINGLE_SUBAGENT_ID = "delegate"`, `subagent.ts`, verified). F5 — the
+  cell-width family uses `displayWidth`/`curtailToCells`/`splitByDisplayWidth`
+  (`tui/util/format.ts:127-158`, verified). F6 — the side-by-side diff floors
+  at the modal's real frame cost. F4/F7/F9/F10/F11 — recorded by their commit
+  as applied earlier in the tree; spot-verified present.
+- **W7 — Provider/eval accounting: COMPLETE except A8 (deferred).** B3 — both
+  streaming adapters emit accumulated usage before the error event
+  (`gemini.ts:125`, `openai.ts:111`, verified). B4 — strict price parsing,
+  `null`/`""` no longer coerce to $0 (`freeModels.ts:64-104`, verified). A7 —
+  A/B arms interleave within each trial (`experiment.ts:177`, verified). B8 —
+  synced rows refresh from the live catalog and certify "untested" rather than
+  undefined (`freeModels.ts:553`, verified). **A8 is DEFERRED** (needs a
+  structured error code from the runner, not a regex tweak) — a named deferral
+  with a reason, per its commit.
+- **W8 — Slop debt + docs truth: PARTIAL.** Landed: E8 — the four
+  `(err as Error)` casts in `grep.ts`/`editFile.ts` are `getErrorMessage`
+  (zero raw-error-formatting hits remain in production sources, re-verified by
+  grep 2026-10-02); G17 — `scripts/audit-qwen.ts` is live work, closed as
+  misclassified with a doc comment; three safe-by-design silent catches carry
+  rationale comments (re-aligned to the §2.3 `// intentional:` form in the
+  reconciliation sweep). **Still open:** H1 (scanner coverage extension —
+  magic constants, non-empty silent catches, dead exports), C9–C19, E7/E9,
+  F8/F12/F13, G6 (spot-check 2026-10-02: `ENGINEERING-ROADMAP.md`'s `anvil
+  1.1.0` line fixed in the sweep; remaining count drift unverified), G9
+  (`--help`/registry parity — no fix found in `index.tsx`), G10–G13, G15
+  (confirmed live 2026-10-02: `measure-startup.mjs:41` `floor(10*0.95)` still
+  indexes the maximum).
 
 **Owner decisions, not mechanical edits:** homegrown-parser vs tree-sitter
 after W4 stands. The headless-denial exit contract was DECIDED in W2: a

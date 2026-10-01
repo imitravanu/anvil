@@ -64,7 +64,7 @@ export function notifyTurnComplete(
     if (sound) stream.write(bellSequence());
     return true;
   } catch {
-    // Notification piping is best-effort on the user's terminal.
+    // intentional: notification piping is best-effort on the user's terminal.
     return false;
   }
 }

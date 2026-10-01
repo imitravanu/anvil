@@ -13,7 +13,7 @@ All 16 findings from the 2026-09-26 Chief Engineer Audit (`docs/AUDIT-2026-09-26
    - Protected-artifact integrity manifest SHA-256 match.
    - Unit test suite: 1,211 / 1,211 passing across 172 files (`@anvil/core`: 765, `@anvil/tui`: 329, `@anvil/cli`: 117).
    - Startup profile: single bundle 6.51 MB, 323 ms median / 406 ms p95.
-   - Packaging smoke test (`npm run verify:package`): isolated clean installation passes and reports `anvil 1.1.0`.
+   - Packaging smoke test (`npm run verify:package`): isolated clean installation passes and reports `anvil 1.2.0`.
 
 2. **M1 — Execution authority: [COMPLETE]**
    - Single per-call classification (`run | handled | refused | invalid`) via `guardianBlocked` set.

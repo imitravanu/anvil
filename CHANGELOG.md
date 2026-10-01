@@ -4,6 +4,46 @@ All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 ## [Unreleased]
 
+### Audit remediation, waves 3–8 (Phase 39)
+
+- **Gate and infra integrity (W3).** The diff scanner and the full-tree
+  residual scan share one roots constant covering `scripts/**`, `evals/**`,
+  and `packages/*/scripts/**`; the sensor fails per rule family by identity;
+  allowlist suppression matches file paths exactly; new workflow files are
+  protected by prefix; the pre-commit hook judges architecture only inside
+  `packages/core/`; `anvil gate --watch` honors `--staged` and owns its
+  SIGTERM via an explicit claim registry; the live-eval workflow takes
+  dispatch inputs via `env:` instead of shell interpolation.
+- **Code intelligence (W4).** Six reproduced parser defects fixed (D1a–f);
+  the symbol index's filesystem walks route failures through named, documented
+  helpers (D2); the LSP post-deadline fallback applies the same timestamp
+  guard as the polling loop, so a mutation can no longer report stale
+  diagnostics (E3), with a real-client test against a fake server (E10).
+- **Safety (W5).** The bash safe-list validates `--name=value` operands and
+  resolves them symlink-aware (E1); root-wipe normalization strips quotes and
+  recognizes `/?` and `/{a,b}` globs (E2); the guardian returns a same-field
+  writer and only auto-fixes when `getErrorMessage` is resolvable (C5/C6);
+  memory content before the first header is a section (C8); a failed MCP POST
+  answers with a JSON-RPC error for that request id instead of failing every
+  in-flight call (E6).
+- **TUI correctness (W6).** Subagent events carry stable member ids so
+  concurrent team members no longer stamp each other's card (F3); the
+  cell-width family measures terminal cells, not code points (F5); the
+  side-by-side diff floors at the modal's real frame cost and refuses two
+  columns below the readable floor (F6); visual baselines fail on a missing
+  baseline unless `VISUAL_UPDATE=1` (F7); in-hunk `---`/`+++` are content
+  lines again (F10); "always allow" clears queued same-tool requests (F11).
+- **Provider/eval accounting (W7).** Both streaming adapters emit accumulated
+  usage before an error ends the stream (B3); pricing parses strictly so
+  `null`/`""` no longer ingest as $0 free models (B4); A/B arms interleave
+  within each trial so provider drift cannot track one arm (A7); synced
+  registry rows refresh from the live catalog and certify "untested" rather
+  than rendering no badge (B8).
+- **Slop debt and docs truth (W8, partial).** The four `(err as Error)` casts
+  in `grep.ts`/`editFile.ts` are `getErrorMessage` (E8); `audit-qwen.ts` is
+  closed as live work, misclassified (G17); three safe-by-design silent
+  catches carry §2.3 `// intentional:` rationale comments.
+
 ### Trust exits and consent (Phase 39 W2)
 
 - **A fully-denied headless run no longer exits 0 (G4).** `anvil -p` without
