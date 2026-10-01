@@ -2,6 +2,40 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-02 (OpenCode chief-engineer session — Phase 39 W8: E9 tree-kill + truncation truth, E8 remainder, E7 duplicate bounds):**
+> owns `packages/core/src/tools/listFiles.ts`,
+> `packages/core/src/tools/__tests__/listFiles.test.ts`,
+> `packages/core/src/tools/bash.ts`,
+> `packages/core/src/tools/__tests__/bash.test.ts`,
+> `packages/core/src/tools/verifyTests.ts`, `packages/core/src/lsp/client.ts`,
+> `packages/core/src/lsp/types.ts`, `docs/PHASE-39-ROADMAP.md`,
+> `docs/CURRENT-FOCUS.md`, `docs/README.md`, `CHANGELOG.md`, plus this file.
+> **E9a [P3]:** `list_files` reported `truncated` whenever exactly MAX_FILES
+> (10,000) files existed, even with nothing dropped. The walk now returns
+> whether it STOPPED EARLY at the cap; `truncated` derives from that.
+> Mutation receipt: new cap-honesty test red against the stashed old walk
+> (2 failed / 30 passed across the two stashed files), green after.
+> **E9b [P3]:** `verify_tests` on win32 signalled only the direct child while
+> `run_command` tree-kills. `killTree` now routes through the SAME tested
+> `planTreeKill` planner (taskkill `/T /F` on win32, process-group elsewhere),
+> mirroring `bash.ts`'s executor. win32 behavior unverifiable on this Linux
+> host — covered by planTreeKill's existing tests + structural parity;
+> recorded honestly, not dressed as a win32 receipt. The two bare catches in
+> killTree also gained §2.3 comments.
+> **E8 remainder [P3]:** the W8 commit closed only the casts; verified and
+> closed the rest here — unused `resolveWithinRoot` import (verifyTests.ts),
+> write-only `opened` set (lsp/client.ts; `versions` is the real ledger),
+> dead `diagnostics()` method + its `LspClient` interface member (zero
+> callers anywhere, §2.8), and `isReadOnlyCommand` now fails closed on
+> non-string input (mutation receipt: red against stashed bash.ts, green
+> after).
+> **E7 (partial):** verifyTests's duplicated timeout bounds now import
+> `MIN/MAX_COMMAND_TIMEOUT_MS` from constants. The remaining E7 sites
+> (grep.ts, outline.ts, readFile.ts, lsp/tools.ts, lsp/sensor.ts, writeFile.ts,
+> editFile.ts) stay open — a constants-placement decision, not mechanical.
+> **Gate:** Steps 0–5 green on the final tree (exit 0, 25/25 mock evals).
+> No protected artifact touched.
+>
 > **DONE 2026-10-02 (OpenCode chief-engineer session — Phase 39 W8: G10/G11/G12 CLI truth, F12 dead exports, F13 catch comments):**
 > owns `packages/cli/src/args.ts`, `packages/cli/src/__tests__/args.test.ts`,
 > `packages/cli/src/index.tsx`, `packages/cli/src/headless.ts`,

@@ -241,6 +241,14 @@ describe("run_command destructive-command guard", () => {
 });
 
 describe("run_command read-only safe-list", () => {
+  it("fails closed on non-string input (E8)", async () => {
+    const { isReadOnlyCommand } = await import("../bash.js");
+    // Tool args arrive as runtime-unknown JSON; a malformed call must not throw.
+    expect(isReadOnlyCommand(undefined as unknown as string, root)).toBe(false);
+    expect(isReadOnlyCommand(null as unknown as string, root)).toBe(false);
+    expect(isReadOnlyCommand(42 as unknown as string, root)).toBe(false);
+  });
+
   it("positively recognizes plain read-only commands", async () => {
     const { isReadOnlyCommand } = await import("../bash.js");
     for (const cmd of [

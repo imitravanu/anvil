@@ -21,12 +21,11 @@ export class LspStdioClient implements LspClient {
   private pending = new Map<number, PendingRequest>();
   private buffer = Buffer.alloc(0);
   private collected: LspDiagnostic[] = [];
+
   private pathDiagnostics = new Map<string, { diagnostics: LspDiagnostic[]; timestamp: number }>();
   private rootUri: string;
   /** Set once the child exits or fails — a dead client must be recreated, not reused. */
   private dead = false;
-  /** URIs opened via textDocument/didOpen (its version lives in `versions`). */
-  private opened = new Set<string>();
   private versions = new Map<string, number>();
 
   private constructor(
@@ -207,7 +206,6 @@ export class LspStdioClient implements LspClient {
     const prevVersion = this.versions.get(uri);
     if (prevVersion === undefined) {
       this.versions.set(uri, 1);
-      this.opened.add(uri);
       this.notify("textDocument/didOpen", {
         textDocument: { uri, languageId, version: 1, text },
       });
@@ -279,10 +277,6 @@ export class LspStdioClient implements LspClient {
     } catch {
       return null;
     }
-  }
-
-  async diagnostics(): Promise<LspDiagnostic[]> {
-    return [...this.collected];
   }
 
   /**

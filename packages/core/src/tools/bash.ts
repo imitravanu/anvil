@@ -316,6 +316,9 @@ const SHELL_METACHARS = /[|;&<>()`$\\\n]/;
  * construction.
  */
 export function isReadOnlyCommand(command: string, projectRoot?: string): boolean {
+  // Tool input arrives as runtime-unknown JSON — fail closed on non-strings
+  // (E8; the description builder below already guards the same way).
+  if (typeof command !== "string") return false;
   const trimmed = command.trim();
   if (!trimmed || SHELL_METACHARS.test(trimmed)) return false;
   if (/[*?[]/.test(trimmed)) return false;

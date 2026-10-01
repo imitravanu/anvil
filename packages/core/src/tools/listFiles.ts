@@ -29,24 +29,30 @@ async function walk(
   out: string[],
   signal?: AbortSignal,
   maxFiles: number = MAX_FILES
-): Promise<void> {
-  if (signal?.aborted || out.length >= maxFiles) return;
+): Promise<boolean> {
+  // E9 (AUDIT-2026-09-30): returns whether the walk STOPPED EARLY at the cap.
+  // `out.length >= maxFiles` alone cannot distinguish "exactly maxFiles files
+  // exist" from "files were dropped" — only an early return proves dropping.
+  if (signal?.aborted) return false;
+  if (out.length >= maxFiles) return true;
   let entries;
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch {
-    return; // unreadable dir — skip silently
+    return false; // unreadable dir — skip silently
   }
   for (const entry of entries) {
-    if (signal?.aborted || out.length >= maxFiles) return;
+    if (signal?.aborted) return false;
+    if (out.length >= maxFiles) return true;
     if (entry.isDirectory() && EXCLUDED_DIRS.has(entry.name)) continue;
     const abs = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      await walk(abs, root, out, signal, maxFiles);
+      if (await walk(abs, root, out, signal, maxFiles)) return true;
     } else if (entry.isFile()) {
       out.push(path.relative(root, abs).split(path.sep).join("/"));
     }
   }
+  return false;
 }
 
 export const definition: ToolDefinition = {
@@ -84,7 +90,7 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   const all: string[] = [];
   // Walk from absDir, but report paths relative to the PROJECT ROOT — the model
   // feeds these straight into other tools, all of which are root-relative.
-  await walk(absDir, ctx.projectRoot, all, ctx.signal, MAX_FILES);
+  const capped = await walk(absDir, ctx.projectRoot, all, ctx.signal, MAX_FILES);
   if (ctx.signal.aborted) {
     return {
       output: { files: [], count: 0, pattern, aborted: true },
@@ -94,7 +100,7 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   }
   const safePattern = typeof pattern === "string" && pattern.trim() ? pattern : undefined;
   const files = (safePattern ? all.filter((f) => matchesPattern(f, safePattern)) : all).sort();
-  const truncated = all.length >= MAX_FILES;
+  const truncated = capped;
   return {
     output: {
       files,

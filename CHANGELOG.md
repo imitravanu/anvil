@@ -58,6 +58,13 @@ All notable changes to Anvil are documented here. The format follows
   the gate/stdin timeouts are named constants (G12). **Dead exports removed**:
   `isAltScreenActive`, `useTerminalSize`, `SPINNER_FRAMES` (G12/F12, §2.8);
   the remaining `eventReducer` catches carry `// intentional:` comments (F13).
+  **`list_files` no longer cries truncated at exactly the cap** — truncation is
+  reported only when the walk actually stopped early (E9). **`verify_tests`
+  tree-kills on Windows** through the same tested `planTreeKill` planner as
+  `run_command` instead of signalling only the direct child (E9). The LSP
+  client's write-only `opened` set and dead `diagnostics()` method are gone,
+  `isReadOnlyCommand` fails closed on non-string input, and `verify_tests`
+  shares `run_command`'s timeout bounds (E8 remainder, E7 partial).
 
 ### Trust exits and consent (Phase 39 W2)
 

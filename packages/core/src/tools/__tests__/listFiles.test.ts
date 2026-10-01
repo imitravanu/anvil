@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { executeTool } from "../index.js";
+import { MAX_FILES } from "../listFiles.js";
 import type { ToolContext } from "../types.js";
 
 let root: string;
@@ -58,4 +59,35 @@ describe("list_files", () => {
     const result = await executeTool("list_files", { path: ".." }, ctx);
     expect(result.isError).toBe(true);
   });
+});
+
+// E9 (AUDIT-2026-09-30): `truncated` was `all.length >= MAX_FILES`, which is
+// true when the project holds EXACTLY MAX_FILES files and nothing was dropped.
+// Only an early-stopped walk may claim truncation.
+describe("truncation honesty (E9)", () => {
+  it("reports truncated only when files were actually dropped", async () => {
+    const big = await fs.mkdtemp(path.join(os.tmpdir(), "anvil-list-cap-"));
+    try {
+      // Batched writes: MAX_FILES+1 open handles at once can exhaust fds.
+      const BATCH = 500;
+      for (let base = 0; base < MAX_FILES + 1; base += BATCH) {
+        await Promise.all(
+          Array.from({ length: Math.min(BATCH, MAX_FILES + 1 - base) }, (_, i) =>
+            fs.writeFile(path.join(big, `f${base + i}.txt`), "x")
+          )
+        );
+      }
+      const bigCtx: ToolContext = { projectRoot: big, signal: never };
+
+      const over = await executeTool("list_files", {}, bigCtx);
+      expect(over.output).toMatchObject({ count: MAX_FILES, truncated: true });
+
+      // Exactly at the cap with nothing dropped: no truncation claim.
+      await fs.rm(path.join(big, `f${MAX_FILES}.txt`));
+      const exact = await executeTool("list_files", {}, bigCtx);
+      expect(exact.output).toEqual({ files: expect.any(Array), count: MAX_FILES });
+    } finally {
+      await fs.rm(big, { recursive: true, force: true });
+    }
+  }, 120_000);
 });

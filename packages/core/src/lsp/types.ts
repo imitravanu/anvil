@@ -35,7 +35,6 @@ export interface LspClient {
   gotoDefinition(path: string, position: LspPosition): Promise<LspLocation[]>;
   findReferences(path: string, position: LspPosition): Promise<LspLocation[]>;
   hover(path: string, position: LspPosition): Promise<string | null>;
-  diagnostics(): Promise<LspDiagnostic[]>;
   diagnosticsForPath?(path: string, sinceTimestamp?: number, timeoutMs?: number): Promise<LspDiagnostic[]>;
   close(): Promise<void>;
 }

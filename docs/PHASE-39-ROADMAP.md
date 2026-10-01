@@ -160,9 +160,20 @@ which that sweep repaired:
   the audit's `index.tsx:235,395` refs verified STALE. F12 — dead exports
   `useTerminalSize`/`SPINNER_FRAMES` removed (§2.8). F13 — remaining
   `eventReducer.ts` catches carry `// intentional:`; the `hooks/toolOutput.ts`
-  ref verified STALE.
+  ref verified STALE. **E9, E8-remainder, E7-bounds FIXED 2026-10-02**
+  (OpenCode session): E9 — `list_files` truncation now derives from an
+  early-stopped walk, not `length >= MAX_FILES` (fail-first: cap-honesty test
+  red against the old walk); `verify_tests` win32 kill routes through
+  `planTreeKill` (taskkill `/T /F`), mirroring `run_command` (parity +
+  planner tests; no win32 host here — recorded honestly). E8 remainder —
+  unused `resolveWithinRoot` import, write-only `opened` set, dead
+  `diagnostics()` + interface member (zero callers), and
+  `isReadOnlyCommand` fails closed on non-strings (fail-first: red against
+  stashed bash.ts). E7 — verifyTests's duplicate timeout bounds now import
+  the shared `MIN/MAX_COMMAND_TIMEOUT_MS`; the other E7 sites stay open.
   **Still open:** H1 (scanner coverage extension —
-  magic constants, non-empty silent catches, dead exports), C9–C19, E7/E9,
+  magic constants, non-empty silent catches, dead exports), C9–C19,
+  E7-remainder (grep/outline/readFile/lsp/writeFile/editFile constants),
   F8, G6 (spot-check 2026-10-02: `ENGINEERING-ROADMAP.md`'s `anvil
   1.1.0` line fixed in the sweep; remaining count drift unverified).
 

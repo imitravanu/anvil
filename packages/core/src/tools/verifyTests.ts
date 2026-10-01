@@ -1,16 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { ToolContext, ToolDefinition, ToolExecutor, ToolExecutionResult } from "./types.js";
-import { resolveWithinRoot } from "./paths.js";
-import { RUN_TEST_TIMEOUT_MS, MAX_TEST_OUTPUT_BYTES } from "../config/constants.js";
+import { planTreeKill } from "./bash.js";
+import { RUN_TEST_TIMEOUT_MS, MAX_TEST_OUTPUT_BYTES, MIN_COMMAND_TIMEOUT_MS, MAX_COMMAND_TIMEOUT_MS } from "../config/constants.js";
 
 export { RUN_TEST_TIMEOUT_MS, MAX_TEST_OUTPUT_BYTES };
 
 // Sanity bounds for the env override — a hostile value must not busy-freeze
-// the turn (`0`) nor park it for an hour (huge values).
-const MIN_TEST_TIMEOUT_MS = 1_000;
-const MAX_TEST_TIMEOUT_MS = 600_000;
+// the turn (`0`) nor park it for an hour (huge values). Shared with
+// run_command's bounds (E7: they were duplicated here).
 
 /**
  * Test-runner timeout in ms, overridable via ANVIL_RUN_TEST_TIMEOUT_MS and
@@ -19,7 +18,7 @@ const MAX_TEST_TIMEOUT_MS = 600_000;
 export function runTestTimeoutMs(): number {
   const raw = Number(process.env.ANVIL_RUN_TEST_TIMEOUT_MS);
   if (!Number.isFinite(raw)) return RUN_TEST_TIMEOUT_MS;
-  return Math.min(Math.max(Math.round(raw), MIN_TEST_TIMEOUT_MS), MAX_TEST_TIMEOUT_MS);
+  return Math.min(Math.max(Math.round(raw), MIN_COMMAND_TIMEOUT_MS), MAX_COMMAND_TIMEOUT_MS);
 }
 
 export interface TestRunResult {
@@ -202,17 +201,26 @@ export async function runTestVerification(
 
     const killTree = () => {
       if (child.pid == null) return;
-      if (process.platform === "win32") {
+      // E9 (AUDIT-2026-09-30): mirror run_command — taskkill /T walks the tree
+      // by parent pid; a bare child.kill on win32 orphans the grandchildren.
+      const plan = planTreeKill(child.pid, process.platform);
+      if (plan.strategy === "taskkill") {
+        spawnSync(plan.command, plan.args, { stdio: "ignore" });
         try {
           child.kill("SIGKILL");
         } catch {
-          // ignore
+          // intentional: best-effort teardown — the child already exited
         }
       } else {
         try {
           process.kill(-child.pid, "SIGKILL");
         } catch {
-          child.kill("SIGKILL");
+          // intentional: the process group may be gone already; kill directly
+          try {
+            child.kill("SIGKILL");
+          } catch {
+            // intentional: best-effort teardown — the child already exited
+          }
         }
       }
     };
