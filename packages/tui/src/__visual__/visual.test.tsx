@@ -76,16 +76,24 @@ function renderFrame(ui: React.ReactElement, columns: number, rows: number): str
   return frame.replace(/\u001b\[[0-9;]*m/g, "").replace(/[ \t]+$/gm, "");
 }
 
-/** Baseline compare-or-update. Missing baselines are created (first run). */
+/** Baseline compare-or-update. Creation requires an explicit VISUAL_UPDATE=1. */
 function expectVisual(frame: string, name: string): void {
   const file = path.join(BASELINE_DIR, `${name}.txt`);
   const exists = fs.existsSync(file);
-  if (process.env.VISUAL_UPDATE === "1" || !exists) {
+  if (process.env.VISUAL_UPDATE === "1") {
     fs.mkdirSync(BASELINE_DIR, { recursive: true });
     fs.writeFileSync(file, frame);
     // eslint-disable-next-line no-console
     console.log(`[visual] baseline ${exists ? "updated" : "created"}: ${name}`);
     return;
+  }
+  // F7 (AUDIT-2026-09-30): a MISSING baseline must FAIL. Auto-creating it meant
+  // deleting or renaming a baseline could never fail CI, and the suite mutated
+  // the working tree. Approval is explicit (VISUAL_UPDATE=1).
+  if (!exists) {
+    throw new Error(
+      `[visual] missing baseline for "${name}" (${file}). Recreate it with VISUAL_UPDATE=1.`
+    );
   }
   const expected = fs.readFileSync(file, "utf8");
   expect(frame).toBe(expected);
@@ -282,7 +290,7 @@ describe("visual regression — TUI frames", () => {
             text: "All checks pass.",
             verifications: [{ id: "v1", command: "npm test", status: "passed", summary: "374 passed", repairsUsed: 1 }],
             toolCalls: [{ id: "t1", name: "verify_tests", input: {}, status: "done", summary: "All tests passed: npm test" }],
-            subAgents: [{ task: "research", status: "done", toolCalls: 1, inputTokens: 10, outputTokens: 5, report: "report body" }],
+            subAgents: [{ id: "delegate", task: "research", status: "done", toolCalls: 1, inputTokens: 10, outputTokens: 5, report: "report body" }],
           })}
         />,
         DEFAULT_COLUMNS,

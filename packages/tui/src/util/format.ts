@@ -116,15 +116,66 @@ function isWide(cp: number): boolean {
   return WIDE_RANGES.some(([lo, hi]) => cp >= lo && cp <= hi);
 }
 
+/** Cells one code point occupies; a variation selector adds none. */
+function charCells(ch: string): number {
+  const cp = ch.codePointAt(0) ?? 0;
+  if (cp === 0xfe0f) return 0;
+  return isWide(cp) ? 2 : 1;
+}
+
 /** Rendered terminal-cell width of a string (wide chars count 2). */
 export function displayWidth(text: string): number {
   let width = 0;
-  for (const ch of text) {
-    const cp = ch.codePointAt(0) ?? 0;
-    if (cp === 0xfe0f) continue; // variation selector adds no cell
-    width += isWide(cp) ? 2 : 1;
-  }
+  for (const ch of text) width += charCells(ch);
   return width;
+}
+
+/**
+ * F5 (AUDIT-2026-09-30): cell-aware sibling of `curtail`. Counting code points
+ * left CJK/emoji rows one cell wider than the budget they were padded to, which
+ * sheared table separators and overflowed the frame.
+ */
+export function curtailToCells(text: string, maxCells: number): string {
+  if (maxCells <= 0) return "";
+  if (displayWidth(text) <= maxCells) return text;
+  if (maxCells === 1) return "…";
+  let out = "";
+  let used = 0;
+  for (const ch of text) {
+    const w = charCells(ch);
+    if (used + w > maxCells - 1) break;
+    out += ch;
+    used += w;
+  }
+  return out + "…";
+}
+
+/**
+ * Split a string into chunks of at most `maxCells` terminal cells. A wide glyph
+ * never straddles a boundary, and a glyph wider than the whole budget is emitted
+ * alone rather than dropped (the caller still advances).
+ */
+export function splitByDisplayWidth(text: string, maxCells: number): string[] {
+  const limit = Math.max(1, maxCells);
+  const chunks: string[] = [];
+  let cur = "";
+  let used = 0;
+  for (const ch of text) {
+    const w = charCells(ch);
+    if (used > 0 && used + w > limit) {
+      chunks.push(cur);
+      cur = "";
+      used = 0;
+    }
+    if (w > limit) {
+      chunks.push(ch);
+      continue;
+    }
+    cur += ch;
+    used += w;
+  }
+  if (cur !== "") chunks.push(cur);
+  return chunks.length > 0 ? chunks : [""];
 }
 
 /** Human-readable age of an ISO timestamp ("2m ago", "3h ago", "5d ago"). */

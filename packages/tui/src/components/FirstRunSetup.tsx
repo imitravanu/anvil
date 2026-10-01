@@ -33,9 +33,10 @@ export function FirstRunSetup({
 
   useInput((_input, key) => {
     if (key.escape) {
-      // Every overlay honors Esc; /connect passes onCancel, first-run does not
-      // (a provider is required before the app can start).
-      if (onCancel && step === "provider") onCancel();
+      // F11 (AUDIT-2026-09-30): every overlay honors Esc at EVERY step. /connect
+      // passes onCancel; first-run omits it (a provider is required to start),
+      // and the absence of the callback is what keeps Esc inert there.
+      onCancel?.();
       return;
     }
     if (step === "provider") {

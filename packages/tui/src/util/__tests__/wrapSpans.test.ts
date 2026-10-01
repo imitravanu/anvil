@@ -33,4 +33,15 @@ describe("wrapSpans", () => {
   it("returns one empty row for empty input", () => {
     expect(wrapSpans([{ text: "" }], 10)).toEqual([{ spans: [] }]);
   });
+
+  it("F5: wraps by terminal CELLS, so CJK rows never exceed the width", () => {
+    // 6 code points but 12 cells at width 4 → 3 rows of 2 glyphs each.
+    const rows = wrapSpans([{ text: "中文中文中文" }], 4);
+    expect(rows.map((r) => r.spans.map((s) => s.text).join(""))).toEqual(["中文", "中文", "中文"]);
+  });
+
+  it("F5: hard-splits an over-wide word by cells, not code points", () => {
+    const rows = wrapSpans([{ text: "😀😀😀😀" }], 4);
+    expect(rows.map((r) => r.spans.map((s) => s.text).join(""))).toEqual(["😀😀", "😀😀"]);
+  });
 });

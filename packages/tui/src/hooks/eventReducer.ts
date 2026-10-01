@@ -25,6 +25,45 @@ export { OUTPUT_RETAIN_MAX };
 /** Per-string cap inside retained output (the total cap alone still spikes). */
 const RETAIN_STRING_MAX = 2000;
 
+/**
+ * F3 (AUDIT-2026-09-30): the newest card carrying this member id. Correlating
+ * by `status === "running"` stamped the wrong row whenever two team members
+ * were in flight; the id is the identity core now stamps on every event.
+ * Sequential delegations reuse `delegate`, so the LAST match is the live one.
+ */
+function lastIndexOfMember(subAgents: readonly DisplaySubAgent[], id: string): number {
+  for (let i = subAgents.length - 1; i >= 0; i--) {
+    if (subAgents[i].id === id) return i;
+  }
+  return -1;
+}
+
+/**
+ * F4 (AUDIT-2026-09-30): accumulate a usage delta while PRESERVING any optional
+ * breakdown the event omits. Rebuilding `{ inputTokens, outputTokens }` fresh
+ * dropped the reasoning/cached totals the status bar renders.
+ */
+function accumulateUsage(
+  prev: UsageTotals,
+  event: { inputTokens: number; outputTokens: number; reasoningTokens?: number; cachedInputTokens?: number }
+): UsageTotals {
+  const next: UsageTotals = {
+    inputTokens: prev.inputTokens + event.inputTokens,
+    outputTokens: prev.outputTokens + event.outputTokens,
+  };
+  const reasoning =
+    event.reasoningTokens === undefined
+      ? prev.reasoningTokens
+      : (prev.reasoningTokens ?? 0) + event.reasoningTokens;
+  if (reasoning !== undefined) next.reasoningTokens = reasoning;
+  const cached =
+    event.cachedInputTokens === undefined
+      ? prev.cachedInputTokens
+      : (prev.cachedInputTokens ?? 0) + event.cachedInputTokens;
+  if (cached !== undefined) next.cachedInputTokens = cached;
+  return next;
+}
+
 export function retainOutput(output: unknown): unknown {
   if (output === undefined) return undefined;
   let text: string;
@@ -190,16 +229,7 @@ export function applyEvent(
     case "usage":
       // Optional breakdowns accumulate only when present, so a provider that
       // omits them never has its zero written over a real running total.
-      setUsage((prev) => ({
-        inputTokens: prev.inputTokens + event.inputTokens,
-        outputTokens: prev.outputTokens + event.outputTokens,
-        ...(event.reasoningTokens === undefined
-          ? {}
-          : { reasoningTokens: (prev.reasoningTokens ?? 0) + event.reasoningTokens }),
-        ...(event.cachedInputTokens === undefined
-          ? {}
-          : { cachedInputTokens: (prev.cachedInputTokens ?? 0) + event.cachedInputTokens }),
-      }));
+      setUsage((prev) => accumulateUsage(prev, event));
       // 28.10: the same event carries THIS response's tokens, so accumulating
       // onto the turn's message yields the per-turn total for /expand — a
       // multi-step turn (text → tools → text) reports each provider response
@@ -351,14 +381,25 @@ export function applyEvent(
         ...m,
         subAgents: [
           ...m.subAgents,
-          { task: event.task, status: "running", toolCalls: 0, inputTokens: 0, outputTokens: 0, report: "" },
+          {
+            id: event.id,
+            task: event.task,
+            status: "running",
+            toolCalls: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            report: "",
+          },
         ],
       }));
       break;
     case "subagent_progress":
       update((m) => {
-        const idx = m.subAgents.findIndex((s) => s.status === "running");
-        if (idx === -1) return m;
+        const idx = lastIndexOfMember(m.subAgents, event.id);
+        // A progress line for a card that is not running (already finished, or
+        // never started) has nothing to update — never fall back to "some other
+        // running member", which is exactly the misattribution F3 fixed.
+        if (idx === -1 || m.subAgents[idx].status !== "running") return m;
         const subAgents = m.subAgents.map((s, i) =>
           i === idx ? { ...s, toolCalls: s.toolCalls + 1, lastTool: event.tool } : s
         );
@@ -366,11 +407,9 @@ export function applyEvent(
       });
       break;
     case "subagent_finished": {
-      setUsage((prev) => ({
-        inputTokens: prev.inputTokens + event.inputTokens,
-        outputTokens: prev.outputTokens + event.outputTokens,
-      }));
+      setUsage((prev) => accumulateUsage(prev, event));
       const done: DisplaySubAgent = {
+        id: event.id,
         task: "",
         status: "done",
         toolCalls: event.toolCalls,
@@ -380,7 +419,9 @@ export function applyEvent(
         lastTool: undefined,
       };
       update((m) => {
-        const idx = m.subAgents.findIndex((s) => s.status === "running");
+        const idx = lastIndexOfMember(m.subAgents, event.id);
+        // No card for this member (its start was never rendered) — append a
+        // finished one so the report is never silently dropped.
         if (idx === -1) return { ...m, subAgents: [...m.subAgents, done] };
         const subAgents = m.subAgents.map((s, i) =>
           i === idx ? { ...s, ...done, task: s.task } : s

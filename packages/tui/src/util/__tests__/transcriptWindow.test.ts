@@ -29,6 +29,16 @@ describe("transcript window estimator", () => {
     expect(estimatedLines(m, 80)).toBeGreaterThan(3);
   });
 
+  it("F5: measures terminal CELLS, so CJK turns are not under-estimated", () => {
+    // 120 code points but 240 cells: counting code points estimated 2 rows
+    // where the renderer takes 4, hiding messages the "… N earlier" line
+    // never mentioned. 1 role + 4 text + 1 margin.
+    expect(estimatedLines(msg("中文".repeat(60)), 80)).toBe(6);
+    // Same fix on the non-markdown (streaming/user) path: 40 glyphs = 80 cells
+    // → 2 rows (the code-point count said 1).
+    expect(estimatedLines(msg("中".repeat(40), "user"), 80)).toBe(4);
+  });
+
   it("counts oldest messages as hidden only when they cannot fit", () => {
     const messages = [
       msg("a".repeat(2000), "user"), // huge — will not fit a 20-row budget

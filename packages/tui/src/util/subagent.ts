@@ -2,6 +2,12 @@
 import { SUBAGENT_TASK_MAX, SUB_REPORT_RETAIN_MAX, capLines } from "./displayLimits.js";
 
 export interface SubAgentRecord {
+  /**
+   * Core's stable member id (F3): a team member's spec id, or `delegate` for a
+   * lone delegation. Progress/finish events address their card by this, so two
+   * members running at once no longer stamp each other's row.
+   */
+  id: string;
   task: string;
   status: "running" | "done" | "cancelled";
   toolCalls: number;

@@ -161,6 +161,7 @@ describe("ToolCallView", () => {
 });
 
 const doneSub: DisplaySubAgent = {
+  id: "delegate",
   task: "find the registry",
   status: "done",
   toolCalls: 2,

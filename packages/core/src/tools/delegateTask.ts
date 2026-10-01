@@ -1,5 +1,5 @@
 import { ToolDefinition, ToolExecutionResult, ToolSessionContext } from "./types.js";
-import { runSubAgentLive, MAX_DELEGATIONS_PER_TURN, capReport } from "../agent/subagent.js";
+import { runSubAgentLive, MAX_DELEGATIONS_PER_TURN, capReport, SINGLE_SUBAGENT_ID } from "../agent/subagent.js";
 import { runTeam } from "../agent/team/index.js";
 import { TEAM_DEFAULT_ITERATIONS } from "../config/constants.js";
 import type {
@@ -142,13 +142,14 @@ export async function* executeSession(
     let wake: (() => void) | null = null;
     const onMemberEvent: TeamRunnerDeps["onMemberEvent"] = (memberId, event) => {
       if (event.type === "member_started") {
-        pending.push({ type: "subagent_started", task: memberTaskById.get(memberId) ?? "" });
+        pending.push({ type: "subagent_started", id: memberId, task: memberTaskById.get(memberId) ?? "" });
       } else if (event.type === "member_failed") {
         // The adapter threw before its own subagent_finished (e.g. a provider
         // error outside the sub-session's catch). Mirror the runner's report
         // convention so the member's stream still terminates.
         pending.push({
           type: "subagent_finished",
+          id: memberId,
           toolCalls: 0,
           inputTokens: 0,
           outputTokens: 0,
@@ -182,6 +183,7 @@ export async function* executeSession(
       // (see onMemberEvent); buffering one here would duplicate it.
       const startedAt = Date.now();
       const gen = runSubAgentLive({
+        id: member.id,
         provider: ctx.provider,
         model: ctx.model,
         projectRoot: ctx.projectRoot,
@@ -214,6 +216,7 @@ export async function* executeSession(
       });
       pending.push({
         type: "subagent_finished",
+        id: member.id,
         toolCalls: run.toolCalls,
         inputTokens: run.usage.in,
         outputTokens: run.usage.out,
@@ -319,9 +322,10 @@ export async function* executeSession(
     outcome: "ok",
     elapsedMs: 0,
   });
-  yield { type: "subagent_started", task };
+  yield { type: "subagent_started", id: SINGLE_SUBAGENT_ID, task };
   const subStartedAt = Date.now();
   const subGen = runSubAgentLive({
+    id: SINGLE_SUBAGENT_ID,
     provider: ctx.provider,
     model: ctx.model,
     projectRoot: ctx.projectRoot,
@@ -375,6 +379,7 @@ export async function* executeSession(
   });
   yield {
     type: "subagent_finished",
+    id: SINGLE_SUBAGENT_ID,
     toolCalls: run.toolCalls,
     inputTokens: run.usage.in,
     outputTokens: run.usage.out,

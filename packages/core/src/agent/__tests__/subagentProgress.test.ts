@@ -50,7 +50,10 @@ describe("live sub-agent progress", () => {
 
     const progress = events.filter((e) => e.type === "subagent_progress");
     expect(progress.length).toBeGreaterThanOrEqual(1);
-    const first = progress[0] as { tool: string; detail: string };
+    const first = progress[0] as { id: string; tool: string; detail: string };
+    // F3: every progress event carries the member id, so consumers can address
+    // the right card instead of "whichever member is still running".
+    expect(first.id).toBe("delegate");
     expect(first.tool).toBe("read_file");
     expect(first.detail).toContain("note.txt");
 
@@ -129,6 +132,7 @@ describe("live sub-agent progress", () => {
       ] as ScriptEntry[]);
       const controller = new AbortController();
       const gen = runSubAgentLive({
+        id: "checkpoint-probe",
         provider,
         model: "fake-model",
         projectRoot: root,

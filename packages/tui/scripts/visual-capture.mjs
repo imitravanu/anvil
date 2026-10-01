@@ -203,7 +203,7 @@ function getScenarios(cols, rows) {
           streaming: false,
           verifications: [{ id: "v1", command: "npm test", status: "passed", summary: "437 passed", repairsUsed: 1 }],
           toolCalls: [{ id: "t1", name: "verify_tests", input: {}, status: "done", summary: "All tests passed: npm test" }],
-          subAgents: [{ task: "research", status: "done", toolCalls: 1, inputTokens: 10, outputTokens: 5, report: "report body" }],
+          subAgents: [{ id: "delegate", task: "research", status: "done", toolCalls: 1, inputTokens: 10, outputTokens: 5, report: "report body" }],
         },
       }),
     },

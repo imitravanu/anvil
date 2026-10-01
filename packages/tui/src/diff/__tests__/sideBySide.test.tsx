@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { parseDiff } from "../parseDiff.js";
 import { pairSideRows } from "../sideBySide.js";
-import { SideBySideDiff } from "../SideBySideDiff.js";
+import {
+  SideBySideDiff,
+  SIDE_BY_SIDE_MIN_COLUMNS,
+  sideBySideFits,
+  sideBySideLayout,
+} from "../SideBySideDiff.js";
 import { frameText, renderThemed } from "../../test-utils/testRender.js";
 
 const DIFF = [
@@ -54,6 +59,26 @@ describe("pairSideRows", () => {
       left: { text: "", tone: "blank" },
       right: { text: "added", tone: "add" },
     });
+  });
+});
+
+describe("F6 side-by-side layout", () => {
+  it("never reserves more cells than the terminal has", () => {
+    // The old `Math.max(20, …)` floor forced a 43-cell layout that overflowed
+    // the documented 40-column target. The modal's frame + padding cost 4 and
+    // the divider 3, so `colWidth * 2 + 3` must stay inside `columns - 4`.
+    for (const cols of [40, 41, 60, 80, 100, 120, 201]) {
+      const { colWidth, textWidth } = sideBySideLayout(cols);
+      expect(colWidth * 2 + 3).toBeLessThanOrEqual(cols - 4);
+      // Inside a column: a 4-cell line number + a space + the text budget.
+      expect(5 + textWidth).toBeLessThanOrEqual(colWidth);
+    }
+  });
+
+  it("refuses a two-column layout too narrow to read", () => {
+    expect(sideBySideFits(SIDE_BY_SIDE_MIN_COLUMNS - 1)).toBe(false);
+    expect(sideBySideFits(SIDE_BY_SIDE_MIN_COLUMNS)).toBe(true);
+    expect(sideBySideFits(120)).toBe(true);
   });
 });
 

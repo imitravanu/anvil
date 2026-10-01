@@ -134,6 +134,74 @@ describe("eventReducer", () => {
     expect(assistant.guardianReports?.[0].violations[0].family).toBe("placeholder");
   });
 
+  /** Harness for the sub-agent card cases: message + usage both reduce. */
+  function subAgentHarness() {
+    let assistant: DisplayMessage = {
+      id: "a1",
+      role: "assistant",
+      text: "",
+      streaming: true,
+      toolCalls: [],
+      subAgents: [],
+    };
+    let usage: UsageTotals = { inputTokens: 0, outputTokens: 0 };
+    const update = (fn: (m: DisplayMessage) => DisplayMessage) => {
+      assistant = fn(assistant);
+    };
+    const setUsage = (action: React.SetStateAction<UsageTotals>) => {
+      usage = typeof action === "function" ? action(usage) : action;
+    };
+    const send = (event: AgentEvent) => applyEvent(event, update, setUsage, vi.fn(), vi.fn());
+    return {
+      send,
+      cards: () => assistant.subAgents,
+      usage: () => usage,
+    };
+  }
+
+  it("F3: concurrent members' events land on their OWN card, by member id", () => {
+    const h = subAgentHarness();
+    h.send({ type: "subagent_started", id: "a", task: "member A" });
+    h.send({ type: "subagent_started", id: "b", task: "member B" });
+    // Interleave: B reports progress first, then A — correlation by "the one
+    // running" gave both of these to A (the first running card).
+    h.send({ type: "subagent_progress", id: "b", tool: "grep", detail: "in b" });
+    h.send({ type: "subagent_progress", id: "a", tool: "read_file", detail: "in a" });
+    h.send({
+      type: "subagent_finished",
+      id: "a",
+      toolCalls: 3,
+      inputTokens: 100,
+      outputTokens: 20,
+      report: "A report",
+    });
+
+    const [a, b] = h.cards();
+    expect(a).toMatchObject({ id: "a", task: "member A", status: "done", toolCalls: 3, report: "A report" });
+    expect(a.lastTool).toBeUndefined();
+    // B is untouched by A's finish: still running, its own single progress.
+    expect(b).toMatchObject({ id: "b", task: "member B", status: "running", toolCalls: 1, lastTool: "grep" });
+  });
+
+  it("F4: subagent usage no longer erases the reasoning/cached accumulators", () => {
+    const h = subAgentHarness();
+    h.send({ type: "usage", inputTokens: 10, outputTokens: 5, reasoningTokens: 4, cachedInputTokens: 3 });
+    h.send({
+      type: "subagent_finished",
+      id: "delegate",
+      toolCalls: 1,
+      inputTokens: 7,
+      outputTokens: 2,
+      report: "r",
+    });
+    expect(h.usage()).toEqual({
+      inputTokens: 17,
+      outputTokens: 7,
+      reasoningTokens: 4,
+      cachedInputTokens: 3,
+    });
+  });
+
   it("applyEvent reduces plan_updated", () => {
     const update = vi.fn();
     const setUsage = vi.fn();

@@ -6,7 +6,12 @@ import { useTheme } from "../theme/theme.js";
 import { ColorizedDiff } from "../diff/colorizeDiff.js";
 import { curtail } from "../util/format.js";
 import { copyToClipboard } from "../util/clipboard.js";
-import { SideBySideDiff } from "../diff/SideBySideDiff.js";
+import {
+  SideBySideDiff,
+  SIDE_BY_SIDE_AUTO_COLUMNS,
+  SIDE_BY_SIDE_MIN_COLUMNS,
+  sideBySideFits,
+} from "../diff/SideBySideDiff.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
 
 export interface BranchDiffInfo {
@@ -43,6 +48,13 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
   const [error, setError] = useState<string | null>(null);
   // DW-4.11 copy feedback (cleared on navigation).
   const [copiedNote, setCopiedNote] = useState<string | null>(null);
+  // F6: why side-by-side was refused (cleared on navigation like copy feedback).
+  const [hintNote, setHintNote] = useState<string | null>(null);
+  // F6 (AUDIT-2026-09-30): `s` used to force the two-column layout at ANY width,
+  // so a 40-column terminal rendered a 43-cell row past the frame. The layout
+  // now clamps, and below the readable minimum it is refused with a note.
+  const sideBySideAvailable = sideBySideFits(termWidth);
+  const showSideBySide = (sideBySide ?? termWidth >= SIDE_BY_SIDE_AUTO_COLUMNS) && sideBySideAvailable;
 
   useEffect(() => {
     if (branchDiff !== undefined && branchDiff !== null) {
@@ -78,7 +90,14 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
 
     // DW-4.5: `s` toggles unified/side-by-side for the whole modal visit.
     if (input === "s") {
-      setSideBySide((prev) => !(prev ?? termWidth >= 120));
+      if (!sideBySideAvailable) {
+        setHintNote(
+          `Side-by-side needs at least ${SIDE_BY_SIDE_MIN_COLUMNS} columns (this terminal is ${termWidth}).`
+        );
+        return;
+      }
+      setHintNote(null);
+      setSideBySide((prev) => !(prev ?? termWidth >= SIDE_BY_SIDE_AUTO_COLUMNS));
       return;
     }
 
@@ -86,6 +105,7 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
     if (input === "c") {
       const text = branchDiff ? branchDiff.diff : (changes[activeIdx]?.diff ?? changes[activeIdx]?.path ?? "");
       const result = copyToClipboard(text);
+      setHintNote(null);
       setCopiedNote(result.ok ? `Copied ${result.bytes} bytes to the clipboard.` : `Copy failed (${result.reason}).`);
       return;
     }
@@ -93,9 +113,11 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
     if (!branchDiff && changes.length > 0) {
       if (key.tab || key.rightArrow || input === "l") {
         setCopiedNote(null);
+        setHintNote(null);
         setActiveIdx((prev: number) => (prev + 1) % changes.length);
       } else if (key.leftArrow || input === "h") {
         setCopiedNote(null);
+        setHintNote(null);
         setActiveIdx((prev: number) => (prev - 1 + changes.length) % changes.length);
       }
     }
@@ -164,8 +186,9 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
           <Text color={theme.colors.textSecondary}>S: side-by-side · C: copy · Esc / q: close</Text>
         </Box>
         <Box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} marginY={1} overflow="hidden">
+          {hintNote && <Text color={theme.colors.textSecondary}>{hintNote}</Text>}
           {hasContent ? (
-            (sideBySide ?? termWidth >= 120) ? (
+            showSideBySide ? (
               <SideBySideDiff diff={branchDiff.diff} maxRows={Math.max(3, height - 7)} />
             ) : (
               <ColorizedDiff
@@ -237,6 +260,11 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
           <Text color={theme.colors.success}>{copiedNote}</Text>
         </Box>
       )}
+      {hintNote && (
+        <Box flexShrink={0} paddingX={1}>
+          <Text color={theme.colors.textSecondary}>{hintNote}</Text>
+        </Box>
+      )}
       {coverageWarning && (
         <Box flexShrink={0} paddingX={1}>
           <Text color={theme.colors.accent}>⚠ {coverageWarning}</Text>
@@ -274,7 +302,7 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
           the modal. The row budget matches what this modal actually has left. */}
       <Box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} marginY={1} overflow="hidden">
         {activeFile.diff ? (
-          (sideBySide ?? termWidth >= 120) ? (
+          showSideBySide ? (
             <SideBySideDiff diff={activeFile.diff} maxRows={Math.max(3, height - 10)} />
           ) : (
             <ColorizedDiff diff={activeFile.diff} maxRows={Math.max(3, height - 9)} maxText={Math.max(20, termWidth - 10)} />

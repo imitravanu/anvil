@@ -53,11 +53,21 @@ export type AgentEvent =
   | { type: "budget_exhausted" }
   | { type: "loop_detected"; tool: string }
   | { type: "plan_updated"; plan: string }
-  // sub-agent delegation (finished carries the capped report).
-  | { type: "subagent_started"; task: string }
-  | { type: "subagent_finished"; toolCalls: number; inputTokens: number; outputTokens: number; report: string }
+  // sub-agent delegation (finished carries the capped report). `id` is the
+  // stable member id — a team member's spec id, or `SINGLE_SUBAGENT_ID` for a
+  // lone delegation — so consumers can correlate concurrent members' events to
+  // the right card instead of guessing "the one that is still running" (F3).
+  | { type: "subagent_started"; id: string; task: string }
+  | {
+      type: "subagent_finished";
+      id: string;
+      toolCalls: number;
+      inputTokens: number;
+      outputTokens: number;
+      report: string;
+    }
   // live delegation progress: the tool the sub-agent is using right now
-  | { type: "subagent_progress"; tool: string; detail: string }
+  | { type: "subagent_progress"; id: string; tool: string; detail: string }
   // Rewind: pre-mutation file snapshot taken this turn.
   | { type: "checkpoint"; id: number; files: number }
   // Closed-loop TDD auto-verification

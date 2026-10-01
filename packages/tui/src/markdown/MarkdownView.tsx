@@ -2,7 +2,7 @@ import { Box, Text, useStdout } from "ink";
 import { MarkdownBlock, MarkdownSpan, parseMarkdownText } from "./renderMarkdown.js";
 import { highlightCodeBlocks } from "./highlightCodeBlocks.js";
 import { useTheme } from "../theme/theme.js";
-import { curtail, displayWidth } from "../util/format.js";
+import { curtail, curtailToCells, displayWidth } from "../util/format.js";
 import { wrapSpans } from "../util/wrapSpans.js";
 import {
   CODE_HEAD_LINES,
@@ -71,14 +71,16 @@ function TableView({ headers, rows }: { headers: MarkdownSpan[][]; rows: Markdow
   // needs plain strings, and footnotes still resolve via the links block.
   // Wide model-emitted tables overflowed narrow terminals and stacked rows;
   // curtail the finished line so a table can never exceed terminal width.
+  // F5: the padding above counts CELLS, so the truncation must too — a
+  // code-point curtail left CJK rows wider than the budget they padded to.
   const line = (cells: MarkdownSpan[][]) =>
-    curtail(
+    curtailToCells(
       cells
         .map((_, c) => pad(cells[c] ?? [{ text: "" }], widths[c]))
         .join(" │ "),
       maxLen
     );
-  const rule = curtail(
+  const rule = curtailToCells(
     widths.map((w) => "─".repeat(w)).join("─┼─"),
     maxLen
   );

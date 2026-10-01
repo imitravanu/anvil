@@ -3,8 +3,30 @@ import { Box, Text, useStdout } from "ink";
 import { parseDiff } from "./parseDiff.js";
 import { pairSideRows } from "./sideBySide.js";
 import { useTheme } from "../theme/theme.js";
-import { curtail } from "../util/format.js";
+import { curtailToCells } from "../util/format.js";
 import { MAX_DIFF_ROWS } from "./colorizeDiff.js";
+
+/** Below this, two code columns cannot be read — callers must use unified. */
+export const SIDE_BY_SIDE_MIN_COLUMNS = 60;
+/** DW-4.5 auto-enable threshold: wide terminals get side-by-side by default. */
+export const SIDE_BY_SIDE_AUTO_COLUMNS = 120;
+
+/** Whether a side-by-side layout is legible at this terminal width. */
+export function sideBySideFits(termColumns: number): boolean {
+  return termColumns >= SIDE_BY_SIDE_MIN_COLUMNS;
+}
+
+/**
+ * F6 (AUDIT-2026-09-30): the columns must never reserve more cells than the
+ * terminal has. The old `Math.max(20, …)` floor forced a 43-cell minimum that
+ * overflowed the documented 40×15 target. The only fixed costs are the modal's
+ * frame (2 borders + 2 padding) and the 3-cell divider — 7 in total.
+ */
+export function sideBySideLayout(termColumns: number): { colWidth: number; textWidth: number } {
+  const colWidth = Math.max(1, Math.floor((termColumns - 7) / 2));
+  // Line-number gutter takes 4 cells plus a space.
+  return { colWidth, textWidth: Math.max(1, colWidth - 5) };
+}
 
 /**
  * DW-4.5 — side-by-side diff for wide terminals. Before | After columns with
@@ -22,9 +44,7 @@ export function SideBySideDiff({
   const { stdout } = useStdout();
   const width = stdout?.columns ?? 80;
   const termRows = stdout?.rows ?? 24;
-  // Frame (2) + padding (2) + middle divider (3); split the rest evenly.
-  const colWidth = Math.max(20, Math.floor((width - 7) / 2));
-  const textWidth = Math.max(10, colWidth - 8);
+  const { colWidth, textWidth } = sideBySideLayout(width);
   const effectiveMaxRows = Math.max(3, Math.min(MAX_DIFF_ROWS, maxRows ?? termRows - 15));
   const parsed = React.useMemo(() => parseDiff(diff), [diff]);
   const paired = React.useMemo(() => pairSideRows(parsed), [parsed]);
@@ -50,13 +70,13 @@ export function SideBySideDiff({
       <Box flexShrink={0}>
         <Box width={colWidth} flexShrink={0}>
           <Text bold color={theme.colors.textSecondary}>
-            {curtail("Before", textWidth)}
+            {curtailToCells("Before", textWidth)}
           </Text>
         </Box>
         <Text color={theme.colors.separator}> │ </Text>
         <Box width={colWidth} flexShrink={0}>
           <Text bold color={theme.colors.textSecondary}>
-            {curtail("After", textWidth)}
+            {curtailToCells("After", textWidth)}
           </Text>
         </Box>
       </Box>
@@ -67,7 +87,7 @@ export function SideBySideDiff({
             row.tone === "hunk" ? theme.colors.accent : theme.colors.textSecondary;
           return (
             <Text key={key} color={color}>
-              {curtail(row.text, colWidth * 2)}
+              {curtailToCells(row.text, colWidth * 2)}
             </Text>
           );
         }
@@ -81,12 +101,12 @@ export function SideBySideDiff({
           <Box key={key} flexShrink={0}>
             <Box width={colWidth} flexShrink={0}>
               <Text color={theme.colors.textMuted} backgroundColor={leftBg}>{leftNo} </Text>
-              <Text color={cellColor(row.left.tone)} backgroundColor={leftBg}>{curtail(row.left.text, textWidth)}</Text>
+              <Text color={cellColor(row.left.tone)} backgroundColor={leftBg}>{curtailToCells(row.left.text, textWidth)}</Text>
             </Box>
             <Text color={theme.colors.separator}> │ </Text>
             <Box width={colWidth} flexShrink={0}>
               <Text color={theme.colors.textMuted} backgroundColor={rightBg}>{rightNo} </Text>
-              <Text color={cellColor(row.right.tone)} backgroundColor={rightBg}>{curtail(row.right.text, textWidth)}</Text>
+              <Text color={cellColor(row.right.tone)} backgroundColor={rightBg}>{curtailToCells(row.right.text, textWidth)}</Text>
             </Box>
           </Box>
         );

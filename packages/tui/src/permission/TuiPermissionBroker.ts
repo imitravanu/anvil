@@ -117,6 +117,19 @@ export class TuiPermissionBroker implements PermissionBroker {
 
   approveAlwaysForSession(toolName: string): void {
     this.alwaysApprove.add(toolName);
+    // F9 (AUDIT-2026-09-30): the grant must also clear requests for the SAME
+    // tool that are already waiting — the enqueue-time check meant a queued
+    // prompt still interrupted the user after they chose "always allow".
+    if (this.current?.toolName === toolName) {
+      this.current.resolve(true);
+      return;
+    }
+    const granted = this.queue.filter((q) => q.toolName === toolName);
+    if (granted.length > 0) {
+      this.queue = this.queue.filter((q) => q.toolName !== toolName);
+      for (const q of granted) q.resolve(true);
+      this.notify();
+    }
   }
 
   /**

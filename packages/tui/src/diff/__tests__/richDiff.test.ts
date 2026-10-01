@@ -37,6 +37,20 @@ describe("parseDiff", () => {
     expect(parseDiff("just some text")).toEqual([{ kind: "meta", text: "just some text" }]);
   });
 
+  it("F10: in-hunk `--- x` / `+++ x` are content lines, not file headers", () => {
+    // A deleted line whose content starts "-- " is emitted as `--- …`, and an
+    // added line starting "++ " as `+++ …`. Treating those as headers stopped
+    // line-number advancement for the rest of the hunk.
+    const rows = parseDiff("@@ -5,2 +5,2 @@\n--- a note\n+++ b note\n");
+    expect(rows[0]).toMatchObject({ kind: "hunk", oldStart: 5, newStart: 5 });
+    expect(rows[1]).toMatchObject({ kind: "del", text: "-- a note", oldNo: 5, newNo: null });
+    expect(rows[2]).toMatchObject({ kind: "add", text: "++ b note", oldNo: null, newNo: 5 });
+    // Outside a hunk the same prefixes are still real file headers.
+    const headers = parseDiff("--- a/app.ts\n+++ b/app.ts\n@@ -1,1 +1,1 @@\n-x\n+y\n");
+    expect(headers[0]).toEqual({ kind: "file", text: "--- a/app.ts" });
+    expect(headers[1]).toEqual({ kind: "file", text: "+++ b/app.ts" });
+  });
+
   it("keeps genuinely empty hunk lines as context (numbers stay in sync)", () => {
     const rows = parseDiff("@@ -1,3 +1,3 @@\n a\n\n b");
     expect(rows[1]).toMatchObject({ kind: "context", text: "a", oldNo: 1, newNo: 1 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collapsePlan, curtail, displayModelLabel, formatCertificationBadge, formatDuration, formatTime, modelInfo, providerLabel, providerOfModel } from "../format.js";
+import { collapsePlan, curtail, curtailToCells, displayModelLabel, displayWidth, formatCertificationBadge, formatDuration, formatTime, modelInfo, providerLabel, providerOfModel, splitByDisplayWidth } from "../format.js";
 
 describe("format helpers", () => {
   it("displayModelLabel resolves a known registry model and falls back to the id", () => {
@@ -70,6 +70,28 @@ describe("format helpers", () => {
         expect(out.charCodeAt(i + 1)).toBeGreaterThanOrEqual(0xdc00);
       }
     }
+  });
+
+  it("F5: curtailToCells honours a terminal-CELL budget (not code points)", () => {
+    // "中文" is 2 code points but 4 cells; a code-point curtail let it overflow
+    // the cell budget it had been padded to.
+    expect(displayWidth("中文")).toBe(4);
+    expect(curtailToCells("中文中文", 5)).toBe("中文…"); // 4 cells + ellipsis
+    expect(curtailToCells("abc", 3)).toBe("abc");
+    expect(curtailToCells("abcd", 3)).toBe("ab…");
+    expect(curtailToCells("abc", 0)).toBe("");
+    expect(curtailToCells("abc", 1)).toBe("…");
+    // Never splits a surrogate pair.
+    expect(curtailToCells("😀😀😀", 5)).toBe("😀😀…");
+  });
+
+  it("F5: splitByDisplayWidth never overflows and never straddles a wide glyph", () => {
+    expect(splitByDisplayWidth("中文中文", 4)).toEqual(["中文", "中文"]);
+    // 3-cell budget: a 2-cell glyph that would straddle starts the next chunk.
+    expect(splitByDisplayWidth("abcde", 3)).toEqual(["abc", "de"]);
+    // A glyph wider than the whole budget is emitted alone, never dropped.
+    expect(splitByDisplayWidth("中", 1)).toEqual(["中"]);
+    expect(splitByDisplayWidth("", 4)).toEqual([""]);
   });
 
   it("collapsePlan caps a multi-line plan at two width-fitting lines", () => {

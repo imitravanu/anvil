@@ -85,10 +85,13 @@ describe("Phase 9: sub-agent delegation", () => {
     // Events: started before finished, turn completes at the end
     expect(events.find((e) => e.type === "subagent_started")).toEqual({
       type: "subagent_started",
+      // F3: a lone delegation carries the stable single-delegation id.
+      id: "delegate",
       task: "find the provider registry",
     });
     expect(events.find((e) => e.type === "subagent_finished")).toEqual({
       type: "subagent_finished",
+      id: "delegate",
       toolCalls: 0,
       inputTokens: 40,
       outputTokens: 9,
@@ -217,7 +220,7 @@ describe("Phase 9: sub-agent delegation", () => {
     ]);
     const gen = session.send("go deep");
     const first = await gen.next();
-    expect(first.value).toEqual({ type: "subagent_started", task: "long investigation" });
+    expect(first.value).toEqual({ type: "subagent_started", id: "delegate", task: "long investigation" });
 
     // Start draining (this launches the sub-run, whose stream now stalls),
     // THEN cancel — the abort must propagate into the in-flight sub stream.

@@ -55,18 +55,29 @@ export interface SubAgentRun {
 }
 
 /**
+ * The id a lone `delegate_task` call uses for its sub-agent events. Team
+ * members carry their own spec id instead, so concurrent members never share
+ * a card (F3/AUDIT-2026-09-30).
+ */
+export const SINGLE_SUBAGENT_ID = "delegate";
+
+/**
  * Progress event relayed while the sub-run executes: the tool it is using
  * right now. Raw sub-agent text is NOT relayed — the report lands in full on
  * subagent_finished, and duplicating it mid-run would double-render.
  */
 export interface SubAgentProgress {
   type: "subagent_progress";
+  /** The member this progress belongs to (see `SINGLE_SUBAGENT_ID`). */
+  id: string;
   tool: string;
   detail: string;
 }
 
 /** Live variant: yields SubAgentProgress while the run executes, returns the final run. */
 export async function* runSubAgentLive(opts: {
+  /** Stable member id stamped on every progress event this run yields. */
+  id: string;
   provider: ModelProvider;
   model: string;
   projectRoot: string;
@@ -122,7 +133,7 @@ export async function* runSubAgentLive(opts: {
           toolCalls += 1;
           const input = (event.input ?? {}) as { command?: string; path?: string };
           const detail = input.command ?? input.path ?? "";
-          yield { type: "subagent_progress", tool: event.name, detail };
+          yield { type: "subagent_progress", id: opts.id, tool: event.name, detail };
           break;
         }
         case "cancelled":

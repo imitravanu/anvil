@@ -138,7 +138,7 @@ describe("MessageView", () => {
         message={assistant({
           toolCalls: [{ id: "c1", name: "read_file", input: {}, status: "done", summary: "ok" }],
           subAgents: [
-            { task: "research", status: "done", toolCalls: 1, inputTokens: 10, outputTokens: 5, report: "r" },
+            { id: "delegate", task: "research", status: "done", toolCalls: 1, inputTokens: 10, outputTokens: 5, report: "r" },
           ],
         })}
         expandTools

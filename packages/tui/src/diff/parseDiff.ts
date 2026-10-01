@@ -22,7 +22,10 @@ export function parseDiff(diff: string): DiffRow[] {
   // The string's own trailing newline is an artifact, not a context line.
   if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
   for (const line of lines) {
-    if (line.startsWith("--- ") || line.startsWith("+++ ")) {
+    // F10 (AUDIT-2026-09-30): a file header only exists OUTSIDE a hunk. Inside
+    // one, `--- x` is a deleted line whose content starts `-- ` and `+++ x` an
+    // added line starting `++ `; treating those as headers stopped numbering.
+    if (!inHunk && (line.startsWith("--- ") || line.startsWith("+++ "))) {
       rows.push({ kind: "file", text: line });
       continue;
     }
@@ -38,10 +41,13 @@ export function parseDiff(diff: string): DiffRow[] {
       rows.push({ kind: "meta", text: line });
       continue;
     }
-    if (line.startsWith("+") && !line.startsWith("+++")) {
+    // Past the header check we are inside a hunk, so a leading `+`/`-` is an
+    // add/del — no `+++`/`---` exclusion is needed (and the old exclusions are
+    // exactly what misclassified in-hunk lines; F10).
+    if (line.startsWith("+")) {
       rows.push({ kind: "add", text: line.slice(1), oldNo: null, newNo: newNo });
       newNo += 1;
-    } else if (line.startsWith("-") && !line.startsWith("---")) {
+    } else if (line.startsWith("-")) {
       rows.push({ kind: "del", text: line.slice(1), oldNo, newNo: null });
       oldNo += 1;
     } else if (line.startsWith("\\")) {

@@ -1,5 +1,6 @@
 import type { DisplayMessage } from "../hooks/useAgentController.js";
 import { parseMarkdownText } from "../markdown/renderMarkdown.js";
+import { displayWidth } from "./format.js";
 import {
   CODE_HEAD_LINES,
   CODE_TAIL_LINES,
@@ -16,7 +17,9 @@ import {
  * MarkdownView actually renders (windowed code blocks, tables, spacing).
  */
 export function estimatedLines(message: DisplayMessage, width: number, expandTools = false): number {
-  // Text wraps at roughly the content width; count code-point-aware chars.
+  // Text wraps at roughly the content width. F5: measure terminal CELLS, like
+  // wrapSpans does — counting code points understated CJK/emoji rows, so the
+  // "… N earlier messages" indicator could claim less was hidden than was.
   const usable = Math.max(20, width - 6);
   let lines = 1; // role label ("anvil" / "❯ you" / "ℹ")
   if (message.text) {
@@ -24,7 +27,7 @@ export function estimatedLines(message: DisplayMessage, width: number, expandToo
       lines += estimateMarkdownLines(message.text, usable);
     } else {
       for (const para of message.text.split("\n")) {
-        lines += Math.max(1, Math.ceil(Array.from(para).length / usable));
+        lines += Math.max(1, Math.ceil(displayWidth(para) / usable));
       }
     }
   }
@@ -70,12 +73,12 @@ function estimateMarkdownLines(text: string, usable: number): number {
         // Hanging indent: continuations wrap at (usable - marker column).
         const prefix = Math.min(block.depth, 4) * 2 + (block.marker === "•" ? 2 : 3);
         const plain = block.spans.map((s) => s.text).join("");
-        lines += Math.max(1, Math.ceil(Array.from(plain).length / Math.max(1, usable - prefix)));
+        lines += Math.max(1, Math.ceil(displayWidth(plain) / Math.max(1, usable - prefix)));
         break;
       }
       default: {
         const plain = block.spans.map((s) => s.text).join("");
-        lines += Math.max(1, Math.ceil(Array.from(plain).length / usable));
+        lines += Math.max(1, Math.ceil(displayWidth(plain) / usable));
         break;
       }
     }
