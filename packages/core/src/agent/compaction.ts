@@ -1,6 +1,6 @@
 import { ConversationMessage, ModelProvider } from "../providers/types.js";
 import { selectiveKeep, estimateTextTokens } from "./context/scoring.js";
-import { IMAGE_TOKEN_ESTIMATE } from "../config/constants.js";
+import { IMAGE_TOKEN_ESTIMATE, ASCII_CHARS_PER_TOKEN, COMPACTION_SUMMARY_MAX_TOKENS } from "../config/constants.js";
 
 export interface CompactionResult {
   compacted: boolean;
@@ -208,7 +208,7 @@ export async function compactIfNeeded(
   if (options?.task) {
     const keepTokens = Math.max(
       0,
-      contextWindow - (latestInputTokens + KEEP_RECENT_MESSAGES * 4)
+      contextWindow - (latestInputTokens + KEEP_RECENT_MESSAGES * ASCII_CHARS_PER_TOKEN)
     );
     // Keep only the recent tail within the budget; everything older than the
     // oldest kept message is what the summarizer condenses.
@@ -306,7 +306,7 @@ async function summarizeMessages(
         "and restating tool output verbatim.",
       messages: input,
       tools: [],
-      maxTokens: 1024,
+      maxTokens: COMPACTION_SUMMARY_MAX_TOKENS,
       signal,
     });
     for await (const event of stream) {

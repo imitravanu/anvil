@@ -6,6 +6,7 @@ import { loadProjectRules } from "../../config/rules.js";
 import { EXCLUDED_DIRS } from "../../tools/paths.js";
 import { getErrorMessage } from "../../errors.js";
 import { log } from "../../logger.js";
+import { GIT_INSPECT_TIMEOUT_MS } from "../../config/constants.js";
 
 
 /**
@@ -18,21 +19,21 @@ function inspectGit(projectRoot: string): GitContext | undefined {
     // instead and use branch --show-current (works on unborn branches).
     execSync("git rev-parse --is-inside-work-tree", {
       cwd: projectRoot,
-      timeout: 2000,
+      timeout: GIT_INSPECT_TIMEOUT_MS,
       encoding: "utf8",
       stdio: ["pipe", "pipe", "ignore"],
     });
 
     const branch = execSync("git branch --show-current", {
       cwd: projectRoot,
-      timeout: 2000,
+      timeout: GIT_INSPECT_TIMEOUT_MS,
       encoding: "utf8",
       stdio: ["pipe", "pipe", "ignore"],
     }).trim();
 
     const porcelain = execSync("git status --porcelain", {
       cwd: projectRoot,
-      timeout: 2000,
+      timeout: GIT_INSPECT_TIMEOUT_MS,
       encoding: "utf8",
       stdio: ["pipe", "pipe", "ignore"],
     }).trim();
@@ -46,6 +47,8 @@ function inspectGit(projectRoot: string): GitContext | undefined {
       modifiedFiles,
     };
   } catch {
+    // intentional: not a git work tree (or git unavailable) is a normal state,
+    // not an error — the situational context simply omits git info.
     return undefined;
   }
 }
@@ -129,6 +132,8 @@ export async function analyzeWorkspace(projectRoot: string): Promise<Situational
     const entries = await fs.promises.readdir(projectRoot);
     topLevelEntries = entries.filter((name) => !EXCLUDED_DIRS.has(name));
   } catch (_err) {
+    // intentional: an unreadable project root yields no top-level entries; the
+    // context is still usable (project name, ecosystem, git all gathered above).
     topLevelEntries = [];
   }
 

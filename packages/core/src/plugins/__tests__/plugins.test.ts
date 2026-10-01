@@ -1,10 +1,11 @@
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { loadPlugins, pluginSystemPrompts } from "../loader.js";
-import { pluginToolDefinitions, renderCommand, buildArgv, registerPluginExecutors } from "../registry.js";
-import { executeTool, describeToolInput } from "../../tools/index.js";
+import { renderCommand, buildArgv, registerPluginExecutors } from "../registry.js";
+import { executeTool, describeToolInput, registerExternalExecutor } from "../../tools/index.js";
+import { log } from "../../logger.js";
 
 function makePluginsDir(entries: Record<string, unknown>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-plugins-"));
@@ -55,7 +56,7 @@ describe("loadPlugins", () => {
     });
     const { plugins } = loadPlugins(dir);
     expect(plugins[0].enabled).toBe(false);
-    expect(pluginToolDefinitions(plugins[0])).toEqual([]);
+    expect(registerPluginExecutors([plugins[0]])).toEqual([]);
   });
 
   it("builds tool definitions with plugin prefix", () => {
@@ -63,7 +64,7 @@ describe("loadPlugins", () => {
       hello: { name: "hello", version: "1.0.0", tools: [{ name: "greet", description: "Say hi", command: "echo hi" }] },
     });
     const { plugins } = loadPlugins(dir);
-    const defs = pluginToolDefinitions(plugins[0]);
+    const defs = registerPluginExecutors(plugins);
     expect(defs[0].name).toBe("plugin_hello__greet");
     expect(defs[0].mutating).toBe(true);
   });
@@ -75,6 +76,58 @@ describe("loadPlugins", () => {
     });
     const { plugins } = loadPlugins(dir);
     expect(pluginSystemPrompts(plugins)).toEqual(["Be terse."]);
+  });
+
+  it("reports an unreadable manifest as a problem instead of skipping it (C19)", () => {
+    dir = makePluginsDir({});
+    // A DIRECTORY where plugin.json should be: readFileSync throws EISDIR — the
+    // "unreadable manifest" case the loader used to swallow without reporting.
+    fs.mkdirSync(path.join(dir, "broken", "plugin.json"), { recursive: true });
+    const { plugins, problems } = loadPlugins(dir);
+    expect(plugins).toEqual([]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0].error).toMatch(/unreadable plugin\.json/);
+  });
+});
+
+describe("registerPluginExecutors", () => {
+  let dir = "";
+  afterEach(() => {
+    if (dir) fs.rmSync(dir, { recursive: true, force: true });
+    dir = "";
+  });
+
+  it("warns on a duplicate tool name instead of dropping it silently (C19)", () => {
+    dir = makePluginsDir({
+      dup: {
+        name: "dup",
+        version: "1.0.0",
+        tools: [
+          { name: "greet", description: "first", command: "echo one" },
+          { name: "greet", description: "second", command: "echo two" },
+        ],
+      },
+    });
+    const { plugins } = loadPlugins(dir);
+    const warn = vi.spyOn(log, "warn").mockImplementation(() => undefined);
+    try {
+      const defs = registerPluginExecutors(plugins);
+      expect(defs).toHaveLength(1); // the shadowed duplicate was collapsed...
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("duplicate tool")); // ...and said so
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("warns when an executor prefix is registered twice instead of dropping it silently (C19)", () => {
+    const warn = vi.spyOn(log, "warn").mockImplementation(() => undefined);
+    try {
+      registerExternalExecutor("c19_dup__", async () => ({ claimed: false }));
+      registerExternalExecutor("c19_dup__", async () => ({ claimed: false }));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("already registered"));
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

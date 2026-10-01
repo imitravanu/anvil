@@ -18,7 +18,7 @@
   cell-width, F6 diff floor, F4/F7/F9/F10/F11); W7 (B3 usage-on-error, B4
   strict pricing, A7 interleaved arms, B8 untested badge — **A8 deferred**,
   needs a structured runner error code). **W8 is partial**: E8, G17, and the G9/G13/G15 quick wins landed (derived `--help` command line, loud eval flags, interpolated p95); **G10/G11/G12 (CLI truth), F12 (dead exports), F13 (catch comments) landed 2026-10-02**, plus E9 (tree-kill parity + truncation honesty), the E8 remainder, and E7's duplicate bounds**;
-  H1, C9–C19, F8, G6-remainder stay open. The W4–W8
+  **E7 (all flagged literals centralized) and C9–C19 (the whole consistency sweep) also landed 2026-10-02**; H1, F8, G6-remainder stay open. The W4–W8
   commits carried no bookkeeping; the 2026-10-02 reconciliation sweep verified
   their claims against live code and repaired the record (see PROGRESS.md).
   Roadmap: [`PHASE-39-ROADMAP.md`](PHASE-39-ROADMAP.md).

@@ -44,6 +44,13 @@ describe("validateTeamSpec", () => {
       validateTeamSpec({ strategy: "pipeline", members: [{ id: "a", task: "x" }] })
     ).toContain("at least two");
   });
+
+  it("rejects an unknown strategy instead of falling through to pipeline (C9)", () => {
+    // Typed as TeamSpec via a cast: the value must come from the runtime edge
+    // (tool JSON), where a typo used to be coerced and silently ran pipeline.
+    const bogus = { strategy: "fan-out", members: [{ id: "a", task: "x" }] } as unknown as TeamSpec;
+    expect(validateTeamSpec(bogus)).toContain("unknown strategy");
+  });
 });
 
 describe("splitBudget", () => {

@@ -1,6 +1,6 @@
 import { getErrorMessage } from "../../errors.js";
 import { TEAM_DEFAULT_ITERATIONS, TEAM_MAX_AGENTS, SUB_AGENT_REPORT_MAX_CHARS } from "../../config/constants.js";
-import { instrumentRunner } from "./types.js";
+import { instrumentRunner, isTeamStrategy, TEAM_STRATEGIES } from "./types.js";
 import type { TeamMemberResult, TeamMemberSpec, TeamRunnerDeps, TeamRunResult, TeamSpec } from "./types.js";
 
 /**
@@ -18,6 +18,12 @@ export function splitBudget(spec: TeamSpec): number[] {
 }
 
 export function validateTeamSpec(spec: TeamSpec): string | null {
+  // C9: reject an unknown strategy loudly. Without this, any non-"parallel"/
+  // "review" string fell through to the serial pipeline branch below — a
+  // typo silently changed the team's execution model.
+  if (!isTeamStrategy(spec.strategy)) {
+    return `unknown strategy: ${String(spec.strategy)} (expected: ${TEAM_STRATEGIES.join(", ")})`;
+  }
   if (spec.members.length === 0) return "team needs at least one member";
   if (spec.members.length > TEAM_MAX_AGENTS) {
     return `team exceeds max agents (${TEAM_MAX_AGENTS})`;

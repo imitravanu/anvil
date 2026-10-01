@@ -1,8 +1,15 @@
 import { spawnSync } from "node:child_process";
 import { getErrorMessage } from "../errors.js";
+import { log } from "../logger.js";
 import { registerExternalExecutor } from "../tools/index.js";
 import type { ToolDefinition } from "../tools/types.js";
 import type { LoadedPlugin, PluginToolDef } from "./types.js";
+import {
+  PLUGIN_TOOL_TIMEOUT_MS,
+  PLUGIN_TOOL_MAX_BUFFER_BYTES,
+  PLUGIN_TOOL_ERROR_MAX_CHARS,
+  PLUGIN_TOOL_STDOUT_MAX_CHARS,
+} from "../config/constants.js";
 
 export const PLUGIN_TOOL_PREFIX = "plugin_";
 
@@ -52,16 +59,6 @@ function usesArgv(tool: PluginToolDef): boolean {
  * gate through the normal permission prompt, whose preview shows the real
  * command in both forms.
  */
-export function pluginToolDefinitions(plugin: LoadedPlugin): ToolDefinition[] {
-  if (!plugin.enabled) return [];
-  return (plugin.manifest.tools ?? []).map((t) => ({
-    name: `${PLUGIN_TOOL_PREFIX}${plugin.manifest.name}__${t.name}`,
-    description: `[plugin:${plugin.manifest.name}] ${t.description}`,
-    inputSchema: { type: "object" },
-    mutating: true,
-  }));
-}
-
 export function registerPluginExecutors(plugins: LoadedPlugin[]): ToolDefinition[] {
   const defs: ToolDefinition[] = [];
   for (const plugin of plugins) {
@@ -69,7 +66,20 @@ export function registerPluginExecutors(plugins: LoadedPlugin[]): ToolDefinition
     const tools = plugin.manifest.tools ?? [];
     if (tools.length === 0) continue;
     const prefix = `${PLUGIN_TOOL_PREFIX}${plugin.manifest.name}__`;
-    const byName = new Map(tools.map((t) => [`${prefix}${t.name}`, t]));
+    // C19: a duplicate tool name used to collapse silently in this Map, so one
+    // definition vanished with no signal at all. Keep the first declaration and
+    // warn so the shadowed tool is visible instead of mysteriously missing.
+    const byName = new Map<string, PluginToolDef>();
+    for (const t of tools) {
+      const fullName = `${prefix}${t.name}`;
+      if (byName.has(fullName)) {
+        log.warn(
+          `[plugins] ${plugin.manifest.name}: duplicate tool "${t.name}" ignored (first declaration wins)`
+        );
+        continue;
+      }
+      byName.set(fullName, t);
+    }
     for (const [fullName, tool] of byName) {
       defs.push({
         name: fullName,
@@ -89,15 +99,15 @@ export function registerPluginExecutors(plugins: LoadedPlugin[]): ToolDefinition
         const child = usesArgv(tool)
           ? spawnSync(tool.command, buildArgv(tool, input), {
               cwd: ctx.projectRoot,
-              timeout: 60_000,
+              timeout: PLUGIN_TOOL_TIMEOUT_MS,
               encoding: "utf8",
-              maxBuffer: 512 * 1024,
+              maxBuffer: PLUGIN_TOOL_MAX_BUFFER_BYTES,
             })
           : spawnSync("bash", ["-c", rendered], {
               cwd: ctx.projectRoot,
-              timeout: 60_000,
+              timeout: PLUGIN_TOOL_TIMEOUT_MS,
               encoding: "utf8",
-              maxBuffer: 512 * 1024,
+              maxBuffer: PLUGIN_TOOL_MAX_BUFFER_BYTES,
             });
         if (child.error) {
           return {
@@ -106,7 +116,7 @@ export function registerPluginExecutors(plugins: LoadedPlugin[]): ToolDefinition
           };
         }
         if (child.status !== 0) {
-          const detail = (child.stderr || child.stdout || `exit ${child.status}`).slice(0, 2000);
+          const detail = (child.stderr || child.stdout || `exit ${child.status}`).slice(0, PLUGIN_TOOL_ERROR_MAX_CHARS);
           return {
             claimed: true,
             result: { output: { error: detail }, isError: true, summary: `${name} exited ${child.status}` },
@@ -115,7 +125,7 @@ export function registerPluginExecutors(plugins: LoadedPlugin[]): ToolDefinition
         return {
           claimed: true,
           result: {
-            output: { stdout: (child.stdout || "").slice(0, 8000) },
+            output: { stdout: (child.stdout || "").slice(0, PLUGIN_TOOL_STDOUT_MAX_CHARS) },
             isError: false,
             summary: `${name} ran`,
           },

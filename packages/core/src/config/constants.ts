@@ -277,6 +277,22 @@ export const LSP_POST_MUTATION_DIAGNOSTICS_MS = 400;
 export const LSP_DIAGNOSTICS_WAIT_MS = 1500;
 export const LSP_TSC_TIMEOUT_MS = 30_000;
 
+// C17 (AUDIT-2026-09-30): the remaining flagged literals, hoisted (rule 2.4).
+// Git probes: awareness.ts's three status calls and gitUtils.ts's diff buffers.
+export const GIT_INSPECT_TIMEOUT_MS = 2000;
+export const GIT_DIFF_MAX_BUFFER_BYTES = 2 * 1024 * 1024;
+// Goal engine (agent/goal/goalEngine.ts): critique report excerpt and the
+// per-milestone summary cap.
+export const GOAL_REPORT_EXCERPT_CHARS = 2000;
+export const GOAL_MILESTONE_SUMMARY_MAX_CHARS = 300;
+// Compaction summarizer completion headroom (agent/compaction.ts).
+export const COMPACTION_SUMMARY_MAX_TOKENS = 1024;
+// Plugin tool execution bounds (plugins/registry.ts).
+export const PLUGIN_TOOL_TIMEOUT_MS = 60_000;
+export const PLUGIN_TOOL_MAX_BUFFER_BYTES = 512 * 1024;
+export const PLUGIN_TOOL_ERROR_MAX_CHARS = 2000;
+export const PLUGIN_TOOL_STDOUT_MAX_CHARS = 8000;
+
 // verify_tests runner bounds (tools/verifyTests.ts).
 export const RUN_TEST_TIMEOUT_MS = 60_000;
 export const MAX_TEST_OUTPUT_BYTES = 30 * 1024;

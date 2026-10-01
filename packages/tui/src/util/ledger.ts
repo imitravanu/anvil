@@ -31,7 +31,7 @@ export function formatLedger(entries: readonly RunLedgerEntry[]): string {
 
   const lines = [
     `Ledger: ${entries.length} event${entries.length === 1 ? "" : "s"} (${outcomes})`,
-    `Tokens on ledger: ${inTokens.toLocaleString()} in / ${outTokens.toLocaleString()} out (measured, per-entry)`,
+    `Tokens on ledger: ${inTokens.toLocaleString()} in / ${outTokens.toLocaleString()} out (measured; one attribution per turn)`,
   ];
   if (tools) lines.push(`Tools: ${tools}`);
 

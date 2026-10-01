@@ -70,6 +70,9 @@ export async function takeSnapshot(projectRoot: string, id: number, paths: strin
     try {
       resolved = resolveWithinRoot(projectRoot, p);
     } catch {
+      // intentional: a path outside the project root cannot be snapshotted, so
+      // it is counted as skipped (reported in the snapshot's `skipped`) rather
+      // than aborting the whole snapshot.
       skipped += 1;
       continue;
     }
@@ -96,9 +99,14 @@ export async function takeSnapshot(projectRoot: string, id: number, paths: strin
         await fs.access(resolved);
         skipped += 1;
       } catch {
+        // intentional: fs.access throwing here means the path is absent, which
+        // IS a legitimate snapshot (its content is null; a rewind deletes the
+        // file the session created). Only a present-but-unreadable file skips.
         files.push({ path: p, content: null });
       }
     } finally {
+      // intentional: closing is best-effort — a close failure must not discard
+      // an already-read snapshot.
       await fh?.close().catch(() => undefined);
     }
   }
@@ -252,18 +260,8 @@ export interface SessionFileChange {
   diff: string | null;
 }
 
-export async function summarizeSessionChanges(
-  projectRoot: string,
-  checkpoints: readonly Checkpoint[]
-): Promise<SessionFileChange[]> {
-  const baseline = new Map<string, Buffer | null>();
-  for (const cp of checkpoints) {
-    for (const f of cp.files) {
-      if (!baseline.has(f.path)) baseline.set(f.path, f.content);
-    }
-  }
-  return diffBaseline(projectRoot, baseline);
-}
+// (summarizeSessionChanges removed — C18/§2.8: dead export, no non-test caller.
+// summarizeSessionChangesFromBaseline below is the live path.)
 
 /**
  * Same review from a pre-built per-path baseline map — the session keeps a

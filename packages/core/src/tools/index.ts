@@ -1,4 +1,5 @@
 import { getErrorMessage } from "../errors.js";
+import { log } from "../logger.js";
 import { ToolContext, ToolDefinition, ToolExecutor, ToolExecutionResult, SessionToolExecutor } from "./types.js";
 import * as readFile from "./readFile.js";
 import * as writeFile from "./writeFile.js";
@@ -87,9 +88,13 @@ export function registerExternalExecutor(
   exec: ExternalToolExecutor,
   describe?: ExternalToolDescribe
 ): void {
-  if (!externalExecutors.some((e) => e.prefix === prefix)) {
-    externalExecutors.push({ prefix, exec, describe });
+  if (externalExecutors.some((e) => e.prefix === prefix)) {
+    // C19: a second registration for the same prefix used to be dropped with no
+    // signal, so tools that never appear look like a wiring bug. Say so.
+    log.warn(`[tools] external executor for prefix "${prefix}" already registered — ignoring duplicate`);
+    return;
   }
+  externalExecutors.push({ prefix, exec, describe });
 }
 
 export async function executeTool(

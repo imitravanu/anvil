@@ -93,7 +93,10 @@ export function loadPlugins(dir: string = pluginsDir()): { plugins: LoadedPlugin
     let text: string;
     try {
       text = fs.readFileSync(manifestPath, "utf8");
-    } catch {
+    } catch (err: unknown) {
+      // C19: an unreadable manifest used to be skipped silently, contradicting
+      // this function's own contract ("problems are reported" — see its docblock).
+      problems.push({ name: entry.name, error: `unreadable plugin.json: ${getErrorMessage(err)}` });
       continue;
     }
     let raw: unknown;

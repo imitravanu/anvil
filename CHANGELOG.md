@@ -67,6 +67,13 @@ All notable changes to Anvil are documented here. The format follows
   shares `run_command`'s timeout bounds (E8 remainder, E7 partial). **Tool and
   LSP magic constants are centralized** — grep/outline/read_file/LSP caps and
   timeouts moved to `config/constants.ts` with values preserved verbatim (E7).
+  **The consistency sweep (C9–C19) is closed.** An unknown team strategy is a
+  hard error instead of a silent pipeline run; the run ledger attributes a
+  turn's measured usage once (not once per tool it called); a consumer that
+  abandons a tool batch now leaves a replayable history; plugin collisions
+  (duplicate tool name, duplicate executor prefix, unreadable manifest) are
+  reported; the remaining magic constants moved to `config/constants.ts`; and
+  dead exports, fields, and plumbing were removed.
 
 ### Trust exits and consent (Phase 39 W2)
 

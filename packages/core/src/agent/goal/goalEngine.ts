@@ -11,9 +11,14 @@ import { ModelProvider } from "../../providers/types.js";
 import { buildSystemPrompt } from "../../config/rules.js";
 import { TOOL_DEFINITIONS } from "../../tools/index.js";
 import { autoCommitMilestone } from "../../git/gitUtils.js";
+import { getErrorMessage } from "../../errors.js";
 
 // Centralized in config/constants (§2.4); re-exported so the public API is unchanged.
-import { MAX_GOAL_TURNS } from "../../config/constants.js";
+import {
+  MAX_GOAL_TURNS,
+  GOAL_REPORT_EXCERPT_CHARS,
+  GOAL_MILESTONE_SUMMARY_MAX_CHARS,
+} from "../../config/constants.js";
 export { MAX_GOAL_TURNS };
 
 const GOAL_AGENT_SYSTEM_PROMPT =
@@ -272,7 +277,7 @@ export async function* runGoalMission(
 
     if (outcome.errored || outcome.verificationFailed) {
       milestone.status = "failed";
-      milestone.summary = (outcome.text || "Milestone turn failed").slice(0, 300);
+      milestone.summary = (outcome.text || "Milestone turn failed").slice(0, GOAL_MILESTONE_SUMMARY_MAX_CHARS);
       yield {
         type: "milestone_failed",
         milestone,
@@ -287,7 +292,7 @@ export async function* runGoalMission(
     const review = yield* deps.sendTurn(
       `Adversarial review of Milestone ${milestone.id}: "${milestone.title}".\n` +
         `Criteria: ${milestone.criteria}\n` +
-        `Your report: ${outcome.text.slice(0, 2000)}\n` +
+        `Your report: ${outcome.text.slice(0, GOAL_REPORT_EXCERPT_CHARS)}\n` +
         `Answer with exactly YES or NO followed by " — " and a one-line reason.`,
       milestone
     );
@@ -310,28 +315,34 @@ export async function* runGoalMission(
 
     if (!satisfied) {
       milestone.status = "failed";
-      milestone.summary = reviewVerdict.slice(0, 300) || "Self-review could not confirm the criteria.";
+      milestone.summary = reviewVerdict.slice(0, GOAL_MILESTONE_SUMMARY_MAX_CHARS) || "Self-review could not confirm the criteria.";
       yield { type: "milestone_failed", milestone, error: "Self-review rejected completion" };
       continue;
     }
 
     milestone.status = "completed";
-    milestone.summary = (reviewVerdict.replace(/^YES\s*—?\s*/i, "") || outcome.text).slice(0, 300);
+    milestone.summary = (reviewVerdict.replace(/^YES\s*—?\s*/i, "") || outcome.text).slice(0, GOAL_MILESTONE_SUMMARY_MAX_CHARS);
 
     if (deps.autoCommit) {
       // Commit ONLY what this session touched (the /diff baseline): an
       // untracked .env or unrelated worktree change must never be swept in.
       let touched: string[] = [];
+      let summarizeError: string | undefined;
       try {
         touched = (await deps.summarizeChanges()).map((c) => c.path);
-      } catch {
-        touched = [];
+      } catch (err: unknown) {
+        // C16: a failed change-summary is NOT "nothing changed". Swallowing it
+        // and then reporting "no session-touched files" blames the session for
+        // a summarizer/git failure; surface the real cause instead.
+        summarizeError = getErrorMessage(err);
       }
       if (touched.length === 0) {
         yield {
           type: "milestone_progress",
           milestone,
-          detail: `Skipped auto-commit for milestone ${milestone.id}: no session-touched files.`,
+          detail: summarizeError
+            ? `Skipped auto-commit for milestone ${milestone.id}: could not summarize session changes (${summarizeError}).`
+            : `Skipped auto-commit for milestone ${milestone.id}: no session-touched files.`,
         };
       } else {
         const commitRes = await autoCommitMilestone(deps.projectRoot, milestone.id, milestone.title, touched);

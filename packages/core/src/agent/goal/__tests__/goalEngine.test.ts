@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { GoalEngine, isSatisfiedVerdict, parseMilestones } from "../goalEngine.js";
 import { FakeProvider, ScriptEntry, stalledStream } from "../../__tests__/fakeProvider.js";
 import { StreamEvent } from "../../../providers/types.js";
+import { AgentSession } from "../../session.js";
 
 const textTurn = (text: string): StreamEvent[] => [
   { type: "text_delta", text },
@@ -444,6 +445,54 @@ Let's begin.`;
       );
       expect(skipped).toBeDefined();
     });
+    it("reports the summarizeChanges failure instead of blaming the session (C16)", async () => {
+      const { execSync } = await import("node:child_process");
+      execSync("git init", { cwd: tmpDir });
+      execSync("git config user.name 'Test Runner'", { cwd: tmpDir });
+      execSync("git config user.email 'test@example.com'", { cwd: tmpDir });
+      fs.writeFileSync(path.join(tmpDir, "initial.txt"), "hello");
+      execSync("git add -A && git commit -m 'initial'", { cwd: tmpDir });
+
+      const planResponse: StreamEvent[] = [
+        {
+          type: "text_delta",
+          text: JSON.stringify([{ id: "1", title: "Only", criteria: "Do it" }]),
+        },
+        { type: "turn_end", stopReason: "end_turn" },
+      ];
+      const provider = new FakeProvider([
+        planResponse,
+        textTurn("Done, no files needed."),
+        textTurn("YES — done."),
+        textTurn("Critic: LGTM"),
+      ]);
+      const engine = new GoalEngine({
+        provider,
+        model: "fake-model",
+        projectRoot: tmpDir,
+        permissionBroker: { async requestPermission() { return true; } },
+        autoVerify: false,
+        autoCommit: true,
+      });
+
+      // The change-summary (the /diff baseline) throws: that is NOT the same as
+      // "the session touched no files". The skip notice must name the real cause.
+      const spy = vi
+        .spyOn(AgentSession.prototype, "summarizeChanges")
+        .mockRejectedValueOnce(new Error("git diff exploded"));
+      try {
+        const { events } = await collect(engine, "Think only");
+        const skipped = events.find(
+          (e: any) => e.type === "milestone_progress" && e.detail.includes("Skipped auto-commit")
+        );
+        expect(skipped).toBeDefined();
+        expect((skipped as { detail: string }).detail).toContain("could not summarize session changes");
+        expect((skipped as { detail: string }).detail).toContain("git diff exploded");
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
     /** Wait until the provider has begun its Nth streamed turn. */
     async function waitForTurn(provider: FakeProvider, n: number): Promise<void> {
       const deadline = Date.now() + 3000;

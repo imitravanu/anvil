@@ -2,6 +2,41 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-02 (Phase 39 W8: C9–C19 — the consistency sweep):**
+> owns `packages/core/src/agent/team/{types,runner}.ts`,
+> `packages/core/src/tools/delegateTask.ts`,
+> `packages/core/src/plugins/{registry,loader,index}.ts`,
+> `packages/core/src/plugins/__tests__/plugins.test.ts`,
+> `packages/core/src/agent/{checkpoints,index,session,compaction}.ts`,
+> `packages/core/src/agent/goal/{awareness,goalEngine}.ts`,
+> `packages/core/src/agent/__tests__/{teamBudget,cancelHistory,ledgerAttribution}.test.ts`,
+> `packages/core/src/agent/goal/__tests__/goalEngine.test.ts`,
+> `packages/core/src/config/constants.ts`, `packages/core/src/git/gitUtils.ts`,
+> `packages/core/src/tools/index.ts`, `packages/tui/src/util/ledger.ts`,
+> `docs/PHASE-39-ROADMAP.md`, `docs/CURRENT-FOCUS.md`, `docs/README.md`,
+> `CHANGELOG.md`, plus this file.
+> **C9–C19 (all 11), each with fail-first evidence where behavior changes:**
+> - C9 [P2] team strategy: new `isTeamStrategy`/`TEAM_STRATEGIES`; an unknown
+>   strategy is now a hard tool error, never a silent pipeline run (fail-first:
+>   `teamBudget.test.ts` red without the guard; `validateTeamSpec` unit too).
+> - C10 comment corrected (per-member clamp, not an aggregate cap).
+> - C11 dead `TeamMemberSpec.maxInnerIterations` field removed (§2.8).
+> - C12 dead `settledResult`/`settledError` plumbing removed (§2.8).
+> - C13 run ledger attributes a turn's measured usage ONCE, not once per tool
+>   (fail-first: `ledgerAttribution.test.ts`); TUI label updated.
+> - C14 `finally` now repairs tool calls abandoned by a consumer break
+>   (fail-first: `cancelHistory.test.ts`).
+> - C15 §2.3 `// intentional:` comments on the silent catches (checkpoints, awareness).
+> - C16 auto-commit skip names the real `summarizeChanges` failure
+>   (fail-first: `goalEngine.test.ts`).
+> - C17 remaining literals hoisted to `config/constants.ts` (values preserved).
+> - C18 dead exports `pluginToolDefinitions`, `summarizeSessionChanges` removed (§2.8).
+> - C19 plugin collisions reported: duplicate tool name, duplicate executor
+>   prefix, unreadable manifest, each with a fail-first test.
+> **Receipt:** core 111 files / 921 tests green, TUI 56 / 344 green, typecheck
+> green, gate Steps 0–5 green. No protected artifact touched.
+>
+
 > **DONE 2026-10-02 (OpenCode chief-engineer session — Phase 39 W8: E7 remainder, magic constants centralized):**
 > owns `packages/core/src/config/constants.ts`, `packages/core/src/tools/grep.ts`,
 > `packages/core/src/tools/outline.ts`, `packages/core/src/tools/readFile.ts`,

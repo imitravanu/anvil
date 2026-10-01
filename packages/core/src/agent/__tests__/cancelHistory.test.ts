@@ -114,5 +114,46 @@ describe("cancellation mid-tool-batch repairs history", () => {
     expect(events.some((e) => e.type === "cancelled")).toBe(true);
     expect(events.some((e) => e.type === "turn_complete")).toBe(false);
   });
+
+  it("closes tool calls abandoned by a consumer that breaks mid-batch (C14)", async () => {
+    const { session } = makeSession(
+      [
+        [
+          { type: "text_delta", text: "Reading the file." },
+          { type: "tool_call_start", id: "t1", name: "read_file" },
+          { type: "tool_call_end", id: "t1", name: "read_file", input: { path: "a.txt" } },
+          { type: "turn_end", stopReason: "tool_use" },
+        ],
+        [
+          { type: "text_delta", text: "Resumed fine." },
+          { type: "turn_end", stopReason: "end_turn" },
+        ],
+      ],
+      { requestPermission: () => Promise.resolve(true) }
+    );
+
+    // Break out of the generator once the batch has started: `break` runs the
+    // generator's `return()` → `finally`, where the catch's repair never runs.
+    for await (const e of session.send("read it")) {
+      if (e.type === "tool_started") break;
+    }
+
+    const history = session.getHistory();
+    const assistantIdx = history.findIndex(
+      (m) => m.role === "assistant" && m.content.some((c) => "type" in c && c.type === "tool_call")
+    );
+    expect(assistantIdx).toBeGreaterThanOrEqual(0);
+    // The abandoned call is answered by a synthetic tool_result in the next
+    // message — the shape providers require for replay...
+    const next = history[assistantIdx + 1];
+    expect(next?.role).toBe("user");
+    expect(
+      next?.content.some(
+        (c) => "type" in c && c.type === "tool_result" && c.result.toolCallId === "t1"
+      )
+    ).toBe(true);
+    // ...and the history ends on an assistant message (no same-role adjacency).
+    expect(history.at(-1)?.role).toBe("assistant");
+  });
 });
 

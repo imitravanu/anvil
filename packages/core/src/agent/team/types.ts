@@ -7,13 +7,25 @@ import { getErrorMessage } from "../../errors.js";
 
 export type TeamStrategy = "parallel" | "pipeline" | "review";
 
+/** The only strategy values `runTeam` understands, in one place (C9). */
+export const TEAM_STRATEGIES: readonly TeamStrategy[] = ["parallel", "pipeline", "review"];
+
+/**
+ * Runtime guard for a value arriving as `unknown` (tool input, JSON). A
+ * `typeof x === "string"` check is NOT enough: an unknown strategy used to be
+ * cast straight to `TeamStrategy` and then silently ran the pipeline branch,
+ * because `runTeam` only special-cases "parallel"/"review" and falls through
+ * for everything else. Callers must reject unknown values instead of casting.
+ */
+export function isTeamStrategy(value: unknown): value is TeamStrategy {
+  return typeof value === "string" && (TEAM_STRATEGIES as readonly string[]).includes(value);
+}
+
 export interface TeamMemberSpec {
   /** Stable id within the team (e.g. "feature", "tests", "review"). */
   id: string;
   /** The one task this member owns. */
   task: string;
-  /** Optional per-member iteration budget override. */
-  maxInnerIterations?: number;
 }
 
 export interface TeamSpec {

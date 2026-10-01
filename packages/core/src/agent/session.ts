@@ -320,7 +320,14 @@ export class AgentSession {
   private recordLedger(
     entry: Omit<RunLedgerEntry, "seq" | "ts">
   ): void {
-    this.ledger.record(entry, this.lastUsage);
+    // C13: measured usage belongs to the ASSISTANT TURN, not to each tool the
+    // turn called. Every tool_finished in one batch shared the same lastUsage
+    // (set once per provider call in onUsage), and the UI sums tokens per
+    // entry — so stamping each one multiplied the turn's usage by its tool
+    // count. Attribute it to the first completion entry and consume it.
+    const usage = entry.eventType === "tool_finished" ? this.lastUsage : null;
+    if (usage) this.lastUsage = null;
+    this.ledger.record(entry, usage);
   }
 
   /** Last completed team run, or null before any team delegation this session. */
@@ -523,11 +530,14 @@ export class AgentSession {
       // Close a turn that ends on a USER message (empty model turn,
       // cancellation, an interrupted batch) so the NEXT user turn cannot create
       // same-role adjacency (N-1). Idempotent, so it is safe on every exit path.
-      // It is NOT a general repair: a consumer that breaks out of the generator
-      // mid-batch leaves the assistant tool_calls unanswered and the history
-      // therefore ends on that assistant message, where this is a no-op — that
-      // shape is closed by repairUnclosedToolCalls in the catch above, not here.
       this.history.closeOpenTurn();
+      // C14: a consumer that breaks out of the generator mid-batch runs
+      // `return()` → this `finally` only — the `catch` above never fires, so its
+      // repairUnclosedToolCalls does not run. Do it here too (idempotent: a
+      // no-op unless the history ends on an unanswered assistant tool_calls
+      // message), so the abandoned calls get synthetic error results and the
+      // next turn's provider replay stays valid.
+      this.history.repairUnclosedToolCalls("turn consumer stopped before the tool batch settled");
       if (this.currentController === controller) this.currentController = null;
       this.isSending = false;
     }

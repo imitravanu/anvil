@@ -7,9 +7,8 @@ import type {
   TeamMemberSpec,
   TeamMemberResult,
   TeamRunnerDeps,
-  TeamMemberEvent,
-  TeamRunResult,
 } from "../agent/team/types.js";
+import { isTeamStrategy, TEAM_STRATEGIES } from "../agent/team/types.js";
 import type { AgentEvent } from "../agent/types.js";
 
 export const definition: ToolDefinition = {
@@ -76,20 +75,43 @@ export async function* executeSession(
   // they share the permission broker, signal, and checkpoint-rewinding — the
   // same path a single delegation takes.
   const teamSpec = raw.team as
-    | { strategy?: string; members?: { id?: string; task?: string; maxInnerIterations?: unknown }[]; totalIterations?: unknown }
+    | { strategy?: unknown; members?: { id?: string; task?: string; maxInnerIterations?: unknown }[]; totalIterations?: unknown }
     | undefined;
-  const isTeamRun =
+  const hasTeamShape =
     ctx.allowDelegation !== false &&
     teamSpec != null &&
     typeof teamSpec === "object" &&
-    typeof teamSpec.strategy === "string" &&
     Array.isArray(teamSpec.members) &&
-    teamSpec.members.length > 0 &&
-    teamSpec.members.every(
+    teamSpec.members.length > 0;
+
+  // C9: an unknown strategy used to be cast straight to TeamStrategy and then
+  // run — but runTeam only special-cases "parallel"/"review", so every other
+  // string silently became the serial pipeline. Reject it loudly instead.
+  if (hasTeamShape && !isTeamStrategy(teamSpec!.strategy)) {
+    ctx.recordLedger({
+      eventType: "tool_finished",
+      tool: "delegate_task",
+      inputHash: inputKey,
+      outcome: "error",
+      elapsedMs: 0,
+    });
+    return {
+      output: {
+        error: `Unknown team strategy "${String(teamSpec!.strategy)}". Expected one of: ${TEAM_STRATEGIES.join(", ")}.`,
+      },
+      isError: true,
+      summary: "Unknown team strategy.",
+    };
+  }
+
+  const isTeamRun =
+    hasTeamShape &&
+    isTeamStrategy(teamSpec!.strategy) &&
+    teamSpec!.members!.every(
       (m) => typeof m === "object" && typeof m.id === "string" && typeof m.task === "string"
     );
 
-  if (isTeamRun) {
+  if (isTeamRun && isTeamStrategy(teamSpec!.strategy)) {
     if (!ctx.tryConsumeDelegation(MAX_DELEGATIONS_PER_TURN)) {
       ctx.recordLedger({
         eventType: "tool_finished",
@@ -106,15 +128,17 @@ export async function* executeSession(
     }
 
   const spec: TeamSpec = {
-    strategy: teamSpec!.strategy as TeamSpec["strategy"],
+    strategy: teamSpec!.strategy,
     members: teamSpec!.members!.map((m) => ({ id: m!.id!, task: m!.task! })),
   };
   if (typeof teamSpec!.totalIterations === "number") {
     spec.totalIterations = teamSpec!.totalIterations;
   }
-  // Per-member override: the model may tune one member's depth. Clamped to the
-  // [1, total] range in runMemberAdapter so it can never exceed the whole team
-  // budget or drop below one iteration.
+  // Per-member override: the model may tune one member's depth. Each override
+  // is clamped to [1, totalBudget] in runMemberAdapter below. Note the clamp is
+  // PER MEMBER: splitBudget divides spec.totalIterations across members, so the
+  // SUM of member budgets can still exceed spec.totalIterations when overrides
+  // raise members (C10) — the bound is a per-member one, not an aggregate cap.
   const memberOverrides = new Map<string, number>();
   if (Array.isArray(teamSpec!.members)) {
     for (const m of teamSpec!.members) {
@@ -235,17 +259,18 @@ export async function* executeSession(
     };
 
     const deps: TeamRunnerDeps = { projectRoot: ctx.projectRoot, runMember: runMemberAdapter, onMemberEvent };
-    let settledResult: TeamRunResult | undefined;
-    let settledError: unknown;
+    // `settled`/`wake` drive the drain loop below; both settle paths only need
+    // to wake it. The success path returns the result (read back via `await
+    // runPromise`), and the rejection path rethrows so the await observes the
+    // failure directly. The old settledResult/settledError variables were dead:
+    // their assignments could never be read before the await threw (C12).
     const runPromise = runTeam(spec, deps, ctx.signal).then(
       (result) => {
-        settledResult = result;
         settled = true;
         wake?.();
         return result;
       },
       (err: unknown) => {
-        settledError = err;
         settled = true;
         wake?.();
         throw err;
@@ -263,7 +288,6 @@ export async function* executeSession(
       }
     }
     const result = await runPromise;
-    if (settledError !== undefined) throw settledError;
     ctx.onTeamRunResult?.(result);
     return {
       output: { report: result.combinedReport, members: result.members },

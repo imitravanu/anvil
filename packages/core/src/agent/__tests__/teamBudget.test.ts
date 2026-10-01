@@ -286,4 +286,26 @@ describe("team budget enforcement (delegate_task → runTeam → sub-agents)", (
     // parent + 2 + 2 + parent-final
     expect(provider.calls).toHaveLength(6);
   });
+
+  it("rejects an unknown team strategy instead of silently running it as pipeline (C9)", async () => {
+    const { provider, session } = makeSession([
+      teamTurn({ strategy: "fan-out", members: [{ id: "a", task: "task-a" }] }),
+      textTurn("parent recovered"),
+    ]);
+
+    await collect(session.send("run the team"));
+
+    // No member sub-session ever started: the typo is a hard tool error, not a
+    // fall-through to runTeam's serial pipeline branch (which would start "task-a").
+    expect(callsForTask(provider, "task-a")).toHaveLength(0);
+    expect(
+      session
+        .getRunLedger()
+        .some(
+          (e) => e.eventType === "tool_finished" && e.tool === "delegate_task" && e.outcome === "error"
+        )
+    ).toBe(true);
+    // parent team turn + parent-final only
+    expect(provider.calls).toHaveLength(2);
+  });
 });

@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { getErrorMessage } from "../errors.js";
+import { GIT_DIFF_MAX_BUFFER_BYTES } from "../config/constants.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -104,7 +105,7 @@ export async function getBranchDiff(projectRoot: string, branch: string): Promis
     // side; the branch itself is validated above).
     const { stdout } = await execFileAsync("git", ["diff", `${branch}...HEAD`, "--"], {
       cwd: projectRoot,
-      maxBuffer: 2 * 1024 * 1024,
+      maxBuffer: GIT_DIFF_MAX_BUFFER_BYTES,
     });
     return stdout;
   } catch (err: unknown) {
@@ -112,7 +113,7 @@ export async function getBranchDiff(projectRoot: string, branch: string): Promis
     try {
       const { stdout } = await execFileAsync("git", ["diff", branch, "--"], {
         cwd: projectRoot,
-        maxBuffer: 2 * 1024 * 1024,
+        maxBuffer: GIT_DIFF_MAX_BUFFER_BYTES,
       });
       return stdout;
     } catch {

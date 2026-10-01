@@ -175,9 +175,20 @@ which that sweep repaired:
   `config/constants.ts`, values preserved verbatim; behavior-preserving by
   construction, receipt is typecheck + full suite (recorded as such).
   E7 is now fully closed.
+  **C9–C19 FIXED 2026-10-02 (all 11 consistency findings):** an unknown team
+  strategy is a hard error (not a silent pipeline run); dead
+  `TeamMemberSpec.maxInnerIterations`, the `settled*` team plumbing, and the
+  `pluginToolDefinitions`/`summarizeSessionChanges` exports are removed (§2.8);
+  the ledger attributes a turn's measured usage once; a consumer break mid-batch
+  now repairs abandoned tool calls; silent catches carry `// intentional:`; the
+  auto-commit skip names the real `summarizeChanges` failure; remaining literals
+  are hoisted to `config/constants.ts`; and plugin collisions (duplicate tool
+  name/executor prefix, unreadable manifest) are reported. Fail-first:
+  `teamBudget`, `ledgerAttribution`, `cancelHistory`, `goalEngine`, `plugins`.
+  Core 111 files / 921 tests, TUI 344, gate Steps 0–5 green.
   **Still open:** H1 (scanner coverage extension —
-  magic constants, non-empty silent catches, dead exports), C9–C19,
-  F8, G6 (spot-check 2026-10-02: `ENGINEERING-ROADMAP.md`'s `anvil
+  magic constants, non-empty silent catches, dead exports), F8, G6
+  (spot-check 2026-10-02: `ENGINEERING-ROADMAP.md`'s `anvil
   1.1.0` line fixed in the sweep; remaining count drift unverified).
 
 **Owner decisions, not mechanical edits:** homegrown-parser vs tree-sitter
