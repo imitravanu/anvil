@@ -184,7 +184,7 @@ rather than the model list: `certified: "live"` was recorded from a run whose
 | **38.2** | Count reasoning tokens in Gemini usage (`thoughtsTokenCount`) so `/context` and compaction stop under-reporting by up to 328× | Probe K | **P0** | **COMPLETE** |
 | **38.3** | Mark the two unreachable `inkling` models broken, with live provenance and a guard on the picker contract | Probe N | **P0** | **COMPLETE** |
 | **38.4** | A prompt A/B harness on a live model: fixed tasks, N trials, pass rate / cost / tool calls / edit-error rate | Probe H | **P0** | **COMPLETE** — `6cc4a6d` + `1b78a63`; audit closure in Phase 39 W1; harder tier open (A4) |
-| **38.5** | The real system prompt — tool-use policy, search-before-edit, verification, conventions | Probe J, M | **P1** | **BLOCKED on measurement capacity** — measured, twice, and **NOT landed**. Lane A (orcarouter free, 5 tasks × 3 trials × 2 arms) was throttled out: 22/30 runs at the 120s timeout + one 429, `NOT SIGNIFICANT` baseline 20% vs candidate 21%. Lane B (openrouter free, 1 task × 2 trials) completed: both arms 100%, candidate 7.5 tool calls vs baseline 6.5 — no benefit, small cost. The candidate text lives in `evals/ab.ts`; landing it without a receipt is the unevidenced change this phase exists to prevent. Unblock: a lane that can complete 5 tasks × 3 trials × 2 arms |
+| **38.5** | The real system prompt — tool-use policy, search-before-edit, verification, conventions | Probe J, M | **P1** | **BLOCKED on lane capacity** — measured, twice, and **NOT landed**. Lane A (orcarouter free, 5 tasks × 3 trials × 2 arms) was throttled out: 22/30 runs at the 120s timeout + one 429, `NOT SIGNIFICANT` baseline 20% vs candidate 21%. Lane B (openrouter free, 1 task × 2 trials) completed: both arms 100%, candidate 7.5 tool calls vs baseline 6.5 — no benefit, small cost. The candidate text lives in `evals/ab.ts`; landing it without a receipt is the unevidenced change this phase exists to prevent. The task set is no longer the blocker (`evals/tasks-hard`, A4, landed 2026-10-03); the unblock is a lane that can finish 5 harder tasks × 3 trials × 2 arms |
 | **38.6** | Reasoning deltas as a first-class `StreamEvent`; surface `reasoning_tokens` and `cached_tokens` in usage | Probe L | **P1** | **COMPLETE** — `23e83e5`; fail-first tests added |
 | **38.7** | Prompt caching (`cache_control` breakpoints) for the 4,177-token prefix | Probe M, L | **P1** | **COMPLETE** — `CompletionRequest.cacheControl` flag; `streamAssistantTurn` always sets it; `toAnthropicRequest` annotates `system` + last tool with `{ type: "ephemeral" }` (one breakpoint, whole [system…tools] span); OpenAI/OpenRouter cache automatically, Gemini below implicit-cache floor ignores the flag |
 | **38.8** | Measure closed-loop verification inside the harness; resolve the `autoVerify: false` boundary with data | §4 | **P2** | **COMPLETE** — deterministic answer: the omission hides exactly repairable failures. `scriptedVerifyProvider` + `EvalRunnerOptions.provider` seam; `verifyAxis.test.ts` runs the SAME task through the real session path: `autoVerify: false` → FAIL (1 tool call, bug never observed), `autoVerify: true` → PASS (`npm test` fails, repair prompt pushed, fix written, verified). The live axis already exists via `AbProfileOverride.autoVerify`; running it against a frontier model awaits quota (A4 harder tier) |
@@ -479,9 +479,11 @@ it a frontier-model receipt is the same capacity problem 38.5 hit.
   Combined: the candidate shows no measurable benefit and a consistent small
   cost, on a task set too easy to separate the arms. **The prompt is not
   landed.** Growing it without a receipt is precisely the unevidenced change
-  this phase exists to prevent; 38.5 is blocked on a lane that can complete
-  5 tasks × 3 trials × 2 arms, not on the prompt text, which is written and
-  measured in `evals/ab.ts`.
+  this phase exists to prevent. The task-set half of the blocker is now gone —
+  `evals/tasks-hard` (six long-horizon, multi-file tasks, `--tasks-dir` in
+  `evals/ab.ts`) landed as Phase 39 A4 — so what remains is purely lane
+  capacity: 5 tasks × 3 trials × 2 arms, each up to 180s, which the free tiers
+  probed above cannot complete.
 
 - **45 of the 69 rows labelled `certified: "live"` came from mock runs**, and
   38.3 fixed only the two Probe N measured. The remaining 43 are unverified,
