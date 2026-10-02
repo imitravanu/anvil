@@ -88,7 +88,8 @@
 - Phases 32–35 landed: the code-intelligence surface tells the truth (per-language
   extraction, kind contract, freshness incl. externally added files), team runs
   stream per-tool, and every self-claim in the README and TUI is derived or
-  verified. Measured state: 1,417 tests across 189 files, full gate Steps 0–5
+  verified. Measured state: 1,430 tests across 191 files (core 929, TUI 350,
+  CLI 151), full gate Steps 0–5
   green, 25/25 mock evals.
 - The tokeniser decision is taken: DEFER, with written adoption triggers in
   [`PHASE-35-ROADMAP.md`](PHASE-35-ROADMAP.md) §35.3. That deferral stands: no
