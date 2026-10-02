@@ -29,6 +29,7 @@ import {
   EVAL_LIVE_TASK_TIMEOUT_MS,
   DEFAULT_MAX_TOKENS,
 } from "../packages/core/src/config/constants.js";
+import { ANVIL_BASE_SYSTEM_PROMPT } from "../packages/core/src/config/agentProfile.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TASKS_DIR = path.join(__dirname, "tasks");
@@ -84,9 +85,12 @@ async function main(): Promise<void> {
   const baseline: AbArm = {
     name: "baseline",
     profile: {
+      // The shipping prompt, imported from its one owner — a hardcoded copy
+      // here would drift from what users run, which is the exact defect
+      // (Probe G) this phase opened on.
       systemPrompt:
-        "You are Anvil, a terminal coding agent. Be concise.\n\n" +
-        "This project declares its own rules in AGENTS.md / .anvil/rules. Read them and follow them.",
+        ANVIL_BASE_SYSTEM_PROMPT +
+        "\n\nThis project declares its own rules in AGENTS.md / .anvil/rules. Read them and follow them.",
     },
   };
   const candidate: AbArm = {
