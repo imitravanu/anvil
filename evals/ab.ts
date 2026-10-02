@@ -5,6 +5,11 @@
  *   npx tsx evals/ab.ts --provider inception --model mercury-2.5 [--trials 3] [--filter multifile]
  *   npx tsx evals/ab.ts --provider openrouter --model stealth/space-bunny-alpha
  *   npx tsx evals/ab.ts --mock --filter bugfix
+ *   npx tsx evals/ab.ts --provider inception --model mercury-2.5 --tasks-dir evals/tasks-hard
+ *
+ * `--tasks-dir` (Phase 39 A4) points the run at a task set other than the 25
+ * short tasks: `evals/tasks-hard` is the harder tier (long horizon, multi-file,
+ * structural guards) the saturated set cannot measure a prompt with.
  *
  * Two arms by default: the shipping prompt, and the shipping prompt plus the
  * behavioral guidance that Phase 38.5 intends to land. A `--baseline-only` run
@@ -15,6 +20,7 @@
  * a harness that failed the build whenever an arm lost would train everyone to
  * distrust it. The verdict line is the output, and it is written to be quoted.
  */
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runPromptExperiment, type AbArm } from "../packages/core/src/eval/index.js";
@@ -68,6 +74,12 @@ async function main(): Promise<void> {
   }
   const trials = trialsFlag === undefined ? 1 : Number(trialsFlag);
   const baselineOnly = args.includes("--baseline-only");
+  const tasksDirFlag = flag(args, "tasks-dir");
+  const tasksDir = tasksDirFlag === undefined ? TASKS_DIR : path.resolve(tasksDirFlag);
+  if (tasksDirFlag !== undefined && !fs.existsSync(tasksDir)) {
+    console.error(`[ab] --tasks-dir does not exist: ${tasksDir}`);
+    process.exit(1);
+  }
 
   const baseline: AbArm = {
     name: "baseline",
@@ -93,13 +105,14 @@ async function main(): Promise<void> {
   console.log(`model    : ${useMock ? "eval-mock" : modelId ?? "(registry default)"}`);
   console.log(`trials   : ${trials} per arm`);
   console.log(`filter   : ${taskFilter ?? "(all)"}`);
+  console.log(`tasks    : ${path.relative(process.cwd(), tasksDir) || tasksDir}`);
   console.log(`arms     : ${arms.map((a) => a.name).join(" vs ")}`);
   console.log("=".repeat(74));
 
   const result = await runPromptExperiment(
     arms,
     {
-      tasksDir: TASKS_DIR,
+      tasksDir: tasksDir,
       useMock,
       ...(providerId ? { providerId } : {}),
       ...(modelId ? { modelId } : {}),

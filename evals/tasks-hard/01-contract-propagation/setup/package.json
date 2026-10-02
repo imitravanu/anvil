@@ -1,0 +1,6 @@
+{
+  "name": "harder-tier-contract-propagation",
+  "private": true,
+  "type": "commonjs",
+  "scripts": { "test": "node --test" }
+}

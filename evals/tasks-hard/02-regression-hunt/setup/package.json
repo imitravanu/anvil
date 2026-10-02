@@ -1,0 +1,6 @@
+{
+  "name": "harder-tier-regression-hunt",
+  "private": true,
+  "type": "commonjs",
+  "scripts": { "test": "node --test" }
+}

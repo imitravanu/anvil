@@ -1,0 +1,6 @@
+{
+  "name": "harder-tier-cross-module-extraction",
+  "private": true,
+  "type": "commonjs",
+  "scripts": { "test": "node --test" }
+}

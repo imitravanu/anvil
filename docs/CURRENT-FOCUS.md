@@ -31,11 +31,18 @@
   a fail-first parity guard (4/4 assertions failed against the pre-change call
   sites, 4/4 pass after). The A/B harness (38.4) and per-task significance
   landed 2026-09-30, and the audit's closure fixes for them are Phase 39 W1
-  (above). **The prompt rewrite (38.5) is unblocked** — a better prompt that
-  nothing could measure was the defect class this phase exists to close, and
-  it is closed. Read
-  [`PHASE-38-ROADMAP.md`](PHASE-38-ROADMAP.md); its §4 lists eleven boundaries,
-  including the one 38.1 created and did not fix.
+  (above). **The prompt rewrite (38.5) has been measured twice and is NOT
+  landed**: lane A was throttled out from under the experiment (22 of 30 runs
+  died at the 120s timeout, one HTTP 429) and lane B, which completed, showed
+  both arms at 100% with the candidate spending one more tool call (7.5 vs 6.5)
+  — no benefit, small cost. **38.6, 38.7 and
+  38.8 landed 2026-10-03**: reasoning deltas are a first-class `StreamEvent`
+  (shown under `/expand`, never folded into history), the static 4,177-token
+  prefix now carries a `cache_control` breakpoint, and the `autoVerify: false`
+  boundary has data — the same repairable failure grades FAIL with verification
+  off and PASS with it on. Read
+  [`PHASE-38-ROADMAP.md`](PHASE-38-ROADMAP.md); its §4 lists the boundaries,
+  including the one 38.1 created and the two 38.5's receipt attempt added.
 - The instruction layer driving an otherwise frontier-grade agent is eleven
   words: `"You are Anvil, a terminal coding agent. Be concise."` — no tool-use
   policy, no search-before-edit discipline, no verification expectation. Wave 2

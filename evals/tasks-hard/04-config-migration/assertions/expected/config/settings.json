@@ -1,0 +1,4 @@
+{
+  "maxRetries": 3,
+  "timeoutMs": 5000
+}

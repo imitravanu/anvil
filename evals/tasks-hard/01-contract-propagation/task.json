@@ -1,0 +1,8 @@
+{
+  "name": "Propagate a shared-module contract change across every call site",
+  "category": "multifile",
+  "prompt": "Money is formatted inconsistently across the app. Change the shared formatter in src/money.js so that formatMoney(cents) always renders a leading currency symbol and exactly two decimals (e.g. formatMoney(1234) === \"$12.34\", formatMoney(0) === \"$0.00\"), and update every call site that currently formats amounts by hand so the app has ONE formatting rule. Do not change any test file. When you are done, the full test suite must pass.",
+  "timeoutMs": 180000,
+  "maxTokens": 4096,
+  "fast": false
+}

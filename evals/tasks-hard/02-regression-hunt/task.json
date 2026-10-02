@@ -1,0 +1,8 @@
+{
+  "name": "Fix a regression that spans two modules",
+  "category": "regression",
+  "prompt": "The test suite in this repository is failing. Find the cause and fix the SOURCE, not the tests. There is more than one file involved — do not stop at the first function that looks wrong; the failure is only correct once the whole suite passes. Run the tests, read the failure, and keep going until they pass.",
+  "timeoutMs": 180000,
+  "maxTokens": 4096,
+  "fast": false
+}

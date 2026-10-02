@@ -9,8 +9,12 @@
 > landed, each with a fail-first mutation receipt. AUDIT-2026-09-30 then found
 > the harness still measured a 4,096-token agent and could name the wrong arm
 > as a "unanimous" winner; those closure fixes landed as Phase 39 W1
-> ([`PHASE-39-ROADMAP.md`](PHASE-39-ROADMAP.md)). Next is 38.5, the prompt
-> rewrite — unblocked by W1; one recorded open item remains: the harder task
+> ([`PHASE-39-ROADMAP.md`](PHASE-39-ROADMAP.md)). 38.6 (reasoning deltas), 38.7
+> (prompt caching) and 38.8 (the verification axis, measured) landed 2026-10-03.
+> 38.5, the prompt rewrite, is **blocked on measurement capacity**: it has been
+> measured twice (once throttled out, once complete-but-saturated at 100% for
+> both arms with the candidate spending an extra tool call), and the prompt is
+> not landed without a receipt. One recorded open item remains: the harder task
 > tier (AUDIT A4).
 > **Scope:** Anvil's agent loop, guardian, compaction, rewind, LSP, and permission
 > surfaces are at or past frontier engineering. The instruction layer driving all
@@ -180,7 +184,7 @@ rather than the model list: `certified: "live"` was recorded from a run whose
 | **38.2** | Count reasoning tokens in Gemini usage (`thoughtsTokenCount`) so `/context` and compaction stop under-reporting by up to 328× | Probe K | **P0** | **COMPLETE** |
 | **38.3** | Mark the two unreachable `inkling` models broken, with live provenance and a guard on the picker contract | Probe N | **P0** | **COMPLETE** |
 | **38.4** | A prompt A/B harness on a live model: fixed tasks, N trials, pass rate / cost / tool calls / edit-error rate | Probe H | **P0** | **COMPLETE** — `6cc4a6d` + `1b78a63`; audit closure in Phase 39 W1; harder tier open (A4) |
-| **38.5** | The real system prompt — tool-use policy, search-before-edit, verification, conventions | Probe J, M | **P1** | **OPEN** — unblocked: harness landed + audit-closed (Phase 39 W1); pair with the harder tier (A4) |
+| **38.5** | The real system prompt — tool-use policy, search-before-edit, verification, conventions | Probe J, M | **P1** | **BLOCKED on measurement capacity** — measured, twice, and **NOT landed**. Lane A (orcarouter free, 5 tasks × 3 trials × 2 arms) was throttled out: 22/30 runs at the 120s timeout + one 429, `NOT SIGNIFICANT` baseline 20% vs candidate 21%. Lane B (openrouter free, 1 task × 2 trials) completed: both arms 100%, candidate 7.5 tool calls vs baseline 6.5 — no benefit, small cost. The candidate text lives in `evals/ab.ts`; landing it without a receipt is the unevidenced change this phase exists to prevent. Unblock: a lane that can complete 5 tasks × 3 trials × 2 arms |
 | **38.6** | Reasoning deltas as a first-class `StreamEvent`; surface `reasoning_tokens` and `cached_tokens` in usage | Probe L | **P1** | **COMPLETE** — `23e83e5`; fail-first tests added |
 | **38.7** | Prompt caching (`cache_control` breakpoints) for the 4,177-token prefix | Probe M, L | **P1** | **COMPLETE** — `CompletionRequest.cacheControl` flag; `streamAssistantTurn` always sets it; `toAnthropicRequest` annotates `system` + last tool with `{ type: "ephemeral" }` (one breakpoint, whole [system…tools] span); OpenAI/OpenRouter cache automatically, Gemini below implicit-cache floor ignores the flag |
 | **38.8** | Measure closed-loop verification inside the harness; resolve the `autoVerify: false` boundary with data | §4 | **P2** | **COMPLETE** — deterministic answer: the omission hides exactly repairable failures. `scriptedVerifyProvider` + `EvalRunnerOptions.provider` seam; `verifyAxis.test.ts` runs the SAME task through the real session path: `autoVerify: false` → FAIL (1 tool call, bug never observed), `autoVerify: true` → PASS (`npm test` fails, repair prompt pushed, fix written, verified). The live axis already exists via `AbProfileOverride.autoVerify`; running it against a frontier model awaits quota (A4 harder tier) |
@@ -338,6 +342,64 @@ current 25 short tasks are saturated for this model class, and the tier is not
 yet authored. This is recorded as a named gap in
 [`PHASE-39-ROADMAP.md`](PHASE-39-ROADMAP.md), not implied by "COMPLETE".
 
+### 38.6 — Reasoning deltas as a first-class event (COMPLETE)
+
+`reasoning_delta` is now a first-class `StreamEvent` / `AgentEvent`. The OpenAI
+adapter emits it from `delta.reasoning`; `turnStream` forwards it without ever
+touching `textParts`; the TUI accumulates it bounded (`REASONING_RETAIN_MAX =
+6000`) on `DisplayMessage.reasoning` and renders it capped (600 chars) under
+`/expand`. Fail-first tests exist at every layer (adapter, turn stream, reducer,
+display limit).
+
+**The design principle, stated so it is not eroded later:** reasoning is
+*surfaced*, never folded into `text_delta` and never replayed into history. A
+user can read what the model thought; the model cannot condition on its own
+prior reasoning, and no compaction or rewind path has to reason about it. It is
+display state, not conversation state.
+
+### 38.7 — The static prefix is now cached (COMPLETE)
+
+`CompletionRequest.cacheControl` is the seam; `streamAssistantTurn` always sets
+it, because the system prompt and tool schemas are byte-identical across turns.
+`toAnthropicRequest` (extracted from `doStream` so the placement is
+unit-testable without a live client) annotates the system prompt and the **last**
+tool with `{ type: "ephemeral" }` — one breakpoint covering the whole
+`[system…tools]` span, not one per tool, because Anthropic honors only four
+breakpoints and a per-tool strategy would exhaust them and evict
+unpredictably.
+
+Provider asymmetry is deliberate and declared: OpenAI/OpenRouter cache
+automatically and need no annotation; Gemini's implicit-cache floor is 32,768
+tokens against this prefix's 4,177, so no breakpoint strategy can reach it. The
+flag says "this prefix is static, cache it if you can", and an adapter that
+cannot express it ignores it.
+
+### 38.8 — The verification axis, measured (COMPLETE)
+
+§4 recorded a dilemma without resolving it: the eval lane runs
+`autoVerify: false` so a repair loop cannot mask the failure a task asserts —
+and therefore the harness never exercises closed-loop verification, which
+shipping treats as core behavior. 38.8 turned that into a measurement.
+
+`scriptedVerifyProvider` is its script: act 1 writes a buggy implementation and
+ends its turn `tool_use`; act 2 writes the fix **and is reachable only when the
+verification feedback marker is present in the request history**. There is no
+branch that repairs without having seen the failure, because a measurement built
+on magic is the defect class this phase exists to close.
+`EvalRunnerOptions.provider` is the injection seam; `verifyAxis.test.ts` runs the
+same task through the real path (`AgentSession` → `turnVerifier` → `npm test` →
+repair prompt → second call):
+
+| Arm | Result | Tool calls |
+| :--- | :--- | :--- |
+| `autoVerify: false` | **FAIL** — the bug is never observed | 1 |
+| `autoVerify: true` | **PASS** — test fails, repair is requested, fix written, re-verified | 2 |
+
+The answer the boundary was waiting for: **the omission hides exactly the
+failures the repair loop would have fixed.** The live axis already exists
+(`AbProfileOverride.autoVerify`, so two arms can differ in nothing else); giving
+it a frontier-model receipt is the same capacity problem 38.5 hit.
+
 ## 4. Declared boundaries (recorded, not hidden)
 
 - **Anvil discards 2,026 characters of live reasoning per turn** (Probe L) and
@@ -388,9 +450,39 @@ yet authored. This is recorded as a named gap in
   suspicious, not fixed — and Probe K sharpens it: if a reasoning model spends
   its budget on `thoughtsTokenCount` inside a 4,096 ceiling, goal mode is the
   first surface to starve. It is not fixed in this phase.
+- **The A/B instrument's arms bypass project-rule injection.** When an arm
+  supplies `systemPrompt`, `runEvalTask` uses it verbatim, so
+  `buildSystemPrompt` (project rules + memory) never runs for that arm. The
+  CLI's two arms therefore share an identical proxy sentence ("this project
+  declares its own rules … read them and follow them") so the *only* difference
+  between them is the behavioral guidance — the base prompt is what is
+  measured. This is a property of the instrument, declared here rather than
+  implied: an arm is not literally the shipping assembly, it is the shipping
+  assembly with the rule block replaced by a request to read the rules.
 - **The suite still cannot differentiate frontier models** (carried from Phase
   37 §4). 38.4 shipped without the harder tier; authoring it is the recorded
   open item (AUDIT A4) in Phase 39.
+- **Free-tier capacity cannot decide a prompt.** Two live receipt attempts were
+  made for 38.5, and neither is a receipt:
+  1. `orcarouter/deepseek-v4-flash-free`, 5 bugfix tasks × 3 trials × 2 arms —
+     **throttled out from under the experiment**: trial 1 ran normally, then 22
+     of 30 runs died at the 120s live timeout and one returned HTTP 429 ("free
+     model capacity is limited right now"). The harness reported it correctly —
+     `NOT SIGNIFICANT`, baseline 20% vs candidate 21%, every timeout graded as a
+     task result rather than hidden as a provider error — but a lane that cannot
+     complete a trial cannot decide a prompt.
+  2. `openrouter/nvidia/nemotron-3-super-120b-a12b:free`, 1 task × 2 trials × 2
+     arms — **completed**, and is quotable as what it is: both arms 100%, the
+     candidate spending **7.5 tool calls against the baseline's 6.5**. On a
+     saturated single task the guidance changes trajectory *cost* (more reading
+     and verification) and moves the outcome not at all.
+  Combined: the candidate shows no measurable benefit and a consistent small
+  cost, on a task set too easy to separate the arms. **The prompt is not
+  landed.** Growing it without a receipt is precisely the unevidenced change
+  this phase exists to prevent; 38.5 is blocked on a lane that can complete
+  5 tasks × 3 trials × 2 arms, not on the prompt text, which is written and
+  measured in `evals/ab.ts`.
+
 - **45 of the 69 rows labelled `certified: "live"` came from mock runs**, and
   38.3 fixed only the two Probe N measured. The remaining 43 are unverified,
   not wrong: the picker already renders them `[✅ mock]` rather than `[✅ live]`

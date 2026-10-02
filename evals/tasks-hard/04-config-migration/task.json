@@ -1,0 +1,8 @@
+{
+  "name": "Migrate a config key across code, config and tests",
+  "category": "config",
+  "prompt": "Our settings file uses a legacy snake_case key `max_retries` while the code reads `maxRetries`. Rename the key to `maxRetries` EVERYWHERE it appears — the settings file, any defaults, and every reader — so there is exactly one spelling left in the repository. Do not edit files under test/. The test suite must pass when you are done, and no legacy spelling may remain anywhere else.",
+  "timeoutMs": 180000,
+  "maxTokens": 4096,
+  "fast": false
+}
