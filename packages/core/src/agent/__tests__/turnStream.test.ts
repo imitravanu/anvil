@@ -38,6 +38,26 @@ function makeInput(
 }
 
 describe("streamAssistantTurn", () => {
+  it("requests prompt caching on the turn (Phase 38.7)", async () => {
+    const provider = new FakeProvider([[{ type: "text_delta", text: "Hi" }]]);
+    await drain(
+      streamAssistantTurn({
+        provider,
+        model: "fake-model",
+        systemPrompt: "static prefix",
+        messages: [],
+        tools: [],
+        maxTokens: 100,
+        controller: new AbortController(),
+        turn: new TurnState(5),
+        onUsage: vi.fn(),
+      })
+    );
+    // The static prefix is byte-identical across turns — the request must
+    // always ask the provider to cache it (Probe M: 4,177 tokens).
+    expect(provider.calls[0].cacheControl).toBe(true);
+  });
+
   it("yields reasoning_delta and never stores it in textParts (Phase 38.6)", async () => {
     const { events, result } = await drain(
       streamAssistantTurn({

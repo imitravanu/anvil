@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   mapStopReason,
   toAnthropicMessages,
+  toAnthropicRequest,
   translateAnthropicStream,
   type RawAnthropicStreamEvent,
 } from "../anthropic.js";
@@ -241,6 +242,46 @@ describe("translateAnthropicStream", () => {
     expect(events.filter((e) => e.type === "usage")).toEqual([
       { type: "usage", inputTokens: 12, outputTokens: 3 },
     ]);
+  });
+});
+
+describe("toAnthropicRequest (Phase 38.7 prompt caching)", () => {
+  const tools = [
+    { name: "read_file", description: "r", inputSchema: { type: "object" }, mutating: false },
+    { name: "write_file", description: "w", inputSchema: { type: "object" }, mutating: true },
+  ];
+
+  it("annotates the static prefix with cache_control when requested", () => {
+    const req = toAnthropicRequest({
+      model: "claude-sonnet-5",
+      systemPrompt: "static prefix",
+      messages: [],
+      tools,
+      maxTokens: 100,
+      cacheControl: true,
+    });
+    // System prompt becomes a content-block array carrying the breakpoint.
+    expect(req.system).toEqual([
+      { type: "text", text: "static prefix", cache_control: { type: "ephemeral" } },
+    ]);
+    // Exactly ONE breakpoint on the tool list — the last tool — so the whole
+    // [system…tools] span caches as one block.
+    const ts = req.tools as Array<{ name: string; cache_control?: unknown }>;
+    expect(ts[0].cache_control).toBeUndefined();
+    expect(ts[1].cache_control).toEqual({ type: "ephemeral" });
+  });
+
+  it("leaves the request untouched when caching is not requested", () => {
+    const req = toAnthropicRequest({
+      model: "claude-sonnet-5",
+      systemPrompt: "static prefix",
+      messages: [],
+      tools,
+      maxTokens: 100,
+    });
+    expect(req.system).toBe("static prefix");
+    const ts = req.tools as Array<{ cache_control?: unknown }>;
+    expect(ts.every((t) => t.cache_control === undefined)).toBe(true);
   });
 });
 

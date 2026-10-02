@@ -76,6 +76,12 @@ export async function* streamAssistantTurn(
     tools: input.tools,
     maxTokens: input.maxTokens,
     signal: controller.signal,
+    // Phase 38.7 — the system prompt + tool schemas are byte-identical across
+    // turns (the 4,177-token static prefix, Probe M). Ask the provider to cache
+    // that prefix so it stops being priced as fresh input every round. Adapters
+    // that cannot express a breakpoint (Gemini: below the implicit-cache floor)
+    // ignore the flag; OpenAI/OpenRouter already cache automatically.
+    cacheControl: true,
   });
 
   const textParts: string[] = [];

@@ -146,6 +146,44 @@ export function toAnthropicMessages(messages: ConversationMessage[]): Anthropic.
   });
 }
 
+/**
+ * Builds the Messages API request, extracting it from doStream so the
+ * Phase 38.7 cache_control placement is unit-testable without a live client.
+ */
+export function toAnthropicRequest(
+  request: CompletionRequest
+): Anthropic.MessageCreateParamsNonStreaming {
+  return {
+    model: request.model,
+    max_tokens: request.maxTokens,
+    ...(request.systemPrompt
+      ? request.cacheControl
+        ? // Breakpoint on the static system prompt: it is byte-identical
+          // across turns (the 4,177-token prefix, Probe M), so the provider
+          // serves it from cache instead of billing it fresh every round.
+          { system: [{ type: "text" as const, text: request.systemPrompt, cache_control: { type: "ephemeral" as const } }] }
+        : { system: request.systemPrompt }
+      : {}),
+    ...(request.tools.length
+      ? {
+          tools: request.tools.map((t, i) => ({
+            name: t.name,
+            description: t.description,
+            input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
+            // The tool list is part of the static prefix; the breakpoint rides
+            // the LAST tool so the whole [system…tools] span caches as one block
+            // (Anthropic honors up to 4 breakpoints; one per tool would exhaust
+            // them and evict unpredictably).
+            ...(request.cacheControl && i === request.tools.length - 1
+              ? { cache_control: { type: "ephemeral" as const } }
+              : {}),
+          })),
+        }
+      : {}),
+    messages: toAnthropicMessages(request.messages),
+  };
+}
+
 export class AnthropicProvider extends BaseProvider {
   readonly id: ProviderId = "anthropic";
   readonly displayName = "Anthropic";
@@ -168,24 +206,9 @@ export class AnthropicProvider extends BaseProvider {
       throw new Error("Anthropic client not initialized");
     }
 
-    const stream = this.client.messages.stream(
-      {
-        model: request.model,
-        max_tokens: request.maxTokens,
-        ...(request.systemPrompt ? { system: request.systemPrompt } : {}),
-        ...(request.tools.length
-          ? {
-              tools: request.tools.map((t) => ({
-                name: t.name,
-                description: t.description,
-                input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
-              })),
-            }
-          : {}),
-        messages: toAnthropicMessages(request.messages),
-      },
-      { signal: request.signal }
-    );
+    const stream = this.client.messages.stream(toAnthropicRequest(request), {
+      signal: request.signal,
+    });
 
     return translateAnthropicStream(stream as AsyncIterable<RawAnthropicStreamEvent>);
   }

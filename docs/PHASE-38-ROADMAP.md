@@ -181,8 +181,8 @@ rather than the model list: `certified: "live"` was recorded from a run whose
 | **38.3** | Mark the two unreachable `inkling` models broken, with live provenance and a guard on the picker contract | Probe N | **P0** | **COMPLETE** |
 | **38.4** | A prompt A/B harness on a live model: fixed tasks, N trials, pass rate / cost / tool calls / edit-error rate | Probe H | **P0** | **COMPLETE** — `6cc4a6d` + `1b78a63`; audit closure in Phase 39 W1; harder tier open (A4) |
 | **38.5** | The real system prompt — tool-use policy, search-before-edit, verification, conventions | Probe J, M | **P1** | **OPEN** — unblocked: harness landed + audit-closed (Phase 39 W1); pair with the harder tier (A4) |
-| **38.6** | Reasoning deltas as a first-class `StreamEvent`; surface `reasoning_tokens` and `cached_tokens` in usage | Probe L | **P1** | **OPEN** |
-| **38.7** | Prompt caching (`cache_control` breakpoints) for the 4,177-token prefix | Probe M, L | **P1** | **OPEN** |
+| **38.6** | Reasoning deltas as a first-class `StreamEvent`; surface `reasoning_tokens` and `cached_tokens` in usage | Probe L | **P1** | **COMPLETE** — `23e83e5`; fail-first tests added |
+| **38.7** | Prompt caching (`cache_control` breakpoints) for the 4,177-token prefix | Probe M, L | **P1** | **COMPLETE** — `CompletionRequest.cacheControl` flag; `streamAssistantTurn` always sets it; `toAnthropicRequest` annotates `system` + last tool with `{ type: "ephemeral" }` (one breakpoint, whole [system…tools] span); OpenAI/OpenRouter cache automatically, Gemini below implicit-cache floor ignores the flag |
 | **38.8** | Measure closed-loop verification inside the harness; resolve the `autoVerify: false` boundary with data | §4 | **P2** | **OPEN** |
 | **38.9** | Guardian gate, docs sync, record | — | **P0** | **OPEN** |
 
