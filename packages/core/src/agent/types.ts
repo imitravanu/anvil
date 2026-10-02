@@ -22,6 +22,9 @@ export const AUTO_APPROVE_BROKER: PermissionBroker = {
 
 export type AgentEvent =
   | { type: "text_delta"; text: string }
+  // Phase 38.6 — streamed model deliberation, kept separate from `text_delta`
+  // so it is shown but never replayed as the assistant's answer.
+  | { type: "reasoning_delta"; text: string }
   | { type: "tool_started"; id: string; name: string; input: unknown }
   | { type: "tool_permission_denied"; id: string; name: string }
   // `durationMs` is EXECUTION time — stamped just before the call runs, so it

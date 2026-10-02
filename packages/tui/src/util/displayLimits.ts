@@ -55,3 +55,15 @@ export function capLines(lines: string[], max: number = EXPANDED_MAX_LINES): str
   if (lines.length <= max) return lines;
   return [...lines.slice(0, max), omittedLine(lines.length, max)];
 }
+
+// Phase 38.6: streamed model reasoning. `reasoning_delta` text is retained
+// bounded in React state and rendered only under /expand, capped, so a 2,000-
+// character deliberation cannot flood the default transcript.
+export const REASONING_RETAIN_MAX = 6000;
+export const REASONING_DISPLAY_MAX_CHARS = 600;
+
+/** Cap text with an omission notice. Pure. */
+export function capChars(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max)} … (${text.length - max} more char(s) omitted)`;
+}

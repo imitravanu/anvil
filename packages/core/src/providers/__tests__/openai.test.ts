@@ -78,6 +78,27 @@ describe("translateChatCompletionsChunkStream", () => {
     ]);
   });
 
+  it("emits reasoning_delta from delta.reasoning (Phase 38.6) and never folds it into content", async () => {
+    const events = await collect(
+      translateChatCompletionsChunkStream(
+        of([
+          { choices: [{ delta: { reasoning: "Let me think…", content: null }, finish_reason: null }] },
+          { choices: [{ delta: { reasoning: " hmm", content: "Hi" } }] },
+          { choices: [{ delta: { content: "!" }, finish_reason: "stop" }] },
+          { choices: [], usage: { prompt_tokens: 5, completion_tokens: 20, completion_tokens_details: { reasoning_tokens: 8 } } },
+        ])
+      )
+    );
+    expect(events).toEqual([
+      { type: "reasoning_delta", text: "Let me think…" },
+      { type: "reasoning_delta", text: " hmm" },
+      { type: "text_delta", text: "Hi" },
+      { type: "text_delta", text: "!" },
+      { type: "usage", inputTokens: 5, outputTokens: 20, reasoningTokens: 8 },
+      { type: "turn_end", stopReason: "end_turn" },
+    ]);
+  });
+
   it("finalizes buffered calls even when the finish_reason chunk never arrives", async () => {
     const events = await collect(
       translateChatCompletionsChunkStream(

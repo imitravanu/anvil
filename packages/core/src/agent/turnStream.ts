@@ -91,6 +91,12 @@ export async function* streamAssistantTurn(
         textParts.push(event.text);
         yield { type: "text_delta", text: event.text };
         break;
+      case "reasoning_delta":
+        // Phase 38.6 — forwarded so a consumer can show it, and deliberately
+        // NOT pushed into `textParts`: reasoning is not the assistant's answer,
+        // and replaying it as message content would corrupt history.
+        yield { type: "reasoning_delta", text: event.text };
+        break;
       case "tool_call_start":
         openCalls.set(event.id, { name: event.name, inputJson: "" });
         break;

@@ -51,6 +51,12 @@ export type ProviderErrorCode =
 // Streaming events emitted while a single provider turn is in progress.
 export type StreamEvent =
   | { type: "text_delta"; text: string }
+  // Phase 38.6 — the model's private deliberation, surfaced as a FIRST-CLASS
+  // event rather than discarded. OpenRouter-style wires carry it on
+  // `delta.reasoning` (measured: 2,026 chars on one turn) and Anvil used to drop
+  // every byte. It is deliberately NOT folded into `text_delta`: reasoning is
+  // not the answer, so it must never enter the assistant's history text.
+  | { type: "reasoning_delta"; text: string }
   | { type: "tool_call_start"; id: string; name: string }
   // Deltas carry the CUMULATIVE argument buffer (adapters append fragments
   // before emitting) — consumers overwrite, never concatenate.
@@ -185,6 +191,11 @@ export interface CompletionRequest {
   tools: ToolDefinition[];
   maxTokens: number;
   signal?: AbortSignal; // pass through to the underlying HTTP request for cancellation
+  /** Phase 38.7 — when true, adapters annotate the static prefix
+   *  (system prompt, tool schemas) with `cache_control: { type: "ephemeral" }`
+   *  so the provider caches it and the 4,177-token prefix stops being paid
+   *  full-price every turn. */
+  cacheControl?: boolean;
 }
 
 // The one method every provider adapter must implement.

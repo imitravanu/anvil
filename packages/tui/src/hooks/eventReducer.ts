@@ -3,7 +3,7 @@ import type React from "react";
 import type { AgentEvent } from "@anvil/core";
 import { retainReport, type SubAgentRecord } from "../util/subagent.js";
 import { friendlyError } from "../util/errors.js";
-import { TRANSCRIPT_STATE_CAP, OUTPUT_RETAIN_MAX } from "../util/displayLimits.js";
+import { TRANSCRIPT_STATE_CAP, OUTPUT_RETAIN_MAX, REASONING_RETAIN_MAX } from "../util/displayLimits.js";
 
 export type DisplaySubAgent = SubAgentRecord;
 
@@ -151,6 +151,13 @@ export interface DisplayMessage {
    */
   inputTokens?: number;
   outputTokens?: number;
+  /**
+   * Phase 38.6 — the model's streamed deliberation, accumulated from
+   * `reasoning_delta` events. Kept apart from `text` because reasoning is not
+   * the answer: it is never replayed into history and renders only under
+   * /expand. Absent when the provider streamed none.
+   */
+  reasoning?: string;
 }
 
 export interface UsageTotals {
@@ -196,6 +203,13 @@ export function applyEvent(
   switch (event.type) {
     case "text_delta":
       update((m) => ({ ...m, text: m.text + event.text }));
+      break;
+    case "reasoning_delta":
+      // Bounded like tool output: long sessions must not bloat React state.
+      update((m) => ({
+        ...m,
+        reasoning: ((m.reasoning ?? "") + event.text).slice(-REASONING_RETAIN_MAX),
+      }));
       break;
     case "tool_started":
       update((m) => ({

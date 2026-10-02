@@ -38,6 +38,31 @@ function makeInput(
 }
 
 describe("streamAssistantTurn", () => {
+  it("yields reasoning_delta and never stores it in textParts (Phase 38.6)", async () => {
+    const { events, result } = await drain(
+      streamAssistantTurn({
+        provider: new FakeProvider([
+          [
+            { type: "reasoning_delta", text: "Let me think…" },
+            { type: "text_delta", text: "Hi" },
+            { type: "turn_end", stopReason: "end_turn" },
+          ],
+        ]),
+        model: "fake-model",
+        systemPrompt: "",
+        messages: [],
+        tools: [],
+        maxTokens: 100,
+        controller: new AbortController(),
+        turn: new TurnState(5),
+        onUsage: vi.fn(),
+      })
+    );
+    expect(events.map((e) => e.type)).toEqual(["reasoning_delta", "text_delta"]);
+    expect(result?.textParts).toEqual(["Hi"]);
+    expect(result?.textParts).not.toContain("Let me think…");
+  });
+
   it("accumulates text and assembles tool calls from deltas", async () => {
     const { input } = makeInput([
       { type: "text_delta", text: "Hel" },

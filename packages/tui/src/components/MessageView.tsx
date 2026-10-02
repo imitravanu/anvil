@@ -6,6 +6,7 @@ import { useTheme } from "../theme/theme.js";
 import { rule } from "../util/chrome.js";
 import { displayWidth, formatTime, formatTokenCount } from "../util/format.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
+import { capChars, REASONING_DISPLAY_MAX_CHARS } from "../util/displayLimits.js";
 import { useBlink, useSpinnerFrame } from "../util/useSpinner.js";
 import { ToolCallView } from "./ToolCallView.js";
 import { SubAgentView } from "./SubAgentView.js";
@@ -93,6 +94,14 @@ export const MessageView = React.memo(function MessageView({ message, expandTool
   return (
     <Box flexDirection="column">
       {cardHeader(theme.typography.assistantPrefix, theme.colors.brand, true)}
+      {expandTools && message.reasoning && (
+        // Phase 38.6 — the model's deliberation, surfaced on demand (/expand)
+        // and capped. Kept off the default transcript so a long think does not
+        // bury the answer; the StatusBar's "% thinking" summarises it otherwise.
+        <Text color={theme.colors.textMuted}>
+          ✻ reasoning: {capChars(sanitizeTerminalText(message.reasoning), REASONING_DISPLAY_MAX_CHARS)}
+        </Text>
+      )}
       {(safeText || message.streaming) && textBlock}
       {message.errorText && (
         <Text color={theme.colors.error}>✗ {sanitizeTerminalText(message.errorText)}</Text>

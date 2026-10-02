@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { applyEvent, retainOutput, OUTPUT_RETAIN_MAX, appendSystemMessage, systemMessage } from "../eventReducer.js";
+import { REASONING_RETAIN_MAX } from "../../util/displayLimits.js";
 import type { DisplayMessage, UsageTotals } from "../eventReducer.js";
 import type { AgentEvent } from "@anvil/core";
 
@@ -221,5 +222,50 @@ describe("eventReducer", () => {
 
     expect(plan).toBe("1. Step one\n2. Step two");
     expect(setMessages).toHaveBeenCalled();
+  });
+
+  it("accumulates reasoning_delta into DisplayMessage.reasoning (Phase 38.6)", () => {
+    let assistant: DisplayMessage = {
+      id: "a1",
+      role: "assistant",
+      text: "",
+      streaming: true,
+      toolCalls: [],
+      subAgents: [],
+    };
+    const update = (fn: (m: DisplayMessage) => DisplayMessage) => {
+      assistant = fn(assistant);
+    };
+    const setUsage = vi.fn();
+    const setMessages = vi.fn();
+    const setPlan = vi.fn();
+
+    applyEvent({ type: "reasoning_delta", text: "Let me think…" }, update, setUsage, setMessages, setPlan);
+    applyEvent({ type: "reasoning_delta", text: " done." }, update, setUsage, setMessages, setPlan);
+
+    expect(assistant.reasoning).toBe("Let me think… done.");
+  });
+
+  it("caps reasoning accumulation at REASONING_RETAIN_MAX", () => {
+    let assistant: DisplayMessage = {
+      id: "a1",
+      role: "assistant",
+      text: "",
+      streaming: true,
+      toolCalls: [],
+      subAgents: [],
+      reasoning: "",
+    };
+    const update = (fn: (m: DisplayMessage) => DisplayMessage) => {
+      assistant = fn(assistant);
+    };
+    const setUsage = vi.fn();
+    const setMessages = vi.fn();
+    const setPlan = vi.fn();
+    const big = "x".repeat(REASONING_RETAIN_MAX + 50);
+
+    applyEvent({ type: "reasoning_delta", text: big }, update, setUsage, setMessages, setPlan);
+
+    expect(assistant.reasoning?.length).toBeLessThanOrEqual(REASONING_RETAIN_MAX);
   });
 });

@@ -28,6 +28,13 @@ export interface RawOpenAIChunk {
   choices?: Array<{
     delta?: {
       content?: string | null;
+      /**
+       * Phase 38.6 — streamed deliberation on the OpenAI-compatible wire format
+       * (OpenRouter, and the gateways that mirror it). Measured at 2,026 chars
+       * for a 68-char answer (Probe L). Optional: providers that do not reason,
+       * or that omit the field, leave it absent — never coerced to "".
+       */
+      reasoning?: string | null;
       tool_calls?: Array<{
         index: number;
         id?: string;
@@ -73,6 +80,13 @@ export async function* translateChatCompletionsChunkStream(
     for await (const chunk of raw) {
       const choice = chunk.choices?.[0];
       const delta = choice?.delta;
+
+      if (delta?.reasoning) {
+        // Reasoning arrives before/alongside the answer and is rendered apart
+        // from it; emitting it here is what stops the adapter from discarding
+        // the model's deliberation (Probe L, Phase 38.6).
+        yield { type: "reasoning_delta", text: delta.reasoning };
+      }
 
       if (delta?.content) {
         yield { type: "text_delta", text: delta.content };
