@@ -1,0 +1,6 @@
+{
+  "name": "harder-tier-single-source-constant",
+  "private": true,
+  "type": "commonjs",
+  "scripts": { "test": "node --test" }
+}

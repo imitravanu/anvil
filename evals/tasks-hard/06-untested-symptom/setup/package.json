@@ -1,0 +1,6 @@
+{
+  "name": "harder-tier-untested-symptom",
+  "private": true,
+  "type": "commonjs",
+  "scripts": { "test": "node --test" }
+}

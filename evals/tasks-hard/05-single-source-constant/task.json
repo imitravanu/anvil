@@ -1,0 +1,8 @@
+{
+  "name": "Every caller shares one timeout constant",
+  "category": "multifile",
+  "prompt": "The request timeout is defined in three different modules (src/api.js, src/worker.js, src/upload.js) and the values have drifted apart. Make there be ONE definition of the request timeout — a new module src/timeout.js exporting REQUEST_TIMEOUT_MS — and have all three modules import it, deleting their own copies. Do not modify files under test/. Existing tests must keep passing.",
+  "timeoutMs": 180000,
+  "maxTokens": 4096,
+  "fast": false
+}

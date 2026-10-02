@@ -1,0 +1,8 @@
+{
+  "name": "Fix a described symptom the existing tests do not cover",
+  "category": "bugfix",
+  "prompt": "Bug report: our paginator drops the last page whenever the total number of items is an exact multiple of the page size (e.g. paginate(4 items, size 2) returns 1 page instead of 2). The existing test suite is green today, so it does not describe this. Fix src/paginate.js and add nothing to test/. Verify your fix actually produces the pages the report describes before you call it done.",
+  "timeoutMs": 180000,
+  "maxTokens": 4096,
+  "fast": false
+}

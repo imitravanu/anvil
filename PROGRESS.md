@@ -2,6 +2,59 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-03 (Phase 38.6 / 38.7 / 38.8 landed; 38.5 measured, not landed;
+> 38.9 closure):** owns `packages/core/src/providers/{types,anthropic,openai}.ts`,
+> `packages/core/src/providers/__tests__/{anthropic,openai}.test.ts`,
+> `packages/core/src/agent/{types,turnStream}.ts`,
+> `packages/core/src/agent/__tests__/turnStream.test.ts`,
+> `packages/core/src/eval/{types,runner,index}.ts`,
+> `packages/core/src/eval/scriptedVerifyProvider.ts` (new),
+> `packages/core/src/eval/__tests__/verifyAxis.test.ts` (new),
+> `packages/tui/src/{hooks/eventReducer.ts,util/displayLimits.ts,components/MessageView.tsx}`
+> and their tests (`eventReducer.test.ts`, `displayLimits.test.ts` new),
+> `docs/{PHASE-38-ROADMAP,CURRENT-FOCUS}.md`, plus this file.
+> **NOT owned / left untouched:** `evals/ab.ts`, `evals/tasks-hard/**` — a
+> concurrent session is authoring the A4 harder tier there. One caveat on the
+> record: commit `8c44d96` swept an in-progress version of `evals/ab.ts`
+> (`--tasks-dir`) into the tree via `git add -A`; the file has since been edited
+> again by its owner and remains their working state.
+> **38.6 [P1] — reasoning deltas as a first-class event.** `reasoning_delta` is
+> now a `StreamEvent`/`AgentEvent`: the OpenAI adapter emits it from
+> `delta.reasoning`, `turnStream` forwards it without touching `textParts`, the
+> TUI accumulates it bounded (`REASONING_RETAIN_MAX = 6000`) and renders it
+> capped (600 chars) under `/expand`. Fail-first at every layer.
+> **38.7 [P1] — the static prefix is cached.** `CompletionRequest.cacheControl`
+> → `streamAssistantTurn` always sets it → `toAnthropicRequest` (extracted from
+> `doStream` so placement is unit-testable without a live client) puts
+> `{ type: "ephemeral" }` on the system prompt and the LAST tool: one breakpoint
+> for the whole `[system…tools]` span, not one per tool (Anthropic honors four;
+> per-tool would exhaust them). OpenAI/OpenRouter cache automatically; Gemini's
+> 32,768-token floor is out of reach for a 4,177-token prefix, so that adapter
+> ignores the flag by design.
+> **38.8 [P2] — the `autoVerify: false` boundary, measured.** New
+> `scriptedVerifyProvider` (act 1 writes a bug and ends `tool_use`; act 2 writes
+> the fix and is reachable ONLY with the verification marker in history) plus an
+> `EvalRunnerOptions.provider` seam. `verifyAxis.test.ts` runs the SAME task
+> through the real path: `autoVerify: false` → FAIL, 1 tool call; `autoVerify:
+> true` → PASS, 2 tool calls (`npm test` fails → repair prompt → fix →
+> re-verified). Answer to the open boundary: the omission hides exactly the
+> repairable failures.
+> **38.5 [P1] — measured twice, NOT landed.** Lane A (`orcarouter`, free, 5
+> tasks × 3 trials × 2 arms) was throttled out: 22/30 runs died at the 120s live
+> timeout + one 429 → `NOT SIGNIFICANT`, baseline 20% vs candidate 21%. Lane B
+> (`openrouter` free, 1 task × 2 trials) completed: both arms 100%, candidate
+> 7.5 tool calls vs baseline 6.5 — no benefit, a consistent small cost. The
+> candidate text stays in `evals/ab.ts` as a variant; landing it without a
+> receipt is the unevidenced change this phase exists to prevent. Blocked on a
+> lane that can complete 5 tasks × 3 trials × 2 arms.
+> **38.9 — closure:** guardian gate green end-to-end (build → typecheck → unit
+> tests → mock evals → anti-slop); roadmap rows + §3 detail for 38.6–38.8 added;
+> two new §4 boundaries declared (arm prompts bypass rule injection; free-tier
+> capacity cannot decide a prompt).
+> **Receipt:** core 929/929 (was 923; +6), TUI 350/350, typecheck clean,
+> `npm run gate` green. Commits `23e83e5`, `14b8932`, `dbfe5fc`, `bc367cb`,
+> `8c44d96`. H1 untouched (protected artifact, still awaiting human review).
+>
 > **DONE 2026-10-02 (Phase 39 W8: F8 queued-message recall + G6 docs truth):**
 > owns `packages/tui/src/hooks/useSessionCommands.ts`,
 > `packages/tui/src/hooks/useAgentController.ts`,
