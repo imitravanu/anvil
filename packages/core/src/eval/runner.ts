@@ -136,7 +136,11 @@ export async function runEvalTask(
     let provider: ModelProvider;
     let modelId = options.modelId || "mock-model";
 
-    if (options.useMock || !options.providerId) {
+    if (options.provider) {
+      // Phase 38.8: a scripted provider for deterministic axis measurement.
+      provider = options.provider;
+      modelId = options.modelId || "scripted";
+    } else if (options.useMock || !options.providerId) {
       provider = createEvalMockProvider(task);
       modelId = "eval-mock";
     } else {

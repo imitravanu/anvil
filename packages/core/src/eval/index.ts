@@ -12,3 +12,8 @@ export {
   type AbResult,
   type AbTrial,
 } from "./experiment.js";
+export {
+  createVerifyRepairProvider,
+  VERIFY_REPAIR_FEEDBACK_MARKER,
+  type VerifyRepairScript,
+} from "./scriptedVerifyProvider.js";

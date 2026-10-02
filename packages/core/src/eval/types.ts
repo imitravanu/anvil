@@ -3,6 +3,8 @@
  * Per docs/ANVIL-COMPLETE-ROADMAP.md Section 6.2
  */
 
+import type { ModelProvider } from "../providers/types.js";
+
 export interface EvalTaskConfig {
   name: string;
   category: "bugfix" | "feature" | "migration" | "regression" | "multifile" | "config";
@@ -69,6 +71,13 @@ export interface EvalRunnerOptions {
   taskFilter?: string;
   timeoutMs?: number;
   useMock?: boolean;
+  /**
+   * Phase 38.8 measurement seam: a fully scripted provider, bypassing both the
+   * mock fixture provider and live credential resolution. Exists so the
+   * verification axis (autoVerify on/off) can be measured deterministically
+   * through the real session path — see eval/scriptedVerifyProvider.ts.
+   */
+  provider?: ModelProvider;
   providerId?: string;
   modelId?: string;
   /**
