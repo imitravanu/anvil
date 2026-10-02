@@ -2,6 +2,34 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-02 (Phase 39 W8: F8 queued-message recall + G6 docs truth):**
+> owns `packages/tui/src/hooks/useSessionCommands.ts`,
+> `packages/tui/src/hooks/useAgentController.ts`,
+> `packages/tui/src/components/App.tsx`,
+> `packages/tui/src/hooks/__tests__/recall.test.tsx` (new),
+> `packages/cli/src/__tests__/docTruth.test.ts`, `scripts/certify-provider.ts`,
+> `docs/{CURRENT-FOCUS,ENGINEERING-ROADMAP,PHASE-39-ROADMAP,README}.md`,
+> `CHANGELOG.md`, plus this file.
+> **F8 [P3, V] — queued messages double-recorded recall:** a message typed
+> mid-turn was recorded at submit (`useSessionCommands.handleSubmit`) AND again
+> when the drain ran it (`useAgentController.runTurn`), so recall read A,B,C,B,C.
+> Recording now lives at exactly one layer — `runTurn`, the layer that actually
+> sends the turn (a held/never-sent message stays out of recall, which is the
+> right semantic). The now-dead `recordSentMessage` prop/return were removed.
+> Fail-first: new `recall.test.tsx` reads `['A','B','C','B','C']` with the fix
+> reverted and `['A','B','C']` with it.
+> **G6 [P2, R] — counts/versions drifted from reality:** certify-provider header
+> 11→12 providers; `ENGINEERING-ROADMAP.md`'s stale suite counts marked as the
+> M0-time baseline (the live totals live in this file, not there);
+> `CURRENT-FOCUS.md` live totals refreshed to 1,417 tests / 189 files; the
+> `PHASE-39-ROADMAP.md` header v1.12.x→v1.2.x. Made mechanical: two new
+> `docTruth` assertions derive the docs-index count from disk and the
+> certify-provider count from the provider registry — both checked fail-first
+> (red against the pre-fix banner/header, green after).
+> **Receipt:** TUI 57 files / 345 tests green, CLI `docTruth` 18/18 green,
+> typecheck green. No protected artifact touched.
+>
+
 > **DONE 2026-10-02 (Phase 39 W8: C9–C19 — the consistency sweep):**
 > owns `packages/core/src/agent/team/{types,runner}.ts`,
 > `packages/core/src/tools/delegateTask.ts`,

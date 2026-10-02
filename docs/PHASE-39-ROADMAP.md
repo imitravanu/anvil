@@ -1,6 +1,6 @@
 # Phase 39 — Audit remediation: make the record honest
 
-> **Version:** v1.12.x
+> **Version:** v1.2.x
 > **Date:** 2026-09-30
 > **Author:** Chief Engineer (OpenCode session, owner-approved)
 > **Status:** IN PROGRESS — W1–W7 landed (verified against live code
@@ -186,10 +186,17 @@ which that sweep repaired:
   name/executor prefix, unreadable manifest) are reported. Fail-first:
   `teamBudget`, `ledgerAttribution`, `cancelHistory`, `goalEngine`, `plugins`.
   Core 111 files / 921 tests, TUI 344, gate Steps 0–5 green.
+  **F8 and G6 FIXED 2026-10-02:** F8 — sent-history recall is recorded at ONE
+  layer (`useAgentController.runTurn`); the submit-layer duplicate is gone
+  (fail-first: `hooks/__tests__/recall.test.tsx` reads A,B,C,B,C without the
+  fix, A,B,C with it). G6 — docs count/version drift repaired: the
+  certify-provider header (11→12 providers), ENGINEERING-ROADMAP's stale suite
+  counts marked as the M0 baseline, CURRENT-FOCUS's live totals refreshed
+  (1,417 / 189), and the PHASE-39 header (v1.12.x→v1.2.x); two new `docTruth`
+  guards now tie the docs-index count to disk and the certify header to the
+  provider registry (both fail-first checked).
   **Still open:** H1 (scanner coverage extension —
-  magic constants, non-empty silent catches, dead exports), F8, G6
-  (spot-check 2026-10-02: `ENGINEERING-ROADMAP.md`'s `anvil
-  1.1.0` line fixed in the sweep; remaining count drift unverified).
+  magic constants, non-empty silent catches, dead exports).
 
 **Owner decisions, not mechanical edits:** homegrown-parser vs tree-sitter
 after W4 stands. The headless-denial exit contract was DECIDED in W2: a

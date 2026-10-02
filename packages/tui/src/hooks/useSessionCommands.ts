@@ -45,7 +45,6 @@ export interface UseSessionCommandsDeps {
   send: (text: string) => Promise<void>;
   launchGoal?: (objective: string) => Promise<void>;
   addPendingImage: (img: { mediaType: string; data: string; path: string }) => void;
-  recordSentMessage?: (text: string) => void;
 }
 
 export interface UseSessionCommandsResult {
@@ -190,7 +189,11 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
   const [mruCommands, setMruCommands] = useState<string[]>([]);
 
   const handleSubmit = async (text: string) => {
-    deps.recordSentMessage?.(text);
+    // F8/AUDIT-2026-09-30: sent-history recall is recorded ONCE, in
+    // useAgentController.runTurn — the layer that actually sends a turn.
+    // Recording here too double-counted: a message queued while busy was
+    // recorded at submit and again when the drain ran it, so submitting A, B,
+    // C during a turn yielded A,B,C,B,C in Up-arrow recall.
     const parsed = parseCommand(text);
     if (parsed) {
       const command = COMMANDS.find((c) => c.name === parsed.name);

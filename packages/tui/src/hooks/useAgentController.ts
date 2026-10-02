@@ -587,6 +587,5 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     clearMessages,
     replaceMessages,
     sentHistory,
-    recordSentMessage,
   };
 }

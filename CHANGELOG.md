@@ -73,7 +73,14 @@ All notable changes to Anvil are documented here. The format follows
   abandons a tool batch now leaves a replayable history; plugin collisions
   (duplicate tool name, duplicate executor prefix, unreadable manifest) are
   reported; the remaining magic constants moved to `config/constants.ts`; and
-  dead exports, fields, and plumbing were removed.
+  dead exports, fields, and plumbing were removed. **Recall no longer
+  double-counts queued messages (F8)** — a message typed mid-turn was recorded
+  at submit and again when the drain ran it, so recall read A,B,C,B,C; it is
+  now recorded at exactly one layer. **Docs count/version drift is repaired
+  (G6)** — the certify-provider header (12 providers), the engineering
+  roadmap's stale suite counts (marked as the M0 baseline), CURRENT-FOCUS's
+  live totals, and the PHASE-39 header (v1.2.x); two `docTruth` guards now tie
+  the docs-index count to disk and the certify header to the provider registry.
 
 ### Trust exits and consent (Phase 39 W2)
 

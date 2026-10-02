@@ -18,7 +18,7 @@
   cell-width, F6 diff floor, F4/F7/F9/F10/F11); W7 (B3 usage-on-error, B4
   strict pricing, A7 interleaved arms, B8 untested badge — **A8 deferred**,
   needs a structured runner error code). **W8 is partial**: E8, G17, and the G9/G13/G15 quick wins landed (derived `--help` command line, loud eval flags, interpolated p95); **G10/G11/G12 (CLI truth), F12 (dead exports), F13 (catch comments) landed 2026-10-02**, plus E9 (tree-kill parity + truncation honesty), the E8 remainder, and E7's duplicate bounds**;
-  **E7 (all flagged literals centralized) and C9–C19 (the whole consistency sweep) also landed 2026-10-02**; H1, F8, G6-remainder stay open. The W4–W8
+  **E7 (all flagged literals centralized), C9–C19 (the whole consistency sweep), F8 (recall double-record) and G6 (docs count/version drift) also landed 2026-10-02**; H1 stays open. The W4–W8
   commits carried no bookkeeping; the 2026-10-02 reconciliation sweep verified
   their claims against live code and repaired the record (see PROGRESS.md).
   Roadmap: [`PHASE-39-ROADMAP.md`](PHASE-39-ROADMAP.md).
@@ -81,7 +81,7 @@
 - Phases 32–35 landed: the code-intelligence surface tells the truth (per-language
   extraction, kind contract, freshness incl. externally added files), team runs
   stream per-tool, and every self-claim in the README and TUI is derived or
-  verified. Measured state: 1,276 tests across 177 files, full gate Steps 0–5
+  verified. Measured state: 1,417 tests across 189 files, full gate Steps 0–5
   green, 25/25 mock evals.
 - The tokeniser decision is taken: DEFER, with written adoption triggers in
   [`PHASE-35-ROADMAP.md`](PHASE-35-ROADMAP.md) §35.3. That deferral stands: no

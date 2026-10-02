@@ -96,7 +96,6 @@ export function App({
     sentHistory,
     queued,
     addPendingImage,
-    recordSentMessage,
   } = useAgentController(session, {
     // Persist after every settled turn — including queued ones that drain
     // inside the controller, after handleSubmit has already returned.
@@ -225,7 +224,6 @@ export function App({
     send,
     launchGoal,
     addPendingImage,
-    recordSentMessage,
   });
   persistRef.current = persist;
 

@@ -122,6 +122,23 @@ describe("doc truth", () => {
     expect(read("README.md")).toContain(`Node-%3E%3D${min}`);
   });
 
+  it("the docs index banner count matches the files on disk", () => {
+    // G6/AUDIT-2026-09-30: the index opened with "84 files" long after the folder
+    // had grown. Derive the number from disk so it can only fail on real drift.
+    const claimed = read("docs/README.md").match(/^(\d+) files —/m)?.[1];
+    expect(claimed, "docs/README.md must open with an 'N files —' banner").toBeDefined();
+    const actual = fs
+      .readdirSync(path.join(ROOT, "docs"))
+      .filter((file) => file.endsWith(".md")).length;
+    expect(Number(claimed)).toBe(actual);
+  });
+
+  it("the certify-provider header names the registry's provider count", () => {
+    // G6: the header said "11" while the list had 12. Tie it to the registry.
+    const count = Object.keys(createProviders({})).length;
+    expect(read("scripts/certify-provider.ts")).toContain(`all ${count} Anvil model providers`);
+  });
+
   it("the certified-provider table lists exactly the registry's providers", () => {
     const rows = certifiedRows();
     const providers = Object.values(createProviders({}));

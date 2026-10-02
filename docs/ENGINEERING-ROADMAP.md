@@ -11,7 +11,7 @@ All 16 findings from the 2026-09-26 Chief Engineer Audit (`docs/AUDIT-2026-09-26
 1. **M0 — Baseline: [COMPLETE]**
    - Guardian Gate (`npm run gate`) Steps 0–5 passing green.
    - Protected-artifact integrity manifest SHA-256 match.
-   - Unit test suite: 1,211 / 1,211 passing across 172 files (`@anvil/core`: 765, `@anvil/tui`: 329, `@anvil/cli`: 117).
+   - Unit test suite at M0: 1,211 / 1,211 passing across 172 files (`@anvil/core`: 765, `@anvil/tui`: 329, `@anvil/cli`: 117). This is the milestone-time baseline; the suite has grown since, and the live totals live in PROGRESS.md rather than here.
    - Startup profile: single bundle 6.51 MB, 323 ms median / 406 ms p95.
    - Packaging smoke test (`npm run verify:package`): isolated clean installation passes and reports `anvil 1.2.0`.
 
