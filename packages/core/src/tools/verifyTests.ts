@@ -273,10 +273,26 @@ export async function runTestVerification(
         command: fullCommand,
         summary,
         output: rawOutput,
-        failureTrace: passed ? undefined : rawOutput.slice(-4000), // retain last 4KB failure trace
+        failureTrace: passed ? undefined : failureTraceTail(rawOutput, 4000), // retain last 4KB failure trace
       });
     });
   });
+}
+
+/**
+ * The last `max` UTF-16 units of raw runner output, used for the failure trace.
+ *
+ * Snaps off a LEADING low surrogate: `slice(-max)` can land between a surrogate
+ * pair, and a trace that opens on half an emoji renders as a replacement glyph.
+ * The general-purpose version of this is the TUI's `tailChars`
+ * (`packages/tui/src/util/format.ts`), but core cannot import it — the
+ * dependency runs TUI → core — so this stays a local, documented snap rather
+ * than a second implementation of anything.
+ */
+export function failureTraceTail(rawOutput: string, max: number): string {
+  const tail = rawOutput.slice(-max);
+  const first = tail.charCodeAt(0);
+  return first >= 0xdc00 && first <= 0xdfff ? tail.slice(1) : tail;
 }
 
 export const definition: ToolDefinition = {

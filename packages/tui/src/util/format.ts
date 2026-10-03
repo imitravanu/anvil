@@ -94,6 +94,25 @@ export function curtail(text: string, max: number): string {
   return chars.slice(0, max - 1).join("") + "…";
 }
 
+/**
+ * Code-point-aware TAIL truncation: the last `max` code points, no marker
+ * (mirror of `curtail`). This is the only safe way to take a text tail — the
+ * obvious `text.slice(-max)` counts UTF-16 units, so a boundary landing between
+ * a surrogate pair leaves the result starting on a low half: invalid UTF-16,
+ * rendered as a replacement glyph where a whole emoji was. That is not
+ * hypothetical — it is the 38.x finding that produced this function, receipt in
+ * `format.test.ts` ('ab' + 😀×3000 + 'c', 6,003 units, capped at 6,000).
+ *
+ * `max` counts code points, deliberately: a unit budget would half-keep an
+ * emoji, which is the corruption this exists to prevent.
+ */
+export function tailChars(text: string, max: number): string {
+  if (max <= 0) return "";
+  const chars = Array.from(text);
+  if (chars.length <= max) return text;
+  return chars.slice(-max).join("");
+}
+
 // Terminal cells, not code points: 🧪/🔧/🎯 are 2 cells wide, │ ⎌ ◈ are 1.
 // Covers the wide ranges Anvil actually renders (emoji, CJK, fullwidth forms);
 // anything unlisted counts 1, which only risks a wrap — never a crash.

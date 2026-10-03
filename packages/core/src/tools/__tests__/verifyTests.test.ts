@@ -5,11 +5,32 @@ import os from "node:os";
 import {
   detectTestCommand,
   extraTestEnvNames,
+  failureTraceTail,
   runTestVerification,
   runTestTimeoutMs,
   execute,
   definition,
 } from "../verifyTests.js";
+
+describe("failureTraceTail (the retained end of a failure trace)", () => {
+  it("keeps the tail verbatim when the cut is clean", () => {
+    expect(failureTraceTail("abcdefghij", 4)).toBe("ghij");
+    expect(failureTraceTail("abc", 10)).toBe("abc");
+  });
+
+  it("never opens on the low half of a surrogate pair", () => {
+    // 'x' + 😀×2000 + 'y' is 4,002 units, so the 4,000-unit cut begins ON the low
+    // half of the first pair (\uDE00): the raw slice — the pre-fix expression —
+    // returned a trace opening with a replacement glyph. The helper snaps past
+    // it to the next whole code point.
+    const raw = "x" + "😀".repeat(2000) + "y";
+    const naive = raw.slice(-4000);
+    expect(naive.charCodeAt(0)).toBeGreaterThanOrEqual(0xdc00);
+    expect(naive.charCodeAt(0)).toBeLessThanOrEqual(0xdfff);
+    expect(failureTraceTail(raw, 4000)).toBe(naive.slice(1));
+    expect(failureTraceTail(raw, 4000).charCodeAt(0)).toBe(0xd83d);
+  });
+});
 
 describe("extraTestEnvNames (ANVIL_TEST_ENV_ALLOW)", () => {
   const KEY = "ANVIL_TEST_ENV_ALLOW";

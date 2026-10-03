@@ -300,6 +300,11 @@ async function summarizeMessages(
   try {
     const stream = provider.streamCompletion({
       model,
+      // No `cacheControl` here, deliberately (38.7): this prompt is ~230 chars
+      // (~55 tokens) and sends `tools: []`, so there is no 1,024-token static
+      // prefix for Anthropic to cache — a breakpoint would be a no-op. The
+      // cacheable prefix is the AGENT's system prompt + tool schemas, which
+      // `streamAssistantTurn` marks.
       systemPrompt:
         "Summarize the following coding-session conversation concisely. Preserve: decisions " +
         "made, files created or modified and why, and any unresolved questions. Omit pleasantries " +

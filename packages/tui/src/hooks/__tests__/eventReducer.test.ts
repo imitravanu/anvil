@@ -268,4 +268,44 @@ describe("eventReducer", () => {
 
     expect(assistant.reasoning?.length).toBeLessThanOrEqual(REASONING_RETAIN_MAX);
   });
+
+  it("retention never begins on a low surrogate when the bound lands mid-pair", () => {
+    // Mixed content is what breaks a blind slice(-max): 'ab' + 😀×3000 + 'c' is
+    // 6,003 units, so the 6,000-bound fell ON a low surrogate and the retained
+    // deliberation began with invalid UTF-16 — rendered as a replacement glyph.
+    let assistant: DisplayMessage = {
+      id: "a1",
+      role: "assistant",
+      text: "",
+      streaming: true,
+      toolCalls: [],
+      subAgents: [],
+      reasoning: "",
+    };
+    const update = (fn: (m: DisplayMessage) => DisplayMessage) => {
+      assistant = fn(assistant);
+    };
+    const setUsage = vi.fn();
+    const setMessages = vi.fn();
+    const setPlan = vi.fn();
+
+    applyEvent(
+      { type: "reasoning_delta", text: "ab" + "😀".repeat(3000) + "c" },
+      update,
+      setUsage,
+      setMessages,
+      setPlan
+    );
+    applyEvent({ type: "reasoning_delta", text: "…and done." }, update, setUsage, setMessages, setPlan);
+
+    const kept = assistant.reasoning ?? "";
+    for (let i = 0; i < kept.length; i++) {
+      const c = kept.charCodeAt(i);
+      if (c >= 0xdc00 && c <= 0xdfff) {
+        expect(kept.charCodeAt(i - 1)).toBeGreaterThanOrEqual(0xd800);
+        expect(kept.charCodeAt(i - 1)).toBeLessThanOrEqual(0xdbff);
+      }
+    }
+    expect(kept.endsWith("…and done.")).toBe(true);
+  });
 });

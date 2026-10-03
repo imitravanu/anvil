@@ -3,6 +3,7 @@ import type React from "react";
 import type { AgentEvent } from "@anvil/core";
 import { retainReport, type SubAgentRecord } from "../util/subagent.js";
 import { friendlyError } from "../util/errors.js";
+import { tailChars } from "../util/format.js";
 import { TRANSCRIPT_STATE_CAP, OUTPUT_RETAIN_MAX, REASONING_RETAIN_MAX } from "../util/displayLimits.js";
 
 export type DisplaySubAgent = SubAgentRecord;
@@ -206,9 +207,11 @@ export function applyEvent(
       break;
     case "reasoning_delta":
       // Bounded like tool output: long sessions must not bloat React state.
+      // tailChars, not slice(-max): the bound can land inside a surrogate pair,
+      // and an emoji cut in half renders as a replacement glyph (38.x finding).
       update((m) => ({
         ...m,
-        reasoning: ((m.reasoning ?? "") + event.text).slice(-REASONING_RETAIN_MAX),
+        reasoning: tailChars((m.reasoning ?? "") + event.text, REASONING_RETAIN_MAX),
       }));
       break;
     case "tool_started":

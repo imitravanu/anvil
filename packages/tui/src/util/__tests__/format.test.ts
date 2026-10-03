@@ -1,5 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { collapsePlan, curtail, curtailToCells, displayModelLabel, displayWidth, formatCertificationBadge, formatDuration, formatTime, modelInfo, providerLabel, providerOfModel, splitByDisplayWidth } from "../format.js";
+import { collapsePlan, curtail, curtailToCells, displayModelLabel, displayWidth, formatCertificationBadge, formatDuration, formatTime, modelInfo, providerLabel, providerOfModel, splitByDisplayWidth, tailChars } from "../format.js";
+
+describe("tailChars — code-point-aware tail (mirror of curtail)", () => {
+  it("returns text at or under the budget unchanged", () => {
+    expect(tailChars("abcdef", 6)).toBe("abcdef");
+    expect(tailChars("abcdef", 99)).toBe("abcdef");
+  });
+
+  it("keeps the LAST code points, not the first", () => {
+    expect(tailChars("abcdef", 3)).toBe("def");
+    expect(tailChars("abcdef", 1)).toBe("f");
+    expect(tailChars("abcdef", 0)).toBe("");
+  });
+
+  it("counts code points, so an emoji is never half-kept", () => {
+    const emoji = "😀".repeat(10); // 10 code points, 20 UTF-16 units
+    expect(tailChars(emoji, 10)).toBe(emoji);
+    expect(tailChars(emoji, 4)).toBe("😀😀😀😀");
+  });
+
+  it("never begins on a low surrogate when the boundary lands mid-pair", () => {
+    // The regression this exists for: 'ab' + 😀×3000 + 'c' is 6,003 units, so a
+    // blind slice(-6000) started on the low half of a pair — invalid UTF-16.
+    const mixed = "ab" + "😀".repeat(3000) + "c";
+    const out = tailChars(mixed, 6000);
+    for (let i = 0; i < out.length; i++) {
+      const c = out.charCodeAt(i);
+      if (c >= 0xdc00 && c <= 0xdfff) {
+        expect(out.charCodeAt(i - 1)).toBeGreaterThanOrEqual(0xd800);
+        expect(out.charCodeAt(i - 1)).toBeLessThanOrEqual(0xdbff);
+      }
+    }
+    expect(Array.from(out).length).toBeLessThanOrEqual(6000);
+    expect(out.endsWith("c")).toBe(true);
+  });
+});
 
 describe("format helpers", () => {
   it("displayModelLabel resolves a known registry model and falls back to the id", () => {

@@ -1,4 +1,6 @@
 /** Shared display budgets (single source — was scattered literals). */
+import { tailChars } from "./format.js";
+
 export const TOOL_SUMMARY_MAX = 60; // one-line tool/sub-agent summaries
 export const SUBAGENT_TASK_MAX = 60;
 export const SESSION_TITLE_MAX = 40; // session picker titles
@@ -62,8 +64,23 @@ export function capLines(lines: string[], max: number = EXPANDED_MAX_LINES): str
 export const REASONING_RETAIN_MAX = 6000;
 export const REASONING_DISPLAY_MAX_CHARS = 600;
 
-/** Cap text with an omission notice. Pure. */
+// H1 (AUDIT-2026-09-30): blinking cursor cadence while a turn streams
+// (util/useSpinner.ts). A display budget, so it lives with the other caps.
+export const SPINNER_BLINK_INTERVAL_MS = 530;
+
+/**
+ * Cap text with an omission notice, keeping the END. Callers retain from the
+ * tail (REASONING_RETAIN_MAX keeps the newest reasoning), so a head-cap would
+ * render a middle slice of a long deliberation — neither its start nor its
+ * end. The leading notice preserves the most recent text. The tail itself comes
+ * from `tailChars` (code-point aware), because a blind `slice(-max)` can begin
+ * on the low half of a surrogate pair. Pure.
+ */
 export function capChars(text: string, max: number): string {
-  if (text.length <= max) return text;
-  return `${text.slice(0, max)} … (${text.length - max} more char(s) omitted)`;
+  const tail = tailChars(text, max);
+  if (tail === text) return text;
+  // The notice counts what was ACTUALLY dropped — snapping the tail off a
+  // surrogate pair drops one more unit than the nominal cap, and a notice that
+  // printed `max` there would be a lie.
+  return `… (${text.length - tail.length} earlier char(s) omitted) ${tail}`;
 }
