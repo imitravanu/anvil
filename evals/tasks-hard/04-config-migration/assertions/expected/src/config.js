@@ -1,6 +1,9 @@
+const DEFAULT_MAX_RETRIES = 1;
+const DEFAULT_TIMEOUT_MS = 1000;
+
 const DEFAULTS = {
-  maxRetries: 1,
-  timeoutMs: 1000,
+  maxRetries: DEFAULT_MAX_RETRIES,
+  timeoutMs: DEFAULT_TIMEOUT_MS,
 };
 
 function readSettings(settings) {
