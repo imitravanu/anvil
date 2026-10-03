@@ -1,6 +1,6 @@
 # Anvil docs — start here
 
-88 files — Phase 39 is the active wave; Phase 38 stays open for 38.5+. This index exists so nobody has to read all of it to know what
+88 files — Phase 39 is COMPLETE and Phase 38 is CLOSED (38.5's prompt was measured four times and deliberately not landed). This index exists so nobody has to read all of it to know what
 is current. Rule of thumb: **if a document is not listed as ACTIVE or CONTRACT, it is
 history** — kept because the engineering record is genuinely valuable (it is why the code
 comments cite the exact bug each rule replaces), not because it is a to-do list.
@@ -12,8 +12,8 @@ comments cite the exact bug each rule replaces), not because it is a to-do list.
 | [`../AGENTS.md`](../AGENTS.md) | The engineering constitution. Law: violations fail the gate. |
 | [`../PROGRESS.md`](../PROGRESS.md) | The live engineering record (dated session entries, evidence per change). |
 | [`CURRENT-FOCUS.md`](CURRENT-FOCUS.md) | **Current work** — standing state: where the project is, and the triggers that reopen work. |
-| [`PHASE-39-ROADMAP.md`](PHASE-39-ROADMAP.md) | **IN PROGRESS** (2026-09-30) — remediation of the 79-finding audit. W1–W7 landed (W1: 10/10 fail-first; W2: 17/17 fail-first; W3 protected-artifact path; W4–W7 verified 2026-10-02 against live code); W8 partial (E7–E9, C9–C19, F8, F12, F13, G6, G9–G13, G15, G17 landed; H1 open). |
-| [`PHASE-38-ROADMAP.md`](PHASE-38-ROADMAP.md) | **IN PROGRESS** (2026-09-29) — frontier agent brain. 38.1–38.4 landed (parity, token accounting, unreachable models, A/B harness + per-task significance; audit closure in Phase 39 W1). 38.5 (prompt rewrite) unblocked; the harder task tier is the recorded gap (A4). |
+| [`PHASE-39-ROADMAP.md`](PHASE-39-ROADMAP.md) | **COMPLETE** (2026-09-30 → 2026-10-04) — remediation of the 79-finding audit. All eight workstreams landed (W1: 10/10 fail-first; W2: 17/17 fail-first; W3 protected-artifact path; W4–W7 verified against live code; W8 closed with H1 scanner coverage + the A8 structured failure origin). |
+| [`PHASE-38-ROADMAP.md`](PHASE-38-ROADMAP.md) | **CLOSED** (2026-09-29 → 2026-10-04) — frontier agent brain. 38.1–38.4 landed (parity, token accounting, unreachable models, A/B harness + per-task significance); 38.6–38.9 landed (reasoning deltas, prompt caching, the verification axis measured, gate/docs/record); the harder task tier (A4) landed at `evals/tasks-hard`. **38.5's prompt rewrite is NOT landed** — three lanes, four measurements, no reproducible advantage (the harder-tier result reversed sign between two completed runs). |
 | [`PHASE-36-ROADMAP.md`](PHASE-36-ROADMAP.md) | COMPLETE (2026-09-28) — two live-probe defects fixed: regex-literal masking in the symbol scanner; window-less quota fails fast. |
 | [`PHASE-37-ROADMAP.md`](PHASE-37-ROADMAP.md) | COMPLETE (2026-09-28) — workspace walk hygiene: build/dependency trees excluded from every walk; parallel-write collision recorded with its demonstration. |
 | [`PHASE-35-ROADMAP.md`](PHASE-35-ROADMAP.md) | COMPLETE (2026-09-28) — declared boundaries closed; tokeniser decision taken (DEFER, with triggers). |
