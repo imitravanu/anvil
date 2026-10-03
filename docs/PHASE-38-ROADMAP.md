@@ -4,18 +4,20 @@
 > **Date:** 2026-09-29
 > **Author:** Chief Engineer
 > **Core Mandate:** *"We are not making some cheap copy here; we are building frontier coding tools."*
-> **Status:** IN PROGRESS — 38.1 (measurement parity), 38.2 (token accounting),
-> 38.3 (unreachable models), and 38.4 (the A/B harness + per-task significance)
-> landed, each with a fail-first mutation receipt. AUDIT-2026-09-30 then found
-> the harness still measured a 4,096-token agent and could name the wrong arm
-> as a "unanimous" winner; those closure fixes landed as Phase 39 W1
+> **Status:** CLOSED (2026-10-04) — 38.1 (measurement parity), 38.2 (token
+> accounting), 38.3 (unreachable models), and 38.4 (the A/B harness + per-task
+> significance) landed, each with a fail-first mutation receipt. AUDIT-2026-09-30
+> then found the harness still measured a 4,096-token agent and could name the
+> wrong arm as a "unanimous" winner; those closure fixes landed as Phase 39 W1
 > ([`PHASE-39-ROADMAP.md`](PHASE-39-ROADMAP.md)). 38.6 (reasoning deltas), 38.7
-> (prompt caching) and 38.8 (the verification axis, measured) landed 2026-10-03.
-> 38.5, the prompt rewrite, is **blocked on measurement capacity**: it has been
-> measured twice (once throttled out, once complete-but-saturated at 100% for
-> both arms with the candidate spending an extra tool call), and the prompt is
-> not landed without a receipt. One recorded open item remains: the harder task
-> tier (AUDIT A4).
+> (prompt caching), 38.8 (the verification axis, measured) and 38.9 (gate, docs,
+> record) landed 2026-10-03/04, and the last open item — the harder task tier
+> (AUDIT A4) — landed 2026-10-04 as `evals/tasks-hard`. **38.5, the prompt
+> rewrite, is deliberately NOT landed**: it was measured four times across three
+> lanes, and on the one lane that completed cleanly the harder-tier result
+> **reversed sign between two back-to-back runs** (85.7→100, then 100→91.7, both
+> `NOT SIGNIFICANT`). No receipt supported shipping the candidate, so none was
+> shipped — which is the phase's own rule working, not an unfinished task.
 > **Scope:** Anvil's agent loop, guardian, compaction, rewind, LSP, and permission
 > surfaces are at or past frontier engineering. The instruction layer driving all
 > of it is eleven words, and the harness that is supposed to detect a bad
@@ -184,11 +186,11 @@ rather than the model list: `certified: "live"` was recorded from a run whose
 | **38.2** | Count reasoning tokens in Gemini usage (`thoughtsTokenCount`) so `/context` and compaction stop under-reporting by up to 328× | Probe K | **P0** | **COMPLETE** |
 | **38.3** | Mark the two unreachable `inkling` models broken, with live provenance and a guard on the picker contract | Probe N | **P0** | **COMPLETE** |
 | **38.4** | A prompt A/B harness on a live model: fixed tasks, N trials, pass rate / cost / tool calls / edit-error rate | Probe H | **P0** | **COMPLETE** — `6cc4a6d` + `1b78a63`; audit closure in Phase 39 W1; harder tier open (A4) |
-| **38.5** | The real system prompt — tool-use policy, search-before-edit, verification, conventions | Probe J, M | **P1** | **BLOCKED on lane capacity** — measured, twice, and **NOT landed**. Lane A (orcarouter free, 5 tasks × 3 trials × 2 arms) was throttled out: 22/30 runs at the 120s timeout + one 429, `NOT SIGNIFICANT` baseline 20% vs candidate 21%. Lane B (openrouter free, 1 task × 2 trials) completed: both arms 100%, candidate 7.5 tool calls vs baseline 6.5 — no benefit, small cost. The candidate text lives in `evals/ab.ts`; landing it without a receipt is the unevidenced change this phase exists to prevent. The task set is no longer the blocker (`evals/tasks-hard`, A4, landed 2026-10-03); the unblock is a lane that can finish 5 harder tasks × 3 trials × 2 arms |
+| **38.5** | The real system prompt — tool-use policy, search-before-edit, verification, conventions | Probe J, M | **P1** | **NOT LANDED (measured three ways; no positive receipt)** — the candidate text lives in `evals/ab.ts`. Free lanes: orcarouter throttled out (22/30 timeouts + 429, `NOT SIGNIFICANT` 20% vs 21%); openrouter 1 task completed 100/100 with the candidate costing 6.5→7.5 tool calls. Working lane: `inception/mercury-2.5` on `evals/tasks-hard`, 6 tasks × 2 trials × 2 arms, **twice** — Run A baseline 85.7% vs candidate 100%, Run B baseline 100% vs candidate 91.7%, both `NOT SIGNIFICANT`; **the effect reverses sign between runs**, so landing it would be reading noise as signal. The task set is no longer the blocker (`evals/tasks-hard`, A4, landed). Remaining unlock: more trials per arm and/or a set where the baseline is not already at ceiling |
 | **38.6** | Reasoning deltas as a first-class `StreamEvent`; surface `reasoning_tokens` and `cached_tokens` in usage | Probe L | **P1** | **COMPLETE** — `23e83e5`; fail-first tests added |
 | **38.7** | Prompt caching (`cache_control` breakpoints) for the 4,177-token prefix | Probe M, L | **P1** | **COMPLETE** — `CompletionRequest.cacheControl` flag; `streamAssistantTurn` always sets it; `toAnthropicRequest` annotates `system` + last tool with `{ type: "ephemeral" }` (one breakpoint, whole [system…tools] span); OpenAI/OpenRouter cache automatically, Gemini below implicit-cache floor ignores the flag |
 | **38.8** | Measure closed-loop verification inside the harness; resolve the `autoVerify: false` boundary with data | §4 | **P2** | **COMPLETE** — deterministic answer: the omission hides exactly repairable failures. `scriptedVerifyProvider` + `EvalRunnerOptions.provider` seam; `verifyAxis.test.ts` runs the SAME task through the real session path: `autoVerify: false` → FAIL (1 tool call, bug never observed), `autoVerify: true` → PASS (`npm test` fails, repair prompt pushed, fix written, verified). The live axis already exists via `AbProfileOverride.autoVerify`; running it against a frontier model awaits quota (A4 harder tier) |
-| **38.9** | Guardian gate, docs sync, record | — | **P0** | **OPEN** |
+| **38.9** | Guardian gate, docs sync, record | — | **P0** | **COMPLETE** — guardian gate green after every landing (mock lane 25/25, core 929, TUI 350); docs synced (38.6 reasoning, 38.7 caching, 38.8 verify axis, 38.5's three receipts, A4 tier); boundaries declared in §4 including the two 38.5 is responsible for |
 
 **38.5 was blocked on 38.4 by this phase's own rule, and that rule was honored.**
 Writing a better prompt before a harness could measure it would have been an
@@ -436,9 +438,15 @@ it a frontier-model receipt is the same capacity problem 38.5 hit.
   real and named: **the harness does not exercise closed-loop verification**,
   which shipping treats as core product behavior. 38.8 measures whether that
   omission hides failures. It is not fixed in this phase.
-- **The base prompt is still eleven words after 38.1 and 38.2.** Both tasks fixed
-  *measurement*, not the prompt. Anyone reading this doc as "the prompt is now
-  good" has misread it: the prompt is unchanged and 38.5 is blocked on evidence.
+- **The base prompt is still eleven words — now for a measured reason.** 38.1 and
+  38.2 fixed *measurement*, not the prompt, and 38.5 wrote a candidate but did not
+  land it: across three attempts (two free lanes, then two completed runs on a
+  working lane over the new harder tier) no attempt produced a reproducible
+  advantage — the harder-tier result **reversed sign between runs**
+  (85.7→100, then 100→91.7, both `NOT SIGNIFICANT`). Anyone reading this doc as
+  "the prompt is now good" has misread it, and anyone reading it as "the prompt
+  work is unfinished" has too: the prompt is unchanged because the change was
+  measured and found unproven.
 - **Gemini implicit caching is not reachable.** Probe M measured the Anvil
   prefix at 0.1× Gemini's 32,768-token implicit-cache floor, so Gemini needs
   conversation history to become cacheable at all. 38.7's design must treat
@@ -459,9 +467,12 @@ it a frontier-model receipt is the same capacity problem 38.5 hit.
   measured. This is a property of the instrument, declared here rather than
   implied: an arm is not literally the shipping assembly, it is the shipping
   assembly with the rule block replaced by a request to read the rules.
-- **The suite still cannot differentiate frontier models** (carried from Phase
-  37 §4). 38.4 shipped without the harder tier; authoring it is the recorded
-  open item (AUDIT A4) in Phase 39.
+- **The suite's harder tier now exists, and it discriminates structurally.**
+  Phase 39 A4 landed `evals/tasks-hard` (six long-horizon, multi-file tasks with
+  structural guards) plus `--tasks-dir` in `evals/ab.ts`, so the "25 short tasks
+  cannot separate prompts" gap is closed. What the two completed mercury runs
+  then showed is a *different* limit, recorded above: at two trials the tier is
+  still near-saturated for that model class (baseline 100% on Run B).
 - **Free-tier capacity cannot decide a prompt.** Two live receipt attempts were
   made for 38.5, and neither is a receipt:
   1. `orcarouter/deepseek-v4-flash-free`, 5 bugfix tasks × 3 trials × 2 arms —
@@ -481,9 +492,36 @@ it a frontier-model receipt is the same capacity problem 38.5 hit.
   landed.** Growing it without a receipt is precisely the unevidenced change
   this phase exists to prevent. The task-set half of the blocker is now gone —
   `evals/tasks-hard` (six long-horizon, multi-file tasks, `--tasks-dir` in
-  `evals/ab.ts`) landed as Phase 39 A4 — so what remains is purely lane
-  capacity: 5 tasks × 3 trials × 2 arms, each up to 180s, which the free tiers
-  probed above cannot complete.
+  `evals/ab.ts`) landed as Phase 39 A4 — so the free-tier attempts were
+  superseded by a lane that *could* finish, and the next item records what that
+  lane actually found (which is not what "capacity" predicted).
+- **A working lane, twice, reversed the sign of the 38.5 effect.** The free-tier
+  attempts above were superseded by two *completed* runs on a lane that was not
+  throttled — `inception/mercury-2.5`, `evals/tasks-hard`, 6 tasks × 2 trials ×
+  2 arms, the same command run twice back to back (2026-10-04):
+  1. **Run A** — baseline **85.7%** (6/7 graded) vs candidate **100%** (8/8).
+     The one task that flipped was `03-cross-module-extraction`, and the failure
+     is the interesting kind: the tests passed on the baseline arm, but
+     `src/posts.js` never imported the extracted rule — a half-solution caught
+     by the structural guard, not by the suite.
+  2. **Run B** — baseline **100%** (11/11) vs candidate **91.7%** (11/12). This
+     time `05-single-source-constant` flipped the *other* way: `src/api.js`
+     never imported the shared constant, on the candidate arm.
+  Both were correctly reported `NOT SIGNIFICANT` (one flipped task; the rule
+  requires two). Read together they say something stronger than "not proven":
+  **the candidate prompt's apparent advantage does not reproduce, and the
+  harder tier is still near-saturated for this model class at two trials
+  (baseline reached 100% in Run B).** Landing the prompt on Run A would have
+  been reading noise as signal — the precise failure mode the corrected
+  significance rule (A2) exists to catch. A *positive* receipt now needs more
+  trials per arm and/or a set where the baseline is not already at ceiling;
+  neither is available for free, and neither is claimed here.
+- **The harder tier does discriminate — just not the arms.** Both completed runs
+  produced real structural failures (`posts.js` and `api.js` not importing the
+  shared module) that a test-suite-only grader would have scored as passes. The
+  instrument works; the sample size and the model's ceiling are what limit the
+  verdict. Recorded because "the tier found nothing" and "the tier found the
+  right failure but not twice" are different claims, and only the second is true.
 
 - **45 of the 69 rows labelled `certified: "live"` came from mock runs**, and
   38.3 fixed only the two Probe N measured. The remaining 43 are unverified,

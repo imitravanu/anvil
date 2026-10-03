@@ -4,9 +4,9 @@
 > what is true right now, kept current alongside any open phase, and what
 > reopens work.
 
-## Where the project stands (2026-10-02)
+## Where the project stands (2026-10-04)
 
-- **Phase 39 is OPEN** (2026-09-30) — remediation of the full-tree adversarial
+- **Phase 39 is COMPLETE** (2026-09-30 → 2026-10-04) — remediation of the full-tree adversarial
   audit [`AUDIT-2026-09-30.md`](AUDIT-2026-09-30.md) (79 findings). **W1–W7
   have landed**: W1 (measurement integrity) with a 10/10 fail-first receipt;
   W2 (trust exits and consent: G4 exit-4, C2 hedge, C3 cancel-130, C4
@@ -16,13 +16,15 @@
   W5 (E1/E2 bash containment, C5/C6 guardian write-back + resolvable auto-fix,
   C8 memory preamble, E6 MCP POST JSON-RPC errors); W6 (F3 member ids, F5
   cell-width, F6 diff floor, F4/F7/F9/F10/F11); W7 (B3 usage-on-error, B4
-  strict pricing, A7 interleaved arms, B8 untested badge — **A8 deferred**,
-  needs a structured runner error code). **W8 is partial**: E8, G17, and the G9/G13/G15 quick wins landed (derived `--help` command line, loud eval flags, interpolated p95); **G10/G11/G12 (CLI truth), F12 (dead exports), F13 (catch comments) landed 2026-10-02**, plus E9 (tree-kill parity + truncation honesty), the E8 remainder, and E7's duplicate bounds**;
-  **E7 (all flagged literals centralized), C9–C19 (the whole consistency sweep), F8 (recall double-record) and G6 (docs count/version drift) also landed 2026-10-02**; H1 stays open. The W4–W8
+  strict pricing, A7 interleaved arms, B8 untested badge — **A8 landed
+  2026-10-04**: a structured `EvalResult.failureKind` now outranks the message
+  regex). **W8 is partial**: E8, G17, and the G9/G13/G15 quick wins landed (derived `--help` command line, loud eval flags, interpolated p95); **G10/G11/G12 (CLI truth), F12 (dead exports), F13 (catch comments) landed 2026-10-02**, plus E9 (tree-kill parity + truncation honesty), the E8 remainder, and E7's duplicate bounds**;
+  **E7 (all flagged literals centralized), C9–C19 (the whole consistency sweep), F8 (recall double-record) and G6 (docs count/version drift) also landed 2026-10-02**; **H1 (scanner coverage: magic constants, non-empty silent catches, `as Error`) landed 2026-10-04** — W8 is closed and Phase 39 is complete. The W4–W8
   commits carried no bookkeeping; the 2026-10-02 reconciliation sweep verified
   their claims against live code and repaired the record (see PROGRESS.md).
   Roadmap: [`PHASE-39-ROADMAP.md`](PHASE-39-ROADMAP.md).
-- **Phase 38 is OPEN** (2026-09-29) — the frontier agent brain. The founding
+- **Phase 38 is CLOSED** (opened 2026-09-29, closed 2026-10-04) — the frontier
+  agent brain. The founding
   probe found that the eval lane assembled a **different agent than the one
   that ships**: its own system prompt, half the output budget, and
   `autoVerify: false`. Every score on record — including Phase 37's live
@@ -31,11 +33,16 @@
   a fail-first parity guard (4/4 assertions failed against the pre-change call
   sites, 4/4 pass after). The A/B harness (38.4) and per-task significance
   landed 2026-09-30, and the audit's closure fixes for them are Phase 39 W1
-  (above). **The prompt rewrite (38.5) has been measured twice and is NOT
+  (above). **The prompt rewrite (38.5) has been measured three ways and is NOT
   landed**: lane A was throttled out from under the experiment (22 of 30 runs
-  died at the 120s timeout, one HTTP 429) and lane B, which completed, showed
-  both arms at 100% with the candidate spending one more tool call (7.5 vs 6.5)
-  — no benefit, small cost. **38.6, 38.7 and
+  died at the 120s timeout, one HTTP 429); lane B, which completed, showed both
+  arms at 100% with the candidate spending one more tool call (7.5 vs 6.5); and
+  two completed runs on a working lane (`inception/mercury-2.5` over the new
+  `evals/tasks-hard` tier, 6 tasks × 2 trials × 2 arms) **reversed sign** —
+  Run A baseline 85.7% vs candidate 100%, Run B baseline 100% vs candidate
+  91.7%, both `NOT SIGNIFICANT`. The candidate is therefore not established as
+  better, and the remaining unlock is more trials per arm or a set where the
+  baseline is not already at ceiling. **38.6, 38.7 and
   38.8 landed 2026-10-03**: reasoning deltas are a first-class `StreamEvent`
   (shown under `/expand`, never folded into history), the static 4,177-token
   prefix now carries a `cache_control` breakpoint, and the `autoVerify: false`
@@ -43,10 +50,17 @@
   off and PASS with it on. Read
   [`PHASE-38-ROADMAP.md`](PHASE-38-ROADMAP.md); its §4 lists the boundaries,
   including the one 38.1 created and the two 38.5's receipt attempt added.
-- The instruction layer driving an otherwise frontier-grade agent is eleven
-  words: `"You are Anvil, a terminal coding agent. Be concise."` — no tool-use
-  policy, no search-before-edit discipline, no verification expectation. Wave 2
-  probed the reasoning and caching layers live and **corrected two hypotheses**:
+- The instruction layer driving an otherwise frontier-grade agent is **still
+  eleven words** — `"You are Anvil, a terminal coding agent. Be concise."` — no
+  tool-use policy, no search-before-edit discipline, no verification
+  expectation, and that is now a **measured decision rather than an oversight**:
+  the candidate text (written, shipped nowhere) was run three ways — two free
+  lanes and two completed runs on a working lane over the new harder tier — and
+  the harder-tier effect **reversed sign between runs** (85.7→100 then 100→91.7,
+  both `NOT SIGNIFICANT`). Nothing was shipped because nothing was shown to be
+  better, not because the work is unfinished.
+  Wave 2 probed the reasoning and caching layers live and **corrected two
+  hypotheses**:
   - **Gemini under-reported output tokens by up to 328×** — `thoughtsTokenCount`
     (327) was discarded while `candidatesTokenCount` (1) was recorded alone, so
     `/context` and compaction worked from a wrong number on the default free
@@ -88,8 +102,8 @@
 - Phases 32–35 landed: the code-intelligence surface tells the truth (per-language
   extraction, kind contract, freshness incl. externally added files), team runs
   stream per-tool, and every self-claim in the README and TUI is derived or
-  verified. Measured state: 1,430 tests across 191 files (core 929, TUI 350,
-  CLI 151), full gate Steps 0–5
+  verified. Measured state: 1,447 tests across 191 files (core 944, TUI 351,
+  CLI 152), full gate Steps 0–5
   green, 25/25 mock evals.
 - The tokeniser decision is taken: DEFER, with written adoption triggers in
   [`PHASE-35-ROADMAP.md`](PHASE-35-ROADMAP.md) §35.3. That deferral stands: no
@@ -100,8 +114,13 @@
 
 ## What reopens work (the standing triggers)
 
-Two phases are open. The active remediation wave is **Phase 39** (W8 remainder
-next: H1 scanner coverage, C9–C19, E7/E9, F8, G6-remainder).
+**Phase 39 is complete** — W8 closed with H1 (scanner coverage) and A8
+(structured failure origin) on 2026-10-04 (recorded in `PROGRESS.md`); A4 (the
+harder task tier, `evals/tasks-hard`) also landed 2026-10-04, which closed the
+task-set half of Phase 38.5's blocker. **Phase 38 is now closed too** (38.6,
+38.7, 38.8 and 38.9 landed; 38.5 measured three ways and deliberately **not**
+landed — the effect reversed sign between two completed runs, so there was
+nothing to ship).
 The scanner trigger assessment is due: AUDIT D1 was the 4th lexical patch
 family for Rust/TS and W4 has now landed — re-assess below. **Phase 38.5** (the prompt rewrite)
 is unblocked: after W1 the harness measures the agent it scores. These

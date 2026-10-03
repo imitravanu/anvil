@@ -3,9 +3,10 @@
 > **Version:** v1.2.x
 > **Date:** 2026-09-30
 > **Author:** Chief Engineer (OpenCode session, owner-approved)
-> **Status:** IN PROGRESS — W1–W7 landed (verified against live code
-> 2026-10-02); W8 partially landed (E8, G17, G9–G13, G15, F12, F13);
-> W8 remainder open (H1, C9–C19, E7/E9, F8, G6).
+> **Status:** COMPLETE (2026-10-04) — W1–W8 all landed. W8 closed with H1
+> (scanner coverage: magic constants, non-empty silent catches, `as Error`) and
+> the previously-deferred A8 (structured evaluator failure origin). The build's
+> own gate (Steps 0–5, 1,447 tests, 25/25 mock evals) is green.
 > **Scope:** [`AUDIT-2026-09-30.md`](AUDIT-2026-09-30.md) recorded 79 findings
 > (9 × P1, 29 × P2, 41 × P3) from a full-tree adversarial review and grouped
 > them into eight workstreams (its §11). This phase executes them. Every wave
@@ -43,10 +44,17 @@ in flight" claim and invented verdict quote, and the `agentProfile.ts` comment
 numbering are all corrected in this wave. Stale numeric counts elsewhere in the
 docs (G6) are scheduled with W8, not rewritten silently here.
 
-**Recorded open item (AUDIT A4):** the harder task tier 38.4's spec requires —
-long horizon, multi-turn, real repo — is NOT authored; `evals/ab.ts` still
-points at the 25 saturated short tasks. This is a named gap, not an implied
-one: authoring it is W1's remaining tail and doubles as 38.5's measurement
+**Recorded open item (AUDIT A4) — CLOSED 2026-10-04:** the harder task tier
+38.4's spec requires (long horizon, multi-file, structural guards) is authored
+at `evals/tasks-hard` — six tasks, each receipt-checked to fail against its setup
+tree and pass against the coherent solution — and `evals/ab.ts` now takes
+`--tasks-dir` to point at it. What the tier then established is recorded in
+[`PHASE-38-ROADMAP.md`](PHASE-38-ROADMAP.md) §4: it catches structural
+half-solutions the suite alone would pass (`posts.js`/`api.js` not importing the
+shared module), but at two trials it is still near-saturated for the
+mercury-2.5 class, so 38.5's prompt stayed unlanded. The original framing follows
+for the record: this was a named gap, not an implied
+one: authoring it was W1's remaining tail and doubles as 38.5's measurement
 carrier.
 
 ## W2 — Trust exits and consent (COMPLETE, 2026-10-01)
@@ -121,16 +129,21 @@ which that sweep repaired:
   (`tui/util/format.ts:127-158`, verified). F6 — the side-by-side diff floors
   at the modal's real frame cost. F4/F7/F9/F10/F11 — recorded by their commit
   as applied earlier in the tree; spot-verified present.
-- **W7 — Provider/eval accounting: COMPLETE except A8 (deferred).** B3 — both
+- **W7 — Provider/eval accounting: COMPLETE (A8 landed 2026-10-04).** A8 —
+  `EvalResult.failureKind` carries the structured failure origin (assertion →
+  `task`), and `classifyTrialFailure` treats a supplied kind as authoritative, so
+  a graded assertion whose text contains "unavailable" is no longer excused as a
+  provider error. B3 — both
   streaming adapters emit accumulated usage before the error event
   (`gemini.ts:125`, `openai.ts:111`, verified). B4 — strict price parsing,
   `null`/`""` no longer coerce to $0 (`freeModels.ts:64-104`, verified). A7 —
   A/B arms interleave within each trial (`experiment.ts:177`, verified). B8 —
   synced rows refresh from the live catalog and certify "untested" rather than
-  undefined (`freeModels.ts:553`, verified). **A8 is DEFERRED** (needs a
-  structured error code from the runner, not a regex tweak) — a named deferral
-  with a reason, per its commit.
-- **W8 — Slop debt + docs truth: PARTIAL.** Landed: E8 — the four
+  undefined (`freeModels.ts:553`, verified). A8 had been deferred pending a
+  structured error code from the runner; it **landed 2026-10-04** as
+  `EvalResult.failureKind`, set at the failure site and authoritative over the
+  message regex — so the deferral is closed, not carried.
+- **W8 — Slop debt + docs truth: COMPLETE (H1 and A8 landed 2026-10-04).** Landed: E8 — the four
   `(err as Error)` casts in `grep.ts`/`editFile.ts` are `getErrorMessage`
   (zero raw-error-formatting hits remain in production sources, re-verified by
   grep 2026-10-02); G17 — `scripts/audit-qwen.ts` is live work, closed as
@@ -195,8 +208,17 @@ which that sweep repaired:
   (1,417 / 189), and the PHASE-39 header (v1.12.x→v1.2.x); two new `docTruth`
   guards now tie the docs-index count to disk and the certify header to the
   provider registry (both fail-first checked).
-  **Still open:** H1 (scanner coverage extension —
-  magic constants, non-empty silent catches, dead exports).
+  **H1 FIXED 2026-10-04:** scanner coverage extended in BOTH engines — rule
+  2.4 magic timeout/retry/cap literals, non-empty silent catches (brace-aware),
+  and `as Error` casts — with 3 new sensor probes and matching sentinel probes.
+  Migration-first: 9 magic literals hoisted to `config/constants.ts` /
+  `displayLimits.ts`, 27 swallowed catches given `// intentional:` rationales,
+  and the scanner caught a real drift (Anthropic's silent `catch { input = {} }`
+  in tool-arg parsing, now routed through `parseToolCallJson`). Two rule
+  boundaries recorded: the guardian's non-empty-silent-catch rule is **anvil
+  scope only**, and a grep-based dead-export scanner was **measured and
+  rejected** (124 false positives, almost all public API types) — a correct one
+  needs the TS language service. See `PROGRESS.md` 2026-10-04.
 
 **Owner decisions, not mechanical edits:** homegrown-parser vs tree-sitter
 after W4 stands. The headless-denial exit contract was DECIDED in W2: a
