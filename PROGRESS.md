@@ -2,6 +2,163 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-05 (UX/UI deep dive — nine findings, nine fixed; fail-first receipts recorded):**
+> owns `packages/tui/src/components/{OverlayFrame.tsx (new),HelpOverlay.tsx (new),Header.tsx,MessageList.tsx,
+> ModelPicker.tsx,ThemePicker.tsx,SessionPicker.tsx,CommandPalette.tsx,RewindModal.tsx,DiffModal.tsx,
+> PermissionPrompt.tsx,MissionDeck.tsx,VerificationCard.tsx,GuardianReportCard.tsx,App.tsx,InputBar.tsx,
+> StatusBar.tsx,FirstRunSetup.tsx}` + `__tests__/{overlayChrome,help,themePicker,firstRunSetup,app}.test.tsx`,
+> `packages/tui/src/commands/{registry.ts,types.ts,help.ts (new)}`,
+> `packages/tui/src/hooks/useSessionCommands.ts` (+ `recall.test.tsx`), `packages/tui/src/util/{chrome,displayLimits,useSpinner}.ts`
+> (+ `__tests__/spinners.test.tsx`), `packages/tui/src/test-utils/testRender.tsx`,
+> `packages/tui/src/__visual__/visual.test.tsx` + regenerated `__visual-baselines__/{empty-state,rewind-modal}.txt`
+> + new `help-overlay.txt`, plus this file. No protected artifact touched; another session's 40-file diff untouched.
+>
+> **1. The theme system DECLARED design tokens that no surface consumed (FIXED).** `borders.modal` (the
+> documented double-line modal), `typography.brandIcon` / `brandName` (validated in `theme/custom.ts`,
+> rendered by nothing — the header hardcoded `▲ ANVIL`), and `sectionDivider` (literal `─` in every App
+> divider and picker section) were all dead; every overlay hardcoded `borderStyle="round"` instead. A custom
+> theme could rebrand itself and nothing on screen changed. Fix: new `OverlayFrame` (title / meta /
+> right-aligned keyboard contract / theme rule) now wraps the four pickers, the palette, the help overlay and
+> onboarding; DiffModal, RewindModal, PermissionPrompt read `borders.modal`; MissionDeck,
+> VerificationCard, GuardianReportCard read `borders.card`; Header, App dividers, ModelPicker sections and the
+> empty-state plain wordmark read their typography tokens. The App's `card: "none"` could not even be
+> expressed (Ink has no "none" style) — `inkBorderStyle()` is now the one translation point.
+> **RED:** with HEAD `Header.tsx`+`ModelPicker.tsx` restored, `overlayChrome.test.tsx` fails
+> `expected … to contain '◆ NEON'` and `expected … to contain '╔'`; GREEN after (8/8).
+>
+> **2. `/help` was a 40-line prose dump that scrolled the user's own turn away (FIXED).** The registry's
+> help entry concatenated every command + a hand-maintained `EXAMPLES` map that had already drifted
+> (examples for 15 of 20 commands, none for `/team`/`/plugin`/`/context`/`/copy`), and printed it into the
+> transcript — twice the visible window, unsearchable, gone after `/clear`. Fix: `HelpOverlay` — a
+> scrollable, type-to-filter reference whose command rows are DERIVED from `COMMANDS` (a new command is
+> discoverable the moment it is registered), plus keys and the overlay-only shortcuts (diff `S`/`C`/tabs,
+> permission `y a n`, picker type-to-filter). Opened by `/help` **and** `?` on an empty prompt (the
+> lazygit/k9s contract; with text typed, `?` stays an ordinary character). Advertised from the StatusBar
+> (`? help · ctrl+c exit`) and the empty state (`↵ send · ↑/↓ history · PgUp/PgDn scroll · ? help`).
+> **RED:** `Cannot find module '../../commands/help.js'`/`'../HelpOverlay.js'` before the modules existed;
+> a second RED surfaced a real layout bug I introduced — putting the overlays section first pushed every
+> command below the first window, so the order is now keys → commands → overlays. **E2E receipt:** the
+> `?` → `onOpenHelp` → `HelpOverlay` → Esc path is asserted through the real `App`
+> (`app.test.tsx`); with HEAD `InputBar.tsx` restored it fails
+> `expected '╭…' to contain 'Help ('`. GREEN after.
+>
+> **3. `ANVIL_NO_ANIM=1` froze only the wordmark — spinners kept ticking at 12 fps and the streaming
+> cursor kept blinking (FIXED).** The flag's whole contract is reduced motion, and two of the three
+> animated affordances ignored it. `useSpinnerFrame` now holds frame 0 and `useBlink` stays steadily
+> visible (read at call time so tests can toggle it); the elapsed-thinking *timer* keeps ticking — that is a
+> clock, not decoration. **RED:** `expected '⠸' to be '⠋'` and `expected 'OFF' to be 'ON'` after
+> 250 ms / 700 ms; GREEN after (6/6).
+>
+> **4. A pasted chunk never reached a type-to-filter box (FIXED).** Ink delivers a paste as ONE
+> multi-character `input`; both ModelPicker and the new help filter guarded with `input.length === 1`, so
+> `gpt-4o-mini` pasted into the model picker silently vanished (a 40-model list you must otherwise type
+> against). Both now sanitize-and-append, exactly as InputBar does. **RED:**
+> `expected … to contain 'filter: qwen'` against the HEAD ModelPicker; the help filter's same-class RED was
+> `expected … to contain '/rewind'` (the multi-char write never narrowed). GREEN after.
+>
+> **5. ThemePicker could overflow the frame and showed nothing but names (FIXED).** `names.map` was
+> unbounded — 6 built-ins + a generous `~/.anvil/themes.json` grew past a fixed-height frame and stacked rows
+> over the status bar (the picker family already guards this; this one didn't). It is now windowed like
+> ModelPicker/SessionPicker, and each row carries that theme's `brand` swatch so two dark themes are told
+> apart without arrowing through live previews. **RED:** with HEAD restored,
+> `expected … to contain '▼'` and `expected +0 to be 6`; GREEN after (3/3).
+>
+> **6–9. Chrome consistency (FIXED).** Onboarding (`FirstRunSetup`) rendered as bare text while every
+> other overlay was framed — now the same modal frame with the theme's brand title; the empty state gained
+> the keyboard line and takes its plain wordmark from `typography.brandName`; the App's outer frame reads
+> `borders.panel` instead of a literal `round`; RewindModal/DiffModal's spacing headers keep their layout
+> (one `paddingY` token experiment was reverted — `panelPaddingY` defaults to 0 and would have removed real
+> breathing room).
+>
+> **Design decisions worth recording:** help section order is keys → commands → overlays so a routine
+> lookup never scrolls; `?` only fires on an EMPTY prompt so a draft starting with `?` still types; the help
+> window budget is `HELP_VISIBLE_ROWS` clamped to the terminal (`rows - 12`) so a short terminal gets a
+> usable window instead of a clipped frame; overlay borders are `modal`, persistent chrome `panel`,
+> in-transcript cards `card` — one semantic rule, not per-component taste.
+>
+> **Verification (tree still carries another session's uncommitted protected changes — no `--ack` passed):**
+> typecheck 0 across core/tui/cli + scripts; build core→tui→cli green; full suites **1,506**
+> (cli 152 / core 967 / tui 387 — TUI +24 vs. this session's start of 363); visual baselines re-approved after inspection
+> (only `empty-state`, `rewind-modal` changed + new `help-overlay`); mock evals **25/25**; a faithful replica
+> of the gate's Step-1 + Step-1.5 rule set (self-tested against a planted placeholder / empty-catch /
+> type-escape probe) over all **35** changed files: **0 hits**. `npm run gate` passes Steps 0/0.5 and then correctly refuses at Step 1
+> because `scripts/verify-gate.mjs`, `AGENTS.md`, `.githooks/pre-commit`, `scripts/gate-manifest.json` and
+> the sentinel test are ANOTHER session's uncommitted protected changes — their review, not this one's. The
+> human's clean-tree gate run is the final confirmation.
+> **Two core failures seen mid-session, neither from this change and both green on re-run:**
+> `eval/fixtureIntegrity`'s guard-probe tripped while another session was still writing the untracked
+> `evals/tasks-hard/**/assertions/guard-probe/` fixtures it probes, and `tools/bash.test`'s kill-poll
+> (`sleep 30` teardown) flaked under load-average 5.7 — that test's own comment documents the history.
+> No `packages/core/**` source or `evals/**` file was modified by this work; both passed on re-run and the
+> next full suite came back 967/967 core.
+>
+> **Held uncommitted deliberately:** the operator did not ask for a commit; the files above (including the
+> three visual baselines) sit in the working tree, listed by name — nothing is invisible.
+>
+> **DONE 2026-10-05 (chief-engineer deep dive #2 — five defects + two audit follow-ups fixed; all fail-first receipts recorded):**
+> owns `packages/core/src/agent/goal/{goalEngine.ts,__tests__/goalEngine.test.ts}`,
+> `packages/core/src/text.ts` (new), `packages/core/src/__tests__/text.test.ts` (new),
+> `packages/core/src/agent/subagent.ts`, `packages/core/src/agent/team/runner.ts`,
+> `packages/core/src/tools/{verifyTests.ts,__tests__/verifyTests.test.ts}`,
+> `packages/tui/src/hooks/{useAgentController.ts,eventReducer.ts}` + their tests,
+> `packages/tui/src/util/{format.ts,subagent.ts}` + their tests,
+> `packages/tui/src/components/StatusBar.tsx`, `packages/tui/src/diff/colorizeDiff.tsx`,
+> plus this file. 18 files, all clean before this session except this one.
+> **1. The TUI's goal mission kept its own outcome bookkeeping, and it had drifted from core's
+> (FIXED).** `runGoalTurn` missed `verification_gave_up` — a milestone could be marked complete
+> on a turn whose tests were last seen failing — and it let an early verification failure stick
+> past a successful repair (core's `GoalEngine.sendTurn` had both rules right; the divergence WAS
+> the bug). Fix: one exported reducer `accumulateGoalOutcome` (goalEngine.ts); both runners call
+> it. **RED:** with only `useAgentController.ts` reverted, the new launchGoal integration test
+> fails on the real assertion; GREEN after. 3 reducer tests + 1 integration test.
+> **2. Goal mode ran on a hardcoded 4,096-token output ceiling, half the shipped 8,192
+> (`DEFAULT_MAX_TOKENS`) (FIXED).** Roadmap K: reasoning bills inside the output ceiling, so goal
+> mode is the first surface to starve. **RED:** lifecycle test with 4096 restored fails
+> `expected 4096 to be 8192`; GREEN after. No other behavior touched.
+> **3. `parseMilestones` silently threw away valid plans (FIXED).** The old regex matched from the
+> first `[` to the LAST `}]` in the reply, so a second object array in prose merged into the blob;
+> `JSON.parse` then failed and the deterministic 3-phase plan silently replaced the model's real
+> plan. Probed with the OLD expressions on the fixture input: `old JSON.parse THREW: Unexpected
+> non-whitespace character after JSON at position 52`. Also `null`/`{}`/non-string rows became
+> executable milestones with invented titles/criteria, and duplicate ids moved two deck rows at
+> once. Fix: string-aware balanced-array extraction + schema normalization (title required;
+> criteria falls back to the title; ids deduped; runaway lists capped at 8). 4 new tests.
+> **4. `verify_tests` threw a raw TypeError on a non-string pattern (FIXED).** `{pattern: 123}` →
+> `pattern.startsWith is not a function`, surfaced to the model as a generic failure. **RED:**
+> `TypeError: pattern.startsWith is not a function` with the guard stashed; now an actionable
+> tool error. 1 test.
+> **5. Model-facing report caps split surrogate pairs (FIXED).** `capReport` (sub-agent report)
+> and `mergeReports` (team report) used `slice(0, 8000)`; a cap landing mid-pair handed the parent
+> model invalid UTF-16. New leaf module `core/src/text.ts` `headChars` (core cannot import the
+> TUI's — the dependency runs TUI → core); both call sites use it. **RED:** the capReport test
+> fails against the stashed `slice` version. 6 new tests.
+> **6/7. Two findings from the 2026-09-22 TUI audit, closed.** `retainReport`/`retainOutput`
+> retained display state with `slice(0, cap)` (same surrogate class) — now the TUI's `headChars`;
+> `ColorizedDiff`'s `pairRows` memo was keyed on a fresh `slice()` and re-paired on every render —
+> the slice is memoized; `StatusBar` charged its width budget for the sparkline even when (unknown
+> model) it does not render it — budget and render now agree.
+>
+> **Verification (on a tree that still carries another session's uncommitted protected changes —
+> boundary declared, no `--ack` passed):** build core→tui→cli green; typecheck 0 across all three
+> workspaces; full suites **1,481** (cli 152 / core 966 / tui 363); mock evals **25/25**; a faithful
+> replica of the gate's Step-1 + Step-1.5 rule set over all 18 changed files: **0 hits**. `npm run
+> gate` itself passes Steps 0 and 0.5 and then correctly refuses at Step 1 because
+> `scripts/verify-gate.mjs`, `AGENTS.md`, `.githooks/pre-commit`, `scripts/gate-manifest.json` and
+> the sentinel test are modified/uncommitted by ANOTHER session — that refusal is their
+> protected-artifact review, not this change's. The human's clean-tree gate run is the final
+> confirmation.
+>
+> **Held uncommitted deliberately:** the operator did not ask for a commit, so the 18 files above
+> are left in the working tree and listed here by name — nothing is invisible. (Another session's
+> 40-file uncommitted diff is untouched.)
+>
+> **Recorded, not fixed (out of lane or by design):** G1 — the gate PATHSPEC still does not scan
+> root `scripts/**` or `evals/**` (protected artifact; needs human review); `eval/report.ts`
+> prices cached input at the full rate, so its cost figures are an upper bound (38.7 follow-up);
+> A/B arms deliberately replace the project-rule block (documented instrument property); `.git`
+> is never packed and 40+ commits are unpushed (operational, owner's call); TUI `notify.ts`'s
+> clean-string cap is UTF-16-unit based but only feeds an OS notification string.
+>
 > **DONE 2026-10-04 (chief-engineer deep dive — three defects found, three fixed;
 > one verified non-finding):** owns `packages/tui/src/util/{format,displayLimits}.ts`,
 > `packages/tui/src/hooks/eventReducer.ts`, their tests,
@@ -60,7 +217,23 @@
 > module), not timeouts, so the `NOT SIGNIFICANT` verdicts are unaffected — but
 > any future run of that tier now gets the budget its fixtures declare.
 >
-> **Boundary, declared:** `npm run gate` Step 1 still refuses on this tree because
+> **6. A structural guard was silently removable — and had been removed (FIXED).**
+> Found while checking the tree: an uncommitted edit by another session had
+> **stripped 01-contract-propagation's one-formatting-rule block** from its
+> `check.sh`, quietly downgrading a harder-tier task to "make the test suite
+> green" — the exact behaviour the tier exists to refuse. The lesson is not the
+> edit, it is that nothing could see it: RED/GREEN integrity cannot distinguish a
+> task from a *weaker* version of itself. Fix: each structurally-guarded task
+> (01/03/04/05) now carries `assertions/guard-probe/` — an overlay that satisfies
+> every assertion while violating the structural rule — and
+> `fixtureIntegrity.test.ts` requires every probe to be RED, with a floor
+> (>= 4 probes) so deleting them is itself a failure.
+> **Reproduction of the enforcement, not just the code:** re-applying that exact
+> removal (guard block → `exit 0`) makes the suite fail with
+> "01-contract-propagation: the guard-probe passes — the structural guard is gone
+> or no longer bites"; restoring the block makes it pass. The guard itself was
+> restored, and the probes are scanner-clean.
+>
 > *another session's* protected files (`scripts/verify-gate.mjs`, `AGENTS.md`,
 > `.githooks/pre-commit`, manifest, sentinel test) are modified and uncommitted.
 > The agent must not pass `--ack-protected-change` (H1: that flag asserts human

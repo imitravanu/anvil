@@ -110,12 +110,13 @@ function listHardTaskDirs(): string[] {
     .sort();
 }
 
-function runCheckIn(taskDir: string, overlay: string | null): number | null {
+function runCheckIn(taskDir: string, overlay: string | null, probe?: string): number | null {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-hard-fixture-"));
   const checkSh = path.join(taskDir, "assertions", "check.sh");
   try {
     copyDirRecursive(path.join(taskDir, "setup"), tempDir);
     if (overlay) copyDirRecursive(overlay, tempDir);
+    if (probe) copyDirRecursive(probe, tempDir);
     try {
       fs.chmodSync(checkSh, 0o755);
     } catch {
@@ -199,6 +200,41 @@ describe("Harder-tier fixture integrity (A4)", () => {
           );
         }
       }
+      expect(problems).toEqual([]);
+    },
+    300_000
+  );
+
+  it(
+    "every declared structural guard still BITES (a removed guard fails the gate)",
+    () => {
+      // RED/GREEN alone cannot see a downgrade: `setup/` still fails without the
+      // fix and still passes with it if someone deletes the extra guard block
+      // from check.sh — the task quietly becomes "make the suite green", which is
+      // exactly what the harder tier exists to refuse. (Observed for real: a
+      // concurrent session's uncommitted edit stripped 01's one-formatting-rule
+      // block on 2026-10-04.) A `guard-probe/` overlay satisfies every assertion
+      // while violating the structural rule, so it must be RED. Remove the guard
+      // and the probe passes — this assertion fails instead of the guard
+      // disappearing.
+      const problems: string[] = [];
+      let probes = 0;
+      for (const dir of hardDirs) {
+        const taskDir = path.join(HARD_TASKS_DIR, dir);
+        const probeDir = path.join(taskDir, "assertions", "guard-probe");
+        if (!fs.existsSync(probeDir)) continue;
+        probes += 1;
+        const status = runCheckIn(taskDir, path.join(taskDir, "assertions", "expected"), probeDir);
+        if (status === 0) {
+          problems.push(
+            `${dir}: the guard-probe passes — the structural guard is gone or no longer bites`
+          );
+        }
+      }
+      // A floor, so a mass deletion of probes is itself a failure. Four tasks
+      // carry structural guards (01/03/04/05); 02 and 06 are guarded by the
+      // suite itself, which the RED check above already proves bites.
+      expect(probes).toBeGreaterThanOrEqual(4);
       expect(problems).toEqual([]);
     },
     300_000
