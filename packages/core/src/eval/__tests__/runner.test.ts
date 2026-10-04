@@ -4,7 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import { loadEvalTasks, runEvalTask, runAllEvalTasks, mapWithConcurrencyLimit, resolveConcurrency } from "../runner.js";
 import { createEvalReport, saveEvalReport, loadRecentReports, formatEvalReport, formatTrendComparison } from "../report.js";
-import { EvalTask } from "../types.js";
+import type { EvalRunnerOptions, EvalTask } from "../types.js";
 
 describe("Phase 17 Eval Harness", () => {
   let tmpDir: string;
@@ -106,6 +106,44 @@ exit 1
     expect(result.error).toBeUndefined();
   });
 
+  it("respectTaskTimeout extends, never truncates, a fixture's own budget", async () => {
+    // The time-shaped twin of AUDIT A1 (every run force-capped at 4,096 tokens):
+    // the A/B harness passed a 120s clock that overrode the harder tier's declared
+    // 180s, so a long-horizon task could be graded as a capability failure for a
+    // cap nobody shipped. This task outlives the harness's 400ms cap and finishes
+    // well inside its own 30s budget.
+    const slowProvider = {
+      id: "openai",
+      displayName: "slow scripted",
+      isConfigured: () => true,
+      async *streamCompletion() {
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        yield { type: "usage" as const, inputTokens: 1, outputTokens: 1 };
+        yield { type: "turn_end" as const, stopReason: "end_turn" as const };
+      },
+    };
+    const base = createMockTask("task-slow", true);
+    // The scripted provider writes nothing, so the assertion must pass on the
+    // pristine setup — this test is about the CLOCK, not the work.
+    fs.writeFileSync(base.assertionScript, "#!/bin/bash\nexit 0\n");
+    fs.chmodSync(base.assertionScript, 0o755);
+    const task = { ...base, timeoutMs: 30_000 };
+    const provider: NonNullable<EvalRunnerOptions["provider"]> =
+      slowProvider as unknown as NonNullable<EvalRunnerOptions["provider"]>;
+
+    const truncated = await runEvalTask(task, { provider, timeoutMs: 400 });
+    expect(truncated.error).toContain("timed out");
+    expect(truncated.passed).toBe(false);
+
+    const respected = await runEvalTask(task, {
+      provider,
+      timeoutMs: 400,
+      respectTaskTimeout: true,
+    });
+    expect(respected.error).toBeUndefined();
+    expect(respected.passed).toBe(true);
+  }, 30_000);
+
   it("runEvalTask captures failure when assertions fail", async () => {
     const task = createMockTask("task-fail", false);
     const result = await runEvalTask(task, { useMock: true });
@@ -113,6 +151,9 @@ exit 1
     expect(result.passed).toBe(false);
     expect(result.taskId).toBe("task-fail");
     expect(result.error).toContain("Intentional failure");
+    // A8: an assertion failure carries a STRUCTURED task origin, so the A/B
+    // harness never has to infer it from the message text.
+    expect(result.failureKind).toBe("task");
   });
 
   it("createEvalReport aggregates results and computes accurate pass rate", () => {

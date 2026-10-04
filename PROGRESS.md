@@ -43,6 +43,23 @@
 > floor — a breakpoint there would be a no-op. The cacheable prefix is the agent's
 > own system prompt + tool schemas, which `streamAssistantTurn` marks. Recorded as
 > a comment at the call site.
+> **5. The A/B harness truncated the longer tier's own clock (FIXED).** `ab.ts`
+> passed `timeoutMs: EVAL_LIVE_TASK_TIMEOUT_MS` (120s) and `runEvalTask` gives
+> that precedence over `task.timeoutMs` — but the harder tier budgets **180s**
+> per task on purpose. A long-horizon task could therefore be graded as a
+> capability failure for a clock the harness chose: the time-shaped twin of
+> AUDIT A1's 4,096-token cap, reintroduced by my own A4 wiring. Fix:
+> `EvalRunnerOptions.respectTaskTimeout` (set by the harness) takes the MAXIMUM
+> of the two limits — extend, never truncate; the eval CLI keeps its documented
+> global override. Fail-first test in `runner.test.ts`: the unflagged half of the
+> same test shows the 400ms cap killing a 1.2s task, the flagged half shows it
+> surviving inside its own 30s budget.
+> *Caveat, on the record:* the two harder-tier runs already recorded (Run A/B)
+> were taken under that 120s cap. Their flipping tasks were graded **guard
+> failures with specific output** (`posts.js`/`api.js` not importing the shared
+> module), not timeouts, so the `NOT SIGNIFICANT` verdicts are unaffected — but
+> any future run of that tier now gets the budget its fixtures declare.
+>
 > **Boundary, declared:** `npm run gate` Step 1 still refuses on this tree because
 > *another session's* protected files (`scripts/verify-gate.mjs`, `AGENTS.md`,
 > `.githooks/pre-commit`, manifest, sentinel test) are modified and uncommitted.

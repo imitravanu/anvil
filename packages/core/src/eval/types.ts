@@ -31,6 +31,15 @@ export interface EvalResult {
   toolCalls: number;
   error?: string;
   /**
+   * A8 (AUDIT-2026-09-30): the STRUCTURED origin of a failure, set where the
+   * failure actually happens. The A/B harness prefers this over regexing the
+   * message, so a graded assertion whose text happens to contain "unavailable"
+   * (or any environmental word) can never be excused as a provider error.
+   * Undefined means the origin was not structurally known — the message
+   * classifier's legacy path still applies.
+   */
+  failureKind?: "provider" | "network" | "task";
+  /**
    * USD cost of this task's tokens (27.5), or undefined when the model's price
    * is unknown — never 0 as a stand-in for unknown.
    */
@@ -70,6 +79,16 @@ export interface EvalRunnerOptions {
   fastOnly?: boolean;
   taskFilter?: string;
   timeoutMs?: number;
+  /**
+   * Phase A4 follow-up: never let `timeoutMs` truncate a budget the FIXTURE
+   * declares. `options.timeoutMs` normally overrides `task.timeoutMs`, which is
+   * right for the eval CLI (one clock for the whole run) and wrong for an A/B
+   * arm: the harder tier budgets 180s per task on purpose, and a harness cap of
+   * 120s grades a long-horizon task as a capability failure for a clock nobody
+   * shipped. The time-shaped twin of AUDIT A1's 4,096-token cap. With this set,
+   * the effective limit is the MAXIMUM of the two — extend, never truncate.
+   */
+  respectTaskTimeout?: boolean;
   useMock?: boolean;
   /**
    * Phase 38.8 measurement seam: a fully scripted provider, bypassing both the

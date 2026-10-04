@@ -127,6 +127,9 @@ export async function runEvalTask(
   let passed = false;
   let errorMsg: string | undefined;
   let failureDiff: string | undefined;
+  // A8: structured failure origin, set at the site that knows it (never inferred
+  // from the message by the A/B harness).
+  let failureKind: "provider" | "network" | "task" | undefined;
 
   try {
     // 1. Prepare isolated workspace
@@ -180,7 +183,16 @@ export async function runEvalTask(
       ...(options.guardian === undefined ? {} : { guardian: options.guardian }),
     });
 
-    const timeoutLimit = options.timeoutMs || task.timeoutMs || EVAL_TASK_TIMEOUT_MS;
+    // A1 (tokens) had a time-shaped twin: a harness cap narrower than the
+    // fixture's own budget grades a long-horizon task as a capability failure
+    // for a clock the harness chose. `respectTaskTimeout` (the A/B harness)
+    // takes the MAXIMUM — extend, never truncate; the plain eval CLI keeps its
+    // documented global override.
+    const runnerTimeout = options.timeoutMs;
+    const taskTimeout = task.timeoutMs;
+    const timeoutLimit = options.respectTaskTimeout
+      ? Math.max(runnerTimeout ?? 0, taskTimeout ?? 0) || EVAL_TASK_TIMEOUT_MS
+      : runnerTimeout || taskTimeout || EVAL_TASK_TIMEOUT_MS;
     const abortController = new AbortController();
     // The old code aborted this controller but never wired it into the turn:
     // session.send() owns its own controller, so a hung provider stalled the
@@ -194,6 +206,9 @@ export async function runEvalTask(
     try {
       for await (const event of session.send(task.prompt)) {
         if (abortController.signal.aborted) {
+          // A8: a timeout is a GRADED outcome (the model may be looping), so the
+          // structured origin is "task" — never excused as provider weather.
+          failureKind = "task";
           throw new Error(`Task timed out after ${timeoutLimit}ms`);
         }
         if (event.type === "tool_finished") {
@@ -263,6 +278,9 @@ export async function runEvalTask(
       passed = true;
     } else {
       passed = false;
+      // A8: an assertion failure is a TASK failure by construction. Without
+      // this, a check.sh message containing an environmental word was excused.
+      failureKind = "task";
       const stderr = checkResult.stderr?.toString("utf8").trim();
       const stdout = checkResult.stdout?.toString("utf8").trim();
       errorMsg = stderr || stdout || `check.sh failed with exit code ${checkResult.status}`;
@@ -302,6 +320,7 @@ export async function runEvalTask(
     tokensUsed,
     toolCalls,
     error: errorMsg,
+    ...(failureKind ? { failureKind } : {}),
     ...(failureDiff ? { failureDiff } : {}),
   };
 }

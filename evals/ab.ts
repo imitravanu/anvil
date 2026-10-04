@@ -122,6 +122,10 @@ async function main(): Promise<void> {
       ...(modelId ? { modelId } : {}),
       ...(taskFilter ? { taskFilter } : {}),
       timeoutMs: useMock ? 30_000 : EVAL_LIVE_TASK_TIMEOUT_MS,
+      // An arm must not truncate a fixture's own budget: the harder tier budgets
+      // 180s per task, and a 120s harness cap would grade it as a failure for a
+      // clock nobody shipped (the time-shaped twin of A1).
+      respectTaskTimeout: true,
       betweenTaskDelayMs: useMock ? 0 : EVAL_AB_TASK_DELAY_MS,
     },
     trials
