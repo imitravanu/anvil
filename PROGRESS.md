@@ -2,6 +2,55 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-04 (chief-engineer deep dive — three defects found, three fixed;
+> one verified non-finding):** owns `packages/tui/src/util/{format,displayLimits}.ts`,
+> `packages/tui/src/hooks/eventReducer.ts`, their tests,
+> `packages/core/src/tools/verifyTests.ts` (+ test),
+> `packages/core/src/eval/__tests__/fixtureIntegrity.test.ts`,
+> `packages/core/src/agent/compaction.ts`, `evals/tasks-hard/04-config-migration/**`.
+> **1. A tail cap split surrogate pairs (FIXED, `580e149`).** Probed, not inferred:
+> `'ab' + 😀×3000 + 'c'` is 6,003 UTF-16 units, so the 38.6 reasoning retention
+> bound (`slice(-6000)`) began ON a low surrogate — the retained deliberation was
+> invalid UTF-16 and `/expand` showed a replacement glyph where an emoji was.
+> `capChars` (the display cap) had the identical expression, and so did the 4KB
+> failure-trace tail in `core/tools/verifyTests.ts`. This is a class the repo
+> already documents (`ToolCallView.tsx:13`: "a naive slice could split a surrogate
+> pair") — the 38.6 code reintroduced it by using `String#slice` directly.
+> Fix: `tailChars` in `format.ts` (code-point-aware TAIL sibling of `curtail`,
+> single owner), used by both TUI sites; core gets a documented local snap
+> (`failureTraceTail`) because the dependency runs TUI → core. The omission notice
+> now counts the units ACTUALLY dropped, so it stays true when the tail snaps.
+> **Reproductions:** 6 new tests, all RED against the old expressions (the reducer
+> test failed `expected NaN to be >= 55296` — i.e. the string *started* on a low
+> surrogate); GREEN after. Core 951, TUI 357.
+> **2. The harder tier had zero gate coverage (FIXED).** gate Step 5 runs the mock
+> lane over `evals/tasks` only, so a `tasks-hard` fixture could rot (lose its
+> guard, stop being RED) with the whole pipeline green. `fixtureIntegrity.test.ts`
+> now pins the tier in both directions — RED against pristine `setup/`, GREEN
+> against `setup/` overlaid with `assertions/expected/` — which is exactly the
+> "the tests must fail against the pre-change code" rule applied to fixtures.
+> Receipt: 6/6 in 2.1s. This converts the receipts I ran by hand when authoring A4
+> into a permanent invariant.
+> **3. A fixture was a gate landmine (FIXED, `eb84ae4`).** The residual scan walks
+> `evals/**` and excludes only `evals/tasks`, so `evals/tasks-hard` IS judged —
+> and `04-config-migration`'s `DEFAULTS { maxRetries: 1, timeoutMs: 1000 }` matched
+> the H1 magic-constant rule on two lines, which would have failed Step 1.5 for
+> whoever ran the gate next. Rewritten with named constants; semantics unchanged.
+> Found by replicating `RESIDUAL_RULES` over the tier (4 hits → CLEAN).
+> **4. A verified NON-finding, recorded so nobody "fixes" it.** `compaction.ts`
+> calls `streamCompletion` without `cacheControl`. Measured: that prompt is ~230
+> chars (~55 tokens) with `tools: []`, i.e. below Anthropic's 1,024-token cache
+> floor — a breakpoint there would be a no-op. The cacheable prefix is the agent's
+> own system prompt + tool schemas, which `streamAssistantTurn` marks. Recorded as
+> a comment at the call site.
+> **Boundary, declared:** `npm run gate` Step 1 still refuses on this tree because
+> *another session's* protected files (`scripts/verify-gate.mjs`, `AGENTS.md`,
+> `.githooks/pre-commit`, manifest, sentinel test) are modified and uncommitted.
+> The agent must not pass `--ack-protected-change` (H1: that flag asserts human
+> review). Finding 3 was therefore verified with a faithful replica of the gate's
+> rule set rather than the gate itself — the human's next clean-tree gate run is
+> the final confirmation, and the replica is why it should now pass.
+>
 > **DONE 2026-10-04 (Phase 38.5/A4 session — harder tier authored, 38.5 measured a
 > third and fourth time, 38.9 closure):** owns `evals/tasks-hard/**` (new),
 > `evals/ab.ts` (`--tasks-dir`, baseline-arm import), `docs/PHASE-38-ROADMAP.md`,
