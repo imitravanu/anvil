@@ -92,8 +92,10 @@
 > No `packages/core/**` source or `evals/**` file was modified by this work; both passed on re-run and the
 > next full suite came back 967/967 core.
 >
-> **Held uncommitted deliberately:** the operator did not ask for a commit; the files above (including the
-> three visual baselines) sit in the working tree, listed by name — nothing is invisible.
+> **Committed as `0787100`** (54 files, 1,579 insertions) once the operator said "finish your work" —
+> this entry's prose had already reached HEAD through another session's docs commit (`ecd9b8a`), so leaving
+> the code behind would have made the receipts lie. The other session's protected-artifact diff stays
+> uncommitted and untouched; no `--ack` was ever passed by this session.
 >
 > **DONE 2026-10-05 (chief-engineer deep dive #2 — five defects + two audit follow-ups fixed; all fail-first receipts recorded):**
 > owns `packages/core/src/agent/goal/{goalEngine.ts,__tests__/goalEngine.test.ts}`,
