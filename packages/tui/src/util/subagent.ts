@@ -1,5 +1,6 @@
 /** sub-agent cards: collapsed line + capped report lines. Pure. */
 import { SUBAGENT_TASK_MAX, SUB_REPORT_RETAIN_MAX, capLines } from "./displayLimits.js";
+import { headChars } from "./format.js";
 
 export interface SubAgentRecord {
   /**
@@ -23,8 +24,11 @@ export { SUB_REPORT_RETAIN_MAX };
 const TRUNC_MARK = "[report shortened for display — full version went to the model]";
 
 export function retainReport(report: string): string {
-  if (report.length <= SUB_REPORT_RETAIN_MAX) return report;
-  return report.slice(0, SUB_REPORT_RETAIN_MAX) + "\n" + TRUNC_MARK;
+  // headChars, not slice(0, max): the cap can land inside a surrogate pair,
+  // leaving half an emoji in retained state (tailChars' documented sibling).
+  const head = headChars(report, SUB_REPORT_RETAIN_MAX);
+  if (head === report) return report;
+  return head + "\n" + TRUNC_MARK;
 }
 
 /** One-line collapsed summary: `◈ sub-agent: <task> — N calls, X in/Y out`. */

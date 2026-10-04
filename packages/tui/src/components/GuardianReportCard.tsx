@@ -2,6 +2,7 @@ import { Box, Text } from "ink";
 import type { GuardianRuleFamily } from "@anvil/core";
 import type { DisplayGuardianReport } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
+import { inkBorderStyle } from "../util/chrome.js";
 import { curtail } from "../util/format.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
 
@@ -33,7 +34,7 @@ export function GuardianReportCard({ report }: { report: DisplayGuardianReport }
   const blockedLabel = `${report.blocked} blocked`;
   const fixedLabel = report.fixed > 0 ? ` · ${report.fixed} auto-fixed` : "";
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.colors.border} paddingX={1} marginY={1}>
+    <Box flexDirection="column" borderStyle={inkBorderStyle(theme.borders.card)} borderColor={theme.colors.border} paddingX={1} marginY={1}>
       <Box gap={1}>
         <Text color={theme.colors.error}>⚠ </Text>
         <Text bold color={theme.colors.accent}>Guardian</Text>

@@ -22,6 +22,7 @@ import {
   MAX_DELEGATIONS_PER_TURN,
 } from "../config/constants.js";
 import { log } from "../logger.js";
+import { headChars } from "../text.js";
 export { SUB_AGENT_REPORT_MAX_CHARS, SUB_AGENT_MAX_ITERATIONS, SUB_AGENT_MAX_TOKENS, MAX_DELEGATIONS_PER_TURN };
 
 export const SUB_AGENT_SYSTEM_PROMPT =
@@ -38,8 +39,11 @@ export function subAgentTools(from: ToolDefinition[] = TOOL_DEFINITIONS): ToolDe
 }
 
 export function capReport(report: string): string {
-  if (report.length <= SUB_AGENT_REPORT_MAX_CHARS) return report;
-  return report.slice(0, SUB_AGENT_REPORT_MAX_CHARS) + "\n[report truncated]";
+  // headChars, not slice: this text rides back to the parent model, and a cap
+  // landing mid-surrogate-pair would hand it a lone surrogate (see text.ts).
+  const head = headChars(report, SUB_AGENT_REPORT_MAX_CHARS);
+  if (head === report) return report;
+  return head + "\n[report truncated]";
 }
 
 export interface SubAgentRun {

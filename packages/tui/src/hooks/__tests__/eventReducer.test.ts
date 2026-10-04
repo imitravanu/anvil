@@ -5,6 +5,17 @@ import type { DisplayMessage, UsageTotals } from "../eventReducer.js";
 import type { AgentEvent } from "@anvil/core";
 
 describe("eventReducer", () => {
+  it("retained output keeps whole code points at the per-string cap", () => {
+    // 1,999 ASCII + emoji + tail crosses the 2,000-UNIT cap exactly on the
+    // emoji: the old slice(0, 2000) kept the high half only — invalid UTF-16.
+    const value = "a".repeat(1999) + "😀" + "tail";
+    const retained = retainOutput({ text: value }) as { text: string };
+    expect(retained.text).toContain("…[truncated]");
+    expect(retained.text).toContain("😀");
+    const loneSurrogate = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+    expect(loneSurrogate.test(retained.text)).toBe(false);
+  });
+
   it("systemMessage creates a system role message", () => {
     const msg = systemMessage("Notice");
     expect(msg.role).toBe("system");

@@ -1,6 +1,6 @@
 import React from "react";
 import { render as inkRender } from "ink-testing-library";
-import { ThemeContext, THEMES } from "../theme/theme.js";
+import { ThemeContext, THEMES, type Theme } from "../theme/theme.js";
 
 /**
  * Render a component under the dark theme (App always provides one —
@@ -14,13 +14,22 @@ export interface ThemedRender {
 }
 
 export function renderThemed(ui: React.ReactElement): ThemedRender {
-  const rendered = inkRender(<ThemeContext.Provider value={THEMES.dark}>{ui}</ThemeContext.Provider>);
+  return renderWithTheme(THEMES.dark, ui);
+}
+
+/**
+ * Render under an explicit theme. Needed for the token tests: chrome that
+ * hardcodes a border/typography glyph renders identically under every theme,
+ * so only a theme with DIFFERENT tokens can prove the token is honored.
+ */
+export function renderWithTheme(theme: Theme, ui: React.ReactElement): ThemedRender {
+  const rendered = inkRender(<ThemeContext.Provider value={theme}>{ui}</ThemeContext.Provider>);
   return {
     lastFrame: () => rendered.lastFrame(),
     unmount: () => rendered.unmount(),
     stdin: rendered.stdin,
     rerender: (next: React.ReactElement) =>
-      rendered.rerender(<ThemeContext.Provider value={THEMES.dark}>{next}</ThemeContext.Provider>),
+      rendered.rerender(<ThemeContext.Provider value={theme}>{next}</ThemeContext.Provider>),
   };
 }
 

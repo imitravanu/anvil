@@ -3,7 +3,7 @@ import type React from "react";
 import type { AgentEvent } from "@anvil/core";
 import { retainReport, type SubAgentRecord } from "../util/subagent.js";
 import { friendlyError } from "../util/errors.js";
-import { tailChars } from "../util/format.js";
+import { headChars, tailChars } from "../util/format.js";
 import { TRANSCRIPT_STATE_CAP, OUTPUT_RETAIN_MAX, REASONING_RETAIN_MAX } from "../util/displayLimits.js";
 
 export type DisplaySubAgent = SubAgentRecord;
@@ -65,15 +65,19 @@ function accumulateUsage(
   return next;
 }
 
+/** Head-cap one retained string without splitting a surrogate pair. */
+function retainString(value: string): string {
+  const head = headChars(value, RETAIN_STRING_MAX);
+  return head === value ? value : head + "…[truncated]";
+}
+
 export function retainOutput(output: unknown): unknown {
   if (output === undefined) return undefined;
   let text: string;
   try {
     text =
       JSON.stringify(output, (_key, value) =>
-        typeof value === "string" && value.length > RETAIN_STRING_MAX
-          ? value.slice(0, RETAIN_STRING_MAX) + "…[truncated]"
-          : value
+        typeof value === "string" ? retainString(value) : value
       ) ?? String(output);
   } catch {
     // intentional: a circular/unserializable tool payload falls back to a

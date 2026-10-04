@@ -52,6 +52,10 @@ export function Header({ model, isBusy, context, providerId, sessionTitle, turnC
   const theme = useTheme();
   const { stdout } = useStdout();
   const width = stdout?.columns ?? 80;
+  // Phase 41: the brand is the THEME's, not a literal. `typography.brandIcon`
+  // / `brandName` were validated for custom themes and rendered nowhere, so a
+  // theme could declare a new mark and the frame ignored it.
+  const brand = `${theme.typography.brandIcon} ${theme.typography.brandName}`;
   // Provider-qualified (AUDIT-02): the same id under two providers must read
   // ITS provider's row, so a free model can't render as [PAID].
   const info = modelInfo(model, providerId);
@@ -94,7 +98,7 @@ export function Header({ model, isBusy, context, providerId, sessionTitle, turnC
   if (width < 80 || !context) {
     return frame(
       <Box justifyContent="space-between" flexShrink={0} flexGrow={1}>
-        <Text bold color={theme.colors.brand}>▲ ANVIL</Text>
+        <Text bold color={theme.colors.brand}>{brand}</Text>
         <Text color={theme.colors.textMuted}>{fitTag(Math.max(12, width - 24))}</Text>
       </Box>
     );
@@ -128,7 +132,7 @@ export function Header({ model, isBusy, context, providerId, sessionTitle, turnC
   // strings the render path uses, so the model tag can be budgeted to exactly
   // the remainder without any Yoga shrink surprise (the "▲ ANVIL" wrap bug).
   const leftWidth = () => {
-    let w = displayWidth("▲ ANVIL");
+    let w = displayWidth(brand);
     const segment = (txt: string) => {
       w += 1 /* gap */ + displayWidth(txt);
     };
@@ -159,7 +163,7 @@ export function Header({ model, isBusy, context, providerId, sessionTitle, turnC
   return frame(
     <Box justifyContent="space-between" flexShrink={0} flexGrow={1}>
       <Box gap={1}>
-        <Text bold color={theme.colors.brand}>▲ ANVIL</Text>
+        <Text bold color={theme.colors.brand}>{brand}</Text>
         {showTitle && (
           <>
             <Text color={theme.colors.separator}>│</Text>

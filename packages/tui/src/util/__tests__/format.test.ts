@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collapsePlan, curtail, curtailToCells, displayModelLabel, displayWidth, formatCertificationBadge, formatDuration, formatTime, modelInfo, providerLabel, providerOfModel, splitByDisplayWidth, tailChars } from "../format.js";
+import { collapsePlan, curtail, curtailToCells, displayModelLabel, displayWidth, formatCertificationBadge, formatDuration, formatTime, headChars, modelInfo, providerLabel, providerOfModel, splitByDisplayWidth, tailChars } from "../format.js";
 
 describe("tailChars — code-point-aware tail (mirror of curtail)", () => {
   it("returns text at or under the budget unchanged", () => {
@@ -33,6 +33,32 @@ describe("tailChars — code-point-aware tail (mirror of curtail)", () => {
     }
     expect(Array.from(out).length).toBeLessThanOrEqual(6000);
     expect(out.endsWith("c")).toBe(true);
+  });
+});
+
+describe("headChars — code-point-aware head (mirror of tailChars)", () => {
+  it("returns text at or under the budget unchanged, and floors at zero", () => {
+    expect(headChars("abcdef", 6)).toBe("abcdef");
+    expect(headChars("abcdef", 99)).toBe("abcdef");
+    expect(headChars("abcdef", 0)).toBe("");
+    expect(headChars("abcdef", -1)).toBe("");
+  });
+
+  it("keeps the FIRST code points, not the last", () => {
+    expect(headChars("abcdef", 3)).toBe("abc");
+    expect(headChars("abcdef", 1)).toBe("a");
+  });
+
+  it("never ends on a high surrogate when the boundary lands mid-pair", () => {
+    // 3,999 ASCII + one emoji + a tail is 4,001 code points / 4,002 units: a
+    // blind slice(0, 4000) kept the emoji's high half and dropped its low
+    // half — invalid UTF-16 in retained state.
+    const mixed = "a".repeat(3999) + "😀" + "b";
+    const out = headChars(mixed, 4000);
+    const last = out.charCodeAt(out.length - 1);
+    expect(last >= 0xd800 && last <= 0xdbff).toBe(false);
+    expect(out.endsWith("😀")).toBe(true);
+    expect(Array.from(out).length).toBe(4000);
   });
 });
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type React from "react";
 import { Text } from "ink";
 import { render } from "ink-testing-library";
-import { AgentSession, type StreamEvent } from "@anvil/core";
+import { AgentSession, type AgentEvent, type StreamEvent } from "@anvil/core";
 import { TRANSCRIPT_STATE_CAP } from "../../util/displayLimits.js";
 import {
   useAgentController,
@@ -360,6 +360,63 @@ describe("useAgentController - Phase 23.8 stream backpressure buffer", () => {
     expect(assistantMsg).toBeDefined();
     expect(assistantMsg!.text).toBe(Array.from({ length: 50 }, (_, i) => `tok${i} `).join(""));
     expect(assistantMsg!.streaming).toBe(false);
+    app.unmount();
+  });
+});
+
+describe("useAgentController - goal mission outcomes", () => {
+  /**
+   * A duck-typed session whose turns are scripted by call number. The mission's
+   * turn runner consumes `session.send` directly, so this is the real
+   * integration seam for the shared goal-outcome reducer.
+   */
+  function scriptedSession(turns: ((call: number) => AsyncGenerator<AgentEvent>)[]) {
+    let call = 0;
+    return {
+      plan: null,
+      projectRoot: "/tmp",
+      cancel: () => undefined,
+      summarizeChanges: async () => [],
+      async *send(): AsyncGenerator<AgentEvent> {
+        const turn = turns[Math.min(call, turns.length - 1)];
+        call += 1;
+        yield* turn(call);
+      },
+    } as unknown as AgentSession;
+  }
+
+  it("fails a milestone whose verification gave up instead of completing it", async () => {
+    // Regression: the TUI's own outcome copy ignored `verification_gave_up`,
+    // so the review turn's YES completed a milestone whose tests were last
+    // seen failing. The shared reducer (core) must mark the turn failed.
+    const session = scriptedSession([
+      // 1 — planning
+      async function* () {
+        yield { type: "text_delta" as const, text: JSON.stringify([{ id: "1", title: "Only", criteria: "Do it" }]) };
+      },
+      // 2 — milestone turn: repair budget exhausted, tests still failing
+      async function* () {
+        yield { type: "text_delta" as const, text: "I tried." };
+        yield { type: "verification_gave_up" as const, command: "npm test" };
+      },
+      // 3 — would be the review turn; must never be reached as satisfaction
+      async function* () {
+        yield { type: "text_delta" as const, text: "YES — everything is fine." };
+      },
+    ]);
+
+    const api: { current: ReturnType<typeof useAgentController> | null } = { current: null };
+    const app = render(<Harness session={session} api={api} />);
+    await new Promise((r) => setTimeout(r, 30));
+
+    await api.current!.launchGoal("Do the thing");
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(api.current!.goal?.milestones[0].status).toBe("failed");
+    const failedNotice = api.current!.messages.find(
+      (m) => m.role === "system" && m.text.includes("Milestone 1 failed")
+    );
+    expect(failedNotice).toBeDefined();
     app.unmount();
   });
 });

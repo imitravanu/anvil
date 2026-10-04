@@ -60,14 +60,19 @@ export function StatusBar({
     (usage.cachedInputTokens && usage.cachedInputTokens > 0
       ? ` · ${Math.round((usage.cachedInputTokens / Math.max(usage.inputTokens, 1)) * 100)}% cached`
       : "");
-  const hints = isBusy ? "esc cancel · ctrl+c cancel" : "ctrl+c exit · /help";
+  // Phase 41: `?` now opens the searchable key/command reference, so advertise
+  // it (and keep the /help command name for people who reach for a slash).
+  const hints = isBusy ? "esc cancel · ctrl+c cancel" : "? help · ctrl+c exit";
 
   // DW-4.2 context gauge (adaptive component) + DW-4.3 token-growth
   // sparkline on wide terminals. Both measured verbatim for the budget.
   const gaugeText = gaugeDisplayText(usage.inputTokens, info?.contextWindow, width, theme.chrome.meterStyle);
   const gaugePlain = gaugeText ? ` │ ${gaugeText}` : "";
   const spark = width >= 120 && tokenHistory.length >= 2 ? brailleSparkline(tokenHistory) : "";
-  const sparkPlain = spark ? ` ${spark}` : "";
+  // Rendered only beside the gauge (see `left`), so the width budget must
+  // count it the same way — an unknown model hides the gauge, and charging
+  // the bar for an invisible sparkline curtails the tokens/hints instead.
+  const sparkPlain = spark && gaugeText ? ` ${spark}` : "";
 
   const checkpointPlain = checkpointCount && checkpointCount > 0 ? ` │ ⎌ ${checkpointCount}` : "";
   const testPlain = testStatus ? ` │ 🧪 ${testStatus}` : "";
@@ -117,7 +122,7 @@ export function StatusBar({
         <Text>
           {sep}
           <ContextGauge inputTokens={usage.inputTokens} contextWindow={info?.contextWindow} width={width} />
-          {spark && <Text color={theme.colors.textSecondary}>{sparkPlain}</Text>}
+          {sparkPlain !== "" && <Text color={theme.colors.textSecondary}>{sparkPlain}</Text>}
         </Text>
       )}{" "}
       <Text color={theme.colors.dim}>│</Text> {tokensShown}

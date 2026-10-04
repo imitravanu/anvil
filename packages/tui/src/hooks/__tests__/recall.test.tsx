@@ -77,6 +77,7 @@ function Harness({ session, provider, api }: { session: AgentSession; provider: 
     setIsSessionPickerOpen: () => undefined,
     setIsConnectOpen: () => undefined,
     setIsThemePickerOpen: () => undefined,
+    setIsHelpOpen: () => undefined,
     setExpandTools: () => undefined,
     expandTools: false,
     send: ctrl.send,

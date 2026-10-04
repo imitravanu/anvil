@@ -15,6 +15,29 @@ export const CHROME = {
 
 export type ChromeGroup = keyof typeof CHROME;
 
+/** Border styles Ink accepts (its own `BoxStyle` set, minus the internal ones). */
+export type InkBorderStyle =
+  | "single"
+  | "double"
+  | "round"
+  | "bold"
+  | "singleDouble"
+  | "doubleSingle"
+  | "classic";
+
+/**
+ * Map a theme's border token to Ink's `borderStyle`. The theme types are wider
+ * than Ink's on purpose: `card: "none"` is the documented way for a theme to
+ * say "no card frame", and Ink spells that `undefined` — the raw token is not
+ * assignable, so this is the single translation point instead of a ternary
+ * repeated in every card.
+ */
+export function inkBorderStyle(
+  style: "round" | "single" | "double" | "bold" | "none"
+): InkBorderStyle | undefined {
+  return style === "none" ? undefined : style;
+}
+
 /**
  * Horizontal meter: `meter(0.6, 10)` → "██████░░░░".
  * Pure — powers gauges and progress lines without component code.
@@ -50,4 +73,15 @@ export function styledMeter(style: MeterStyle, fraction: number, width: number):
 /** Repeat a horizontal rule to a width: `rule(5)` → "─────". */
 export function rule(width: number): string {
   return CHROME.lines.h.repeat(Math.max(0, width));
+}
+
+/**
+ * Repeat a THEME's section divider to a width. Only the divider's first code
+ * point is used: a custom theme may legitimately declare a multi-cell divider
+ * ("=="), and repeating it whole would double the rule's width and overflow
+ * the frame the rule was sized to. Empty/absent falls back to `─`.
+ */
+export function sectionRule(divider: string, width: number): string {
+  const unit = [...divider][0] ?? CHROME.lines.h;
+  return unit.repeat(Math.max(0, width));
 }

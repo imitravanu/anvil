@@ -256,6 +256,23 @@ describe("verify_tests tool executor", () => {
     expect(definition.mutating).toBe(false);
   });
 
+  it("reports a non-string pattern as a tool error instead of throwing", async () => {
+    // The model can send { pattern: 123 }; argvWithPattern's `pattern.startsWith`
+    // then threw a TypeError that surfaced as a generic "verify_tests failed".
+    fs.writeFileSync(
+      path.join(tmpDir, "package.json"),
+      JSON.stringify({ scripts: { test: "exit 0" } }),
+      "utf8"
+    );
+    const result = await execute({ pattern: 123 }, {
+      projectRoot: tmpDir,
+      signal: new AbortController().signal,
+    });
+    expect(result.isError).toBe(true);
+    expect(result.summary).toBe("verify_tests failed: pattern must be a string");
+    expect(JSON.stringify(result.output)).toContain("pattern");
+  });
+
   it("returns error when no test runner detected", async () => {
     const result = await execute({}, {
       projectRoot: tmpDir,

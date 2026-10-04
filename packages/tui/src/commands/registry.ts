@@ -21,31 +21,11 @@ import { handleCopy } from "./handlers/clipboard.js";
 export const COMMANDS: Command[] = [
   {
     name: "help",
-    description: "List available commands",
-    run: (_args, ctx) => {
-      const EXAMPLES: Record<string, string> = {
-        clear: "e.g. /clear — fresh transcript; the old session stays resumable",
-        connect: "e.g. /connect — pick a provider, paste its API key",
-        expand: "e.g. /expand — toggle full tool output on/off",
-        image: "e.g. /image diagram.png — then ask about it",
-        ledger: "e.g. /ledger — what ran, what failed, tokens spent",
-        retry: "e.g. /retry actually use python 3.12 — retry with corrected wording",
-        diff: "e.g. /diff or /diff main — review session edits or branch diff",
-        goal: "e.g. /goal add user auth — autonomous plan, execution & critique",
-        pr: "e.g. /pr — create a GitHub pull request via gh",
-        mcp: "e.g. /mcp reconnect — refresh all servers",
-        model: "e.g. /model — Enter switches, Esc cancels",
-        rewind: "e.g. /rewind 2 — restore checkpoint #2 (plain /rewind lists them)",
-        session: "e.g. /session resume — with no id it opens the picker",
-        "session search": "e.g. /session search retry budget — searches saved transcripts",
-        sync: "e.g. /sync — force a free-model refresh now",
-        theme: "e.g. /theme — arrow through with live preview, Enter applies",
-      };
-      const lines = COMMANDS.map(
-        (c) => `/${c.name} — ${c.description}${EXAMPLES[c.name] ? `\n    ${EXAMPLES[c.name]}` : ""}`
-      ).join("\n");
-      ctx.printSystemMessage(lines);
-    },
+    // Phase 41: the reference is a searchable overlay (every command from this
+    // registry + the real keybindings), not a prose dump that scrolled the
+    // user's own turn out of the transcript.
+    description: "Keys & commands — searchable reference overlay (`?` does the same)",
+    run: (_args, ctx) => ctx.openHelp(),
   },
   {
     name: "clear",
@@ -194,9 +174,10 @@ export function parseCommand(input: string): { name: string; args: string[] } | 
 }
 
 export function makeHandlers(deps: CommandHandlerDeps): CommandContext {
-  const { isBusy, printSystemMessage, applyTheme, setIsModelPickerOpen, setIsThemePickerOpen, setIsConnectOpen, session, setExpandTools } = deps;
+  const { isBusy, printSystemMessage, applyTheme, setIsModelPickerOpen, setIsThemePickerOpen, setIsConnectOpen, setIsHelpOpen, session, setExpandTools } = deps;
   return {
     clearHistory: () => handleClearHistory(deps),
+    openHelp: () => setIsHelpOpen?.(true),
     openModelPicker: () => {
       if (isBusy) {
         printSystemMessage("Cannot switch models while a turn is in flight.");

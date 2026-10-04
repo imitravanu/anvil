@@ -40,6 +40,17 @@ describe("retainReport + capReportLines", () => {
     expect(kept.length).toBeLessThanOrEqual(SUB_REPORT_RETAIN_MAX + 100);
   });
 
+  it("never splits a surrogate pair at the retain cap", () => {
+    // 3,999 ASCII + emoji + tail: a blind slice(0, 4000) retained the emoji's
+    // high half — invalid UTF-16 that a renderer shows as a replacement glyph.
+    const report = "a".repeat(SUB_REPORT_RETAIN_MAX - 1) + "😀" + "tail";
+    const kept = retainReport(report);
+    expect(kept).toContain("shortened for display");
+    expect(kept).toContain("😀");
+    const loneSurrogate = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+    expect(loneSurrogate.test(kept)).toBe(false);
+  });
+
   it("caps lines with an omission notice, handles empty", () => {
     expect(capReportLines("")).toEqual(["(empty report)"]);
     const lines = capReportLines(Array.from({ length: 35 }, (_, i) => `l${i}`).join("\n"));

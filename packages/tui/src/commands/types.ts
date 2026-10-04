@@ -13,6 +13,8 @@ import type { McpAppState } from "../components/App.js";
 export interface CommandContext {
   clearHistory: () => void;
   openModelPicker: () => void;
+  // /help: open the key/command reference overlay
+  openHelp: () => void;
   printSystemMessage: (text: string) => void; // shows a message in the transcript, not sent to the model
   // /session subcommands
   sessionList: () => void;
@@ -84,6 +86,7 @@ export interface CommandHandlerDeps {
   resumeFromStored: (stored: StoredSession) => void;
   applyTheme: (name: string) => void;
   setSession: Dispatch<SetStateAction<AgentSession>>;
+  setIsHelpOpen?: Dispatch<SetStateAction<boolean>>;
   setIsModelPickerOpen: Dispatch<SetStateAction<boolean>>;
   setIsSessionPickerOpen: Dispatch<SetStateAction<boolean>>;
   setIsConnectOpen: Dispatch<SetStateAction<boolean>>;

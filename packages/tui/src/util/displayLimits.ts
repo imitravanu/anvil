@@ -6,6 +6,7 @@ export const SUBAGENT_TASK_MAX = 60;
 export const SESSION_TITLE_MAX = 40; // session picker titles
 export const EXPANDED_MAX_LINES = 30; // expanded tool output / sub-agent reports
 export const MAX_VISIBLE_ROWS = 8; // picker window size
+export const HELP_VISIBLE_ROWS = 20; // help overlay content rows (taller: reference doc, not a picker)
 export const LEDGER_MAX_ROWS = 15; // /ledger recent rows
 export const TRANSCRIPT_STATE_CAP = 1000; // DisplayMessage[] bound
 export const TRANSCRIPT_SCROLL_PAGE = 5; // PgUp/PgDn transcript messages per press

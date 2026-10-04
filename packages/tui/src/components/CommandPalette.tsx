@@ -1,7 +1,8 @@
-import { Box, Text } from "ink";
+import { Text } from "ink";
 import { COMMANDS } from "../commands/registry.js";
 import { commandIcon, filterCommands } from "../commands/palette.js";
 import { useTheme } from "../theme/theme.js";
+import { OverlayFrame } from "./OverlayFrame.js";
 
 /**
  * DW-3.2 — command palette menu. Presentational: InputBar owns the query,
@@ -23,12 +24,10 @@ export function CommandPalette({
   // carries the bright focus border.
   const matches = filterCommands(COMMANDS, query, mru ?? []);
   return (
-    <Box
-      flexDirection="column"
-      flexShrink={0}
-      borderStyle={theme.borders.panel}
-      borderColor={theme.colors.borderFocus}
-      paddingX={1}
+    <OverlayFrame
+      title="Commands"
+      meta={query.trim() ? `“${query.trim()}”` : `(${matches.length})`}
+      hints="↑/↓ navigate · Enter run · Esc close · Tab fill"
     >
       {matches.length === 0 ? (
         <Text color={theme.colors.textSecondary}>No matching commands.</Text>
@@ -44,13 +43,9 @@ export function CommandPalette({
               {" — "}
               {command.description}
             </Text>
-            {i === highlight ? (
-              <Text color={theme.colors.accent}> (Tab fill · Enter run)</Text>
-            ) : null}
           </Text>
         ))
       )}
-      <Text color={theme.colors.textSecondary}> ↑/↓ navigate · Enter run · Esc close · Tab fill</Text>
-    </Box>
+    </OverlayFrame>
   );
 }

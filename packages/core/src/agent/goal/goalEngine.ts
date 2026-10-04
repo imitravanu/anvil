@@ -6,7 +6,7 @@ import {
 } from "./types.js";
 import { analyzeWorkspace } from "./awareness.js";
 import { AgentSession } from "../session.js";
-import { AgentOptions } from "../types.js";
+import { AgentOptions, type AgentEvent } from "../types.js";
 import { ModelProvider } from "../../providers/types.js";
 import { buildSystemPrompt } from "../../config/rules.js";
 import { TOOL_DEFINITIONS } from "../../tools/index.js";
@@ -18,6 +18,7 @@ import {
   MAX_GOAL_TURNS,
   GOAL_REPORT_EXCERPT_CHARS,
   GOAL_MILESTONE_SUMMARY_MAX_CHARS,
+  DEFAULT_MAX_TOKENS,
 } from "../../config/constants.js";
 export { MAX_GOAL_TURNS };
 
@@ -37,6 +38,49 @@ export interface GoalTurnOutcome {
   verificationFailed: boolean;
   permissionDenied: boolean;
   cancelled: boolean;
+}
+
+/**
+ * Cap on milestones accepted from one plan. The prompt asks for 2–4; a runaway
+ * list would flood the mission deck and queue turns no one reviewed. Extra
+ * entries are dropped — the mission still runs on the first (highest-priority)
+ * ones rather than refusing the whole plan.
+ */
+const MAX_PARSED_MILESTONES = 8;
+
+/**
+ * Fold one session event into a mission turn's outcome — the single owner of
+ * the event→outcome rule, shared by GoalEngine's turn runner and the TUI's
+ * live-session runner. The two hand-rolled copies HAD diverged: the TUI never
+ * counted `verification_gave_up` as a failure (so a milestone could be marked
+ * complete on a turn whose tests were still failing), and it let an early
+ * failure stick past a successful repair. Verdicts are last-wins where the
+ * engine can revise them — `verification_result` reports the FINAL probe, so a
+ * repaired turn clears the failure; `verification_gave_up` is terminal.
+ */
+export function accumulateGoalOutcome(outcome: GoalTurnOutcome, event: AgentEvent): void {
+  switch (event.type) {
+    case "text_delta":
+      outcome.text += event.text;
+      break;
+    case "verification_result":
+      outcome.verificationFailed = !event.passed;
+      break;
+    case "verification_gave_up":
+      outcome.verificationFailed = true;
+      break;
+    case "tool_permission_denied":
+      outcome.permissionDenied = true;
+      break;
+    case "error":
+      outcome.errored = true;
+      break;
+    case "cancelled":
+      outcome.cancelled = true;
+      break;
+    default:
+      break;
+  }
 }
 
 /**
@@ -63,34 +107,87 @@ function emptyOutcome(): GoalTurnOutcome {
 }
 
 /**
+ * First COMPLETE JSON array in `rawText`, scanned with a string-aware bracket
+ * counter. The greedy regex this replaced matched from the first `[` to the
+ * LAST `]` in the reply, so any array mentioned after the plan (an example,
+ * "options: [...]") merged into one unparseable blob and a valid plan was
+ * silently thrown away for the deterministic fallback. Returns null when
+ * nothing parseable is found; the fallback owns that case. Pure.
+ */
+function extractJsonArray(rawText: string): unknown[] | null {
+  for (let start = rawText.indexOf("["); start !== -1; start = rawText.indexOf("[", start + 1)) {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    let ended = false;
+    for (let i = start; i < rawText.length; i++) {
+      const ch = rawText[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (ch === "\\") escaped = true;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') inString = true;
+      else if (ch === "[") depth += 1;
+      else if (ch === "]") {
+        depth -= 1;
+        if (depth === 0) {
+          ended = true;
+          try {
+            const parsed: unknown = JSON.parse(rawText.slice(start, i + 1));
+            if (Array.isArray(parsed)) return parsed;
+          } catch {
+            // Not JSON (prose brackets, a truncated example) — try the next '['.
+          }
+          break;
+        }
+      }
+    }
+    // Ran past the end without closing: no complete array can follow either.
+    if (!ended && depth > 0) return null;
+  }
+  return null;
+}
+
+/**
+ * Validate and normalize model-supplied milestone rows. The old mapping
+ * fabricated `Milestone N` / `"Milestone completion criteria"` for anything
+ * shaped wrong, so an empty object became an executable milestone with invented
+ * criteria. A row without a usable title is dropped instead; ids are made
+ * unique (the plan deck and plan updates address milestones by id, so a
+ * duplicate would move two rows at once). Null when nothing is usable.
+ */
+function normalizeMilestones(parsed: readonly unknown[]): GoalMilestone[] | null {
+  const out: GoalMilestone[] = [];
+  const seenIds = new Set<string>();
+  for (const row of parsed) {
+    if (out.length >= MAX_PARSED_MILESTONES) break;
+    if (row === null || typeof row !== "object" || Array.isArray(row)) continue;
+    const rec = row as Record<string, unknown>;
+    const title = typeof rec.title === "string" ? rec.title.trim() : "";
+    if (!title) continue;
+    const criteria =
+      typeof rec.criteria === "string" && rec.criteria.trim().length > 0 ? rec.criteria.trim() : title;
+    const rawId = typeof rec.id === "string" ? rec.id.trim() : "";
+    let id = rawId.length > 0 ? rawId : String(out.length + 1);
+    if (seenIds.has(id)) id = `${id}-${out.length + 1}`;
+    seenIds.add(id);
+    out.push({ id, title, criteria, status: "pending" });
+  }
+  return out.length > 0 ? out : null;
+}
+
+/**
  * Parse milestone JSON or fall back to a deterministic plan scaled to the
  * goal: a short, single-action goal gets ONE milestone; only broad goals
  * earn the 3-phase plan.
  */
 export function parseMilestones(rawText: string, goal: string): GoalMilestone[] {
-  try {
-    // Fenced JSON first — models wrap arrays in ```json fences more often
-    // than not, and the greedy fallback below can span prose if two arrays
-    // or an example appear in the reply.
-    const fenced = rawText.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
-    const jsonMatch = fenced?.[1] ?? rawText.match(/\[\s*\{[\s\S]*\}\s*\]/)?.[0];
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const list: unknown[] = parsed;
-        return list.map((m, idx) => {
-          const rec = (m !== null && typeof m === "object" ? m : {}) as Record<string, unknown>;
-          return {
-            id: String(rec.id ?? idx + 1),
-            title: String(rec.title ?? `Milestone ${idx + 1}`),
-            criteria: String(rec.criteria ?? "Milestone completion criteria"),
-            status: "pending" as const,
-          };
-        });
-      }
-    }
-  } catch {
-    // fallback below
+  const parsed = extractJsonArray(rawText);
+  if (parsed) {
+    const normalized = normalizeMilestones(parsed);
+    if (normalized) return normalized;
   }
 
   const ACTION_VERBS =
@@ -442,7 +539,10 @@ export class GoalEngine {
     this.session = new AgentSession(options.provider, {
       systemPrompt: basePrompt,
       model: options.model,
-      maxTokens: 4096,
+      // The shared chat budget, not a hardcoded half-budget: reasoning models
+      // bill deliberation INSIDE the output ceiling (Probe K), so a 4,096 cap
+      // starves the visible turn — the first surface to go silent in goal mode.
+      maxTokens: DEFAULT_MAX_TOKENS,
       projectRoot: options.projectRoot,
       permissionBroker: options.permissionBroker,
       tools: options.tools ?? TOOL_DEFINITIONS,
@@ -474,13 +574,10 @@ export class GoalEngine {
   ): AsyncGenerator<GoalEvent, GoalTurnOutcome, unknown> {
     const outcome = emptyOutcome();
     for await (const event of this.session.send(prompt)) {
-      if (event.type === "text_delta") {
-        outcome.text += event.text;
-      } else if (event.type === "verification_result") {
-        // Last verdict wins. A single turn can verify-fail, repair, and then
-        // verify-pass (S1.2 always probes the final state), so a sticky failure
-        // marked a successfully repaired milestone as failed.
-        outcome.verificationFailed = !event.passed;
+      // Single owner of the outcome rule (shared with the TUI's live runner) —
+      // the branches below only produce deck progress, never outcome state.
+      accumulateGoalOutcome(outcome, event);
+      if (event.type === "verification_result") {
         if (milestone) {
           yield {
             type: "milestone_progress",
@@ -494,9 +591,8 @@ export class GoalEngine {
         }
       } else if (event.type === "verification_gave_up") {
         // Verification abandoned mid-mission: tests were last seen failing.
-        // A milestone ending this turn must not claim success, and the deck
-        // must say why.
-        outcome.verificationFailed = true;
+        // `accumulateGoalOutcome` already marked the turn failed; the deck must
+        // say why rather than showing a silent pass.
         if (milestone) {
           yield {
             type: "milestone_progress",
@@ -508,12 +604,6 @@ export class GoalEngine {
         if (milestone) {
           yield { type: "milestone_progress", milestone, detail: `Running ${event.name}...` };
         }
-      } else if (event.type === "tool_permission_denied") {
-        outcome.permissionDenied = true;
-      } else if (event.type === "error") {
-        outcome.errored = true;
-      } else if (event.type === "cancelled") {
-        outcome.cancelled = true;
       }
     }
     return outcome;

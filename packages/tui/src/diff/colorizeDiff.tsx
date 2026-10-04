@@ -68,7 +68,10 @@ export function ColorizedDiff({
   const maxText = Math.max(20, maxTextProp ?? width - 20);
   const effectiveMaxRows = Math.max(3, Math.min(MAX_DIFF_ROWS, maxRows ?? termRows - 15));
   const parsed = React.useMemo(() => parseDiff(diff), [diff]);
-  const visible = parsed.slice(0, effectiveMaxRows);
+  // Memoized slice: the pairing memo below keys on `visible`, and a fresh
+  // array every render made that key change every time, so pairRows re-ran for
+  // the whole visible window on any unrelated state update.
+  const visible = React.useMemo(() => parsed.slice(0, effectiveMaxRows), [parsed, effectiveMaxRows]);
   const omitted = parsed.length - visible.length;
   // Pair only the rows that render — full-diff pairing wasted CPU on large diffs.
   const words = React.useMemo(() => pairRows(visible, (r) => r.text), [visible]);

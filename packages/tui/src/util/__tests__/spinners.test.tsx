@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { Text } from "ink";
-import { frameText, renderThemed } from "../../test-utils/testRender.js";
+import { frameText, renderThemed, tick } from "../../test-utils/testRender.js";
 import { SPINNERS, useBlink, useSpinnerFrame, type SpinnerStyle } from "../useSpinner.js";
 
 function SpinnerProbe({ style }: { style: SpinnerStyle }) {
@@ -46,5 +46,40 @@ describe("useBlink", () => {
     const rendered = renderThemed(<BlinkProbe />);
     expect(frameText(rendered.lastFrame)).toBe("ON");
     rendered.unmount();
+  });
+});
+
+describe("ANVIL_NO_ANIM", () => {
+  let saved: string | undefined;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.ANVIL_NO_ANIM;
+    else process.env.ANVIL_NO_ANIM = saved;
+  });
+
+  const withNoEnv = () => {
+    saved = process.env.ANVIL_NO_ANIM;
+    process.env.ANVIL_NO_ANIM = "1";
+  };
+  const restoreEnv = () => {
+    if (saved === undefined) delete process.env.ANVIL_NO_ANIM;
+    else process.env.ANVIL_NO_ANIM = saved;
+  };
+
+  it("freezes an ACTIVE spinner on its first frame (same contract as the wordmark)", async () => {
+    withNoEnv();
+    const rendered = renderThemed(<SpinnerProbe style="dots" />);
+    await tick(250); // three 80 ms spinner frames have elapsed by now
+    expect(frameText(rendered.lastFrame)).toBe(SPINNERS.dots.frames[0]);
+    rendered.unmount();
+    restoreEnv();
+  });
+
+  it("keeps the streaming cursor visible instead of blinking", async () => {
+    withNoEnv();
+    const rendered = renderThemed(<BlinkProbe />);
+    await tick(700); // past SPINNER_BLINK_INTERVAL_MS (530)
+    expect(frameText(rendered.lastFrame)).toBe("ON");
+    rendered.unmount();
+    restoreEnv();
   });
 });

@@ -1,6 +1,7 @@
 import { getErrorMessage } from "../../errors.js";
 import { TEAM_DEFAULT_ITERATIONS, TEAM_MAX_AGENTS, SUB_AGENT_REPORT_MAX_CHARS } from "../../config/constants.js";
 import { instrumentRunner, isTeamStrategy, TEAM_STRATEGIES } from "./types.js";
+import { headChars } from "../../text.js";
 import type { TeamMemberResult, TeamMemberSpec, TeamRunnerDeps, TeamRunResult, TeamSpec } from "./types.js";
 
 /**
@@ -47,8 +48,11 @@ export function validateTeamSpec(spec: TeamSpec): string | null {
 function mergeReports(results: TeamMemberResult[]): string {
   const parts = results.map((r) => `## ${r.id}\n${r.report}`);
   const combined = parts.join("\n\n");
-  if (combined.length <= SUB_AGENT_REPORT_MAX_CHARS) return combined;
-  return combined.slice(0, SUB_AGENT_REPORT_MAX_CHARS) + "\n[team report truncated]";
+  // headChars, not slice: the merged report rides back to the model, and a cap
+  // landing mid-surrogate-pair would hand it a lone surrogate (see text.ts).
+  const head = headChars(combined, SUB_AGENT_REPORT_MAX_CHARS);
+  if (head === combined) return combined;
+  return head + "\n[team report truncated]";
 }
 
 export async function runTeam(spec: TeamSpec, deps: TeamRunnerDeps, signal: AbortSignal): Promise<TeamRunResult> {

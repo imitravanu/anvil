@@ -11,8 +11,11 @@ import {
   visibleModels,
 } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
+import { sectionRule } from "../util/chrome.js";
+import { OverlayFrame } from "./OverlayFrame.js";
 import { groupByProvider } from "../util/grouping.js";
 import { formatCertificationBadge, formatPricingTag, pricingKind } from "../util/format.js";
+import { sanitizeTerminalText } from "../util/sanitize.js";
 import { MAX_VISIBLE_ROWS } from "../util/displayLimits.js";
 import { useWindowedList } from "../hooks/useWindowedList.js";
 
@@ -140,8 +143,11 @@ export function ModelPicker({
       setFilter((f) => f.slice(0, -1));
       return;
     }
-    if (!key.upArrow && !key.downArrow && !key.return && !key.tab && input && input.length === 1 && input >= " " && !key.ctrl && !key.meta) {
-      setFilter((f) => f + input);
+    if (!key.upArrow && !key.downArrow && !key.return && !key.tab && input && !key.ctrl && !key.meta) {
+      // Paste arrives as one multi-character chunk; a length===1 guard
+      // dropped it wholesale, so a pasted model id never reached the filter.
+      const printable = sanitizeTerminalText(input);
+      if (printable) setFilter((f) => f + printable);
       return;
     }
     if (ordered.length === 0) {
@@ -253,19 +259,16 @@ export function ModelPicker({
   }
 
   return (
-    <Box
-      flexDirection="column"
-      flexShrink={0}
-      borderStyle={theme.borders.panel}
-      // DW-3.3 focus signal: owns keystrokes while mounted.
-      borderColor={theme.colors.borderFocus}
-      paddingX={1}
+    <OverlayFrame
+      title="Select a model"
+      meta={ordered.length > 0 ? `(${selected + 1}/${ordered.length})` : "(no matches)"}
+      hints="↑/↓ · Enter switch · Esc cancel · type to filter"
     >
-      <Text color={theme.colors.primary}>
-        {ordered.length > 0
-          ? `Select a model (${selected + 1}/${ordered.length}) — type to filter, Enter to switch, Esc to cancel`
-          : "No models match the filter — backspace to clear it, Esc to cancel"}
-      </Text>
+      {ordered.length === 0 && (
+        <Text color={theme.colors.textSecondary}>
+          Nothing matches the filter — Backspace to erase, Esc to cancel.
+        </Text>
+      )}
       {filter && (
         <Text color={theme.colors.textSecondary}>
           filter: <Text color={theme.colors.toolName}>{filter}</Text> — Backspace to erase, Esc to clear
@@ -277,15 +280,16 @@ export function ModelPicker({
       )}
       {grouped.map((section) => (
         <Box key={section.key} flexDirection="column">
-          <Text color={theme.colors.textSecondary}>─ {section.header} ─</Text>
+          <Text color={theme.colors.textSecondary}>
+            {sectionRule(theme.typography.sectionDivider, 2)} {section.header}{" "}
+            {sectionRule(theme.typography.sectionDivider, 2)}
+          </Text>
           {section.rows.map(renderRow)}
         </Box>
       ))}
       {hasBelow && (
         <Text color={theme.colors.textSecondary}>  ▼ {ordered.length - (scrollOffset + MAX_VISIBLE)} more below...</Text>
       )}
-      {/* DW-2.5 footer hints — the keyboard contract, always visible. */}
-      <Text color={theme.colors.textSecondary}> ↑/↓ navigate · Enter select · Esc cancel · type to filter</Text>
-    </Box>
+    </OverlayFrame>
   );
 }

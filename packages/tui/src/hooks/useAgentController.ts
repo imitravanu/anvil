@@ -6,6 +6,7 @@ import {
   type AgentEvent,
   runGoalMission,
   MAX_GOAL_TURNS,
+  accumulateGoalOutcome,
   type GoalMilestone,
   type GoalTurnOutcome,
 } from "@anvil/core";
@@ -366,13 +367,17 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
 
       try {
         for await (const event of session.send(prompt)) {
+          // Single owner of the event→outcome rule (core). The TUI used to keep
+          // its own copy, which missed `verification_gave_up` (a milestone
+          // could complete on still-failing tests) and made a verification
+          // failure sticky even after a successful repair.
+          accumulateGoalOutcome(outcome, event);
           if (event.type === "text_delta") {
             if (textNeedsBreak) {
               textBuffer += "\n\n";
               textNeedsBreak = false;
             }
             textBuffer += event.text;
-            outcome.text += event.text;
             if (!flushTimerRef.current) {
               flushTimerRef.current = setTimeout(() => {
                 flushTimerRef.current = null;
@@ -389,10 +394,6 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
             if (event.type === "tool_finished" || event.type === "tool_permission_denied") {
               textNeedsBreak = true;
             }
-            if (event.type === "verification_result" && !event.passed) outcome.verificationFailed = true;
-            if (event.type === "tool_permission_denied") outcome.permissionDenied = true;
-            if (event.type === "error") outcome.errored = true;
-            if (event.type === "cancelled") outcome.cancelled = true;
             applyEvent(event, updateAssistant, trackUsage, setMessages, setPlan, setTestStatus);
           }
           onEvent?.(event);

@@ -1,6 +1,7 @@
 import { Box, Text, useStdout } from "ink";
 import type { DisplayVerification } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
+import { inkBorderStyle } from "../util/chrome.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
 import { curtail } from "../util/format.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
@@ -21,7 +22,7 @@ export function VerificationCard({ verification }: { verification: DisplayVerifi
   return (
     <Box
       flexDirection="column"
-      borderStyle="round"
+      borderStyle={inkBorderStyle(theme.borders.card)}
       borderColor={borderColor}
       paddingX={1}
       marginY={1}

@@ -1,0 +1,23 @@
+╔══════════════════════════════════════════════════════════════════════════════════════════════════╗
+║ Help (8 keys · 20 commands)                              type to filter · ↑/↓ scroll · Esc close ║
+║ ──────────────────────────────────────────────────────────────────────────────────────────────── ║
+║ ── Keys                                                                                          ║
+║ Enter             Send the message (queues while a turn runs)                                    ║
+║ /                 Open the command palette                                                       ║
+║ Tab               Complete the highlighted command                                               ║
+║ ↑ / ↓             Recall sent messages; navigate menus and pickers                               ║
+║ Esc               Cancel the running turn, or dismiss a menu or overlay                          ║
+║ Ctrl+C            Cancel while busy; exit when idle                                              ║
+║ PgUp / PgDn       Scroll the transcript (5 messages per press)                                   ║
+║ ?                 Open this help                                                                 ║
+║ ── Commands                                                                                      ║
+║ /help             Keys & commands — searchable reference overlay (`?` does the same)             ║
+║ /clear            Clear the conversation history                                                 ║
+║ /model            Switch model or provider                                                       ║
+║ /sync             Sync live free models (auto-catches pricing & model changes)                   ║
+║ /session          Sessions: list | new | resume [id] | rename <title> | search <text>            ║
+║ /image            Attach an image (png/jpeg/webp/gif) to your next message                       ║
+║ /connect          Add or update a provider API key                                               ║
+║ /ledger           Show this session's run ledger (what ran, tokens spent)                        ║
+║   ▼ 21 more below — ↓ to scroll                                                                  ║
+╚══════════════════════════════════════════════════════════════════════════════════════════════════╝

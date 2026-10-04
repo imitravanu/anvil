@@ -62,7 +62,10 @@ describe("FirstRunSetup", () => {
     expect(out).toContain("Could not save the key");
     // Still on the key step (masked input renders as asterisks, not the key).
     expect(out).toContain("Step 2 of 2");
-    expect(out).toContain("press Enter again");
+    // The modal frame narrows the text column, so the instruction wraps
+    // across a row boundary (and the `║` sits in the middle); strip the frame
+    // borders and normalize whitespace before asserting the phrase is present.
+    expect(out.replace(/[╔╗╚╝║═]/g, " ").replace(/\s+/g, " ")).toContain("press Enter again");
     expect(out).not.toContain("API key saved.");
     app.unmount();
   });

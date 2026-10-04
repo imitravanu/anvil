@@ -36,6 +36,7 @@ export interface UseSessionCommandsDeps {
   setIsSessionPickerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setIsConnectOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setIsThemePickerOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsHelpOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setExpandTools: React.Dispatch<React.SetStateAction<boolean>>;
   expandTools: boolean;
   setIsDiffOpen?: React.Dispatch<React.SetStateAction<boolean>>;
@@ -105,6 +106,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     setIsSessionPickerOpen,
     setIsConnectOpen,
     setIsThemePickerOpen,
+    setIsHelpOpen,
     setExpandTools,
     expandTools,
     setIsDiffOpen,
@@ -151,6 +153,10 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     printSystemMessage(`Resumed "${stored.metadata.title}" (${stored.metadata.model}).`);
     // re-emit the persisted plan once so the user sees it.
     if (restored.plan) printSystemMessage(`Plan: ${restored.plan}`);
+    // The session's provider/model becomes the ACTIVE selection, but NOT the
+    // saved default: resuming a conversation is a read of history, and letting
+    // it overwrite the global default silently changed what every FUTURE
+    // session boots with. Persist defaults only from an explicit switch.
   };
 
   const ctx = makeHandlers({
@@ -174,6 +180,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     setIsSessionPickerOpen,
     setIsConnectOpen,
     setIsThemePickerOpen,
+    setIsHelpOpen,
     setExpandTools,
     expandTools,
     setIsDiffOpen,

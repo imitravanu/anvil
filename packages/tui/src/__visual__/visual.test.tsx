@@ -14,6 +14,7 @@ import { WordmarkAnimation } from "../components/Wordmark.js";
 import { MissionDeck } from "../components/MissionDeck.js";
 import { PermissionPrompt } from "../components/PermissionPrompt.js";
 import { RewindModal } from "../components/RewindModal.js";
+import { HelpOverlay } from "../components/HelpOverlay.js";
 import { StatusBar } from "../components/StatusBar.js";
 import { THEMES, ThemeContext } from "../theme/theme.js";
 import type { DisplayMessage } from "../hooks/useAgentController.js";
@@ -297,6 +298,13 @@ describe("visual regression — TUI frames", () => {
         DEFAULT_ROWS
       ),
       "verification-card"
+    );
+  });
+
+  it("help overlay — keys + commands, windowed with a filter line", () => {
+    expectVisual(
+      renderFrame(<HelpOverlay onClose={() => undefined} />, DEFAULT_COLUMNS, DEFAULT_ROWS),
+      "help-overlay"
     );
   });
 

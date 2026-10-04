@@ -2,10 +2,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { GoalEngine, isSatisfiedVerdict, parseMilestones } from "../goalEngine.js";
+import { GoalEngine, accumulateGoalOutcome, isSatisfiedVerdict, parseMilestones } from "../goalEngine.js";
 import { FakeProvider, ScriptEntry, stalledStream } from "../../__tests__/fakeProvider.js";
 import { StreamEvent } from "../../../providers/types.js";
 import { AgentSession } from "../../session.js";
+import { DEFAULT_MAX_TOKENS } from "../../../config/constants.js";
 
 const textTurn = (text: string): StreamEvent[] => [
   { type: "text_delta", text },
@@ -41,6 +42,51 @@ describe("isSatisfiedVerdict (Phase 22.5)", () => {
   it("rejects a plain no, and tolerates surrounding whitespace", () => {
     expect(isSatisfiedVerdict("NO — criteria not met")).toBe(false);
     expect(isSatisfiedVerdict("  YES — done  ")).toBe(true);
+  });
+});
+
+// The event→outcome rule used to live twice (GoalEngine's turn runner and the
+// TUI's live runner) and the copies diverged: the TUI never counted
+// `verification_gave_up` as a failure, so a milestone could complete on
+// still-failing tests, and it let an early failure stick past a successful
+// repair. One reducer now owns the rule for both callers.
+describe("accumulateGoalOutcome (single owner of the event→outcome rule)", () => {
+  const base = () => ({
+    text: "",
+    errored: false,
+    verificationFailed: false,
+    permissionDenied: false,
+    cancelled: false,
+  });
+
+  it("treats verification_gave_up as a failure — not a pass", () => {
+    const outcome = base();
+    accumulateGoalOutcome(outcome, { type: "verification_gave_up", command: "npm test" });
+    expect(outcome.verificationFailed).toBe(true);
+  });
+
+  it("lets the LAST verification verdict win, so a successful repair clears a failure", () => {
+    const outcome = base();
+    accumulateGoalOutcome(outcome, { type: "verification_result", passed: false, summary: "failed" });
+    expect(outcome.verificationFailed).toBe(true);
+    accumulateGoalOutcome(outcome, { type: "verification_result", passed: true, summary: "passed" });
+    expect(outcome.verificationFailed).toBe(false);
+  });
+
+  it("accumulates text and the terminal signals", () => {
+    const outcome = base();
+    accumulateGoalOutcome(outcome, { type: "text_delta", text: "a" });
+    accumulateGoalOutcome(outcome, { type: "text_delta", text: "b" });
+    accumulateGoalOutcome(outcome, { type: "tool_permission_denied", id: "t1", name: "write_file" });
+    accumulateGoalOutcome(outcome, { type: "error", message: "boom" });
+    accumulateGoalOutcome(outcome, { type: "cancelled" });
+    expect(outcome).toEqual({
+      text: "ab",
+      errored: true,
+      verificationFailed: false,
+      permissionDenied: true,
+      cancelled: true,
+    });
   });
 });
 
@@ -94,6 +140,55 @@ Let's begin.`;
       const milestones = parseMilestones("No JSON here.", "Fix bug");
       expect(milestones).toHaveLength(1);
       expect(milestones[0].criteria).toBe("Fix bug");
+    });
+
+    it("drops malformed rows instead of fabricating milestones from them", () => {
+      // The old mapping turned `null`, `{}` and non-string fields into
+      // executable milestones with invented titles/criteria. A row with no
+      // usable title is not actionable and must not run.
+      const raw = JSON.stringify([
+        { id: "1", title: "Real work", criteria: "do the real work" },
+        null,
+        { id: "2" },
+        { id: "3", title: 42, criteria: "not a title" },
+        { id: "4", title: "Missing criteria" },
+      ]);
+      const milestones = parseMilestones(raw, "Broad goal with several verbs: fix and polish");
+      expect(milestones).toHaveLength(2);
+      expect(milestones[0].title).toBe("Real work");
+      expect(milestones[1].title).toBe("Missing criteria");
+      // Criteria fall back to the title, never to an invented generic string.
+      expect(milestones[1].criteria).toBe("Missing criteria");
+    });
+
+    it("makes milestone ids unique — the deck updates rows by id", () => {
+      const raw = JSON.stringify([
+        { id: "dup", title: "First", criteria: "a" },
+        { id: "dup", title: "Second", criteria: "b" },
+      ]);
+      const milestones = parseMilestones(raw, "Fix bug");
+      expect(milestones.map((m) => m.id)).toEqual(["dup", "dup-2"]);
+    });
+
+    it("extracts the plan when a second object array follows it in prose", () => {
+      // The greedy regex matched from the first `[` to the LAST `}]` in the
+      // reply, merging the trailing example into the plan blob; JSON.parse then
+      // failed and the deterministic fallback silently replaced the REAL plan.
+      const raw =
+        '[{"id":"1","title":"Real plan","criteria":"do it"}] Another example: [{"id":"9","title":"Example","criteria":"e"}]';
+      const milestones = parseMilestones(raw, "Broad goal with several verbs: fix and polish");
+      expect(milestones).toHaveLength(1);
+      expect(milestones[0].title).toBe("Real plan");
+    });
+
+    it("caps a runaway milestone list and keeps the first entries", () => {
+      const raw = JSON.stringify(
+        Array.from({ length: 12 }, (_, i) => ({ id: String(i + 1), title: `M${i + 1}`, criteria: `c${i}` }))
+      );
+      const milestones = parseMilestones(raw, "Fix bug");
+      expect(milestones).toHaveLength(8);
+      expect(milestones[0].title).toBe("M1");
+      expect(milestones[7].title).toBe("M8");
     });
   });
 
@@ -169,6 +264,10 @@ Let's begin.`;
       expect(result.milestones[1].status).toBe("completed");
       expect(result.criticVerdict).toContain("Adversarial critique");
       expect(result.totalTurns).toBeGreaterThanOrEqual(3);
+      // The shared chat budget, not the old hardcoded 4,096: reasoning models
+      // bill deliberation inside the output ceiling, so the half-budget
+      // starved goal turns (Probe K).
+      expect(provider.calls[0].maxTokens).toBe(DEFAULT_MAX_TOKENS);
     });
 
     it("marks a milestone FAILED when self-review rejects it, and the run is not a success", async () => {

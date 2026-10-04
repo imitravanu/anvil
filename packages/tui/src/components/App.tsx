@@ -6,6 +6,8 @@ import {
   createProviders,
   loadCredentials,
   loadSession,
+  loadSettings,
+  saveSettings,
   analyzeWorkspace,
   type AgentOptions,
   type McpServerConnection,
@@ -34,8 +36,10 @@ import { DiffModal } from "./DiffModal.js";
 import { RewindModal } from "./RewindModal.js";
 import { SessionPicker } from "./SessionPicker.js";
 import { ThemePicker } from "./ThemePicker.js";
+import { HelpOverlay } from "./HelpOverlay.js";
 import { StatusBar } from "./StatusBar.js";
 import { TRANSCRIPT_SCROLL_PAGE } from "../util/displayLimits.js";
+import { sectionRule } from "../util/chrome.js";
 
 // Provider labels live in util/labels.ts — single source of truth.
 
@@ -150,6 +154,8 @@ export function App({
   const [isSessionPickerOpen, setIsSessionPickerOpen] = useState(false);
   const [isConnectOpen, setIsConnectOpen] = useState(false);
   const [isThemePickerOpen, setIsThemePickerOpen] = useState(false);
+  // /help and `?` — reference overlay (keys + every registered command).
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isDiffOpen, setIsDiffOpen] = useState(false);
   const [branchDiff, setBranchDiff] = useState<{ branch: string; diff: string } | null>(null);
   const [isRewindOpen, setIsRewindOpen] = useState(false);
@@ -178,6 +184,7 @@ export function App({
     isModelPickerOpen ||
     isSessionPickerOpen ||
     isThemePickerOpen ||
+    isHelpOpen ||
     isConnectOpen;
   useInput((_input, key) => {
     if (overlaysOpen) return;
@@ -215,6 +222,7 @@ export function App({
     setIsSessionPickerOpen,
     setIsConnectOpen,
     setIsThemePickerOpen,
+    setIsHelpOpen,
     setExpandTools,
     expandTools,
     setIsDiffOpen,
@@ -248,6 +256,16 @@ export function App({
     setActiveProviderId(provider.id);
     setCurrentModel(modelInfo.id);
     setIsModelPickerOpen(false);
+    try {
+      saveSettings({
+        ...loadSettings(),
+        defaultProviderId: provider.id,
+        defaultModel: modelInfo.id,
+      });
+    } catch {
+      // intentional: settings persistence is best-effort — the model switch is
+      // already applied in memory, and a failed write must not break the UI.
+    }
   };
 
   const handleSessionPick = (id: string) => {
@@ -292,7 +310,7 @@ export function App({
           forever, so Ink always uses its stable in-place diff path. */}
       <Box
         flexDirection="column"
-        borderStyle="round"
+        borderStyle={resolveTheme(themeName).borders.panel}
         borderColor={resolveTheme(themeName).colors.border}
         height={Math.max(9, rows - 1)}
         width={stdout?.columns ?? 80}
@@ -397,6 +415,8 @@ export function App({
             onDone={handleConnectDone}
             onCancel={() => setIsConnectOpen(false)}
           />
+        ) : isHelpOpen ? (
+          <HelpOverlay onClose={() => setIsHelpOpen(false)} />
         ) : (
           <InputBar
             isBusy={isBusy}
@@ -408,6 +428,7 @@ export function App({
             onCancel={cancel}
             sentHistory={sentHistory}
             mruCommands={mruCommands}
+            onOpenHelp={() => setIsHelpOpen(true)}
           />
         )}
         <StatusBar
@@ -425,10 +446,12 @@ export function App({
 }
 
 /** Full-width horizontal rule separating the frame's zones. Width accounts for
- * the outer frame's two border columns so the rule spans the content exactly. */
+ * the outer frame's two border columns so the rule spans the content exactly;
+ * the glyph comes from the theme's `sectionDivider` (Phase 41), so a custom
+ * theme's divider reach every zone boundary, not just the overlays'. */
 function Divider() {
   const { stdout } = useStdout();
   const theme = useTheme();
   const width = Math.max(0, (stdout?.columns ?? 80) - 2);
-  return <Text dimColor>{"─".repeat(width)}</Text>;
+  return <Text dimColor>{sectionRule(theme.typography.sectionDivider, width)}</Text>;
 }

@@ -3,6 +3,7 @@ import { Box, Text, useInput } from "ink";
 import { listSessions } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 import { curtail, displayModelLabel, relativeTime } from "../util/format.js";
+import { OverlayFrame } from "./OverlayFrame.js";
 import { SESSION_TITLE_MAX, MAX_VISIBLE_ROWS } from "../util/displayLimits.js";
 import { useWindowedList } from "../hooks/useWindowedList.js";
 
@@ -51,17 +52,11 @@ export function SessionPicker({
   const visibleSessions = sessions.slice(scrollOffset, scrollOffset + MAX_VISIBLE);
 
   return (
-    <Box
-      flexDirection="column"
-      flexShrink={0}
-      borderStyle="round"
-      // DW-3.3 focus signal: owns keystrokes while mounted.
-      borderColor={theme.colors.borderFocus}
-      paddingX={1}
+    <OverlayFrame
+      title="Saved sessions"
+      meta={sessions.length > 0 ? `(${selected + 1}/${sessions.length})` : undefined}
+      hints="↑/↓ · Enter resume · Esc cancel"
     >
-      <Text color={theme.colors.primary}>
-        Saved sessions{sessions.length > 0 ? ` (${selected + 1}/${sessions.length})` : ""} — Enter to resume, Esc to cancel
-      </Text>
       {loaded.failed ? (
         <Text color={theme.colors.toolError}>Could not load saved sessions (sessions dir unreadable).</Text>
       ) : sessions.length === 0 ? (
@@ -84,6 +79,6 @@ export function SessionPicker({
           )}
         </>
       )}
-    </Box>
+    </OverlayFrame>
   );
 }

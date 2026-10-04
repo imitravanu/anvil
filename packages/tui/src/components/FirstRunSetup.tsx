@@ -5,6 +5,7 @@ import type { ProviderId } from "@anvil/core";
 import { getErrorMessage, saveCredential } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 import { PROVIDER_META } from "../util/providers.js";
+import { OverlayFrame } from "./OverlayFrame.js";
 
 const PROVIDERS = PROVIDER_META;
 
@@ -48,9 +49,17 @@ export function FirstRunSetup({
     }
   });
 
+  // Phase 41 — onboarding is framed like every other overlay instead of bare
+  // text: theme modal border, brand title, step in the meta slot.
+  const brandTitle = `${theme.typography.brandIcon} ${theme.typography.brandName}`;
+
   if (step === "provider") {
     return (
-      <Box flexDirection="column" flexShrink={0} paddingX={1}>
+      <OverlayFrame
+        title={brandTitle}
+        meta="connect a provider"
+        hints={onCancel ? "Esc cancel" : undefined}
+      >
         <Text color={theme.colors.primary}>{title}</Text>
         <Text color={theme.colors.textSecondary}>Step 1 of 2 — choose a provider, Enter to continue{onCancel ? ", Esc to cancel" : ""}:</Text>
         {PROVIDERS.map((p, i) => (
@@ -59,14 +68,14 @@ export function FirstRunSetup({
             {p.marketLabel}
           </Text>
         ))}
-      </Box>
+      </OverlayFrame>
     );
   }
 
   if (step === "key") {
     return (
-      <Box flexDirection="column" flexShrink={0} paddingX={1}>
-        <Text color={theme.colors.textSecondary}>Step 2 of 2 — paste the key (↑/↓ won't work here)</Text>
+      <OverlayFrame title={brandTitle} meta="Step 2 of 2" hints={onCancel ? "Esc cancel" : undefined}>
+        <Text color={theme.colors.textSecondary}>Paste the key — ↑/↓ won't work here</Text>
         <Text color={theme.colors.primary}>
           Paste your {provider.marketLabel} API key (input is hidden):
         </Text>
@@ -108,15 +117,15 @@ export function FirstRunSetup({
             setStep("done");
           }}
         />
-      </Box>
+      </OverlayFrame>
     );
   }
 
   // done — wait for Enter, then hand off to the caller
   return (
-    <Box flexDirection="column" flexShrink={0} paddingX={1}>
+    <OverlayFrame title={brandTitle} meta="ready" hints="Enter continue">
       <Text color={theme.colors.toolDone}>✓ {provider.marketLabel} API key saved.</Text>
       <Text color={theme.colors.textSecondary}>Add more providers or press Enter to continue.</Text>
-    </Box>
+    </OverlayFrame>
   );
 }

@@ -6,8 +6,10 @@
 
                  Just type a task — I can read, edit, and run code in this project.
 
+                          ↵ send · ↑/↓ history · PgUp/PgDn scroll · ? help
+
                            Try:
-                           /help — list commands
+                           /help — every key & command
                            /model — switch model or provider
                            /goal — autonomous mission with plan & critique
                            /diff — review file changes & unified diffs

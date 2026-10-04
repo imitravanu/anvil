@@ -13,9 +13,10 @@ interface InputBarProps {
   onCancel: () => void;
   sentHistory?: string[]; // this session's sent messages, for Up/Down recall
   mruCommands?: readonly string[]; // most-recently-used slash commands first
+  onOpenHelp?: () => void; // `?` on an empty prompt — the key/command reference
 }
 
-export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [], mruCommands = [] }: InputBarProps) {
+export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [], mruCommands = [], onOpenHelp }: InputBarProps) {
   const theme = useTheme();
   const { exit } = useApp();
   const [value, setValue] = useState("");
@@ -39,7 +40,7 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [], mruComm
     setCommandIndex(0);
   }, [matchingCommands.length, slashText]);
 
-  useInput((_input, key) => {
+  useInput((input, key) => {
     // Esc: cancel a busy turn FIRST (the one thing a user must always be able
     // to reach), then dismiss the slash menu.
     if (key.escape) {
@@ -51,6 +52,13 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [], mruComm
         setValue(""); // dismiss the menu and go back to typing
         return;
       }
+    }
+    // `?` on an EMPTY prompt opens help (the lazygit/k9s contract). With text
+    // already typed it is an ordinary character: a draft starting with "?" is
+    // a question, not a request for the manual.
+    if (input === "?" && value === "" && onOpenHelp) {
+      onOpenHelp();
+      return;
     }
     // Slash-menu keys: arrows navigate, Tab fills.
     if (showCommandMenu) {
@@ -75,7 +83,7 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [], mruComm
     // exit cleanly while idle. Ink delivers Ctrl+C as "c" with key.ctrl set
     // (use-input.js maps ctrl keys to keypress.name); accept the raw \x03 byte
     // too, in case a future Ink version changes that mapping.
-    if (key.ctrl && (_input === "c" || _input === "\x03")) {
+    if (key.ctrl && (input === "c" || input === "\x03")) {
       if (isBusy) {
         onCancel();
         return;

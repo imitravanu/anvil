@@ -315,7 +315,18 @@ export const definition: ToolDefinition = {
 };
 
 export const execute: ToolExecutor = async (input, ctx: ToolContext): Promise<ToolExecutionResult> => {
-  const pattern = (input as { pattern?: string })?.pattern;
+  const rawPattern = (input as { pattern?: unknown } | null | undefined)?.pattern;
+  // A non-string pattern is caller error: passing it on made argvWithPattern's
+  // `pattern.startsWith` throw a TypeError that `executeTool`'s catch reported
+  // as a generic "verify_tests failed". Say what the tool actually needs.
+  if (rawPattern !== undefined && typeof rawPattern !== "string") {
+    return {
+      output: { error: "verify_tests requires `pattern` to be a string when provided." },
+      isError: true,
+      summary: "verify_tests failed: pattern must be a string",
+    };
+  }
+  const pattern = rawPattern;
   const cmd = detectTestCommand(ctx.projectRoot);
 
   if (!cmd) {

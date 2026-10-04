@@ -1,4 +1,5 @@
 import { useAnimation } from "ink";
+import { SPINNER_BLINK_INTERVAL_MS } from "./displayLimits.js";
 
 /**
  * DW-3.1 & Phase 29.7 — context-matched spinner system.
@@ -19,18 +20,31 @@ export const SPINNERS = {
 
 export type SpinnerStyle = keyof typeof SPINNERS;
 
-/** Cycles the style's frames while `active`; freezes otherwise. */
+/**
+ * `ANVIL_NO_ANIM=1` — reduced motion. Read at call time (not module load) so a
+ * test can toggle it, and honored by EVERY animated affordance: the wordmark
+ * already advertised this contract, but the spinners and cursor ignored it, so
+ * a no-animation run still flickered at 12 fps.
+ */
+function noAnim(): boolean {
+  return process.env.ANVIL_NO_ANIM === "1";
+}
+
+/** Cycles the style's frames while `active`; held on the first frame under ANVIL_NO_ANIM. */
 export function useSpinnerFrame(active: boolean, style: SpinnerStyle = "dots"): string {
   const { frames, interval } = SPINNERS[style];
-  const { frame } = useAnimation({ interval, isActive: active });
-  return frames[frame % frames.length];
+  const frozen = noAnim();
+  const { frame } = useAnimation({ interval, isActive: active && !frozen });
+  return frozen ? frames[0] : frames[frame % frames.length];
 }
 
 /**
  * DW-3.4 — blinking block cursor for streaming text. Visible on mount so
- * static test frames are deterministic; toggles on the interval while active.
+ * static test frames are deterministic; toggles on the interval while active,
+ * or stays steadily visible under ANVIL_NO_ANIM (a flicker is motion too).
  */
-export function useBlink(active: boolean, intervalMs = 530): boolean {
-  const { frame } = useAnimation({ interval: intervalMs, isActive: active });
-  return frame % 2 === 0;
+export function useBlink(active: boolean, intervalMs = SPINNER_BLINK_INTERVAL_MS): boolean {
+  const frozen = noAnim();
+  const { frame } = useAnimation({ interval: intervalMs, isActive: active && !frozen });
+  return frozen ? true : frame % 2 === 0;
 }

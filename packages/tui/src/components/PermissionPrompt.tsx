@@ -165,7 +165,7 @@ export function PermissionPrompt({
             <Box
               key={option}
               flexShrink={0}
-              borderStyle="round"
+              borderStyle={theme.borders.panel}
               borderColor={i === selected ? theme.colors.brand : theme.colors.separator}
               paddingX={1}
             >

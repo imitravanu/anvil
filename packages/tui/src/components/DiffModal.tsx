@@ -138,7 +138,7 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
     return (
       <Box
         flexDirection="column"
-        borderStyle="round"
+        borderStyle={theme.borders.modal}
         borderColor={theme.colors.accent}
         paddingX={2}
         paddingY={1}
@@ -152,7 +152,7 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
     return (
       <Box
         flexDirection="column"
-        borderStyle="round"
+        borderStyle={theme.borders.modal}
         borderColor={theme.colors.toolError}
         paddingX={2}
         paddingY={1}
@@ -173,7 +173,7 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
     return (
       <Box
         flexDirection="column"
-        borderStyle="round"
+        borderStyle={theme.borders.modal}
         borderColor={theme.colors.primary}
         paddingX={1}
         height={height}
@@ -211,7 +211,7 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
     return (
       <Box
         flexDirection="column"
-        borderStyle="round"
+        borderStyle={theme.borders.modal}
         borderColor={theme.colors.border}
         paddingX={2}
         paddingY={1}
@@ -242,7 +242,7 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
   return (
     <Box
       flexDirection="column"
-      borderStyle="round"
+      borderStyle={theme.borders.modal}
       // DW-3.3 focus signal: the viewer owns keystrokes while mounted.
       borderColor={theme.colors.borderFocus}
       paddingX={1}

@@ -113,6 +113,21 @@ export function tailChars(text: string, max: number): string {
   return chars.slice(-max).join("");
 }
 
+/**
+ * Code-point-aware HEAD truncation (mirror of `tailChars`): the first `max`
+ * code points, no marker. `slice(0, max)` counts UTF-16 units and can end on
+ * the high half of a surrogate pair — the retained state then holds invalid
+ * UTF-16, which JSON.stringify escapes as a lone surrogate and the provider (or
+ * a renderer) turns into a replacement glyph. Callers that want an ellipsis use
+ * `curtail`; this is for caps whose omission marker is added separately.
+ */
+export function headChars(text: string, max: number): string {
+  if (max <= 0) return "";
+  const chars = Array.from(text);
+  if (chars.length <= max) return text;
+  return chars.slice(0, max).join("");
+}
+
 // Terminal cells, not code points: 🧪/🔧/🎯 are 2 cells wide, │ ⎌ ◈ are 1.
 // Covers the wide ranges Anvil actually renders (emoji, CJK, fullwidth forms);
 // anything unlisted counts 1, which only risks a wrap — never a crash.

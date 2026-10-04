@@ -29,7 +29,12 @@ function EmptyState({ model, providerId }: { model: string; providerId?: string 
   return (
     <Box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1}>
       {mode === "plain" ? (
-        <Text color={theme.colors.primary} bold>anvil</Text>
+        // Phase 41: the wordmark's plain fallback is the THEME's brand name
+        // (a custom theme can call itself something else). The animated pixel
+        // wordmark above spells ANVIL by construction — a bitmap, not text.
+        <Text color={theme.colors.primary} bold>
+          {theme.typography.brandName.toLowerCase()}
+        </Text>
       ) : (
         <WordmarkAnimation skipAnimation={mode === "static"} onSettled={() => setSettled(true)} />
       )}
@@ -51,9 +56,17 @@ function EmptyState({ model, providerId }: { model: string; providerId?: string 
           <Box marginTop={1} flexDirection="column">
             <Text color={theme.colors.userText}>Just type a task — I can read, edit, and run code in this project.</Text>
           </Box>
+          <Box marginTop={1}>
+            {/* Phase 41: the keyboard contract, on the first screen. Off-TTY
+                (tests) it is static text; the `?` key is what opens the
+                searchable reference in the running app. */}
+            <Text color={theme.colors.textMuted}>
+              ↵ send · ↑/↓ history · PgUp/PgDn scroll · ? help
+            </Text>
+          </Box>
           <Box marginTop={1} flexDirection="column">
             <Text color={theme.colors.textSecondary}>Try:</Text>
-            <Text><Text color={theme.colors.primary}>/help</Text><Text color={theme.colors.textSecondary}> — list commands</Text></Text>
+            <Text><Text color={theme.colors.primary}>/help</Text><Text color={theme.colors.textSecondary}> — every key & command</Text></Text>
             <Text><Text color={theme.colors.primary}>/model</Text><Text color={theme.colors.textSecondary}> — switch model or provider</Text></Text>
             <Text><Text color={theme.colors.primary}>/goal</Text><Text color={theme.colors.textSecondary}> — autonomous mission with plan & critique</Text></Text>
             <Text><Text color={theme.colors.primary}>/diff</Text><Text color={theme.colors.textSecondary}> — review file changes & unified diffs</Text></Text>
