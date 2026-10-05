@@ -263,11 +263,42 @@ export function runNativeGateWatch(opts: NativeGateOptions): Promise<number> {
 
   let watcher: fs.FSWatcher;
   try {
-    watcher = fs.watch(cwd, { recursive: true }, (_event, filename) => {
-      const name = filename ?? "";
-      if (name.includes("node_modules") || name.includes(".git") || name.startsWith("dist")) return;
-      debouncer.schedule();
-    });
+    if (process.platform === "linux") {
+      // `recursive: true` is macOS/Windows only — on Linux it watches the top
+      // dir alone, so subdir writes never rescan. Watch the top two levels
+      // explicitly; deeper changes still surface via the diff rescan on save.
+      const watchers: fs.FSWatcher[] = [];
+      const watchDir = (dir: string): void => {
+        try {
+          watchers.push(
+            fs.watch(dir, (_event, filename) => {
+              const name = filename ?? "";
+              if (name.includes("node_modules") || name.includes(".git") || name.includes("dist")) return;
+              debouncer.schedule();
+            })
+          );
+        } catch {
+          // intentional: an unreadable subdir must not break the whole watch.
+        }
+      };
+      watchDir(cwd);
+      try {
+        for (const entry of fs.readdirSync(cwd, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue;
+          if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "dist") continue;
+          watchDir(`${cwd}/${entry.name}`);
+        }
+      } catch {
+        // intentional: a readdir failure still leaves the top-level watch live.
+      }
+      watcher = { close: () => { for (const w of watchers) w.close(); } } as fs.FSWatcher;
+    } else {
+      watcher = fs.watch(cwd, { recursive: true }, (_event, filename) => {
+        const name = filename ?? "";
+        if (name.includes("node_modules") || name.includes(".git") || name.includes("dist")) return;
+        debouncer.schedule();
+      });
+    }
   } catch (err: unknown) {
     process.stderr.write(`anvil gate --watch: cannot watch ${cwd}: ${getErrorMessage(err)}\n`);
     return Promise.resolve(1);

@@ -59,7 +59,8 @@ export { MAX_STDIN_BYTES, MAX_STDIN_WAIT_MS };
 export async function readStdin(
   idleMs = STDIN_IDLE_TIMEOUT_MS,
   maxBytes = MAX_STDIN_BYTES,
-  maxWaitMs = MAX_STDIN_WAIT_MS
+  maxWaitMs = MAX_STDIN_WAIT_MS,
+  quiet = false
 ): Promise<string> {
   if (process.stdin.isTTY) return "";
   return new Promise((resolve) => {
@@ -82,7 +83,7 @@ export async function readStdin(
       totalBytes += buf.length;
       chunks.push(buf);
       if (totalBytes >= maxBytes) {
-        process.stderr.write(`[anvil] stdin exceeded ${Math.round(maxBytes / 1024)} KB — truncating\n`);
+        if (!quiet) process.stderr.write(`[anvil] stdin exceeded ${Math.round(maxBytes / 1024)} KB — truncating\n`);
         finish(Buffer.concat(chunks).subarray(0, maxBytes).toString("utf8"));
         return;
       }
@@ -93,15 +94,17 @@ export async function readStdin(
     const onEnd = () => finish(Buffer.concat(chunks).toString("utf8"));
     const onError = () => finish("");
     const onIdle = () => {
-      process.stderr.write(
-        `[anvil] no EOF on stdin after ${Math.round(idleMs / 1000)}s — continuing without piped input\n`
-      );
+      if (!quiet) {
+        process.stderr.write(
+          `[anvil] no EOF on stdin after ${Math.round(idleMs / 1000)}s — continuing without piped input\n`
+        );
+      }
       process.stdin.destroy();
       finish(Buffer.concat(chunks).toString("utf8"));
     };
     let idle = setTimeout(onIdle, idleMs);
     hardTimer = setTimeout(() => {
-      process.stderr.write(`[anvil] stdin reached hard timeout (${Math.round(maxWaitMs / 1000)}s) — continuing\n`);
+      if (!quiet) process.stderr.write(`[anvil] stdin reached hard timeout (${Math.round(maxWaitMs / 1000)}s) — continuing\n`);
       finish(Buffer.concat(chunks).toString("utf8"));
     }, maxWaitMs);
     process.stdin.on("data", onData);

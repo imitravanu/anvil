@@ -420,7 +420,14 @@ export async function callTool(
     return { output: result, isError: (result as { isError?: unknown }).isError === true };
   } catch (err: unknown) {
     const msg = getErrorMessage(err).toLowerCase();
-    const isTransportDead = msg.includes("transport closed") || msg.includes("econnreset") || msg.includes("epipe");
+    const isTransportDead =
+      msg.includes("transport closed") ||
+      msg.includes("econnreset") ||
+      msg.includes("epipe") ||
+      msg.includes("etimedout") ||
+      msg.includes("econnrefused") ||
+      msg.includes("socket hang up") ||
+      msg.includes("closed");
     if (isTransportDead && conn.serverConfig) {
       const reconnected = await reconnectServerConnection(conn, { timeoutMs: opts?.timeoutMs ?? conn.timeoutMs });
       if (reconnected && conn.client) {

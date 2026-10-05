@@ -2,6 +2,14 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **IN-PROGRESS 2026-10-06 (chief-engineer Batch B P1 — permission/CLI/MCP):**
+> owns `packages/tui/src/permission/TuiPermissionBroker.ts`,
+> `packages/cli/src/gate.ts`, `packages/cli/src/headless.ts`,
+> `packages/cli/src/index.tsx`, `packages/core/src/mcp/client.ts`.
+> No protected artifact touched.
+> Live probes: always-allow queued true/true, post-abort deny, latch clear.
+> Gate 2026-10-06 FULL GREEN Steps 0-5.
+>
 > **DONE 2026-10-06 (chief-engineer P0 batch + AST parser defects verified live, no md trusted):**
 > owns `packages/core/src/lsp/client.ts`, `packages/core/src/config/constants.ts`,
 > `packages/core/src/session/store.ts`,

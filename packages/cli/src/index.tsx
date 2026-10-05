@@ -474,7 +474,12 @@ async function runFromFlags(flags: Record<string, string>): Promise<void> {
   // context — peek briefly rather than blocking up to STDIN_IDLE_TIMEOUT_MS on
   // a silent inherited pipe. Without --prompt stdin IS the prompt, so the full
   // idle window still applies (slow producers keep working there).
-  const stdinText = await readStdin(hasPromptFlag ? STDIN_CONTEXT_PEEK_MS : undefined);
+  const stdinText = await readStdin(
+    hasPromptFlag ? STDIN_CONTEXT_PEEK_MS : undefined,
+    undefined,
+    undefined,
+    flags.raw === "1"
+  );
   const hasStdin = Boolean(stdinText && stdinText.trim());
 
   if (hasPromptFlag || hasStdin) {

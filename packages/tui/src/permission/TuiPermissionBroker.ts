@@ -28,6 +28,7 @@ export class TuiPermissionBroker implements PermissionBroker {
   private queue: { toolName: string; summary: string; resolve: (approved: boolean) => void }[] = [];
   private alwaysApprove = new Set<string>(); // tool names approved for the rest of this session
   private abortHandlers = new Map<AbortSignal, () => void>();
+  private aborted = false;
 
   /** Register a listener; returns an unsubscribe function. Fires immediately with current state. */
   subscribe(listener: Listener): () => void {
@@ -47,12 +48,17 @@ export class TuiPermissionBroker implements PermissionBroker {
    */
   attachAbortSignal(signal: AbortSignal): void {
     if (signal.aborted) {
+      this.aborted = true;
       this.rejectAllPending();
       return;
     }
+    // A fresh turn attaches a fresh signal — clear the previous turn's abort
+    // latch so post-cancel turns can prompt again.
+    this.aborted = false;
     if (this.abortHandlers.has(signal)) return; // idempotent per signal
     const handler = () => {
       this.abortHandlers.delete(signal);
+      this.aborted = true;
       this.rejectAllPending();
     };
     this.abortHandlers.set(signal, handler);
@@ -86,6 +92,7 @@ export class TuiPermissionBroker implements PermissionBroker {
 
   async requestPermission(toolName: string, summary: string): Promise<boolean> {
     if (this.alwaysApprove.has(toolName)) return true;
+    if (this.aborted) return false;
     return new Promise<boolean>((resolve) => {
       // F1/AUDIT-2026-09-30: the summary is model-authored; sanitize at this
       // handoff so every consent renderer consumes terminal-safe text — a
@@ -98,6 +105,16 @@ export class TuiPermissionBroker implements PermissionBroker {
 
   private pump(): void {
     if (this.current || this.queue.length === 0) return;
+    // Skip heads already granted always-allow while queued — the grant arrived
+    // after enqueue and must not prompt.
+    while (this.queue.length > 0 && this.alwaysApprove.has(this.queue[0].toolName)) {
+      const granted = this.queue.shift()!;
+      granted.resolve(true);
+    }
+    if (this.current || this.queue.length === 0) {
+      this.notify();
+      return;
+    }
     const next = this.queue.shift()!;
     let resolved = false;
     this.current = {
@@ -140,6 +157,7 @@ export class TuiPermissionBroker implements PermissionBroker {
    */
   clearSessionApprovals(): void {
     this.alwaysApprove.clear();
+    this.aborted = false;
   }
 
   private notify(): void {
