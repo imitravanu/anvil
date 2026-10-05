@@ -4,7 +4,7 @@ import type { AgentEvent } from "@anvil/core";
 import { retainReport, type SubAgentRecord } from "../util/subagent.js";
 import { friendlyError } from "../util/errors.js";
 import { headChars, tailChars } from "../util/format.js";
-import { TRANSCRIPT_STATE_CAP, OUTPUT_RETAIN_MAX, REASONING_RETAIN_MAX } from "../util/displayLimits.js";
+import { TRANSCRIPT_STATE_CAP, OUTPUT_RETAIN_MAX, REASONING_RETAIN_MAX, PLAN_RETAIN_MAX } from "../util/displayLimits.js";
 
 export type DisplaySubAgent = SubAgentRecord;
 
@@ -93,7 +93,7 @@ export function retainOutput(output: unknown): unknown {
       return { truncated: text, note: "[output truncated for display]" };
     }
   }
-  return { truncated: text.slice(0, OUTPUT_RETAIN_MAX), note: "[output truncated for display]" };
+  return { truncated: headChars(text, OUTPUT_RETAIN_MAX), note: "[output truncated for display]" };
 }
 
 export interface DisplayVerification {
@@ -228,9 +228,9 @@ export function applyEvent(
       }));
       break;
     case "tool_finished":
-      update((m) => ({
-        ...m,
-        toolCalls: m.toolCalls.map((t) =>
+      update((m) => {
+        const matched = m.toolCalls.some((t) => t.id === event.id);
+        const toolCalls = m.toolCalls.map((t) =>
           t.id === event.id
             ? {
                 ...t,
@@ -240,16 +240,34 @@ export function applyEvent(
                 durationMs: event.durationMs,
               }
             : t
-        ),
-      }));
+        );
+        // Out-of-order or dropped `tool_started` must still surface — a silent
+        // no-op hides executed work from the transcript.
+        if (!matched) {
+          toolCalls.push({
+            id: event.id,
+            name: event.name,
+            input: undefined,
+            status: (event.result.isError ? "error" : "done") as DisplayToolCall["status"],
+            summary: event.result.summary,
+            output: retainOutput(event.result.output),
+            durationMs: event.durationMs,
+          });
+        }
+        return { ...m, toolCalls };
+      });
       break;
     case "tool_permission_denied":
-      update((m) => ({
-        ...m,
-        toolCalls: m.toolCalls.map((t) =>
-          t.id === event.id ? { ...t, status: "error", summary: "Denied" } : t
-        ),
-      }));
+      update((m) => {
+        const matched = m.toolCalls.some((t) => t.id === event.id);
+        const toolCalls = m.toolCalls.map((t) =>
+          t.id === event.id ? { ...t, status: "error" as const, summary: "Denied" } : t
+        );
+        if (!matched) {
+          toolCalls.push({ id: event.id, name: event.name, input: undefined, status: "error" as const, summary: "Denied" });
+        }
+        return { ...m, toolCalls };
+      });
       break;
     case "usage":
       // Optional breakdowns accumulate only when present, so a provider that
@@ -327,7 +345,7 @@ export function applyEvent(
       break;
     case "plan_updated":
       setPlan(event.plan || null);
-      appendSystemMessage(setMessages, `Plan updated: ${event.plan}`);
+      appendSystemMessage(setMessages, `Plan updated: ${headChars(event.plan, PLAN_RETAIN_MAX)}`);
       break;
     case "verification_started":
       setTestStatus?.("running");
@@ -360,9 +378,19 @@ export function applyEvent(
       update((m) => {
         const list = m.verifications ?? [];
         if (list.length === 0) return m;
-        const lastIdx = list.length - 1;
+        // Concurrent verifications overlap — patch the last RUNNING card, not
+        // the last card overall, so a late result for an earlier probe cannot
+        // overwrite a later probe's outcome and strand the earlier one.
+        let target = -1;
+        for (let k = list.length - 1; k >= 0; k--) {
+          if (list[k].status === "running") {
+            target = k;
+            break;
+          }
+        }
+        if (target === -1) return m;
         const updated = list.map((v, i) =>
-          i === lastIdx
+          i === target
             ? {
                 ...v,
                 status: (event.passed ? "passed" : "failed") as DisplayVerification["status"],
@@ -382,9 +410,24 @@ export function applyEvent(
       update((m) => {
         const list = m.verifications ?? [];
         if (list.length === 0) return m;
-        const lastIdx = list.length - 1;
+        let target = -1;
+        for (let k = list.length - 1; k >= 0; k--) {
+          if (list[k].status === "running" && list[k].command === event.command) {
+            target = k;
+            break;
+          }
+        }
+        if (target === -1) {
+          for (let k = list.length - 1; k >= 0; k--) {
+            if (list[k].status === "running") {
+              target = k;
+              break;
+            }
+          }
+        }
+        if (target === -1) return m;
         const verifications = list.map((v, i) =>
-          i === lastIdx
+          i === target
             ? {
                 ...v,
                 status: "failed" as const,
@@ -456,12 +499,16 @@ export function applyEvent(
       break;
     }
     case "cancelled":
+      setTestStatus?.(null);
       update((m) => ({
         ...m,
         toolCalls: m.toolCalls.map((t) =>
           t.status === "running" ? { ...t, status: "cancelled" as const, summary: "Cancelled" } : t
         ),
         subAgents: m.subAgents.map((s) => (s.status === "running" ? { ...s, status: "cancelled" } : s)),
+        verifications: (m.verifications ?? []).map((v) =>
+          v.status === "running" ? { ...v, status: "failed" as const, summary: v.summary ?? "Cancelled." } : v
+        ),
       }));
       break;
   }

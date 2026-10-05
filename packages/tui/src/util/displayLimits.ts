@@ -21,6 +21,8 @@ export const IMAGE_MAX_BYTES = 5 * 1024 * 1024; // /image attachment cap
 export const SUB_REPORT_RETAIN_MAX = 4000;
 /** Retained tool-output cap so long sessions can't bloat React state. */
 export const OUTPUT_RETAIN_MAX = 6000;
+/** Retained plan-text cap: a multi-KB plan must not flood the transcript. */
+export const PLAN_RETAIN_MAX = 4000;
 /** Max diff rows rendered in the permission overlay before an omission note. */
 export const MAX_DIFF_ROWS = 40;
 

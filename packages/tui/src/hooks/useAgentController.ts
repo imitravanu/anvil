@@ -254,15 +254,24 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
    *  the busyRef claim: runTurn's finally clears it, but the drain re-checks
    *  and re-enters runTurn in the same synchronous continuation, so a user
    *  send() can never observe the window between turns (that window used to
-   *  let a second send start a concurrent turn on one session). */
+   *  let a second send start a concurrent turn on one session). A cancelled
+   *  drained turn holds the remainder instead of firing the next turn — the
+   *  same S6 intent-ambiguity rule as the first turn. */
   const drainQueue = useCallback(async () => {
     while (queueRef.current.length > 0) {
       const [next, ...rest] = queueRef.current;
       queueRef.current = rest;
       setQueued(rest);
-      await runTurn(next);
+      const outcome = await runTurn(next);
+      if (outcome.cancelled && queueRef.current.length > 0) {
+        const n = queueRef.current.length;
+        printSystemMessage(
+          `Turn cancelled — ${n} queued message${n === 1 ? "" : "s"} held, not sent. Send again to deliver ${n === 1 ? "it" : "them"}.`
+        );
+        return;
+      }
     }
-  }, [runTurn]);
+  }, [runTurn, printSystemMessage]);
 
   /** Drain queued messages after the current turn settles. */
   const send = useCallback(
@@ -275,6 +284,19 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         }
         queueRef.current = next.slice(-MESSAGE_QUEUE_CAP);
         setQueued([...queueRef.current]);
+        return;
+      }
+      // A held queue from a cancelled turn belongs to its conversation — a new
+      // send must drain it first (FIFO), not jump ahead of it.
+      if (queueRef.current.length > 0) {
+        busyRef.current = true;
+        try {
+          queueRef.current = [...queueRef.current, text].slice(-MESSAGE_QUEUE_CAP);
+          setQueued([...queueRef.current]);
+          await drainQueue();
+        } finally {
+          busyRef.current = false;
+        }
         return;
       }
       busyRef.current = true;
@@ -332,6 +354,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     ): Promise<GoalTurnOutcome> => {
       // busy/isBusy are owned by launchGoal for the whole mission — toggling
       // per turn let user input slip into the gaps between mission turns.
+      const turnStartMs = Date.now();
       const assistantId = randomUUID();
       setMessages((prev) => {
         const next: DisplayMessage[] = [
@@ -409,6 +432,12 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
       } finally {
         flushTextBuffer();
         updateAssistant((m) => ({ ...m, streaming: false }));
+        // Mission turns count for the sparkline and the long-turn bell too —
+        // previously only chat turns sampled, so missions were invisible.
+        const delta = Math.max(0, cumulativeRef.current - lastCumulativeRef.current);
+        lastCumulativeRef.current = cumulativeRef.current;
+        setTokenHistory((prev) => [...prev, delta].slice(-TOKEN_HISTORY_CAP));
+        notifyTurnComplete(Date.now() - turnStartMs, "Anvil mission turn finished", process.stderr, readNotifyPrefs());
         onTurnSettledRef.current?.();
       }
       return outcome;
@@ -559,10 +588,11 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
       } catch (err: unknown) {
         printSystemMessage(`Mission error: ${getErrorMessage(err)}`);
       } finally {
-        setIsBusy(false);
         // Messages typed between mission turns queued — deliver them now,
-        // while we still hold the busy claim.
+        // while we still hold the busy claim AND the spinner. Clearing isBusy
+        // first flashed idle during the drain.
         await drainQueue();
+        setIsBusy(false);
         busyRef.current = false;
       }
     },

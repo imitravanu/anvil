@@ -2,6 +2,15 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (chief-engineer Batch C TUI correctness, verified live):**
+> owns `packages/tui/src/hooks/eventReducer.ts`,
+> `packages/tui/src/hooks/useAgentController.ts`,
+> `packages/tui/src/util/displayLimits.ts` (+ `PLAN_RETAIN_MAX`).
+> No protected artifact touched.
+> Live probes (dist, not docs): unknown finish/denial fallback OK,
+> concurrent result patches last running OK, cancel clears testStatus OK.
+> Targeted 31/31 (reducer/controller/queue). Gate FULL GREEN Steps 0-5.
+>
 > **IN-PROGRESS 2026-10-06 (chief-engineer Batch B P1 — permission/CLI/MCP):**
 > owns `packages/tui/src/permission/TuiPermissionBroker.ts`,
 > `packages/cli/src/gate.ts`, `packages/cli/src/headless.ts`,
