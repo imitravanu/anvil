@@ -52,6 +52,82 @@ const REGEX_PRECEDING_KEYWORDS = new Set([
 ]);
 const REGEX_PRECEDING_CHARS = "=([,;:?!&|+~^<>{}*%-";
 
+/**
+ * Identifier patterns for the declaration scanners, Unicode-aware on purpose.
+ * The ASCII classes this file used to carry stopped at the first non-ASCII
+ * letter and then published the truncated prefix as the symbol's name: an
+ * `export const café = 1` indexed a `caf` that does not exist in the file, a
+ * `function fóo` became `f`, and an `interface Ünicode` matched nothing at all
+ * — so `find_symbol` answered a name the user never wrote (or nothing, while
+ * the declaration sat right there). ECMAScript identifiers additionally allow
+ * `$` and Rust/Go/Python do not, so the families get one pattern each.
+ * `\p{...}` requires the `u` flag, which is why these are built once at module
+ * scope rather than written as literals the scanner would recompile per line.
+ */
+const IDENT_JS = "[$\\p{L}\\p{Nl}_][$\\u200C\\u200D\\p{L}\\p{Nl}\\p{Mn}\\p{Mc}\\p{Nd}\\p{Pc}_]*";
+const IDENT_XID = "[\\p{L}\\p{Nl}_][\\p{L}\\p{Nl}\\p{Mn}\\p{Mc}\\p{Nd}\\p{Pc}_]*";
+/** Rust's variant match accepted a leading digit before; keep that tolerance. */
+const IDENT_LOOSE = "[\\p{L}\\p{Nl}\\p{Nd}_][\\p{L}\\p{Nl}\\p{Mn}\\p{Mc}\\p{Nd}\\p{Pc}_]*";
+
+const RE_TS_INTERFACE = new RegExp(`^interface\\s+(${IDENT_JS})`, "u");
+const RE_TS_TYPE = new RegExp(`^type\\s+(${IDENT_JS})`, "u");
+const RE_TS_ENUM = new RegExp(`^enum\\s+(${IDENT_JS})`, "u");
+const RE_TS_ENUM_MEMBER = new RegExp(`^(${IDENT_JS}|"[^"]+"|'[^']+')\\s*(?:=|,|$)`, "u");
+const RE_TS_CLASS = new RegExp(`^(?:abstract\\s+)?class\\s+(${IDENT_JS})`, "u");
+const RE_TS_MEMBER = new RegExp(
+  `^(?:public\\s+|private\\s+|protected\\s+|static\\s+|async\\s+|abstract\\s+|override\\s+|declare\\s+)*(constructor|${IDENT_JS})\\s*(\\([^{]*\\))`,
+  "u"
+);
+const RE_TS_ARROW_PROP = new RegExp(
+  `^(?:public\\s+|private\\s+|protected\\s+|static\\s+|readonly\\s+|async\\s+|declare\\s+|abstract\\s+|override\\s+)*(${IDENT_JS})\\s*(?:[!:][\\s\\S]*?)?=\\s*(?:async\\s*)?(?:\\([^)]*\\)|${IDENT_JS})\\s*(?::[^=]*)?=>`,
+  "u"
+);
+const RE_TS_FUNCTION = new RegExp(`^(?:async\\s+)?function(?:\\s*\\*|\\s+)\\s*(${IDENT_JS})`, "u");
+const RE_TS_ARROW = new RegExp(
+  `^(?:const|let|var)\\s+(${IDENT_JS})\\s*=\\s*(?:async\\s*)?(?:\\([^)]*\\)|${IDENT_JS})\\s*=>`,
+  "u"
+);
+const RE_TS_VAR = new RegExp(`^(?:const|let|var)\\s+(${IDENT_JS})`, "u");
+const RE_PY_CLASS = new RegExp(`^class\\s+(${IDENT_XID})`, "u");
+const RE_PY_DEF = new RegExp(`^(?:async\\s+)?def\\s+(${IDENT_XID})`, "u");
+const RE_RS_FN = new RegExp(`^(?:async\\s+)?fn\\s+(${IDENT_XID})`, "u");
+const RE_RS_VARIANT = new RegExp(`^(${IDENT_LOOSE})`, "u");
+const RE_RS_STRUCT = new RegExp(`^struct\\s+(${IDENT_XID})`, "u");
+const RE_RS_TRAIT = new RegExp(`^trait\\s+(${IDENT_XID})`, "u");
+const RE_RS_ENUM = new RegExp(`^enum\\s+(${IDENT_XID})`, "u");
+const RE_RS_UNION = new RegExp(`^union\\s+(${IDENT_XID})`, "u");
+const RE_RS_MOD = new RegExp(`^mod\\s+(${IDENT_XID})`, "u");
+const RE_RS_TYPE_ALIAS = new RegExp(`^type\\s+(${IDENT_XID})`, "u");
+const RE_RS_CONST = new RegExp(`^(?:const|static)\\s+(?:mut\\s+)?(${IDENT_XID})`, "u");
+const RE_GO_METHOD = new RegExp(`^(${IDENT_XID})\\s*\\(`, "u");
+const RE_GO_GROUP_ENTRY = new RegExp(
+  `^(${IDENT_XID})\\s+(?:struct\\b|interface\\b|=|[\\p{L}\\p{Nl}_*\\[\\]])`,
+  "u"
+);
+const RE_GO_FUNC = new RegExp(
+  `^func\\s+(?:\\(\\s*${IDENT_XID}\\s+\\*?(${IDENT_XID})(?:\\[[^\\]]*\\])?\\s*\\)\\s*)?(${IDENT_XID})`,
+  "u"
+);
+const RE_GO_TYPE = new RegExp(`^type\\s+(${IDENT_XID})`, "u");
+const RE_GO_CONST_VAR = new RegExp(`^(const|var)\\s+(${IDENT_XID})`, "u");
+
+/**
+ * A symbol's body span, never inverted. The brace scanner reports `bodyStart`
+ * as the first line INSIDE the braces, so a one-line `function f() {}` yields
+ * bodyStart = braceLine + 1 while its closing brace is still on the brace line:
+ * publishing both gave an AstSymbol a body of `2..1`. A body with no interior
+ * line has no span, so both coordinates collapse onto the declaration's line.
+ * Python's block shape is the same hazard — the body opens on the next line, so
+ * a one-line `def f(): pass` would point past its own end.
+ */
+function bodySpan(
+  start: number | undefined,
+  end: number | undefined
+): { bodyStartLine?: number; bodyEndLine?: number } {
+  if (start === undefined || end === undefined) return {};
+  return { bodyStartLine: Math.min(start, end), bodyEndLine: end };
+}
+
 function regexLiteralLength(line: string, j: number): number {
   if (line[j] !== "/") return 0;
   const after = line[j + 1];
@@ -392,11 +468,24 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
       continue;
     }
 
+    // A multi-line import/export brace list is a module specifier list, not
+    // declarations. Its `type Foo,` entries matched the type-alias pattern, so
+    // every file that lists types inline published a type alias at an import
+    // line (useAgentController.ts reported DisplaySubAgent twice, at the two
+    // import lines). Skip the whole clause instead.
+    if (/^(?:import|export)\s*(?:type\s+)?\{/.test(trimmed)) {
+      const clause = findMatchingBrace(i);
+      if (clause) {
+        i = clause.endIdx + 1;
+        continue;
+      }
+    }
+
     const isExported = trimmed.startsWith("export ") || trimmed.startsWith("export default ");
     const decl = isExported ? trimmed.replace(/^export\s+(default\s+)?/, "") : trimmed;
 
     // Interface definition
-    const ifaceMatch = /^interface\s+([A-Za-z0-9_$]+)/.exec(decl);
+    const ifaceMatch = RE_TS_INTERFACE.exec(decl);
     if (ifaceMatch) {
       const name = ifaceMatch[1];
       const brace = findMatchingBrace(i);
@@ -408,8 +497,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
         endLine,
         signature: trimmed.split("{")[0]?.trim(),
         docstring: extractDocstring(i),
-        bodyStartLine: brace?.bodyStart,
-        bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
         isExported,
       });
       i = endLine;
@@ -417,7 +505,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
     }
 
     // Type alias definition
-    const typeMatch = /^type\s+([A-Za-z0-9_$]+)/.exec(decl);
+    const typeMatch = RE_TS_TYPE.exec(decl);
     if (typeMatch) {
       const name = typeMatch[1];
       // D1b (AUDIT-2026-09-30): an object alias is brace-matched on its OWN
@@ -453,7 +541,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
 
     // Enum definition. Members are indexed as `constant` children: `Color.Red`
     // is a real thing to search for and was previously invisible.
-    const enumMatch = /^enum\s+([A-Za-z0-9_$]+)/.exec(decl);
+    const enumMatch = RE_TS_ENUM.exec(decl);
     if (enumMatch) {
       const name = enumMatch[1];
       const brace = findMatchingBrace(i);
@@ -464,7 +552,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
         for (let k = brace.bodyStart - 1; k <= brace.endIdx; k++) {
           if (!codeLines[k]) continue;
           const memberLine = lines[k].trim();
-          const memberMatch = /^([A-Za-z0-9_$]+|"[^"]+"|'[^']+')\s*(?:=|,|$)/.exec(memberLine);
+          const memberMatch = RE_TS_ENUM_MEMBER.exec(memberLine);
           if (memberMatch) {
             members.push({
               name: memberMatch[1].replace(/^["']|["']$/g, ""),
@@ -485,8 +573,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
         endLine,
         signature: trimmed.split("{")[0]?.trim(),
         docstring: extractDocstring(i),
-        bodyStartLine: brace?.bodyStart,
-        bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
         children: members.length > 0 ? members : undefined,
         isExported,
       });
@@ -495,7 +582,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
     }
 
     // Class definition
-    const classMatch = /^(?:abstract\s+)?class\s+([A-Za-z0-9_$]+)/.exec(decl);
+    const classMatch = RE_TS_CLASS.exec(decl);
     if (classMatch) {
       const name = classMatch[1];
       const brace = findMatchingBrace(i);
@@ -511,10 +598,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
           const innerLine = lines[childIdx - 1]?.trim() ?? "";
           if (innerLine && codeLines[childIdx - 1]) {
             // Method or constructor pattern
-            const methodMatch =
-              /^(?:public\s+|private\s+|protected\s+|static\s+|async\s+|abstract\s+|override\s+|declare\s+)*(constructor|[A-Za-z0-9_$]+)\s*(\([^{]*\))/.exec(
-                innerLine
-              );
+            const methodMatch = RE_TS_MEMBER.exec(innerLine);
             if (methodMatch) {
               const methodName = methodMatch[1];
               // An abstract/declared method ends in `;` and has no body. Scanning
@@ -529,8 +613,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
                   endLine: methodBrace ? methodBrace.endIdx + 1 : childIdx,
                   signature: (innerLine.split("{")[0] ?? "").replace(/;\s*$/, "").trim(),
                   docstring: extractDocstring(childIdx - 1),
-                  bodyStartLine: methodBrace?.bodyStart,
-                  bodyEndLine: methodBrace ? methodBrace.endIdx + 1 : undefined,
+                  ...bodySpan(methodBrace?.bodyStart, methodBrace ? methodBrace.endIdx + 1 : undefined),
                 });
                 childIdx = methodBrace ? methodBrace.endIdx + 2 : childIdx + 1;
                 continue;
@@ -543,10 +626,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
             // fields are deliberately NOT indexed here: they are values, not
             // declarations an agent looks up by name, and indexing them would
             // flood the symbol table.
-            const arrowPropMatch =
-              /^(?:public\s+|private\s+|protected\s+|static\s+|readonly\s+|async\s+|declare\s+|abstract\s+|override\s+)*([A-Za-z0-9_$]+)\s*(?:[!:][\s\S]*?)?=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z0-9_$]+)\s*(?::[^=]*)?=>/.exec(
-                innerLine
-              );
+            const arrowPropMatch = RE_TS_ARROW_PROP.exec(innerLine);
             if (arrowPropMatch) {
               // Only a `{` after the arrow opens a body. `(e) => this.log(e);` is a
               // complete single-line expression, and scanning ahead for a brace
@@ -560,8 +640,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
                 endLine: propBrace ? propBrace.endIdx + 1 : childIdx,
                 signature: `${innerLine.split("=>")[0]?.trim()} =>`,
                 docstring: extractDocstring(childIdx - 1),
-                bodyStartLine: propBrace?.bodyStart,
-                bodyEndLine: propBrace ? propBrace.endIdx + 1 : undefined,
+                ...bodySpan(propBrace?.bodyStart, propBrace ? propBrace.endIdx + 1 : undefined),
               });
               childIdx = propBrace ? propBrace.endIdx + 2 : childIdx + 1;
               continue;
@@ -578,8 +657,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
         endLine,
         signature: trimmed.split("{")[0]?.trim(),
         docstring: extractDocstring(i),
-        bodyStartLine: brace?.bodyStart,
-        bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
         children,
         isExported,
       });
@@ -588,7 +666,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
     }
 
     // Function definition
-    const funcMatch = /^(?:async\s+)?function(?:\s*\*|\s+)\s*([A-Za-z0-9_$]+)/.exec(decl);
+    const funcMatch = RE_TS_FUNCTION.exec(decl);
     if (funcMatch) {
       const name = funcMatch[1];
       const brace = findMatchingBrace(i);
@@ -600,8 +678,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
         endLine,
         signature: trimmed.split("{")[0]?.trim(),
         docstring: extractDocstring(i),
-        bodyStartLine: brace?.bodyStart,
-        bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
         isExported,
       });
       i = endLine;
@@ -609,9 +686,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
     }
 
     // Arrow function or const declaration: const foo = (...) => { ... }
-    const arrowMatch = /^(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z0-9_$]+)\s*=>/.exec(
-      decl
-    );
+    const arrowMatch = RE_TS_ARROW.exec(decl);
     if (arrowMatch) {
       const name = arrowMatch[1];
       // D1a (AUDIT-2026-09-30): brace-match ONLY when this declaration's own
@@ -627,8 +702,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
         endLine,
         signature: trimmed.split("=>")[0]?.trim() + " =>",
         docstring: extractDocstring(i),
-        bodyStartLine: brace?.bodyStart,
-        bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
         isExported,
       });
       i = endLine;
@@ -637,7 +711,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
 
     // Exported const/let/var variable
     if (isExported) {
-      const varMatch = /^(?:const|let|var)\s+([A-Za-z0-9_$]+)/.exec(decl);
+      const varMatch = RE_TS_VAR.exec(decl);
       if (varMatch) {
         const name = varMatch[1];
         symbols.push({
@@ -774,7 +848,7 @@ function parsePython(lines: string[]): AstSymbol[] {
         continue;
       }
 
-      const nestedClass = /^class\s+([A-Za-z0-9_]+)/.exec(mTrimmed);
+      const nestedClass = RE_PY_CLASS.exec(mTrimmed);
       if (nestedClass) {
         const nName = nestedClass[1];
         const nEnd = findBlockEnd(mIdx, mIndent);
@@ -784,8 +858,7 @@ function parsePython(lines: string[]): AstSymbol[] {
           startLine: mIdx + 1,
           endLine: nEnd + 1,
           signature: mTrimmed.split(":")[0]?.trim(),
-          bodyStartLine: mIdx + 2,
-          bodyEndLine: nEnd + 1,
+          ...bodySpan(mIdx + 2, nEnd + 1),
           children: collectClassMembers(mIndent, mIdx + 1, nEnd),
           isExported: !nName.startsWith("_"),
         });
@@ -793,7 +866,7 @@ function parsePython(lines: string[]): AstSymbol[] {
         continue;
       }
 
-      const methMatch = /^(?:async\s+)?def\s+([A-Za-z0-9_]+)/.exec(mTrimmed);
+      const methMatch = RE_PY_DEF.exec(mTrimmed);
       if (methMatch) {
         const mEnd = findBlockEnd(mIdx, mIndent);
         members.push({
@@ -802,8 +875,7 @@ function parsePython(lines: string[]): AstSymbol[] {
           startLine: mIdx + 1,
           endLine: mEnd + 1,
           signature: mTrimmed.split(":")[0]?.trim(),
-          bodyStartLine: mIdx + 2,
-          bodyEndLine: mEnd + 1,
+          ...bodySpan(mIdx + 2, mEnd + 1),
         });
         mIdx = mEnd + 1;
         continue;
@@ -826,7 +898,7 @@ function parsePython(lines: string[]): AstSymbol[] {
     const indent = getIndent(raw);
 
     // Class definition
-    const classMatch = /^class\s+([A-Za-z0-9_]+)/.exec(trimmed);
+    const classMatch = RE_PY_CLASS.exec(trimmed);
     if (classMatch) {
       const name = classMatch[1];
       const endIdx = findBlockEnd(i, indent);
@@ -839,8 +911,7 @@ function parsePython(lines: string[]): AstSymbol[] {
         startLine: i + 1,
         endLine: endIdx + 1,
         signature: trimmed.split(":")[0]?.trim(),
-        bodyStartLine: i + 2,
-        bodyEndLine: endIdx + 1,
+        ...bodySpan(i + 2, endIdx + 1),
         children,
         isExported: !name.startsWith("_"),
       });
@@ -849,7 +920,7 @@ function parsePython(lines: string[]): AstSymbol[] {
     }
 
     // Function definition
-    const funcMatch = /^(?:async\s+)?def\s+([A-Za-z0-9_]+)/.exec(trimmed);
+    const funcMatch = RE_PY_DEF.exec(trimmed);
     if (funcMatch) {
       const name = funcMatch[1];
       const endIdx = findBlockEnd(i, indent);
@@ -859,8 +930,7 @@ function parsePython(lines: string[]): AstSymbol[] {
         startLine: i + 1,
         endLine: endIdx + 1,
         signature: trimmed.split(":")[0]?.trim(),
-        bodyStartLine: i + 2,
-        bodyEndLine: endIdx + 1,
+        ...bodySpan(i + 2, endIdx + 1),
         isExported: !name.startsWith("_"),
       });
       i = endIdx + 1;
@@ -952,7 +1022,7 @@ function parseRust(lines: string[]): AstSymbol[] {
       if (codeLines[k] && line) {
         const innerPub = line.startsWith("pub ");
         const innerDecl = innerPub ? line.replace(/^pub(?:\([^)]*\))?\s+/, "") : line;
-        const methodMatch = /^(?:async\s+)?fn\s+([A-Za-z0-9_]+)/.exec(innerDecl);
+        const methodMatch = RE_RS_FN.exec(innerDecl);
         if (methodMatch) {
           // A trait signature ends in `;` and has no body. Without this check the
           // scanner would treat the NEXT method's braces as its body, consume
@@ -966,8 +1036,7 @@ function parseRust(lines: string[]): AstSymbol[] {
             startLine: k + 1,
             endLine: bounded && methodBrace ? methodBrace.endIdx + 1 : k + 1,
             signature: (line.split("{")[0] ?? "").replace(/;\s*$/, "").trim(),
-            bodyStartLine: bounded ? methodBrace?.bodyStart : undefined,
-            bodyEndLine: bounded && methodBrace ? methodBrace.endIdx + 1 : undefined,
+            ...bodySpan(bounded ? methodBrace?.bodyStart : undefined, bounded && methodBrace ? methodBrace.endIdx + 1 : undefined),
             isExported: innerPub,
           });
           k = bounded && methodBrace ? methodBrace.endIdx + 1 : k + 1;
@@ -990,7 +1059,7 @@ function parseRust(lines: string[]): AstSymbol[] {
     for (let k = bodyStart; k <= bodyEnd; k++) {
       const line = lines[k].trim();
       if (line && codeLines[k] && depth === 0 && !line.startsWith("#[")) {
-        const variantMatch = /^([A-Za-z0-9_]+)/.exec(line);
+        const variantMatch = RE_RS_VARIANT.exec(line);
         if (variantMatch) {
           variants.push({
             name: variantMatch[1],
@@ -1026,7 +1095,7 @@ function parseRust(lines: string[]): AstSymbol[] {
     const decl = pubMatch ? trimmed.slice(pubMatch[0].length) : trimmed;
 
     // Struct
-    const structMatch = /^struct\s+([A-Za-z0-9_]+)/.exec(decl);
+    const structMatch = RE_RS_STRUCT.exec(decl);
     if (structMatch) {
       const name = structMatch[1];
       const brace = findMatchingBrace(i);
@@ -1037,8 +1106,7 @@ function parseRust(lines: string[]): AstSymbol[] {
         startLine: i + 1,
         endLine,
         signature: trimmed.split("{")[0]?.trim(),
-        bodyStartLine: brace?.bodyStart,
-        bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
         isExported: isPub,
       });
       i = endLine;
@@ -1046,7 +1114,7 @@ function parseRust(lines: string[]): AstSymbol[] {
     }
 
     // Trait — its methods are the interface an agent searches for by name.
-    const traitMatch = /^trait\s+([A-Za-z0-9_]+)/.exec(decl);
+    const traitMatch = RE_RS_TRAIT.exec(decl);
     if (traitMatch) {
       const name = traitMatch[1];
       const brace = findMatchingBrace(i);
@@ -1058,8 +1126,7 @@ function parseRust(lines: string[]): AstSymbol[] {
         startLine: i + 1,
         endLine,
         signature: trimmed.split("{")[0]?.trim(),
-        bodyStartLine: brace?.bodyStart,
-        bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
         children: children.length > 0 ? children : undefined,
         isExported: isPub,
       });
@@ -1068,7 +1135,7 @@ function parseRust(lines: string[]): AstSymbol[] {
     }
 
     // Enum — variants are indexed so `Mode::Fast` is findable by name.
-    const enumMatch = /^enum\s+([A-Za-z0-9_]+)/.exec(decl);
+    const enumMatch = RE_RS_ENUM.exec(decl);
     if (enumMatch) {
       const name = enumMatch[1];
       const brace = findMatchingBrace(i);
@@ -1080,8 +1147,7 @@ function parseRust(lines: string[]): AstSymbol[] {
         startLine: i + 1,
         endLine,
         signature: trimmed.split("{")[0]?.trim(),
-        bodyStartLine: brace?.bodyStart,
-        bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
         children: variants.length > 0 ? variants : undefined,
         isExported: isPub,
       });
@@ -1090,7 +1156,7 @@ function parseRust(lines: string[]): AstSymbol[] {
     }
 
     // Union (a braced record type, same shape as a struct)
-    const unionMatch = /^union\s+([A-Za-z0-9_]+)/.exec(decl);
+    const unionMatch = RE_RS_UNION.exec(decl);
     if (unionMatch) {
       const name = unionMatch[1];
       const brace = findMatchingBrace(i);
@@ -1101,8 +1167,7 @@ function parseRust(lines: string[]): AstSymbol[] {
         startLine: i + 1,
         endLine,
         signature: trimmed.split("{")[0]?.trim(),
-        bodyStartLine: brace?.bodyStart,
-        bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
         isExported: isPub,
       });
       i = endLine;
@@ -1113,7 +1178,7 @@ function parseRust(lines: string[]): AstSymbol[] {
     // The body is parsed recursively and re-based so `find_symbol` still reaches
     // nested functions (the index flattens children) instead of promoting them
     // to file-level declarations with a wrong parent.
-    const modMatch = /^mod\s+([A-Za-z0-9_]+)/.exec(decl);
+    const modMatch = RE_RS_MOD.exec(decl);
     if (modMatch) {
       const name = modMatch[1];
       const brace = findMatchingBrace(i);
@@ -1127,8 +1192,7 @@ function parseRust(lines: string[]): AstSymbol[] {
         startLine: i + 1,
         endLine,
         signature: trimmed.split("{")[0]?.trim(),
-        bodyStartLine: brace?.bodyStart,
-        bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
         children,
         isExported: isPub,
       });
@@ -1160,8 +1224,7 @@ function parseRust(lines: string[]): AstSymbol[] {
         startLine: i + 1,
         endLine,
         signature: trimmed.split("{")[0]?.trim(),
-        bodyStartLine: brace?.bodyStart,
-        bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
         children,
         isExported: isPub,
       });
@@ -1170,7 +1233,7 @@ function parseRust(lines: string[]): AstSymbol[] {
     }
 
     // Type alias
-    const typeAliasMatch = /^type\s+([A-Za-z0-9_]+)/.exec(decl);
+    const typeAliasMatch = RE_RS_TYPE_ALIAS.exec(decl);
     if (typeAliasMatch) {
       const name = typeAliasMatch[1];
       // A `where` clause or a long generic list can push the `;` several lines down.
@@ -1190,7 +1253,7 @@ function parseRust(lines: string[]): AstSymbol[] {
     }
 
     // Const / static item
-    const constMatch = /^(?:const|static)\s+(?:mut\s+)?([A-Za-z0-9_]+)/.exec(decl);
+    const constMatch = RE_RS_CONST.exec(decl);
     if (constMatch) {
       const name = constMatch[1];
       symbols.push({
@@ -1206,7 +1269,7 @@ function parseRust(lines: string[]): AstSymbol[] {
     }
 
     // Function
-    const fnMatch = /^(?:async\s+)?fn\s+([A-Za-z0-9_]+)/.exec(decl);
+    const fnMatch = RE_RS_FN.exec(decl);
     if (fnMatch) {
       const name = fnMatch[1];
       const brace = findMatchingBrace(i);
@@ -1217,8 +1280,7 @@ function parseRust(lines: string[]): AstSymbol[] {
         startLine: i + 1,
         endLine,
         signature: trimmed.split("{")[0]?.trim(),
-        bodyStartLine: brace?.bodyStart,
-        bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
         isExported: isPub,
       });
       i = endLine;
@@ -1288,7 +1350,7 @@ function parseGo(lines: string[]): AstSymbol[] {
     for (let k = bodyStartIdx; k <= bodyEndIdx; k++) {
       if (!codeLines[k]) continue;
       const line = lines[k].trim();
-      const methodMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*\(/.exec(line);
+      const methodMatch = RE_GO_METHOD.exec(line);
       if (methodMatch) {
         methods.push({
           name: methodMatch[1],
@@ -1319,7 +1381,7 @@ function parseGo(lines: string[]): AstSymbol[] {
       let k = i + 1;
       while (k < total && !/^\s*\)/.test(lines[k])) {
         const entry = lines[k].trim();
-        const nameMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s+(?:struct\b|interface\b|=|[A-Za-z_*\[\]])/.exec(entry);
+        const nameMatch = RE_GO_GROUP_ENTRY.exec(entry);
         if (nameMatch && codeLines[k]) {
           const name = nameMatch[1];
           const isStruct = new RegExp(`^${name}\\s+struct\\b`).test(entry);
@@ -1335,8 +1397,7 @@ function parseGo(lines: string[]): AstSymbol[] {
             startLine: k + 1,
             endLine: brace ? brace.endIdx + 1 : k + 1,
             signature: entry,
-            bodyStartLine: brace?.bodyStart,
-            bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+            ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
             children: members.length > 0 ? members : undefined,
             isExported: isExported(name),
           });
@@ -1351,10 +1412,7 @@ function parseGo(lines: string[]): AstSymbol[] {
 
     // Function or method. The optional receiver group `(r *Type)` is what
     // distinguishes a method from a free function.
-    const funcMatch =
-      /^func\s+(?:\(\s*[A-Za-z_][A-Za-z0-9_]*\s+\*?([A-Za-z_][A-Za-z0-9_]*)(?:\[[^\]]*\])?\s*\)\s*)?([A-Za-z_][A-Za-z0-9_]*)/.exec(
-        trimmed
-      );
+    const funcMatch = RE_GO_FUNC.exec(trimmed);
     if (funcMatch) {
       const receiver = funcMatch[1];
       const name = funcMatch[2];
@@ -1366,8 +1424,7 @@ function parseGo(lines: string[]): AstSymbol[] {
         startLine: i + 1,
         endLine,
         signature: trimmed.split("{")[0]?.trim(),
-        bodyStartLine: brace?.bodyStart,
-        bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
         isExported: isExported(name),
       });
       i = endLine;
@@ -1384,7 +1441,7 @@ function parseGo(lines: string[]): AstSymbol[] {
     }
 
     // Type declaration: struct, interface, alias, or a defined type.
-    const typeMatch = /^type\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(trimmed);
+    const typeMatch = RE_GO_TYPE.exec(trimmed);
     if (typeMatch) {
       const name = typeMatch[1];
       const rest = trimmed.slice(trimmed.indexOf(name) + name.length).trim();
@@ -1404,8 +1461,7 @@ function parseGo(lines: string[]): AstSymbol[] {
         startLine: i + 1,
         endLine: brace ? brace.endIdx + 1 : i + 1,
         signature: trimmed,
-        bodyStartLine: brace?.bodyStart,
-        bodyEndLine: brace ? brace.endIdx + 1 : undefined,
+        ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
         children: members.length > 0 ? members : undefined,
         isExported: isExported(name),
       });
@@ -1414,7 +1470,7 @@ function parseGo(lines: string[]): AstSymbol[] {
     }
 
     // Package-level const / var.
-    const constMatch = /^(const|var)\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(trimmed);
+    const constMatch = RE_GO_CONST_VAR.exec(trimmed);
     if (constMatch) {
       const name = constMatch[2];
       symbols.push({

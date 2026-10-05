@@ -2,6 +2,78 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (chief-engineer deep dive #3 — the AST layer, three real defects fixed; two areas
+> verified clean; three unfixable-here findings handed off with the exact fix):**
+> owns `packages/core/src/ast/parser.ts` + `packages/core/src/ast/__tests__/parser.test.ts`, plus this
+> file. **No protected artifact touched; the other session's 39-entry diff stays uncommitted and
+> untouched** — including `config/constants.ts`, which is why finding H1 below is a handoff, not a patch.
+>
+> **Where I looked and why there.** The AST layer drives `outline`, `find_symbol`, the read_file skeleton
+> and the LSP fallback, and it is a from-scratch line scanner rather than a real parser — the class of
+> code where mechanical gate rules cannot see anything. Method: an adversarial probe of 52 tricky
+> constructs (TS/JS/TSX/Python/Rust/Go) asserting four invariants (never throws; every line range inside
+> the file and non-inverted; a sentinel declaration appended after each body is still indexed; every
+> expected symbol present with its kind), then a whole-repo sweep parsing all **540** tracked source
+> files, then targeted probes for identifier shapes.
+>
+> **1. Every non-ASCII identifier was published truncated — a symbol name the file does not contain
+> (FIXED).** The 24 name captures were ASCII-only classes (`[A-Za-z0-9_$]+`), so matching stopped at the
+> first non-ASCII letter and the PREFIX became the symbol name: `export const café = 1` indexed `caf`,
+> `function fóo` became `f`, `class Café` became `Caf`, Python/Go `naïve` became `na`, and
+> `interface Ünicode` matched nothing at all. Agent-facing harm: `find_symbol`/outline answered a name
+> the user never wrote, so a rename/edit could be aimed at a phantom. Fix: two shared Unicode-aware
+> patterns (`\p{L}`-based, `$` allowed for ECMAScript only) built once at module scope with the `u` flag
+> — Rust's variant match keeps its leading-digit tolerance — replacing all 24 literals. A non-ASCII
+> method inside a class (`müller()`) is indexed too; it was silently dropped before.
+> **RED (verified live against HEAD `parser.ts`):** `expected [ 'caf', 'f', 'Caf' ] to deeply equal
+> [ 'café', 'fóo', 'Café', 'Ünicode' ]`, `expected [] to deeply equal [ 'müller' ]`, and
+> `expected 'na' to be 'naïve'`; GREEN after.
+>
+> **2. `type` entries inside a multi-line import/export brace list were indexed as type aliases (FIXED).**
+> `import {\n  type DisplaySubAgent,\n} from "./reducer.js";` published a `type` symbol AT THE IMPORT
+> LINE — `useAgentController.ts` reported `DisplaySubAgent` twice (its two import lines) and
+> `export { type Thing } from ...` did the same. Real repo: **74** such lines. This was the sweep's
+> duplicate detector catching a false symbol, not a nesting quirk. Fix: the scanner now recognises a
+> module-specifier brace clause (`^(?:import|export)\s*(?:type\s+)?\{`) and skips it whole.
+> **RED:** the new test saw `DisplaySubAgent`, `Thing` and `Real` where only `Real` and `realFn` exist.
+>
+> **3. Every one-line body published an inverted span (FIXED).** The brace scanner reports `bodyStart` as
+> the first line INSIDE the braces, so `function f() {}` produced `bodyStartLine: 2, bodyEndLine: 1` —
+> and `3..2`, `5..4`, … on every one-liner, in all four languages. `folder.ts` happened to guard
+> `start <= end`, so folding was safe, but the AST type published a negative-length body to any future
+> consumer. Fix: one `bodySpan()` helper collapses a body with no interior line onto the declaration's
+> own line (Python's block shape gets the same clamp), used at all 21 construction sites.
+> **RED:** `one.ts: one body 2..1: expected 2 to be less than or equal to 1`.
+>
+> **Verified clean (no defects found, receipts recorded):** the 52-case probe went from 114 findings to
+> 0 after the fixes (the 13 remaining hits were my probe's own sentinel-name mismatch for Python/Rust),
+> and the 540-file repo sweep reports **0 throws, 0 inverted spans, 0 out-of-range line numbers**.
+>
+> **Handoffs — found, not patched here (with the exact fix):**
+> **H1. `providers/base.ts` retry backoff is two raw literals** — `Math.min(50 * Math.pow(2, attempt),
+> 2000)` appears twice, which constitution §2.4 forbids for retry timing and the scanner's
+> assignment-shaped magic check cannot see. Fix: add
+> `PROVIDER_RETRY_INITIAL_DELAY_MS = getEnvNumber("ANVIL_PROVIDER_RETRY_DELAY_MS", 50)` and
+> `PROVIDER_RETRY_MAX_DELAY_MS` to `config/constants.ts` and use both. **Not patched because that file
+> is another session's actively modified, uncommitted work (§1.2).**
+> **H2. `providers/cache.ts` keeps a v1 write path with no production caller** (`loadModelsCache` /
+> `saveModelsCache`, rule 2.8), and `saveModelsCache` rewrites the cache as `{syncedAt: null,
+> sources: {legacy}}` — any future caller destroys the v2 freshness stamp and every other source. Fix:
+> merge into `sources` and preserve `syncedAt`, or delete the pair with its tests.
+> **H3. Declarations nested inside a callback are classified as top-level.** `const update = () => {}`
+> inside a `describe(...)`/controller closure is indexed with the right LINE but the wrong nesting, so
+> the sweep flags duplicates in test files and in `useAgentController.ts` (`updateAssistant`,
+> `flushTextBuffer`). Fixing needs brace-depth tracking in the TS top-level loop — a real change with
+> regression risk, so it is declared as a limitation rather than smuggled in. Two smaller gaps for a
+> conscious decision: `export namespace N {}` indexes its members as top-level and never emits the
+> `module` kind that `AstSymbolKind` already declares, and a NON-exported top-level data `const` is not
+> indexed while an exported one is (only arrow/function consts are indexed unexported).
+>
+> **Verification:** typecheck 0 across core/tui/cli + scripts; build core→tui→cli green; full suites
+> **1,526** (cli 152 / core 983 / tui 391 — core +6 from the new tests); mock evals **25/25**; gate-rule
+> replica over the two changed files: 0 hits; `npm run gate` passes Steps 0/0.5 and refuses at Step 1 on
+> ANOTHER session's protected artifacts (no `--ack` passed by this session).
+>
 > **DONE 2026-10-06 (the three recorded outstanding limits — bash guard gaps, the cache-priced cost
 > upper bound, and the per-theme rendered-colour/contrast audit — all three closed; every fail-first
 > receipt re-verified against the working tree, not inherited from prose):**

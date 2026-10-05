@@ -743,3 +743,89 @@ describe("declaration boundaries (D1 parser six-pack)", () => {
     expect(skeleton).toContain("lines folded");
   });
 });
+
+describe("Unicode identifiers and body spans (2026-10-06 deep dive)", () => {
+  it("publishes a non-ASCII name whole instead of its ASCII prefix", () => {
+    // The name captures were ASCII classes, so these were published truncated —
+    // `café` as `caf`, `fóo` as `f` — meaning find_symbol answered a name the
+    // file does not contain, and `interface Ünicode` matched nothing at all.
+    const src = [
+      "export const café = 1;",
+      "export function fóo() {}",
+      "export class Café {}",
+      "export interface Ünicode { a: string }",
+    ].join("\n");
+    const ast = parseFileAst(src, "unicode.ts");
+    expect(ast.symbols.map((s) => s.name)).toEqual(["café", "fóo", "Café", "Ünicode"]);
+    expect(ast.symbols.map((s) => s.kind)).toEqual(["constant", "function", "class", "interface"]);
+  });
+
+  it("indexes a non-ASCII method inside a class", () => {
+    const ast = parseFileAst(["export class K {", "  müller() {}", "}"].join("\n"), "unicode.ts");
+    expect(ast.symbols[0].children?.map((c) => c.name)).toEqual(["müller"]);
+  });
+
+  it("keeps non-ASCII names in Python, Rust and Go", () => {
+    expect(parseFileAst("def naïve():\n    pass", "u.py").symbols[0].name).toBe("naïve");
+    expect(parseFileAst("pub fn naïve() {}", "u.rs").symbols[0].name).toBe("naïve");
+    expect(parseFileAst("package main\n\nfunc naïve() {}", "u.go").symbols[0].name).toBe("naïve");
+    expect(parseFileAst("pub struct Ünion {}", "u.rs").symbols[0].name).toBe("Ünion");
+  });
+
+  it("never publishes an inverted body span for a one-line body", () => {
+    // The brace scanner reports bodyStart as the first line INSIDE the braces,
+    // so a one-line body pointed one line past its own closing brace: the AST
+    // carried body 2..1 (and 3..2, 5..4, …) on every one-liner.
+    const cases: Array<[string, string]> = [
+      ["export function one() {}", "one.ts"],
+      ["export const two = () => {};", "two.ts"],
+      ["export class Three {}", "three.ts"],
+      ["def four(): pass", "four.py"],
+      ["pub fn five() {}", "five.rs"],
+      ["package main\n\nfunc six() {}", "six.go"],
+    ];
+    for (const [src, file] of cases) {
+      const symbols = parseFileAst(src, file).symbols;
+      expect(symbols.length, `${file} must index its declaration`).toBeGreaterThan(0);
+      for (const sym of symbols) {
+        if (sym.bodyStartLine === undefined || sym.bodyEndLine === undefined) continue;
+        expect(
+          sym.bodyStartLine,
+          `${file}: ${sym.name} body ${sym.bodyStartLine}..${sym.bodyEndLine}`
+        ).toBeLessThanOrEqual(sym.bodyEndLine);
+      }
+    }
+  });
+
+  it("still folds a multi-line body (the clamp does not disable folding)", () => {
+    const src = [
+      "export function big() {",
+      "  const a = 1;",
+      "  const b = 2;",
+      "  const c = 3;",
+      "  const d = 4;",
+      "}",
+    ].join("\n");
+    expect(generateSkeleton(src, "big.ts")).toContain("lines folded");
+  });
+
+  it("does not index `type` entries inside a module brace list as type aliases", () => {
+    // A multi-line import list is data, not declarations. Every `type Foo,`
+    // entry was published as a type alias at its import line — this repo alone
+    // has 74 such lines (useAgentController.ts reported DisplaySubAgent at two
+    // import lines).
+    const src = [
+      "import {",
+      "  type DisplaySubAgent,",
+      "  type DisplayGoal,",
+      "} from \"./reducer.js\";",
+      "export {",
+      "  type Thing,",
+      "} from \"./x.js\";",
+      "export type Real = string;",
+      "export function realFn() {}",
+    ].join("\n");
+    const ast = parseFileAst(src, "imports.ts");
+    expect(ast.symbols.map((s) => `${s.name}:${s.kind}`)).toEqual(["Real:type", "realFn:function"]);
+  });
+});
