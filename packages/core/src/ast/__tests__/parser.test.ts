@@ -828,4 +828,31 @@ describe("Unicode identifiers and body spans (2026-10-06 deep dive)", () => {
     const ast = parseFileAst(src, "imports.ts");
     expect(ast.symbols.map((s) => `${s.name}:${s.kind}`)).toEqual(["Real:type", "realFn:function"]);
   });
+
+  it("nests TypeScript namespace contents under the module instead of promoting them", () => {
+    // The TS branch had no namespace case: the namespace was invisible and its
+    // members surfaced as top-level siblings. Rust's `mod` already nests (the
+    // Rust suite asserts it), so the `module` kind and the shiftLines mechanism
+    // both existed — TypeScript simply never used them.
+    const src = [
+      "export namespace Geometry {",
+      "  export const PI = 3.14;",
+      "  export function area(r: number) {",
+      "    return PI * r * r;",
+      "  }",
+      "}",
+      "export function outside() {}",
+    ].join("\n");
+    const ast = parseFileAst(src, "ns.ts");
+    const ns = ast.symbols.find((s) => s.name === "Geometry");
+    expect(ns?.kind).toBe("module");
+    expect(ns?.startLine).toBe(1);
+    expect(ns?.endLine).toBe(6);
+    expect(ns?.isExported).toBe(true);
+    expect((ns?.children ?? []).map((c) => c.name)).toEqual(["PI", "area"]);
+    // Nested coordinates are file-absolute, not slice-relative.
+    expect(ns?.children?.find((c) => c.name === "area")?.startLine).toBe(3);
+    // And the members are no longer double-reported as top-level symbols.
+    expect(ast.symbols.map((s) => s.name)).toEqual(["Geometry", "outside"]);
+  });
 });

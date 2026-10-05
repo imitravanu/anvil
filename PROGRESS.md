@@ -2,6 +2,60 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (session close-out — the uncommitted tree landed, the handed-off fixes applied;
+> HUMAN ACK GIVEN for the protected artifacts):**
+> owns, in this batch, `packages/core/src/config/constants.ts`, `packages/core/src/providers/{base,cache}.ts`
+> + their tests, `packages/core/src/ast/parser.ts` + its test, `packages/core/src/guardian/scanner.ts`
+> (one wording fix), and this file.
+>
+> **1. The 39-entry uncommitted tree is landed, in two reviewed commits.** The operator explicitly
+> granted the human review the constitution requires for protected artifacts, so I read every protected
+> diff first — all of it STRENGTHENS enforcement (new Step 1 rules for TypeScript suppressions,
+> skipped tests, inline timeout/retry/cap literals, raw error-cast narrowing, silent catches; the
+> residual scan drains the same shapes; the hook and the sentinel test grow matching checks; the manifest
+> is regenerated for exactly the files it hashes), with no rule relaxed and no secret or debug leftover
+> in the batch. Then `npm run gate -- --ack-protected-change` passed **Steps 0-5** on the combined tree
+> before anything was committed. `2d738e1` lands the gate v2.3 hardening (protected files + manifest +
+> sentinel + hook + `package.json` + CHANGELOG); `50ea40b` lands the behavioral half — model→provider
+> inference at the model's own precedence level, structured `failureKind` beating the message regex in
+> the A/B verdict, the remaining literals hoisted with `// intentional:` rationales, guardian parity, and
+> a 7th harder-tier multi-turn task. The protected commit used the documented `--no-verify` escape hatch
+> because the hook refuses protected paths by design.
+>
+> **2. One defect surfaced while landing it (FIXED).** The new hook skip rule is path-agnostic, so it
+> matched the guardian's own rule *description*, which named the banned test-skipping API verbatim, and
+> refused a legitimate commit. The description is reworded so a rule never contains the shape it bans —
+> the file's own idiom (`TS_SUPPRESSION_TERMS`, `PLACEHOLDER_TERMS`) — instead of weakening the hook.
+> Still open for a human call: the hook could scope that rule to test paths like the gate does.
+>
+> **3. H1 — provider retry backoff (FIXED).** `Math.min(50 * Math.pow(2, attempt), 2000)` was written
+> inline twice. Now `PROVIDER_RETRY_INITIAL_DELAY_MS` / `PROVIDER_RETRY_MAX_DELAY_MS` in
+> `config/constants.ts` (env-overridable) drive both sites. **RED (verified live):** with HEAD
+> `base.ts`+`constants.ts` swapped in, the new test fails `expected undefined to be 400` — it overrides
+> the constant to 400 ms before a fresh module evaluation and asserts the retry actually took that long,
+> which an inline literal cannot satisfy.
+>
+> **4. H2 — the v1 cache write path (FIXED).** `saveModelsCache` rewrote the file as
+> `{syncedAt: null, sources: {legacy}}`, so one legacy write destroyed every other source AND the
+> freshness stamp a v2 sync had just recorded. It now merges and preserves `syncedAt`.
+> **RED:** `expected null to be '2026-10-05T19:48:35.027Z'`.
+>
+> **5. H3 — TypeScript namespaces (FIXED); the rest of H3 declared.** `namespace`/`module`/`declare
+> namespace` now emit the `module` kind with their members nested under them, via the same `shiftLines`
+> mechanism Rust's `mod` already uses — members used to be published as top-level siblings. **RED:**
+> `expected undefined to be 'module'`. **Correction to deep-dive #3's note:** the `module` kind was NOT
+> dead — the Rust parser produced it and the kind-contract test asserts it; the gap was TypeScript-only.
+> Deliberately still open, unchanged and now recorded: brace-depth tracking in the TS scanner (so
+> callback-nested `const` helpers stop reading as top-level — the four remaining sweep duplicates are
+> exactly that), and non-exported top-level DATA `const`s staying unindexed while exported ones are
+> indexed as `constant` (an API-surface decision, not an accident — indexing locals would flood
+> `find_symbol` with every test helper).
+>
+> **Verification (clean tree, NO ack needed):** `npm run gate` PASSES all Steps 0-5 — sensor 16/16,
+> manifest verified, diff scan clean, full-tree residual scan clean, build core→tui→cli, typecheck 0,
+> suites **1,529** (cli 152 / core 986 / tui 391; core +3 from the new tests), mock evals **25/25**.
+> `git status --porcelain` is empty after this batch.
+>
 > **DONE 2026-10-06 (chief-engineer deep dive #3 — the AST layer, three real defects fixed; two areas
 > verified clean; three unfixable-here findings handed off with the exact fix):**
 > owns `packages/core/src/ast/parser.ts` + `packages/core/src/ast/__tests__/parser.test.ts`, plus this

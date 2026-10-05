@@ -1,5 +1,9 @@
 import { getErrorMessage, sleepAbortable } from "../errors.js";
-import { PROVIDER_STREAM_MAX_RETRIES } from "../config/constants.js";
+import {
+  PROVIDER_STREAM_MAX_RETRIES,
+  PROVIDER_RETRY_INITIAL_DELAY_MS,
+  PROVIDER_RETRY_MAX_DELAY_MS,
+} from "../config/constants.js";
 import {
   CompletionRequest,
   ModelProvider,
@@ -53,7 +57,10 @@ export abstract class BaseProvider implements ModelProvider {
             // The underlying stream is still open after a mid-flight error
             // event — close the abandoned iterator before retrying.
             await iterator.return(undefined);
-            const delay = Math.min(50 * Math.pow(2, attempt), 2000);
+            const delay = Math.min(
+              PROVIDER_RETRY_INITIAL_DELAY_MS * Math.pow(2, attempt),
+              PROVIDER_RETRY_MAX_DELAY_MS
+            );
             await sleepAbortable(delay, request.signal);
             continue;
           }
@@ -76,7 +83,10 @@ export abstract class BaseProvider implements ModelProvider {
           !request.signal?.aborted &&
           !surfaced
         ) {
-          const delay = Math.min(50 * Math.pow(2, attempt), 2000);
+          const delay = Math.min(
+            PROVIDER_RETRY_INITIAL_DELAY_MS * Math.pow(2, attempt),
+            PROVIDER_RETRY_MAX_DELAY_MS
+          );
           await sleepAbortable(delay, request.signal);
           continue;
         }

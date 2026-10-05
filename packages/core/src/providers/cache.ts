@@ -78,6 +78,18 @@ export function loadModelsCache(): ModelInfo[] {
   return collectModelsFromCache(loadModelsCacheV2());
 }
 
+/**
+ * v1 flat-list write, kept for backward compatibility. It MERGES into the v2
+ * cache instead of replacing it: the old body rewrote the whole file as
+ * `{ version: 2, syncedAt: null, sources: { legacy } }`, so a single v1 write
+ * destroyed every other source a sync had collected AND cleared the freshness
+ * stamp those models were carried in under.
+ */
 export function saveModelsCache(models: ModelInfo[]): void {
-  saveModelsCacheV2({ version: 2, syncedAt: null, sources: { legacy: models } });
+  const cache = loadModelsCacheV2();
+  saveModelsCacheV2({
+    version: 2,
+    syncedAt: cache.syncedAt,
+    sources: { ...cache.sources, legacy: models },
+  });
 }

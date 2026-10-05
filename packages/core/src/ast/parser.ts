@@ -88,6 +88,10 @@ const RE_TS_ARROW = new RegExp(
   "u"
 );
 const RE_TS_VAR = new RegExp(`^(?:const|let|var)\\s+(${IDENT_JS})`, "u");
+const RE_TS_NAMESPACE = new RegExp(
+  `^(?:declare\\s+)?(?:namespace|module)\\s+(${IDENT_JS}(?:\\.${IDENT_JS})*|"[^"]+"|'[^']+')`,
+  "u"
+);
 const RE_PY_CLASS = new RegExp(`^class\\s+(${IDENT_XID})`, "u");
 const RE_PY_DEF = new RegExp(`^(?:async\\s+)?def\\s+(${IDENT_XID})`, "u");
 const RE_RS_FN = new RegExp(`^(?:async\\s+)?fn\\s+(${IDENT_XID})`, "u");
@@ -659,6 +663,39 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
         docstring: extractDocstring(i),
         ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
         children,
+        isExported,
+      });
+      i = endLine;
+      continue;
+    }
+
+    // Namespace / module declaration. Its members used to be published as
+    // top-level siblings (this scanner does not track nesting) and the
+    // namespace itself was invisible — `find_symbol` had no `module` symbol to
+    // answer with, although AstSymbolKind declares the kind and the Rust parser
+    // already nests `mod` bodies. Same mechanism here: parse the slice and
+    // re-base its lines with shiftLines.
+    const nsMatch = RE_TS_NAMESPACE.exec(decl);
+    if (nsMatch) {
+      const name = nsMatch[1];
+      const brace = findMatchingBrace(i);
+      const endLine = brace ? brace.endIdx + 1 : i + 1;
+      const children =
+        brace && brace.bodyStart <= brace.endIdx
+          ? shiftLines(
+              parseTypeScriptJs(lines.slice(brace.bodyStart - 1, brace.endIdx)),
+              brace.bodyStart - 1
+            )
+          : [];
+      symbols.push({
+        name,
+        kind: "module",
+        startLine: i + 1,
+        endLine,
+        signature: trimmed.split("{")[0]?.trim(),
+        docstring: extractDocstring(i),
+        ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
+        children: children.length > 0 ? children : undefined,
         isExported,
       });
       i = endLine;

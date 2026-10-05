@@ -336,3 +336,11 @@ export const MCP_CONNECT_TIMEOUT_MS = 10_000;
 // must not truncate the scan.
 export const GATE_DIFF_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
 
+// Provider stream retry pacing (providers/base.ts). The delay doubles per
+// attempt and is capped. Both numbers were raw literals inside the retry loop
+// (`Math.min(50 * Math.pow(2, attempt), 2000)`), which rule 2.4 forbids for
+// retry timing and which the scanner's assignment-shaped magic check cannot
+// see — an expression, not an assignment.
+export const PROVIDER_RETRY_INITIAL_DELAY_MS = getEnvNumber("ANVIL_PROVIDER_RETRY_DELAY_MS", 50);
+export const PROVIDER_RETRY_MAX_DELAY_MS = getEnvNumber("ANVIL_PROVIDER_RETRY_MAX_MS", 2_000);
+

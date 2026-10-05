@@ -8,6 +8,7 @@ import {
   isModelsCacheFresh,
   loadModelsCache,
   loadModelsCacheV2,
+  saveModelsCache,
   saveModelsCacheV2,
 } from "../cache.js";
 
@@ -75,6 +76,20 @@ describe("Phase 8 (B) — cache v2", () => {
     expect(isModelsCacheFresh(1000)).toBe(false);
     fs.rmSync(cachePath, { force: true });
     expect(loadModelsCacheV2().sources).toEqual({});
+  });
+
+  it("v1 flat-list write merges into the v2 cache instead of destroying it", () => {
+    const syncedAt = new Date().toISOString();
+    saveModelsCacheV2({ version: 2, syncedAt, sources: { openrouter: [model("or-a", "openrouter")] } });
+    saveModelsCache([model("legacy-b", "groq")]);
+    const after = loadModelsCacheV2();
+    // Pre-fix this rewrote the whole file as {syncedAt: null, sources: {legacy}},
+    // so the other source AND the freshness stamp the sync had just recorded
+    // were both lost by one legacy write.
+    expect(after.syncedAt).toBe(syncedAt);
+    expect(after.sources.openrouter?.map((m) => m.id)).toEqual(["or-a"]);
+    expect(after.sources.legacy?.map((m) => m.id)).toEqual(["legacy-b"]);
+    expect(isModelsCacheFresh(10 * 60 * 1000)).toBe(true);
   });
 
   it("collects and de-duplicates across sources", () => {

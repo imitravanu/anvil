@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { BaseProvider } from "../base.js";
 import type { CompletionRequest, ProviderId, StreamEvent } from "../types.js";
 
@@ -132,5 +132,51 @@ describe("BaseProvider", () => {
     // The first attempt's stream (still open after the error event) was
     // explicitly closed — its finally ran — instead of leaking mid-flight.
     expect(p.firstAttemptClosed).toBe(true);
+  });
+
+  it("paces retries from the named backoff constant, not an inline literal (rule 2.4)", async () => {
+    // The schedule used to be `Math.min(50 * Math.pow(2, attempt), 2000)` written
+    // inline. Overriding the constant before a FRESH module evaluation is what
+    // makes this fail-first: a raw literal ignores the override, retries after
+    // ~50ms, and the elapsed-time floor below cannot be met.
+    vi.resetModules();
+    const configured = 400;
+    process.env.ANVIL_PROVIDER_RETRY_DELAY_MS = String(configured);
+    try {
+      const { BaseProvider: FreshBase } = await import("../base.js");
+      const constants = await import("../../config/constants.js");
+      expect(constants.PROVIDER_RETRY_INITIAL_DELAY_MS).toBe(configured);
+
+      let attempts = 0;
+      class ConfiguredBackoff extends FreshBase {
+        readonly id: ProviderId = "openai";
+        readonly displayName = "TestConfiguredBackoff";
+        isConfigured(): boolean {
+          return true;
+        }
+        protected async *doStream(): AsyncGenerator<StreamEvent> {
+          attempts += 1;
+          if (attempts === 1) {
+            yield { type: "error", message: "HTTP 503 overloaded" };
+            return;
+          }
+          yield { type: "text_delta", text: "ok" };
+          yield { type: "turn_end", stopReason: "end_turn" };
+        }
+      }
+
+      const events: StreamEvent[] = [];
+      const started = Date.now();
+      for await (const e of new ConfiguredBackoff().streamCompletion(req())) events.push(e);
+      const elapsed = Date.now() - started;
+      expect(attempts).toBe(2);
+      expect(events.some((e) => e.type === "text_delta" && e.text === "ok")).toBe(true);
+      expect(elapsed, "a 50ms literal could not pace a 400ms backoff").toBeGreaterThanOrEqual(
+        configured - 50
+      );
+    } finally {
+      delete process.env.ANVIL_PROVIDER_RETRY_DELAY_MS;
+      vi.resetModules();
+    }
   });
 });
