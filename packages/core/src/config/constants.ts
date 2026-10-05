@@ -324,6 +324,11 @@ export const CERT_PROVIDER_TIMEOUT_MS = 35_000;
 // per-path post-mutation poll.
 export const LSP_DIAGNOSTICS_POLL_MS = 50;
 export const LSP_PATH_DIAGNOSTICS_POLL_MS = 25;
+// LSP stdio framing cap (lsp/client.ts): a hostile/buggy server claiming a
+// gigabyte Content-Length must not buffer forever — fail the frame instead.
+export const LSP_MAX_FRAME_BYTES = 8 * 1024 * 1024;
+// LSP per-language client idle lifetime (lsp/client.ts cache).
+export const LSP_IDLE_CLOSE_MS = 60_000;
 // MCP child-process kill grace between SIGTERM and SIGKILL (mcp/transport.ts).
 export const MCP_KILL_GRACE_MS = 500;
 // Free-model catalog sync fetch timeouts (providers/freeModels.ts): the public

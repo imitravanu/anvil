@@ -370,6 +370,10 @@ export class AgentSession {
       yield { type: "error", message: "A turn is already in progress for this session." };
       return;
     }
+    if (userText.trim().length === 0 && images.length === 0) {
+      yield { type: "error", message: "Empty message — nothing to send." };
+      return;
+    }
     this.isSending = true;
     this.history.pushUserText(userText, images);
     if (this.title === null) {

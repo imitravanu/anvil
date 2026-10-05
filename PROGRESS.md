@@ -2,6 +2,20 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (chief-engineer P0 batch + AST parser defects verified live, no md trusted):**
+> owns `packages/core/src/lsp/client.ts`, `packages/core/src/config/constants.ts`,
+> `packages/core/src/session/store.ts`,
+> `packages/core/src/agent/compaction.ts`, `packages/core/src/agent/historyStore.ts`,
+> `packages/core/src/agent/session.ts`, `packages/core/src/eval/runner.ts`,
+> `packages/core/src/ast/parser.ts`.
+> No protected artifact touched.
+> Live probes (node dist, not docs): decode `%ZZ` fallback, frame cap, exact
+> diagnostics match, single-flight, deep session guard, compaction -1, summary
+> no-fold, empty send error, eval copy skip, parser App 1→4 + if/for exclusion +
+> return-type skip + callback consume — all OK.
+> `config/index.ts` fallback reverted: empty creds → null is onboarding by design.
+> Gate 2026-10-06 FULL GREEN Steps 0-5. ParserInvariants 64/64 (was 56/64).
+>
 > **DONE 2026-10-06 (session close-out — the uncommitted tree landed, the handed-off fixes applied;
 > HUMAN ACK GIVEN for the protected artifacts):**
 > owns, in this batch, `packages/core/src/config/constants.ts`, `packages/core/src/providers/{base,cache}.ts`

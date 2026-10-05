@@ -166,7 +166,9 @@ export function findCleanCompactionCut(
     if (!isSplit(cut)) return cut;
   }
 
-  return targetCut;
+  // Every candidate splits a tool_call/tool_result pair — compacting would
+  // replay malformed history, so signal no-compact to the caller.
+  return -1;
 }
 
 export async function compactIfNeeded(

@@ -22,7 +22,16 @@ function isStoredSession(v: unknown): v is StoredSession {
   const s = v as { metadata?: unknown; history?: unknown };
   if (typeof s.metadata !== "object" || s.metadata === null) return false;
   const m = s.metadata as { id?: unknown };
-  return typeof m.id === "string" && Array.isArray(s.history);
+  if (typeof m.id !== "string" || !Array.isArray(s.history)) return false;
+  // Deep guard: a corrupt entry (null, wrong role, missing content) must fail
+  // lookup, not crash restore when HistoryStore dereferences role/content.
+  for (const entry of s.history as unknown[]) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return false;
+    const msg = entry as { role?: unknown; content?: unknown };
+    if (msg.role !== "user" && msg.role !== "assistant") return false;
+    if (!Array.isArray(msg.content)) return false;
+  }
+  return true;
 }
 
 // All functions take an optional directory override so tests can run against a

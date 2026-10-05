@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { getErrorMessage } from "../errors.js";
-import { LSP_REQUEST_TIMEOUT_MS, LSP_DIAGNOSTICS_POLL_MS, LSP_PATH_DIAGNOSTICS_POLL_MS } from "../config/constants.js";
+import { LSP_REQUEST_TIMEOUT_MS, LSP_DIAGNOSTICS_POLL_MS, LSP_PATH_DIAGNOSTICS_POLL_MS, LSP_MAX_FRAME_BYTES, LSP_IDLE_CLOSE_MS } from "../config/constants.js";
 import type { LspClient, LspDiagnostic, LspLocation, LspPosition, LspServerCommand } from "./types.js";
 
 interface PendingRequest {
@@ -102,6 +102,14 @@ export class LspStdioClient implements LspClient {
         continue;
       }
       const length = Number(match[1]);
+      if (!Number.isFinite(length) || length < 0 || length > LSP_MAX_FRAME_BYTES) {
+        // intentional: a hostile/buggy server claiming an unbounded frame
+        // must not OOM the agent — drop the frame and fail the client.
+        this.buffer = this.buffer.subarray(headerEnd + 4);
+        this.dead = true;
+        this.failAll(new Error("LSP frame exceeds size cap"));
+        return;
+      }
       const bodyStart = headerEnd + 4;
       if (this.buffer.length < bodyStart + length) return;
       const body = this.buffer.subarray(bodyStart, bodyStart + length).toString("utf8");
@@ -131,7 +139,15 @@ export class LspStdioClient implements LspClient {
     if (msg.method === "textDocument/publishDiagnostics") {
       const params = msg.params as { uri?: string; diagnostics?: { range?: { start?: { line?: number } }; severity?: number; message?: string }[] };
       const rawUri = typeof params.uri === "string" ? params.uri : "";
-      const path = decodeURIComponent(rawUri.replace(/^file:\/\//, ""));
+      const stripped = rawUri.replace(/^file:\/\//, "");
+      let path: string;
+      try {
+        path = decodeURIComponent(stripped);
+      } catch {
+        // intentional: attacker-controlled URI with bad escapes must not
+        // throw out of the stdout handler — fall back to the raw path.
+        path = stripped;
+      }
       const diags: LspDiagnostic[] = (params.diagnostics ?? []).map((d) => ({
         path,
         line: (d.range?.start?.line ?? 0) + 1,
@@ -296,9 +312,10 @@ export class LspStdioClient implements LspClient {
    */
   async diagnosticsForPath(targetPath: string, sinceTimestamp: number = 0, timeoutMs: number = 500): Promise<LspDiagnostic[]> {
     const deadline = Date.now() + timeoutMs;
+    const matchesPath = (p: string): boolean => p === targetPath;
     const findForPath = (): LspDiagnostic[] | null => {
       for (const [p, val] of this.pathDiagnostics.entries()) {
-        if (p === targetPath || p.endsWith(targetPath) || targetPath.endsWith(p)) {
+        if (matchesPath(p)) {
           if (val.timestamp >= sinceTimestamp) {
             return val.diagnostics;
           }
@@ -318,7 +335,7 @@ export class LspStdioClient implements LspClient {
     }
 
     for (const [p, val] of this.pathDiagnostics.entries()) {
-      if (p === targetPath || p.endsWith(targetPath) || targetPath.endsWith(p)) {
+      if (matchesPath(p)) {
         // E3 (AUDIT-2026-09-30): the post-deadline fallback honors the SAME
         // freshness guard as the polling loop. Returning the cached entry
         // unconditionally let a mutation report diagnostics that predate it —
@@ -355,9 +372,9 @@ export class LspStdioClient implements LspClient {
 // Clients live until an idle timeout closes them or the process exits.
 // ---------------------------------------------------------------------------
 
-const LSP_IDLE_CLOSE_MS = 60_000;
 const clients = new Map<string, LspStdioClient>();
 const idleTimers = new Map<string, NodeJS.Timeout>();
+const inflight = new Map<string, Promise<LspStdioClient | null>>();
 let exitCleanupRegistered = false;
 
 function cacheKey(language: string, projectRoot: string): string {
@@ -404,12 +421,32 @@ export async function getLspClient(
     void client.close();
     client = undefined;
   }
-  if (!client) {
-    client = await LspStdioClient.start(server, projectRoot);
-    if (!client) return null;
-    clients.set(key, client);
-    registerExitCleanup();
+  if (client) {
+    scheduleIdleClose(key, client);
+    return client;
   }
-  scheduleIdleClose(key, client);
-  return client;
+  const pending = inflight.get(key);
+  if (pending) return pending;
+  const start = (async (): Promise<LspStdioClient | null> => {
+    const started = await LspStdioClient.start(server, projectRoot);
+    if (!started) return null;
+    // Single-flight guard: a concurrent caller may have populated the cache
+    // while we were starting — keep the winner, close the loser.
+    const raced = clients.get(key);
+    if (raced && !raced.isDead()) {
+      void started.close();
+      scheduleIdleClose(key, raced);
+      return raced;
+    }
+    clients.set(key, started);
+    registerExitCleanup();
+    scheduleIdleClose(key, started);
+    return started;
+  })();
+  inflight.set(key, start);
+  try {
+    return await start;
+  } finally {
+    inflight.delete(key);
+  }
 }

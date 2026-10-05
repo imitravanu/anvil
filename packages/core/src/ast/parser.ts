@@ -75,9 +75,13 @@ const RE_TS_ENUM = new RegExp(`^enum\\s+(${IDENT_JS})`, "u");
 const RE_TS_ENUM_MEMBER = new RegExp(`^(${IDENT_JS}|"[^"]+"|'[^']+')\\s*(?:=|,|$)`, "u");
 const RE_TS_CLASS = new RegExp(`^(?:abstract\\s+)?class\\s+(${IDENT_JS})`, "u");
 const RE_TS_MEMBER = new RegExp(
-  `^(?:public\\s+|private\\s+|protected\\s+|static\\s+|async\\s+|abstract\\s+|override\\s+|declare\\s+)*(constructor|${IDENT_JS})\\s*(\\([^{]*\\))`,
+  `^(?:public\\s+|private\\s+|protected\\s+|static\\s+|async\\s+|abstract\\s+|override\\s+|declare\\s+|get\\s+|set\\s+)*(?:\\*\\s*)?(constructor|${IDENT_JS})\\s*(\\([^{]*\\))`,
   "u"
 );
+const TS_CONTROL_KEYWORDS = new Set([
+  "if", "for", "while", "switch", "catch", "do", "else", "return",
+  "case", "with", "finally", "try", "new",
+]);
 const RE_TS_ARROW_PROP = new RegExp(
   `^(?:public\\s+|private\\s+|protected\\s+|static\\s+|readonly\\s+|async\\s+|declare\\s+|abstract\\s+|override\\s+)*(${IDENT_JS})\\s*(?:[!:][\\s\\S]*?)?=\\s*(?:async\\s*)?(?:\\([^)]*\\)|${IDENT_JS})\\s*(?::[^=]*)?=>`,
   "u"
@@ -398,11 +402,21 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
     );
   }
 
-  // Find matching closing brace given an opening line index
+  // Find matching closing brace given an opening line index.
+  // Paren-aware: `{}` inside `(...)` (destructured params, object types) must
+  // not open the body — the first balanced pair used to be the param object,
+  // so the declaration ended on its own signature line and the scanner walked
+  // into the real body indexing `if`/`for` as methods.
   function findMatchingBrace(startIdx: number): { endIdx: number; bodyStart: number } | null {
     let depth = 0;
+    let parenDepth = 0;
     let foundOpen = false;
     let bodyStart = -1;
+    // After `=>` the signature is over — parens are body-level (call args,
+    // paren-wrapped object bodies) and must not hide braces. Same once the
+    // body has opened: `if (x) {` balances its parens before its brace, but
+    // nested arrows/calls must not desync the depth count.
+    let signatureDone = false;
 
     for (let i = startIdx; i < total; i++) {
       // A line inside a comment or a multi-line template literal is data, not
@@ -444,15 +458,51 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
           continue;
         }
 
+        if (!signatureDone && char === "=" && next === ">") {
+          signatureDone = true;
+          parenDepth = 0;
+          j++;
+          continue;
+        }
+        if (!signatureDone && !foundOpen) {
+          if (char === "(") {
+            parenDepth++;
+            continue;
+          }
+          if (char === ")") {
+            if (parenDepth > 0) parenDepth--;
+            continue;
+          }
+          if (parenDepth > 0) continue;
+        }
+
         if (char === "{") {
           depth++;
           if (!foundOpen) {
             foundOpen = true;
+            signatureDone = true;
             bodyStart = i + 2;
           }
         } else if (char === "}") {
           depth--;
           if (foundOpen && depth === 0) {
+            // A return-type object (`: { ... }`, `Promise<{...}>`) closes before
+            // the body opens (`} {`). Returning it ends the declaration on its
+            // signature. If another `{` follows on this line, or the next code
+            // line opens with `{`, this was the signature — keep looking.
+            const rest = line.slice(j + 1);
+            if (rest.includes("{")) {
+              foundOpen = false;
+              bodyStart = -1;
+              continue;
+            }
+            let k = i + 1;
+            while (k < total && (!lines[k].trim() || !codeLines[k])) k++;
+            if (k < total && lines[k].trimStart().startsWith("{")) {
+              foundOpen = false;
+              bodyStart = -1;
+              continue;
+            }
             return { endIdx: i, bodyStart };
           }
         }
@@ -603,7 +653,7 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
           if (innerLine && codeLines[childIdx - 1]) {
             // Method or constructor pattern
             const methodMatch = RE_TS_MEMBER.exec(innerLine);
-            if (methodMatch) {
+            if (methodMatch && !TS_CONTROL_KEYWORDS.has(methodMatch[1])) {
               const methodName = methodMatch[1];
               // An abstract/declared method ends in `;` and has no body. Scanning
               // ahead for a brace would adopt the NEXT method's body and drop it.
@@ -746,20 +796,42 @@ function parseTypeScriptJs(lines: string[]): AstSymbol[] {
       continue;
     }
 
-    // Exported const/let/var variable
+    // Exported const/let/var variable. A call-wrapped arrow body
+    // (`useCallback((x) => { ... }, [])`) is not an arrow match above, but its
+    // braces must still be consumed — otherwise the scanner walks into the body
+    // and promotes nested locals to file-level symbols. Only arrows consume:
+    // plain objects/templates must not adopt the next declaration's braces.
     if (isExported) {
       const varMatch = RE_TS_VAR.exec(decl);
       if (varMatch) {
         const name = varMatch[1];
+        const brace = lines[i].includes("{") && lines[i].includes("=>") ? findMatchingBrace(i) : null;
+        const endLine = brace ? brace.endIdx + 1 : i + 1;
         symbols.push({
           name,
           kind: "constant",
           startLine: i + 1,
-          endLine: i + 1,
+          endLine,
           signature: trimmed,
           docstring: extractDocstring(i),
+          ...bodySpan(brace?.bodyStart, brace ? brace.endIdx + 1 : undefined),
           isExported: true,
         });
+        if (brace) {
+          i = endLine;
+          continue;
+        }
+      }
+    }
+
+    // An inline callback body (`it("...", () => { const x ... })`) is not a
+    // declaration, but its braces must still be consumed — otherwise nested
+    // locals leak to file level and duplicate across `it` blocks.
+    if (!isExported && trimmed.includes("=>") && lines[i].includes("{")) {
+      const brace = findMatchingBrace(i);
+      if (brace) {
+        i = brace.endIdx + 1;
+        continue;
       }
     }
 

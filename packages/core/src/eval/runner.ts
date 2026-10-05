@@ -107,15 +107,28 @@ export function loadEvalTasks(tasksDir: string): EvalTask[] {
   return tasks.sort((a, b) => a.id.localeCompare(b.id));
 }
 
+const EVAL_COPY_EXCLUDED = new Set(["node_modules", "dist", ".git"]);
+
 function copyDirRecursive(src: string, dest: string): void {
   fs.mkdirSync(dest, { recursive: true });
   const entries = fs.readdirSync(src, { withFileTypes: true });
   for (const entry of entries) {
+    if (EVAL_COPY_EXCLUDED.has(entry.name)) continue;
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
+    // lstat guard: never follow symlinked dirs out of the fixture — a
+    // poisoned fixture could otherwise copy the host filesystem.
+    let stat: fs.Stats;
+    try {
+      stat = fs.lstatSync(srcPath);
+    } catch {
+      // intentional: raced unlink during copy — skip, the task setup is best-effort.
+      continue;
+    }
+    if (stat.isSymbolicLink()) continue;
     if (entry.isDirectory()) {
       copyDirRecursive(srcPath, destPath);
-    } else {
+    } else if (entry.isFile()) {
       fs.copyFileSync(srcPath, destPath);
     }
   }

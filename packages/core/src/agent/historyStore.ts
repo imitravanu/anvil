@@ -87,7 +87,13 @@ export class HistoryStore {
       data: img.data,
     }));
     const last = this.messages.at(-1);
-    if (last && last.role === "user" && !last.content.some((c) => c.type === "tool_result")) {
+    const lastText = last?.role === "user"
+      ? (last.content.find((c) => c.type === "text") as { text: string } | undefined)?.text ?? ""
+      : "";
+    // Never fold into the compaction summary — it is context, not a request,
+    // and merging would corrupt the baseline plus break /retry boundaries.
+    const lastIsSummary = lastText.startsWith("[Earlier conversation summary");
+    if (last && last.role === "user" && !last.content.some((c) => c.type === "tool_result") && !lastIsSummary) {
       const existingImages = last.content.filter(
         (c): c is { type: "image"; mediaType: string; data: string } => c.type === "image"
       );
