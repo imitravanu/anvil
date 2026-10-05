@@ -23,6 +23,8 @@ export function loadProjectMemory(projectRoot: string): ProjectMemory | null {
   try {
     resolved = resolveWithinRoot(projectRoot, MEMORY_RELATIVE_PATH);
   } catch {
+    // intentional: a path that escapes the project root means no memory —
+    // absence, not an error worth surfacing.
     return null;
   }
 
@@ -59,6 +61,8 @@ export function loadProjectMemory(projectRoot: string): ProjectMemory | null {
       sizeBytes: stat.size,
     };
   } catch {
+    // intentional: an unreadable memory file is treated as absent; the model
+    // simply runs without project memory.
     return null;
   }
 }

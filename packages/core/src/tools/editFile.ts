@@ -144,6 +144,8 @@ export const execute: ToolExecutor = async (rawInput, ctx: ToolContext) => {
   try {
     diagnostics = await checkPostMutationDiagnostics(ctx.projectRoot, result.abs, result.updated);
   } catch {
+    // intentional: diagnostics are an optional post-edit signal; a fetch
+    // failure means "none available", not a failed edit.
     diagnostics = [];
   }
 

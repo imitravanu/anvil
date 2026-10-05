@@ -1,0 +1,11 @@
+{
+  "name": "Build a helper, then wire it into a caller that has existing behaviour to protect",
+  "category": "feature",
+  "prompt": "Add a duration parser to src/duration.js: parseDuration(text) converts strings like \"1h30m\", \"45s\" and \"2m\" into milliseconds, and throws an Error for anything it cannot parse (e.g. \"abc\", \"\"). The test suite describes the accepted forms and must pass.",
+  "followUps": [
+    "Now use that helper. src/session.js reads its `ttl` option with `Number(ttl) * 1000`, which silently produces NaN for values like \"30m\". Make `ttl` accept a \"30m\"-style string through the parser you just added, while a bare number of seconds (e.g. 3600) keeps behaving exactly as it does today. Do not change any test file, and the whole suite must still pass."
+  ],
+  "timeoutMs": 240000,
+  "maxTokens": 4096,
+  "fast": false
+}

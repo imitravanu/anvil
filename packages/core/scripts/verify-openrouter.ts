@@ -16,6 +16,7 @@ function loadKey(): string | undefined {
       ? creds.openrouterApiKey
       : undefined;
   } catch {
+    // intentional: a missing/unreadable credentials file simply means no key.
     return undefined;
   }
 }

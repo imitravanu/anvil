@@ -3,6 +3,7 @@ import { StringDecoder } from "node:string_decoder";
 import { getErrorMessage } from "../errors.js";
 import {
   DEFAULT_MCP_REQUEST_TIMEOUT_MS,
+  MCP_KILL_GRACE_MS,
   MCP_MAX_PUMP_QUEUE_BYTES,
   MCP_MAX_PUMP_QUEUE_LINES,
   SSE_CONNECT_INITIAL_DELAY_MS,
@@ -138,6 +139,8 @@ export function killAllMcpServers(): void {
         try {
           process.kill(-child.pid, "SIGKILL");
         } catch {
+          // intentional: process-group kill is unavailable — fall back to
+          // signalling the direct child.
           child.kill("SIGKILL");
         }
       }
@@ -226,6 +229,8 @@ export function createStdioTransport(
             try {
               process.kill(-child.pid, sig);
             } catch {
+              // intentional: process-group kill is unavailable — fall back to
+              // signalling the direct child.
               child.kill(sig);
             }
           }
@@ -234,7 +239,7 @@ export function createStdioTransport(
         }
       };
       killTree("SIGTERM");
-      const grace = setTimeout(() => killTree("SIGKILL"), 500);
+      const grace = setTimeout(() => killTree("SIGKILL"), MCP_KILL_GRACE_MS);
       (grace as unknown as { unref?: () => void }).unref?.();
       child.once("exit", () => clearTimeout(grace));
       liveChildren.delete(child);
@@ -356,6 +361,8 @@ export function sanitizeSseUrl(url: string): string {
     u.hash = "";
     return u.toString();
   } catch {
+    // intentional: an unparseable URL is replaced by a safe placeholder so
+    // error output never echoes a malformed credential-bearing URL.
     return "(invalid url)";
   }
 }

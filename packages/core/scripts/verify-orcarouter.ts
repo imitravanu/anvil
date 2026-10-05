@@ -24,6 +24,7 @@ function loadKey(): string | undefined {
       ? creds.orcarouterApiKey
       : undefined;
   } catch {
+    // intentional: a missing/unreadable credentials file simply means no key.
     return undefined;
   }
 }

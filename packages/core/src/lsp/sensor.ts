@@ -34,6 +34,8 @@ export async function checkPostMutationDiagnostics(
       .filter((d) => d.path === absPath || d.path.endsWith(absPath) || absPath.endsWith(d.path))
       .slice(0, 10);
   } catch {
+    // intentional: a diagnostics fetch is an optional sensor reading — a
+    // failure means "no diagnostics", not a failed mutation.
     return [];
   }
 }

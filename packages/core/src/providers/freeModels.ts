@@ -11,7 +11,7 @@ import { loadModelsCacheV2, saveModelsCacheV2, ModelsCacheV2 } from "./cache.js"
 
 export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 // Centralized in config/constants (§2.4); re-exported so the public API is unchanged.
-import { DEFAULT_SYNC_TTL_MS } from "../config/constants.js";
+import { DEFAULT_SYNC_TTL_MS, OPENROUTER_SYNC_TIMEOUT_MS, ORCAROUTER_SYNC_TIMEOUT_MS } from "../config/constants.js";
 export { DEFAULT_SYNC_TTL_MS };
 const REFERER = "https://github.com/imitravanu/anvil";
 const TITLE = "Anvil";
@@ -81,7 +81,7 @@ function refreshModelMetadata(row: ModelInfo, liveModel: ModelInfo): void {
 /** OpenRouter deliberately mimics chat-completions; its /models endpoint is public. */
 export async function fetchOpenRouterFreeModels(apiKey?: string): Promise<ModelInfo[]> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 4000);
+  const timer = setTimeout(() => controller.abort(), OPENROUTER_SYNC_TIMEOUT_MS);
   try {
     const headers: Record<string, string> = { "HTTP-Referer": REFERER, "X-Title": TITLE };
     if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
@@ -190,7 +190,7 @@ function prettifyOrcarouterVendor(rawId: string): string {
 export async function fetchOrcarouterFreeModels(apiKey?: string): Promise<ModelInfo[]> {
   void apiKey; // key-less public catalog; signature kept for FreeModelSource.
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
+  const timer = setTimeout(() => controller.abort(), ORCAROUTER_SYNC_TIMEOUT_MS);
   try {
     const res = await fetch(ORCAROUTER_PRICING_URL, { signal: controller.signal });
     if (!res.ok) {

@@ -163,6 +163,7 @@ function validateSseEntry(cfg: Record<string, unknown>): string | null {
   try {
     parsed = new URL(cfg.url.trim());
   } catch {
+    // intentional: the parse failure IS the reported problem (safe to print).
     return "sse \"url\" is not a valid URL";
   }
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {

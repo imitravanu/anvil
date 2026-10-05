@@ -160,30 +160,57 @@ export function resolveProviderSelection(input: SelectionInput): ProviderSelecti
         (input.creds[`${id}ApiKey` as keyof ProviderCredentials] as string).length > 0)
   );
 
-  const providerRaw =
-    input.flagProvider ?? input.envProvider ?? input.settings?.defaultProviderId;
   const modelRaw = input.flagModel ?? input.envModel ?? input.settings?.defaultModel;
 
+  // Unknown ids (typos) are a different mistake from "no API key yet" — report
+  // them distinctly instead of the old misleading "not configured". The model
+  // id stays free-form on purpose: OpenRouter-style providers accept arbitrary
+  // model ids the registry can never enumerate.
+  const checked = (candidate: string): ProviderId => {
+    if (!(PROVIDER_ORDER as readonly string[]).includes(candidate)) {
+      throw new UnknownProviderError(candidate);
+    }
+    if (!configured.includes(candidate as ProviderId)) {
+      throw new ProviderSelectionError(candidate);
+    }
+    return candidate as ProviderId;
+  };
+
+  // A model in MODEL_REGISTRY implies its provider when that provider is
+  // configured. This must sit at the SAME precedence level as the model's own
+  // source (CLI flag > env > settings), not below settings — otherwise a
+  // persisted `defaultProviderId` makes `--model <other-provider-model>`
+  // unreachable: the saved provider would be paired with a foreign model and
+  // fail at the provider call. A free-form model (absent from the registry)
+  // still falls through to the provider source below it.
+  const inferProvider = (model: string | undefined): ProviderId | undefined =>
+    model
+      ? (MODEL_REGISTRY.find(
+          (m) => m.id === model && configured.includes(m.providerId as ProviderId)
+        )?.providerId as ProviderId | undefined)
+      : undefined;
+
+  const flagModelProvider = inferProvider(input.flagModel);
+  const envModelProvider = inferProvider(input.envModel);
+
   let providerId: ProviderId | undefined;
-  if (providerRaw) {
-    // Unknown ids (typos) are a different mistake from "no API key yet" —
-    // report them distinctly instead of the old misleading "not configured".
-    // The model id stays free-form on purpose: OpenRouter-style providers
-    // accept arbitrary model ids the registry can never enumerate.
-    if (!(PROVIDER_ORDER as readonly string[]).includes(providerRaw)) {
-      throw new UnknownProviderError(providerRaw);
-    }
-    if (!configured.includes(providerRaw as ProviderId)) {
-      throw new ProviderSelectionError(providerRaw);
-    }
-    providerId = providerRaw as ProviderId;
+  if (input.flagProvider) {
+    providerId = checked(input.flagProvider);
+  } else if (flagModelProvider) {
+    providerId = flagModelProvider;
+  } else if (input.envProvider) {
+    providerId = checked(input.envProvider);
+  } else if (envModelProvider) {
+    providerId = envModelProvider;
+  } else if (input.settings?.defaultProviderId) {
+    providerId = checked(input.settings.defaultProviderId);
   } else {
     const keyConfigured = PROVIDER_ORDER.filter(
       (id) =>
         typeof input.creds[`${id}ApiKey` as keyof ProviderCredentials] === "string" &&
         (input.creds[`${id}ApiKey` as keyof ProviderCredentials] as string).length > 0
     );
-    providerId = keyConfigured[0];
+    providerId = inferProvider(input.settings?.defaultModel) ?? keyConfigured[0];
   }
   if (!providerId) return null;
 

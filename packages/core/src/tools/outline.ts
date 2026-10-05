@@ -252,6 +252,7 @@ async function collectFiles(targetAbs: string, projectRoot: string): Promise<str
     try {
       entries = await fs.readdir(dir, { withFileTypes: true });
     } catch {
+      // intentional: an unreadable directory is skipped in the outline walk.
       return;
     }
     for (const e of entries) {
@@ -315,6 +316,8 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
           outlines.push({ path: fileRel, symbols: slice });
         }
       } catch {
+        // intentional: a file that vanished or is unreadable is skipped; the
+        // outline continues with the rest of the tree.
         continue;
       }
     }

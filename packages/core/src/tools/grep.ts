@@ -117,6 +117,8 @@ async function* textFiles(dir: string, signal?: AbortSignal): AsyncGenerator<str
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch {
+    // intentional: an unreadable directory contributes no matches — grep
+    // skips it rather than failing the whole search.
     return;
   }
   for (const entry of entries) {

@@ -41,6 +41,15 @@ export interface GuardianViolation {
 const TUI_PACKAGE = "@anvil/" + "tui";
 const CLI_PACKAGE = "@anvil/" + "cli";
 const PLACEHOLDER_TERMS = "TO" + "DO|FI" + "XME|XX" + "X";
+const TS_SUPPRESSION_TERMS = "@" + "ts-(?:ignore|nocheck)\\b";
+const TEST_SKIP_PATTERN = "\\b(?:it|test|describe)\\.skip\\b|\\b(?:xit|xtest|xdescribe)\\s*\\(";
+// H1 (AUDIT-2026-09-30): inline timeout/retry/cap literals (rule 2.4). Written
+// as a string so this file never contains the literal shapes it flags.
+// A `0` delay is the standard yield-to-event-loop idiom (`setTimeout(fn, 0)`),
+// not an arbitrary timeout — `[1-9]` keeps the positive-number cases and drops
+// that false positive (found live against an eval fixture's own test harness).
+const MAGIC_TIMEOUT_TERMS =
+  "(?:timeout|timeoutMs|idleMs|maxWaitMs|maxBuffer|retries|maxRetries|delayMs|debounceMs|intervalMs)\\s*[:=]\\s*[1-9][\\d_]*|set(?:Timeout|Interval)\\s*\\([^,]+,\\s*[1-9][\\d_]*";
 
 const RULES: { rule: string; family: GuardianRuleFamily; scope: RuleScope; pattern: RegExp; detail: string }[] = [
   {
@@ -76,7 +85,7 @@ const RULES: { rule: string; family: GuardianRuleFamily; scope: RuleScope; patte
     family: "style",
     scope: "anvil",
     pattern:
-      /\b(?:color|borderColor|backgroundColor)\s*=\s*["'](?:cyan|green|red|yellow|blue|magenta|white|black|gray)["']/,
+      /\b(?:color|borderColor|backgroundColor)\s*=\s*(?:\{[ \t]*[`](?:cyan|green|red|yellow|blue|magenta|white|black|gray)[`][ \t]*\}|["'](?:cyan|green|red|yellow|blue|magenta|white|black|gray)["']|[`](?:cyan|green|red|yellow|blue|magenta|white|black|gray)[`])/,
     detail: `Hardcoded color string (use useTheme() from ${TUI_PACKAGE})`,
   },
   {
@@ -85,6 +94,34 @@ const RULES: { rule: string; family: GuardianRuleFamily; scope: RuleScope; patte
     scope: "anvil",
     pattern: new RegExp(`\\b(${PLACEHOLDER_TERMS})\\b`),
     detail: "Placeholder marker left in code (resolve before merge)",
+  },
+  {
+    rule: "no-ts-suppression",
+    family: "type-escape",
+    scope: "universal",
+    pattern: new RegExp(TS_SUPPRESSION_TERMS),
+    detail: "TypeScript suppression (@" + "ts-ignore/@" + "ts-nocheck forbidden; fix the underlying types)",
+  },
+  {
+    rule: "no-as-error",
+    family: "raw-error",
+    scope: "anvil",
+    pattern: /\bas\s+Error\b/,
+    detail: "Raw error narrowing (use getErrorMessage(err) from @anvil/core or a type guard)",
+  },
+  {
+    rule: "no-magic-constant",
+    family: "style",
+    scope: "anvil",
+    pattern: new RegExp(MAGIC_TIMEOUT_TERMS),
+    detail: "Inline timeout/retry/cap literal (import from @anvil/core config/constants)",
+  },
+  {
+    rule: "no-skipped-test",
+    family: "style",
+    scope: "universal",
+    pattern: new RegExp(TEST_SKIP_PATTERN),
+    detail: "Skipped test case (a skipped it/test/describe block, or xit/xtest/xdescribe; tests must pass)",
   },
 ];
 
@@ -112,6 +149,11 @@ function isCommentLine(text: string): boolean {
 function isCorePackageFile(file: string): boolean {
   if (!/(^|\/)packages\//.test(file)) return true;
   return /(^|\/)packages\/core\//.test(file);
+}
+
+function isTuiComponentFile(file: string): boolean {
+  if (!/(^|\/)packages\//.test(file)) return true;
+  return /(^|\/)packages\/tui\/src\/components\//.test(file);
 }
 
 /** Source types the guardian scans — the same set the repo gate's PATHSPEC covers. */
@@ -143,7 +185,7 @@ const SPLIT_PATTERNS: { rule: string; family: GuardianRuleFamily; scope: RuleSco
     rule: "no-empty-catch",
     family: "style",
     scope: "universal",
-    pattern: /catch\s*(?:\([^)]*\))?\s*\n\s*\{\s*\}/,
+    pattern: /catch\s*(?:\([^)]*\))?\s*\{[ \t\r\n]*\}/,
     detail: "Silent catch block split across lines (log or explain why swallowing is safe)",
   },
   {
@@ -154,6 +196,45 @@ const SPLIT_PATTERNS: { rule: string; family: GuardianRuleFamily; scope: RuleSco
     detail: "Raw error formatting split across lines (use getErrorMessage(err) from @anvil/core)",
   },
 ];
+
+/**
+ * True when a catch body neither surfaces the error nor explains itself. The
+ * body is compliant if it contains any of these tokens (case-insensitive), or
+ * any comment. Empty bodies are the dedicated `no-empty-catch` rule's job.
+ */
+const CATCH_SURFACES = /log\.|console\.|printSystemMessage|getErrorMessage|throw\b|error|problem|fail|warn|\/\/|\/\*/i;
+
+function matchBraceBody(text: string, openIdx: number): string {
+  let depth = 0;
+  for (let i = openIdx; i < text.length; i++) {
+    if (text[i] === "{") depth++;
+    else if (text[i] === "}") {
+      depth--;
+      if (depth === 0) return text.slice(openIdx + 1, i);
+    }
+  }
+  return text.slice(openIdx + 1);
+}
+
+/** Line numbers of non-empty catch blocks with no log and no rationale (H1). */
+function silentCatchLineNumbers(text: string): number[] {
+  const out: number[] = [];
+  const re = /catch\s*(?:\([^)]*\))?\s*\{/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    // A comment that merely NAMES a catch (docs/explanations) is not code.
+    const lineStart = text.lastIndexOf("\n", m.index) + 1;
+    const lineEnd = text.indexOf("\n", m.index);
+    const line = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd);
+    if (/^\s*(?:\/\/|\*|\/\*)/.test(line) || text.slice(lineStart, m.index).includes("//")) continue;
+    const openIdx = text.indexOf("{", m.index);
+    const body = matchBraceBody(text, openIdx);
+    if (body.trim() === "") continue;
+    if (CATCH_SURFACES.test(body)) continue;
+    out.push(text.slice(0, m.index).split("\n").length);
+  }
+  return out;
+}
 
 /**
  * Scan added-line text; pure and unit-tested without git. Project-declared
@@ -201,10 +282,15 @@ export function scanTextForSlop(
       for (const { rule, family, scope: ruleScope, pattern, detail } of RULES) {
         if (ruleScope === "anvil" && scope !== "anvil") continue;
         if (rule === "no-as-any" && isTestPath(file)) continue;
+        if (rule === "no-as-error" && isTestPath(file)) continue;
+        if (rule === "no-ts-suppression" && isTestPath(file)) continue;
+        if (rule === "no-skipped-test" && !isTestPath(file)) continue;
         if (rule === "no-architecture-breach" && !isCorePackageFile(file)) continue;
-        // Comments are not code — except for the placeholder marker, whose
-        // whole purpose is to catch a marker word left in a comment.
-        if (comment && rule !== "no-placeholder-marker") continue;
+        if (rule === "no-hardcoded-color" && !isTuiComponentFile(file)) continue;
+        if (rule === "no-magic-constant" && /^[`'"]/.test(lineText.trim())) continue;
+        // Comments are not code — except for placeholder marker and ts-suppression,
+        // whose whole purpose is to catch markers/suppressions written in comments.
+        if (comment && rule !== "no-placeholder-marker" && rule !== "no-ts-suppression") continue;
         if (pattern.test(lineText)) {
           violations.push({ file, line: i + 1, rule, family, detail });
         }
@@ -216,6 +302,23 @@ export function scanTextForSlop(
       }
     }
   });
+
+  // H1: brace-aware non-empty silent catches. Tests are exempt (fixtures).
+  // Anvil scope only: unlike a truly empty catch, a non-empty silent catch is
+  // an ordinary defensive fallback idiom in foreign code, and blocking it would
+  // make the guardian unusable outside this repo (the same reason
+  // no-raw-error-format is anvil-scoped).
+  if (scanBuiltins && scope === "anvil" && !isTestPath(file)) {
+    for (const lineNo of silentCatchLineNumbers(text)) {
+      violations.push({
+        file,
+        line: lineNo,
+        rule: "no-silent-catch",
+        family: "style",
+        detail: "Silent catch block with no log or rationale (log, or add // intentional: <reason>)",
+      });
+    }
+  }
   return violations;
 }
 

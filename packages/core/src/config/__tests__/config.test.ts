@@ -78,6 +78,63 @@ describe("resolveProviderSelection", () => {
     expect(sel).toEqual({ providerId: "gemini", model: "gemini-3.6-flash" });
   });
 
+  it("infers configured provider from model when provider is omitted", () => {
+    // Both anthropic and gemini configured, but model is gemini-specific without flagProvider
+    const sel = resolveProviderSelection({
+      flagModel: "gemini-3.6-flash",
+      creds: both,
+    });
+    expect(sel).toEqual({ providerId: "gemini", model: "gemini-3.6-flash" });
+  });
+
+  // Regression: the inference above is unreachable once a provider has been
+  // persisted, because settings.defaultProviderId used to outrank a CLI/env
+  // model. That paired the saved provider with a foreign, provider-specific
+  // model id and failed at the provider call (e.g. gemini model -> anthropic).
+  it("an explicit --model outranks a saved default provider", () => {
+    const sel = resolveProviderSelection({
+      flagModel: "gemini-3.6-flash",
+      settings: { defaultProviderId: "anthropic" },
+      creds: both,
+    });
+    expect(sel).toEqual({ providerId: "gemini", model: "gemini-3.6-flash" });
+  });
+
+  it("an explicit ANVIL_MODEL outranks a saved default provider", () => {
+    const sel = resolveProviderSelection({
+      envModel: "gemini-3.6-flash",
+      settings: { defaultProviderId: "anthropic" },
+      creds: both,
+    });
+    expect(sel).toEqual({ providerId: "gemini", model: "gemini-3.6-flash" });
+  });
+
+  it("a free-form model not in the registry keeps the saved default provider", () => {
+    const sel = resolveProviderSelection({
+      flagModel: "some-vendor/custom-model:free",
+      settings: { defaultProviderId: "anthropic" },
+      creds: both,
+    });
+    expect(sel).toEqual({ providerId: "anthropic", model: "some-vendor/custom-model:free" });
+  });
+
+  it("an explicit model whose provider is unconfigured falls to the saved provider", () => {
+    // Only anthropic is configured; a gemini-only model id cannot be routed to
+    // gemini, so the saved provider still applies (free-form routing preserved).
+    const sel = resolveProviderSelection({
+      flagModel: "gemini-3.6-flash",
+      settings: { defaultProviderId: "anthropic" },
+      creds: { anthropicApiKey: "a-key" },
+    });
+    expect(sel).toEqual({ providerId: "anthropic", model: "gemini-3.6-flash" });
+  });
+
+  it("a saved provider with no key is validated, not silently booted", () => {
+    expect(() =>
+      resolveProviderSelection({ settings: { defaultProviderId: "gemini" }, creds: { anthropicApiKey: "a-key" } })
+    ).toThrow(ProviderSelectionError);
+  });
+
   it("fallback level: first configured provider with its first registry model", () => {
     const sel = resolveProviderSelection({ creds: both });
     expect(sel).toEqual({ providerId: "anthropic", model: "claude-opus-5" });

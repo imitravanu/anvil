@@ -74,6 +74,8 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   try {
     diagnostics = await checkPostMutationDiagnostics(ctx.projectRoot, abs, content);
   } catch {
+    // intentional: diagnostics are an optional post-write signal; a fetch
+    // failure means "none available", not a failed write.
     diagnostics = [];
   }
 
@@ -115,6 +117,8 @@ export const describe = async (input: unknown, ctx: ToolContext): Promise<string
     const prev = await fs.readFile(abs, "utf8");
     return `Overwrite ${relPath} (${bytes} bytes, currently ${Buffer.byteLength(prev, "utf8")} bytes)`;
   } catch {
+    // intentional: stat/read failed because the file does not exist yet —
+    // preview the write as a creation.
     return `Create ${relPath} (${bytes} bytes)`;
   }
 };

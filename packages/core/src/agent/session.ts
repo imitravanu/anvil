@@ -428,6 +428,8 @@ export class AgentSession {
           try {
             await sleepAbortable(rateLimitRetry * 1000, controller.signal);
           } catch {
+            // intentional: the sleep was aborted — the user cancelled during
+            // the rate-limit wait, so the turn ends as cancelled.
             yield { type: "cancelled" };
             return;
           }

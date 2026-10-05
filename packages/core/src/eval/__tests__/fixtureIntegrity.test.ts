@@ -139,9 +139,12 @@ describe("Harder-tier fixture integrity (A4)", () => {
   const hardDirs = listHardTaskDirs();
 
   it("discovers the harder tier", () => {
-    expect(hardDirs.length).toBeGreaterThanOrEqual(6);
+    expect(hardDirs.length).toBeGreaterThanOrEqual(7);
     expect(hardDirs).toContain("01-contract-propagation");
     expect(hardDirs).toContain("06-untested-symptom");
+    // A4's spec is "long horizon, multi-turn, real repo" — the tier must keep a
+    // multi-turn member or the maintenance mode simply stops being measured.
+    expect(hardDirs).toContain("07-multiturn-ttl");
   });
 
   it("gives every harder fixture the structure the harness requires", () => {
@@ -231,10 +234,10 @@ describe("Harder-tier fixture integrity (A4)", () => {
           );
         }
       }
-      // A floor, so a mass deletion of probes is itself a failure. Four tasks
-      // carry structural guards (01/03/04/05); 02 and 06 are guarded by the
+      // A floor, so a mass deletion of probes is itself a failure. Five tasks
+      // carry structural guards (01/03/04/05/07); 02 and 06 are guarded by the
       // suite itself, which the RED check above already proves bites.
-      expect(probes).toBeGreaterThanOrEqual(4);
+      expect(probes).toBeGreaterThanOrEqual(5);
       expect(problems).toEqual([]);
     },
     300_000

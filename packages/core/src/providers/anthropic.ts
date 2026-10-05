@@ -121,11 +121,10 @@ export function toAnthropicMessages(messages: ConversationMessage[]): Anthropic.
       } else if (c.type === "tool_call") {
         let input: unknown = c.call.input;
         if (typeof input === "string") {
-          try {
-            input = JSON.parse(input);
-          } catch {
-            input = {};
-          }
+          // Route through the shared parser so malformed arguments surface the
+          // `__parseError` sentinel instead of silently collapsing to `{}`
+          // (the drift streaming.ts documents and forbids).
+          input = parseToolCallJson(input);
         }
         content.push({
           type: "tool_use",

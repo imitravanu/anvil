@@ -21,6 +21,7 @@ import {
   createMockCertificationProvider,
   certifyProvider,
   getErrorMessage,
+  CERT_PROVIDER_TIMEOUT_MS,
   PROVIDER_CERT_MODELS,
   resolveCertificationCredentials,
   type ProviderId,
@@ -52,7 +53,7 @@ function parseArgs(args: string[]) {
   let json = false;
   let verbose = false;
   let model: string | undefined;
-  let timeoutMs = 35_000;
+  let timeoutMs = CERT_PROVIDER_TIMEOUT_MS;
   let out: string | undefined;
 
   for (let i = 0; i < args.length; i++) {

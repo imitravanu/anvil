@@ -30,6 +30,8 @@ export function loadProjectRules(projectRoot: string): ProjectRules | null {
     try {
       resolved = resolveWithinRoot(projectRoot, candidate);
     } catch {
+      // intentional: a candidate that escapes the project root is skipped,
+      // not fatal — the next candidate may still resolve.
       continue;
     }
 

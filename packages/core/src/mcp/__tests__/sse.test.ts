@@ -47,9 +47,14 @@ describe("sanitizeSseUrl", () => {
   });
 });
 
-interface FakeSse {
+interface FakeSseBase {
   url: string;
   close: () => Promise<void>;
+}
+
+interface FakeSse extends FakeSseBase {
+  /** How many times the SSE stream (GET /sse) was opened — a reconnect counter. */
+  getRequests: () => number;
 }
 
 interface FakeSseOpts {
@@ -57,13 +62,21 @@ interface FakeSseOpts {
   endpoint?: string;
   /** Answer `tools/call` with a body far past the client's read cap. */
   oversizedPost?: boolean;
+  /**
+   * Fail the FIRST `tools/call` POST with this HTTP status (E6). The stream must
+   * stay up so the next call is served on the SAME connection, with no reconnect.
+   */
+  failFirstPostStatus?: number;
 }
 
 /** Legacy-profile SSE server: GET /sse yields an endpoint event, POST /rpc answers JSON-RPC inline. */
 function startFakeSseServer(opts: FakeSseOpts = {}): Promise<FakeSse> {
   const streams: http.ServerResponse[] = [];
+  let getRequests = 0;
+  let failedOnce = false;
   const server = http.createServer((req, res) => {
     if (req.method === "GET" && (req.url === "/sse" || req.url?.startsWith("/sse?"))) {
+      getRequests += 1;
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
@@ -108,6 +121,12 @@ function startFakeSseServer(opts: FakeSseOpts = {}): Promise<FakeSse> {
         } else if (msg.method === "tools/list") {
           respond({ tools: [{ name: "ping", description: "pong tool", inputSchema: { type: "object", properties: {} } }] });
         } else if (msg.method === "tools/call") {
+          if (opts.failFirstPostStatus !== undefined && !failedOnce) {
+            failedOnce = true;
+            res.writeHead(opts.failFirstPostStatus);
+            res.end();
+            return;
+          }
           if (opts.oversizedPost) {
             // Bounded-read probe: the body is well past the client's cap, so the
             // client must abandon it mid-stream instead of buffering it whole.
@@ -140,6 +159,7 @@ function startFakeSseServer(opts: FakeSseOpts = {}): Promise<FakeSse> {
       const { port } = server.address() as AddressInfo;
       resolve({
         url: `http://127.0.0.1:${port}/sse`,
+        getRequests: () => getRequests,
         close: () =>
           new Promise<void>((done) => {
             for (const s of streams) {
@@ -340,6 +360,28 @@ describe("SSE transport end-to-end (Phase 25.1)", () => {
       // Failing the transport is the honest outcome: the response could not be
       // read within the cap, so the call errors as closed.
       expect(res.isError).toBe(true);
+    } finally {
+      transport.close();
+    }
+  });
+
+  it("answers a failed POST with a JSON-RPC error and keeps the stream up (E6)", async () => {
+    fake = await startFakeSseServer({ failFirstPostStatus: 500 });
+    const transport = await createSseTransport(fake.url, { timeoutMs: 5000 });
+    try {
+      const conn = await connectServer("sse-fake", sseCfg(fake.url), transport, { timeoutMs: 5000 });
+      expect(conn.status).toBe("ready");
+      // The failed POST errors THIS call only — correlated by request id, so it
+      // does not poison the transport or fail every other in-flight call.
+      const failed = await callTool(conn, "ping", { n: 1 });
+      expect(failed.isError).toBe(true);
+      expect(JSON.stringify(failed.output)).toContain("HTTP 500");
+      // The stream stayed up: the next call is served on the same connection...
+      const ok = await callTool(conn, "ping", { n: 2 });
+      expect(ok.isError).toBe(false);
+      expect(JSON.stringify(ok.output)).toContain("pong");
+      // ...and no reconnect was triggered — GET /sse was opened exactly once.
+      expect(fake.getRequests()).toBe(1);
     } finally {
       transport.close();
     }

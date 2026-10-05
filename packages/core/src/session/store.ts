@@ -41,6 +41,8 @@ export function loadSession(id: string, dir: string = SESSIONS_DIR()): StoredSes
     const raw: unknown = JSON.parse(fs.readFileSync(file, "utf-8"));
     return isStoredSession(raw) ? raw : null;
   } catch {
+    // intentional: a missing or corrupt session file is a lookup miss — the
+    // sessions dir is user-facing and a bad file must not crash the picker.
     return null;
   }
 }

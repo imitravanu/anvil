@@ -51,6 +51,22 @@ describe("environmental failures stay environmental", () => {
   });
 });
 
+describe("A8: a structured failure origin outranks the message", () => {
+  it("does not excuse a task failure whose assertion text contains an environmental word", () => {
+    const message = "AssertionError: expected status 'unavailable' but got 'down'";
+    // The legacy message-only path would excuse this (the A8 defect)...
+    expect(classifyTrialFailure(message).providerError).toBe(true);
+    // ...but the runner-supplied structured kind is authoritative.
+    expect(classifyTrialFailure(message, "task").providerError).toBe(false);
+  });
+
+  it("maps a structured provider/network origin to environmental, task to graded", () => {
+    expect(classifyTrialFailure("anything", "provider").providerError).toBe(true);
+    expect(classifyTrialFailure(undefined, "network").providerError).toBe(true);
+    expect(classifyTrialFailure(undefined, "task")).toEqual({ providerError: false, reason: "task" });
+  });
+});
+
 describe("genuine capability differences are not excused", () => {
   it("keeps a wrong-answer failure graded", () => {
     // The whole point: a model that produced the wrong code must count against

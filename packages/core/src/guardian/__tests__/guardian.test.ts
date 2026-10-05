@@ -20,6 +20,19 @@ const GET_ERROR_MESSAGE_IMPORT = '+import { getErrorMessage } from "@anvil/core"
 const FIX_RAW_ERROR_UNFIXABLE =
   "const m = err instanceof " + "Error ? err.message : JSON.stringify(err);";
 const FIX_EMPTY_CATCH = "try { run(); } catch " + "{}";
+const FIX_MULTILINE_CATCH = "try { run(); } catch (e) {\n}";
+const FIX_TS_IGNORE = "// @" + "ts-ignore";
+const FIX_TS_NOCHECK = "// @" + "ts-nocheck";
+const FIX_SKIPPED_TEST = 'it.' + 'skip("test", () => {});';
+// H1 fixtures — split so this test source never contains the literal shapes.
+const FIX_AS_ERROR = "const m = (err as " + "Error).message;";
+const FIX_MAGIC_TIMEOUT = "const r = fetch(url, { time" + "out: 5000 });";
+// `0` is the yield-to-event-loop idiom, not a magic timeout (found live against
+// an eval fixture's own harness: `setTimeout(resolve, 0)`).
+const FIX_YIELD_ZERO = "await new Promise((resolve) => set" + "Timeout(resolve, 0));";
+const FIX_SILENT_CATCH = "try { run(); } catch { value = 1; }";
+const FIX_COLOR_QUOTE = '<Box color="cyan" />';
+const FIX_COLOR_TEMPLATE = "<Box color={`" + "cyan`} />";
 // Split for the same reason: this repo's gate flags these tokens in added lines.
 const PLACEHOLDER_WORD = "TO" + "DO";
 const TUI_IMPORT = 'import x from "@anvil/' + 'tui";';
@@ -47,9 +60,62 @@ describe("scanTextForSlop", () => {
     expect(violations.some((v) => v.rule === "no-raw-error-format")).toBe(true);
   });
 
-  it("flags empty catch blocks", () => {
-    const violations = scanTextForSlop("src/a.ts", FIX_EMPTY_CATCH, "anvil");
-    expect(violations.some((v) => v.rule === "no-empty-catch")).toBe(true);
+  it("flags empty catch blocks (both single-line and multiline)", () => {
+    expect(scanTextForSlop("src/a.ts", FIX_EMPTY_CATCH, "anvil").some((v) => v.rule === "no-empty-catch")).toBe(true);
+    expect(scanTextForSlop("src/a.ts", FIX_MULTILINE_CATCH, "anvil").some((v) => v.rule === "no-empty-catch")).toBe(true);
+  });
+
+  it("flags ts-ignore and ts-nocheck in production code, allows in tests", () => {
+    expect(scanTextForSlop("src/a.ts", FIX_TS_IGNORE, "anvil").some((v) => v.rule === "no-ts-suppression")).toBe(true);
+    expect(scanTextForSlop("src/a.ts", FIX_TS_NOCHECK, "anvil").some((v) => v.rule === "no-ts-suppression")).toBe(true);
+    expect(scanTextForSlop("src/__tests__/a.test.ts", FIX_TS_IGNORE, "anvil").some((v) => v.rule === "no-ts-suppression")).toBe(false);
+  });
+
+  it("flags skipped tests in test files, ignores in non-test files", () => {
+    expect(scanTextForSlop("src/__tests__/a.test.ts", FIX_SKIPPED_TEST, "anvil").some((v) => v.rule === "no-skipped-test")).toBe(true);
+    expect(scanTextForSlop("src/a.ts", FIX_SKIPPED_TEST, "anvil").some((v) => v.rule === "no-skipped-test")).toBe(false);
+  });
+
+  it("flags 'as Error' casts in production, allows tests (H1)", () => {
+    expect(scanTextForSlop("src/a.ts", FIX_AS_ERROR, "anvil").some((v) => v.rule === "no-as-error")).toBe(true);
+    expect(scanTextForSlop("src/__tests__/a.test.ts", FIX_AS_ERROR, "anvil").some((v) => v.rule === "no-as-error")).toBe(false);
+  });
+
+  it("flags inline timeout/retry/cap literals but not named constants (H1)", () => {
+    expect(scanTextForSlop("src/a.ts", FIX_MAGIC_TIMEOUT, "anvil").some((v) => v.rule === "no-magic-constant")).toBe(true);
+    expect(
+      scanTextForSlop("src/a.ts", "const r = fetch(url, { timeout: TIMEOUT_MS });", "anvil").some(
+        (v) => v.rule === "no-magic-constant"
+      )
+    ).toBe(false);
+  });
+
+  it("does not flag a zero-delay yield as a magic timeout (H1 negative control)", () => {
+    expect(scanTextForSlop("src/a.ts", FIX_YIELD_ZERO, "anvil").some((v) => v.rule === "no-magic-constant")).toBe(false);
+    expect(
+      scanTextForSlop("src/a.ts", "set" + "Timeout(flush, 50);", "anvil").some((v) => v.rule === "no-magic-constant")
+    ).toBe(true);
+  });
+
+  it("flags non-empty silent catches, allows logged/explained ones (H1)", () => {
+    expect(scanTextForSlop("src/a.ts", FIX_SILENT_CATCH, "anvil").some((v) => v.rule === "no-silent-catch")).toBe(true);
+    expect(
+      scanTextForSlop("src/a.ts", "try { run(); } catch {\n  // intentional: best-effort\n  value = 1;\n}", "anvil").some(
+        (v) => v.rule === "no-silent-catch"
+      )
+    ).toBe(false);
+    expect(
+      scanTextForSlop("src/a.ts", "try { run(); } catch (e) {\n  log.warn(getErrorMessage(e));\n}", "anvil").some(
+        (v) => v.rule === "no-silent-catch"
+      )
+    ).toBe(false);
+    expect(scanTextForSlop("src/__tests__/a.test.ts", FIX_SILENT_CATCH, "anvil").some((v) => v.rule === "no-silent-catch")).toBe(false);
+  });
+
+  it("flags hardcoded color strings in TUI components, ignores outside", () => {
+    expect(scanTextForSlop("packages/tui/src/components/A.tsx", FIX_COLOR_QUOTE, "anvil").some((v) => v.rule === "no-hardcoded-color")).toBe(true);
+    expect(scanTextForSlop("packages/tui/src/components/A.tsx", FIX_COLOR_TEMPLATE, "anvil").some((v) => v.rule === "no-hardcoded-color")).toBe(true);
+    expect(scanTextForSlop("packages/core/src/A.tsx", FIX_COLOR_QUOTE, "anvil").some((v) => v.rule === "no-hardcoded-color")).toBe(false);
   });
 
   it("does not treat prose as code (the markdown false positive)", () => {

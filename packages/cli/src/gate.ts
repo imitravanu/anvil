@@ -6,6 +6,7 @@ import {
   loadCustomGuardianRules,
   recordHealthScan,
   scanDiffForSlop,
+  GATE_DIFF_MAX_BUFFER_BYTES,
   GATE_DIFF_SCAN_TIMEOUT_MS,
   GUARDIAN_WATCH_INTERVAL_MS,
   GUARDIAN_WATCH_MAX_SCANS_PER_MIN,
@@ -62,7 +63,7 @@ function scanGitDiff(cwd: string, command: string, label: string, recordTelemetr
     diff = execSync(command, {
       cwd,
       encoding: "utf8",
-      maxBuffer: 8 * 1024 * 1024,
+      maxBuffer: GATE_DIFF_MAX_BUFFER_BYTES,
       timeout: GATE_DIFF_SCAN_TIMEOUT_MS,
     });
   } catch (err: unknown) {

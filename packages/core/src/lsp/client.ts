@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { getErrorMessage } from "../errors.js";
-import { LSP_REQUEST_TIMEOUT_MS } from "../config/constants.js";
+import { LSP_REQUEST_TIMEOUT_MS, LSP_DIAGNOSTICS_POLL_MS, LSP_PATH_DIAGNOSTICS_POLL_MS } from "../config/constants.js";
 import type { LspClient, LspDiagnostic, LspLocation, LspPosition, LspServerCommand } from "./types.js";
 
 interface PendingRequest {
@@ -64,6 +64,7 @@ export class LspStdioClient implements LspClient {
     try {
       child = spawn(server.command, server.args, { stdio: ["pipe", "pipe", "ignore"] });
     } catch {
+      // intentional: the server binary is missing/unspawnable; LSP is optional.
       return null;
     }
     if (!child.stdin || !child.stdout) return null;
@@ -77,6 +78,8 @@ export class LspStdioClient implements LspClient {
       client.notify("initialized", {});
       return client;
     } catch {
+      // intentional: a failed handshake means no usable LSP — close the child
+      // and report the language server as unavailable.
       await client.close();
       return null;
     }
@@ -112,6 +115,8 @@ export class LspStdioClient implements LspClient {
     try {
       msg = JSON.parse(body) as typeof msg;
     } catch {
+      // intentional: a malformed frame from an external server is dropped —
+      // one bad message must not kill the reader.
       return;
     }
     if (typeof msg.id === "number" && this.pending.has(msg.id)) {
@@ -228,7 +233,7 @@ export class LspStdioClient implements LspClient {
     const deadline = Date.now() + ms;
     while (this.collected.length === 0 && Date.now() < deadline) {
       if (this.dead) break;
-      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+      await new Promise<void>((resolve) => setTimeout(resolve, LSP_DIAGNOSTICS_POLL_MS));
     }
     return [...this.collected];
   }
@@ -241,6 +246,8 @@ export class LspStdioClient implements LspClient {
       });
       return this.toLocations(result);
     } catch {
+      // intentional: an LSP query failure degrades to "no result" —
+      // definition/reference lookups are best-effort, never hard errors.
       return [];
     }
   }
@@ -254,6 +261,8 @@ export class LspStdioClient implements LspClient {
       });
       return this.toLocations(result);
     } catch {
+      // intentional: an LSP query failure degrades to "no result" —
+      // definition/reference lookups are best-effort, never hard errors.
       return [];
     }
   }
@@ -275,6 +284,7 @@ export class LspStdioClient implements LspClient {
       const marked = contents as { value?: string };
       return typeof marked.value === "string" ? marked.value : JSON.stringify(contents);
     } catch {
+      // intentional: hover is a best-effort enrichment; failure means no hover.
       return null;
     }
   }
@@ -302,7 +312,7 @@ export class LspStdioClient implements LspClient {
 
     while (Date.now() < deadline) {
       if (this.dead) break;
-      await new Promise<void>((resolve) => setTimeout(resolve, 25));
+      await new Promise<void>((resolve) => setTimeout(resolve, LSP_PATH_DIAGNOSTICS_POLL_MS));
       const found = findForPath();
       if (found !== null) return [...found];
     }

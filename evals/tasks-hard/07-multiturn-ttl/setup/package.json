@@ -1,0 +1,6 @@
+{
+  "name": "harder-tier-multiturn-ttl",
+  "private": true,
+  "type": "commonjs",
+  "scripts": { "test": "node --test" }
+}

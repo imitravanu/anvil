@@ -60,6 +60,8 @@ export function geminiErrorMessage(err: unknown): string {
       const msg = parsed?.error?.message;
       return typeof msg === "string" ? msg : null;
     } catch {
+      // intentional: a non-JSON error body has no embedded message — the
+      // caller falls back to the raw error text.
       return null;
     }
   };
@@ -185,6 +187,8 @@ export function toGeminiContents(messages: ConversationMessage[]): Record<string
         try {
           response = JSON.parse(c.result.content);
         } catch {
+          // intentional: a non-JSON tool result is passed through as plain
+          // text output so the model still receives the result.
           response = { output: c.result.content };
         }
         parts.push({ functionResponse: { id: c.result.toolCallId, name, response } });

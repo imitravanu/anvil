@@ -337,6 +337,24 @@ describe("toAnthropicMessages", () => {
     ]);
   });
 
+  // H1 regression: this translator had drifted back to a silent `catch {}`
+  // collapsing to `{}` — malformed arguments must surface the shared sentinel
+  // (streaming.ts) so the model is told its JSON was invalid.
+  it("surfaces malformed string tool input as the __parseError sentinel, never a silent {}", () => {
+    const messages = [
+      {
+        role: "assistant" as const,
+        content: [
+          { type: "tool_call" as const, call: { id: "t3", name: "run", input: "{not json" } },
+        ],
+      },
+    ];
+    const content = toAnthropicMessages(messages)[0].content as Array<{ input?: unknown }>;
+    const input = content[0]?.input as { __parseError?: boolean; rawInput?: string };
+    expect(input.__parseError).toBe(true);
+    expect(input.rawInput).toBe("{not json");
+  });
+
   it("passes the real image MIME through (no png hardcode)", () => {
     for (const mediaType of ["image/png", "image/jpeg", "image/webp", "image/gif"]) {
       const messages = [

@@ -5,6 +5,7 @@ import { render } from "ink";
 import {
   CORE_VERSION,
   STDIN_CONTEXT_PEEK_MS,
+  MCP_CONNECT_TIMEOUT_MS,
   McpServerConnection,
   TOOL_DEFINITIONS,
   connectAllMcpServers,
@@ -17,6 +18,7 @@ import {
   killAllMcpServers,
   loadCredentials,
   loadSettings,
+  saveSettings,
   loadModelsCacheV2,
   collectModelsFromCache,
   registerExternalExecutor,
@@ -208,7 +210,7 @@ async function connectMcpTools(
   // used to silently catch here, so a dead MCP server just vanished).
   const empty = { defs: [], connected: 0, toolCount: 0 };
   try {
-    const mcp = await connectAllMcpServers(conns, { timeoutMs: 10_000 });
+    const mcp = await connectAllMcpServers(conns, { timeoutMs: MCP_CONNECT_TIMEOUT_MS });
     for (const problem of mcp.problems) notices.push(`MCP ${problem}`);
     if (mcp.connected === 0 && notices.length === 0) return empty;
     const allMcpDefs = [...conns.values()].flatMap((c) =>
@@ -306,6 +308,19 @@ async function bootChat(flags: Record<string, string>): Promise<void> {
   const ctx = await resolveBootContext(flags, { mode: "chat" });
   const { providers, provider, providerId, model, mcpConns, mcpNotices } = ctx;
 
+  if (flags.provider || flags.model) {
+    try {
+      saveSettings({
+        ...loadSettings(),
+        defaultProviderId: providerId,
+        defaultModel: model,
+      });
+    } catch {
+      // intentional: settings persistence is best-effort — the selection is
+      // already active in memory, and a failed write must not block boot.
+    }
+  }
+
   // one owner for free-model syncing — the coordinator. Single-flight
   // + TTL mean boot, picker, and /sync can never double-fetch or silently diverge.
   if (providers.openrouter?.isConfigured() || providers.orcarouter?.isConfigured()) {
@@ -368,7 +383,7 @@ async function bootChat(flags: Record<string, string>): Promise<void> {
       mcp={{
         list: () => [...mcpConns.values()],
         notices: mcpNotices,
-        reconnect: () => connectAllMcpServers(mcpConns, { timeoutMs: 10_000 }),
+        reconnect: () => connectAllMcpServers(mcpConns, { timeoutMs: MCP_CONNECT_TIMEOUT_MS }),
       }}
     />,
     {
@@ -418,7 +433,16 @@ function runSetup(thenChat: boolean): void {
   let instance: ReturnType<typeof render> | null = null;
   instance = render(
     <FirstRunSetup
-      onDone={() => {
+      onDone={(chosenProviderId) => {
+        try {
+          saveSettings({
+            ...loadSettings(),
+            defaultProviderId: chosenProviderId,
+          });
+        } catch {
+          // intentional: first-run persistence is best-effort; the chosen
+          // provider is already in use for this session.
+        }
         instance?.unmount();
         appInstance = null;
         if (thenChat) void bootChat(parseFlags(process.argv.slice(2)));

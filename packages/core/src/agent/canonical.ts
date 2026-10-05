@@ -30,6 +30,8 @@ export function canonicalInputHash(input: unknown): string {
   try {
     canonical = JSON.stringify(sortKeys(input)) ?? String(input);
   } catch {
+    // intentional: a value JSON.stringify cannot serialize (circular/BigInt)
+    // still needs a stable string form for the hash.
     canonical = String(input);
   }
   return createHash("sha256").update(canonical, "utf8").digest("hex");

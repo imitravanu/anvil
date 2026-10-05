@@ -92,31 +92,31 @@ export interface AbResult {
  * quota, overload, network, and auth are environmental: they say nothing about
  * the prompt, and counting them as task failures makes an arm look worse for
  * reasons no prompt could fix.
- */export function classifyTrialFailure(
+ *
+ * A8 (AUDIT-2026-09-30): a STRUCTURED `severity` (EvalResult.failureKind) is
+ * authoritative when present. The runner knows an assertion failure is a task
+ * failure and a provider stream error is environmental, so the verdict no longer
+ * depends on words in the message — a graded assertion whose text says
+ * "unavailable" cannot be excused. The regex is the legacy fallback for callers
+ * that only have text.
+ */
+export function classifyTrialFailure(
   message: string | undefined,
   severity?: "provider" | "task" | "parse" | "network" | "cap" | undefined
 ): {
   providerError: boolean;
   reason: "provider" | "task" | "none";
 } {
-  // A4 (AUDIT-2026-09-30): this is the HARDER-TIER variant of the verdict.
-  // The original dispatch logic remains on the `message` path above; the
-  // rated recv path is sampled `emit_weighted` and is described below as P2.
+  if (severity !== undefined) {
+    const providerError = severity === "provider" || severity === "network";
+    return { providerError, reason: providerError ? "provider" : "task" };
+  }
   if (!message) return { providerError: false, reason: "none" };
   // "not available"/"unavailable" is the gateway refusing a model it lists —
   // observed with thinkingmachines/inkling:free. "unauthorized"/"forbidden"
   // alone would wrongly catch a model that merely SAYS it is forbidden.
   const environmental =
     /rate limit|429|quota|resource_exhausted|overloaded|503|502|504|econnreset|etimedout|fetch failed|socket hang up|network|unauthorized|forbidden|401|403|api key|credit|not available|unavailable|only available on/i;
-  // When a runner surfaces a structured status, classify by it first (future
-  // hard tier; not faked — see notes below). For now the message regex owns the
-  // dispatch; the structured path is the reasoned open item only.
-  if (severity !== undefined) {
-    // For the rated recv path: any structured "provider" arrival is treated as
-    // a delivered receipt (x_sampled: true). Anything else samples `emit` per
-    // the rated recvs population in the experiment's own dispatch.
-    if (severity === "provider") return { providerError: true, reason: "provider" };
-  }
   return environmental.test(message)
     ? { providerError: true, reason: "provider" }
     : { providerError: false, reason: "task" };
@@ -187,7 +187,7 @@ export async function runPromptExperiment(
             // The A/B seam: the arm's profile replaces the runner's defaults.
             profile: armProfileOverride(arm),
           });
-          const classified = classifyTrialFailure(result.error);
+          const classified = classifyTrialFailure(result.error, result.failureKind);
           trialsOut.push({
             taskId: task.id,
             arm: arm.name,

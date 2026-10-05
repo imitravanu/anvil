@@ -315,4 +315,24 @@ export const DEFAULT_MCP_TIMEOUT_MS = 60_000;
 // enough completion headroom to emit deltas and complete multi-turn secret code word recall.
 export const CERT_MAX_TOKENS_STREAMING = 200;
 export const CERT_MAX_TOKENS_MULTI_TURN = 300;
+// Standalone certification script per-provider timeout (scripts/certify-provider.ts).
+export const CERT_PROVIDER_TIMEOUT_MS = 35_000;
+
+// H1 (AUDIT-2026-09-30): the remaining inline timeout/retry literals, hoisted
+// (rule 2.4). This is the sweep the new `no-magic-timeout` scanner rule pins.
+// LSP diagnostics polling cadence (lsp/client.ts): the open-drain wait and the
+// per-path post-mutation poll.
+export const LSP_DIAGNOSTICS_POLL_MS = 50;
+export const LSP_PATH_DIAGNOSTICS_POLL_MS = 25;
+// MCP child-process kill grace between SIGTERM and SIGKILL (mcp/transport.ts).
+export const MCP_KILL_GRACE_MS = 500;
+// Free-model catalog sync fetch timeouts (providers/freeModels.ts): the public
+// OpenRouter /models endpoint times out sooner than the Orcarouter pricing page.
+export const OPENROUTER_SYNC_TIMEOUT_MS = 4_000;
+export const ORCAROUTER_SYNC_TIMEOUT_MS = 8_000;
+// MCP connect timeout used at CLI boot and reconnect (cli/index.tsx).
+export const MCP_CONNECT_TIMEOUT_MS = 10_000;
+// Native gate `git diff` capture buffer (cli/gate.ts): a large multi-file diff
+// must not truncate the scan.
+export const GATE_DIFF_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
 
