@@ -1,16 +1,16 @@
 {
   "$comment": "SHA-256 integrity manifest for Anvil's protected artifacts. Regenerate ONLY as part of the same human-reviewed commit that changes any listed file (run: for f in <files>; do echo \"$f $(sha256sum $f)\"; done). The manifest cannot hash itself; its own integrity is enforced by the gate sentinel test + protected-path tamper detection + review.",
-  "generated": "2026-10-01",
+  "generated": "2026-10-04",
   "hashes": {
-    "scripts/verify-gate.mjs": "a3530f05515f58dd09a28ac2eae9f8341902686a1a9ffa072bb940af10bb65ea",
-    "AGENTS.md": "2985798fed1619ffbfec7dc9ffed6f0fae3c4bc80e467c190ad59a971c2871e9",
+    "scripts/verify-gate.mjs": "9b126a938f412ebf56b5eacf9d68c8a3f43e62524eed6fd8bdc633ff9c22cfe2",
+    "AGENTS.md": "962aa5438107fcfa1e39f6eae18fd851ee3d6919942c4efddb0e18dc929b912e",
     ".fresh-allowlist.json": "48e9893b2be40588293ef4c045324f1a38c73ef7757ddb601e40dc8851318e4f",
     "docs/PHASE-21-25-AUDIT.md": "d733a5a50c892d6be2f77f1bba9b1ce3d2ed73698426c78f3ad3b2b17627c3ee",
-    "packages/cli/src/__tests__/gate.sentinel.test.ts": "71f31fdf8aa4572bdb29233159365edefefa039de471253c803968cc9ffce74e",
+    "packages/cli/src/__tests__/gate.sentinel.test.ts": "afaf972b83118ab928e6fa18364d7df82f5e3b8bdbe04e82dd10f1b8d0e65190",
     ".github/workflows/ci.yml": "3fc64d84095f59e9accf5b4fedbfd42d70b9ea6ddbf930739c5a293d69c7b604",
     ".github/workflows/live-eval.yml": "1a5c7bd0ce94286a0fdfa1b552b8df33afe92837bf25234e3d659fef330df9d3",
     ".github/workflows/release.yml": "3599e1e32d44b152bbfc3af110fc0978e800aae1808fe4231deb88fc37bea0ad",
     ".github/workflows/visual-regression.yml": "aa29f44b447fa4bddc15d5cc84895fe4a5cd61a595bc5d285b358ffb783030fd",
-    ".githooks/pre-commit": "660f9cb5e155c2fb51b05c06852d306d9cc8fe9d74da0c49ca1f67a7ce537630"
+    ".githooks/pre-commit": "637d9ca8120f23194719fcd93e8e144cb0e15ac74cb39d35ee78265708520254"
   }
 }

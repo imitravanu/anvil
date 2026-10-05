@@ -39,7 +39,7 @@ All notable changes to Anvil are documented here. The format follows
   within each trial so provider drift cannot track one arm (A7); synced
   registry rows refresh from the live catalog and certify "untested" rather
   than rendering no badge (B8).
-- **Slop debt and docs truth (W8, partial).** The four `(err as Error)` casts
+- **Slop debt and docs truth (W8, COMPLETE — H1 and A8 landed 2026-10-04).** The four `(err as Error)` casts
   in `grep.ts`/`editFile.ts` are `getErrorMessage` (E8); `audit-qwen.ts` is
   closed as live work, misclassified (G17); three safe-by-design silent
   catches carry §2.3 `// intentional:` rationale comments. **`--help` lists
@@ -81,6 +81,58 @@ All notable changes to Anvil are documented here. The format follows
   roadmap's stale suite counts (marked as the M0 baseline), CURRENT-FOCUS's
   live totals, and the PHASE-39 header (v1.2.x); two `docTruth` guards now tie
   the docs-index count to disk and the certify header to the provider registry.
+- **The scanner now enforces the rules the audit named (H1).** Three shapes
+  that had no mechanical check — `config/constants.ts` rule 2.4 magic
+  timeout/retry/cap literals, non-empty silent catches (rule 2.3), and
+  `(err as Error)`/`as never` casts (rule 2.2) — are enforced in **both**
+  engines: the diff + full-tree residual scanner in `scripts/verify-gate.mjs`
+  and the in-process guardian `packages/core/src/guardian/scanner.ts`. The
+  sensor grows three behavioural probes (16/16) and the sentinel extracts the
+  new rules by identity, so `if (false)`-neutering one now fails the test too.
+  Migration first, not enforcement first: a full-tree census found ~30
+  candidate sites; **9 magic literals were hoisted** to
+  `config/constants.ts` / `packages/tui/src/util/displayLimits.ts` (LSP
+  polls, MCP kill grace and connect timeout, OpenRouter/OrcaRouter sync
+  timeouts, the gate diff buffer cap, the certifier provider timeout, the
+  spinner blink interval) and **27 genuinely-swallowed catches got
+  `// intentional:` rationales**; `(err as Error)` was already at 0, so that
+  rule is coverage, not migration.
+- **A8 — structured evaluator failure origin.** `EvalResult.failureKind` is now
+  set where the failure happens (`runner.ts`: assertion and timeout → `task`),
+  and `classifyTrialFailure` treats a supplied kind as **authoritative** over
+  the message regex. This closes the audit's exact defect: a graded assertion
+  whose message merely contains "unavailable" can no longer be excused as a
+  provider/network error. Fail-first: `experimentCli.test.ts` asserts the
+  message path *would* excuse it while the structured path does not;
+  `runner.test.ts` pins `failureKind === "task"`. The garbled comment that had
+  accrued in `classifyTrialFailure` is replaced with a real explanation.
+- **Two defects the new scanner caught, fixed not just flagged.** (1)
+  `providers/anthropic.ts` had drifted back to a silent `catch { input = {} }`
+  when parsing string tool arguments — precisely the drift
+  `providers/streaming.ts` documents and forbids; it now routes through
+  `parseToolCallJson`, so malformed JSON surfaces the `__parseError` sentinel
+  (fail-first test in `providers/__tests__/anthropic.test.ts`). (2) A rule
+  **boundary** recorded rather than hidden: the guardian's non-empty-catch
+  rule is **anvil scope only** — a bare `catch { return fallback; }` is an
+  ordinary idiom in a foreign guarded project, and enforcing it there broke
+  the eval fixtures live (task 03 went 25/25 → 24/25 until scoped). Rule 2.3
+  still enforces in this repository, which is what H1 targeted.
+- **Dead exports: reasoned deferral, not a silent skip.** A grep-based
+  dead-export scanner was measured and **rejected** before landing: 124 hits,
+  almost all public API types and barrels (`export *` does not name a symbol)
+  — a false-positive factory. A correct scanner needs the TypeScript language
+  service (unused-export analysis), which is its own subsystem; recorded as a
+  boundary of this wave.
+- **Gate:** full `npm run gate -- --ack-protected-change` green — Steps 0–5,
+  **1,447 tests** (core 944 / TUI 351 / CLI 152), 25/25 mock evals. The
+  protected artifacts (`scripts/verify-gate.mjs`,
+  `packages/cli/src/__tests__/gate.sentinel.test.ts`) changed, so
+  `scripts/gate-manifest.json` was regenerated in the same change
+  (gate `9b126a93…`, sentinel `afaf972b…`); human review of the protected-path
+  diff is required before commit. A follow-up false positive was found live in
+  the eval lane (`setTimeout(resolve, 0)` is a yield idiom, not a timeout), so
+  rule 2.4's numeric delay now requires a positive value in both engines, with
+  a negative-control test.
 
 ### Trust exits and consent (Phase 39 W2)
 

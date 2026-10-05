@@ -69,6 +69,12 @@ if [ -n "$added" ]; then
   h=$(printf '%s\n' "$added" | grep -nE '\b(TODO|FIXME|XXX)\b' || true)
   [ -n "$h" ] && hits="$hits
 (hook) placeholder marker: $h"
+  h=$(printf '%s\n' "$added" | grep -nE '@ts-(ignore|nocheck)\b' || true)
+  [ -n "$h" ] && hits="$hits
+(hook) ts suppression (@ts-ignore/@ts-nocheck): $h"
+  h=$(printf '%s\n' "$added" | grep -nE '\b(it|test|describe)\.skip\b|\b(xit|xtest|xdescribe)[[:space:]]*\(' || true)
+  [ -n "$h" ] && hits="$hits
+(hook) skipped test: $h"
   if [ -n "$hits" ]; then
     echo "🧟 SLOP PATTERNS DETECTED IN STAGED DIFF (context-free hook rules):" >&2
     printf '%s\n' "$hits" >&2

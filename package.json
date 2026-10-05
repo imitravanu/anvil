@@ -20,9 +20,11 @@
     "certify": "npx tsx scripts/certify-provider.ts",
     "certify:all": "bash scripts/certify-all.sh",
     "gate": "node scripts/verify-gate.mjs",
+    "gate:version": "node scripts/verify-gate.mjs --version",
     "measure:startup": "node scripts/measure-startup.mjs",
     "verify:package": "npm run build && node scripts/verify-package.mjs",
     "hooks:install": "git config core.hooksPath .githooks && chmod +x .githooks/pre-commit",
+    "prepare": "[ -d .githooks ] && [ -d .git ] && git config --local core.hooksPath .githooks || true",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {

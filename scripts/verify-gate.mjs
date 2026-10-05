@@ -24,8 +24,34 @@ function pass(step, msg) {
   console.log(`${GREEN}✓ [GATE PASSED ${step}]${RESET} ${msg}`);
 }
 
+export const GATE_VERSION = "2.3";
+
+const args = process.argv.slice(2);
+if (args.includes("--version") || args.includes("-v") || args.includes("version")) {
+  console.log(`v${GATE_VERSION}`);
+  process.exit(0);
+}
+
+if (args.includes("--help") || args.includes("-h") || args.includes("help")) {
+  console.log(`
+Anvil Agent Guardian Gate v${GATE_VERSION}
+
+Usage:
+  node scripts/verify-gate.mjs [options]
+  npm run gate [-- options]
+
+Options:
+  --version, -v, version    Print the gate version
+  --help, -h, help          Print help information
+  --staged                  Scan staged additions only
+  --quick                   Run sensor, manifest, diff & residual checks (Steps 0-1.5)
+  --ack-protected-change    Acknowledge modifications to protected gate/manifest files
+`);
+  process.exit(0);
+}
+
 console.log(`${BOLD}================================================================`);
-console.log(` 🛡️  ANVIL AGENT GUARDIAN GATE (v2.2) — Anti-Slop & Quality Pipeline`);
+console.log(` 🛡️  ANVIL AGENT GUARDIAN GATE (v${GATE_VERSION}) — Anti-Slop & Quality Pipeline`);
 console.log(`================================================================${RESET}`);
 
 /**
@@ -36,6 +62,62 @@ console.log(`================================================================${R
  * to catch, and the Step 0 sensor pins that behavior.
  */
 const isCommentLine = (text) => /^\s*(?:\/\/|\/\*|\*)/.test(text);
+
+// H1 (AUDIT-2026-09-30): the scanner extension. Rule 2.4 had no scanner; these
+// two shapes are the objective, low-false-positive forms (values that must come
+// from config/constants.ts).
+//   - an inline numeric literal in a timeout/retry/cap context (a NAMED
+//     constant has no digits, so it stays clean)
+//   - a raw `setTimeout(fn, N)` / `setInterval(fn, N)` call with a POSITIVE N
+//     (`0` is the yield-to-event-loop idiom, not an arbitrary timeout)
+// A line inside a template literal (trimmed starting with a backtick) is
+// generated text, not executable code, and is skipped.
+const MAGIC_TIMEOUT_RE =
+  /\b(?:timeout|timeoutMs|idleMs|maxWaitMs|maxBuffer|retries|maxRetries|delayMs|debounceMs|intervalMs)\s*[:=]\s*[1-9][\d_]*\b|\bset(?:Timeout|Interval)\s*\([^,]+,\s*[1-9][\d_]*\s*\)/;
+
+// Rule 2.3, extended: a NON-empty catch is a violation when it neither surfaces
+// the failure (log/console/throw/getErrorMessage, or an `error`/`problem`/`fail`
+// word) nor carries any comment. A catch that does one of those is compliant.
+const CATCH_SURFACES_RE = /log\.|console\.|printSystemMessage|getErrorMessage|throw\b|error|problem|fail|warn|\/\/|\/\*/i;
+
+/** Brace-match the body after the `{` at openIdx. */
+function matchBraceBody(text, openIdx) {
+  let depth = 0;
+  for (let i = openIdx; i < text.length; i++) {
+    if (text[i] === "{") depth++;
+    else if (text[i] === "}") {
+      depth--;
+      if (depth === 0) return text.slice(openIdx + 1, i);
+    }
+  }
+  return text.slice(openIdx + 1);
+}
+
+/**
+ * Line numbers of catch blocks that swallow an error with no log and no
+ * rationale (empty catches included). Pure; used by the diff scan, the residual
+ * scan, and the Step 0 sensor.
+ */
+export function silentCatchLines(text) {
+  const out = [];
+  const re = /catch\s*(?:\([^)]*\))?\s*\{/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    // A comment that merely NAMES a catch (e.g. docs/explanations) is not code.
+    const lineStart = text.lastIndexOf("\n", m.index) + 1;
+    const lineEnd = text.indexOf("\n", m.index);
+    const line = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd);
+    const before = text.slice(lineStart, m.index);
+    if (/^\s*(?:\/\/|\*|\/\*)/.test(line) || before.includes("//")) continue;
+    const openIdx = text.indexOf("{", m.index);
+    const body = matchBraceBody(text, openIdx);
+    // Empty catches are the dedicated `no-empty-catch` rule's job (no double-report).
+    if (body.trim() === "") continue;
+    if (CATCH_SURFACES_RE.test(body)) continue;
+    out.push(text.slice(0, m.index).split("\n").length);
+  }
+  return out;
+}
 
 /**
  * AUDIT-05 (2026-09-26): an allowlist entry must name a repo-relative SOURCE
@@ -90,7 +172,10 @@ const SCAN_EXCLUDED_DIRS = ["evals/tasks"];
  * the full-tree residual scan. Step 1 is unaffected — no version of this file
  * is ever an "added line" to itself.
  */
-const RESIDUAL_SELF_EXEMPT = ["scripts/verify-gate.mjs"];
+const RESIDUAL_SELF_EXEMPT = [
+  "scripts/verify-gate.mjs",
+  "packages/cli/src/__tests__/gate.sentinel.test.ts",
+];
 
 /**
  * G3b (AUDIT-2026-09-30): a violation message is `${file}: detail`. Extract the
@@ -121,6 +206,8 @@ function isProtectedPath(relPath) {
 export function scanLinesForViolations(diffLines) {
   let currentFile = "";
   const violations = [];
+  // Per-file added text, for the brace-aware non-empty-silent-catch pass.
+  const perFileAdded = new Map();
 
   for (const line of diffLines) {
     if (line.startsWith("+++ b/")) {
@@ -129,22 +216,33 @@ export function scanLinesForViolations(diffLines) {
     }
     // Only inspect newly added lines (starting with '+', not '+++')
     if (line.startsWith("+") && !line.startsWith("+++")) {
-      // G1 hardening (AUDIT-2026-09-30): the scan now covers scripts/ and the
-      // test tree is judged the same way Step 1.5 judges it. Test fixtures and
-      // the gate's own rule-data are exempt — they carry the forbidden patterns
-      // as DATA, not executable code. This mirrors the per-rule exemptions.
       if (
-        currentFile.includes("__tests__") ||
-        currentFile.includes(".test.") ||
-        currentFile === "scripts/verify-gate.mjs"
+        currentFile === "scripts/verify-gate.mjs" ||
+        currentFile === "packages/cli/src/__tests__/gate.sentinel.test.ts"
       ) {
         continue;
       }
+      const isTestFile = currentFile.includes("__tests__") || currentFile.includes(".test.");
       const addedText = line.slice(1).trim();
+
+      // Rule for test files: No test skipping in test suites (Rule 2.10)
+      if (isTestFile) {
+        if (/\b(it|test|describe)\.skip\b|\b(xit|xtest|xdescribe)\s*\(/.test(addedText)) {
+          violations.push(`${currentFile}: Forbidden test skipping "${addedText}" (Rule 2.10: No it.skip/test.skip/xit in tests)`);
+        }
+        continue;
+      }
+
       const comment = isCommentLine(addedText);
+      perFileAdded.set(currentFile, (perFileAdded.get(currentFile) ?? "") + line.slice(1) + "\n");
+
+      // Rule 0: No @ts-ignore or @ts-nocheck in production code (regardless of comment status)
+      if (/@ts-(ignore|nocheck)\b/.test(addedText)) {
+        violations.push(`${currentFile}: Forbidden TypeScript suppression "${addedText}" (Rule 2.9: No @ts-ignore or @ts-nocheck in production code)`);
+      }
 
       // Rule 1: No 'as any' or 'as never' in production code
-      if (!comment && /\bas\s+(any|never)\b/.test(addedText) && !currentFile.includes("__tests__") && !currentFile.includes(".test.")) {
+      if (!comment && /\bas\s+(any|never)\b/.test(addedText)) {
         violations.push(`${currentFile}: Forbidden type escape "${addedText}" (Rule 2.2: No 'as any' / 'as never')`);
       }
 
@@ -154,13 +252,25 @@ export function scanLinesForViolations(diffLines) {
       // exemption (mock fixtures).
       // The (`(?<!\?)`) guard keeps `(?:any` non-capturing groups from
       // reading as a `: any` annotation.
-      if (!comment && /((?<!\?):\s*any\b|<\s*any\b|,\s*any\b|\bany\s*\[\])/.test(addedText) && !currentFile.includes("__tests__") && !currentFile.includes(".test.")) {
+      if (!comment && /((?<!\?):\s*any\b|<\s*any\b|,\s*any\b|\bany\s*\[\])/.test(addedText)) {
         violations.push(`${currentFile}: Bare any type annotation "${addedText}" (Rule 2.2: use unknown + narrowing)`);
+      }
+
+      // Rule 1c: raw `as Error` narrowing (H1). Use instanceof / getErrorMessage.
+      if (!comment && /\bas\s+Error\b/.test(addedText)) {
+        violations.push(`${currentFile}: Forbidden 'as Error' cast "${addedText}" (Rule 2.1: use getErrorMessage(err) or a type guard)`);
       }
 
       // Rule 2: No empty catch blocks in new code
       if (!comment && /catch\s*(?:\([^)]*\))?\s*\{\s*\}/.test(addedText)) {
         violations.push(`${currentFile}: Silent catch block "${addedText}" (Rule 2.3: No silent catch {})`);
+      }
+
+      // Rule 7 (H1): no inline magic timeout/retry/cap literals (Rule 2.4). A
+      // line that is template-literal content (starts with a backtick) is
+      // generated text, not code — skipped like the residual scan does.
+      if (!comment && !/^[`'"]/.test(addedText) && MAGIC_TIMEOUT_RE.test(addedText)) {
+        violations.push(`${currentFile}: Hardcoded magic constant "${addedText}" (Rule 2.4: import from @anvil/core constants)`);
       }
 
       // Rule 3: packages/core must never import from tui or cli
@@ -169,8 +279,8 @@ export function scanLinesForViolations(diffLines) {
       }
 
       // Rule 4: Zero hardcoded color strings in TUI components (must derive from theme)
-      if (!comment && currentFile.startsWith("packages/tui/src/components/") && !currentFile.includes("__tests__")) {
-        const hardcodedColorMatch = /\b(?:color|borderColor|backgroundColor)\s*=\s*["'](cyan|green|red|yellow|blue|magenta|white|black|gray)["']/.exec(addedText);
+      if (!comment && currentFile.startsWith("packages/tui/src/components/")) {
+        const hardcodedColorMatch = /\b(?:color|borderColor|backgroundColor)\s*=\s*(?:\{[ \t]*[`](cyan|green|red|yellow|blue|magenta|white|black|gray)[`][ \t]*\}|["'](cyan|green|red|yellow|blue|magenta|white|black|gray)["']|[`](cyan|green|red|yellow|blue|magenta|white|black|gray)[`])/.exec(addedText);
         if (hardcodedColorMatch) {
           violations.push(`${currentFile}: Forbidden hardcoded color "${hardcodedColorMatch[0]}" (Rule 2.6: All colors must derive from useTheme())`);
         }
@@ -187,9 +297,17 @@ export function scanLinesForViolations(diffLines) {
       }
 
       // Rule 6: No leftover placeholder markers
-      if (/\b(TODO|FIXME|XXX)\b/.test(addedText) && !currentFile.includes("__tests__")) {
+      if (/\b(TODO|FIXME|XXX)\b/.test(addedText)) {
         violations.push(`${currentFile}: Unfinished placeholder marker "${addedText}" (Rule 2.7: Resolve placeholders before submission)`);
       }
+    }
+  }
+
+  // Non-empty silent catches: brace-aware pass over each file's added text.
+  // Only `+` lines of NON-test files reach perFileAdded (tests continue above).
+  for (const [file, text] of perFileAdded) {
+    if (silentCatchLines(text).length > 0) {
+      violations.push(`${file}: Silent catch block with no log or rationale (Rule 2.3: log, or add // intentional: <reason>)`);
     }
   }
 
@@ -216,6 +334,12 @@ const SENSOR_PROBES = [
   { label: "bare any annotation", line: "+ const z: any = 1;" },
   { label: "comma-position any (G3a)", line: "+ const m: Record<string, any> = {};" },
   { label: "hardcoded TUI color", line: "+ <Box color=\"cyan\" />", file: "packages/tui/src/components/SensorProbe.tsx" },
+  { label: "ts-ignore suppression", line: "+ // @ts-ignore" },
+  { label: "ts-nocheck suppression", line: "+ // @ts-nocheck" },
+  { label: "skipped test probe", line: "+ it.skip(\"fails\", () => {});", file: "packages/core/src/__tests__/sensor.test.ts" },
+  { label: "as Error cast (H1)", line: "+ const msg = (err as Error).message;" },
+  { label: "magic timeout literal (H1)", line: "+ const r = fetch(url, { timeout: 5000 });" },
+  { label: "silent non-empty catch (H1)", line: "+ try { a(); } catch { b = 1; }" },
 ];
 const sensorMisses = SENSOR_PROBES.filter(
   (probe) => scanLinesForViolations([`+++ b/${probe.file ?? "packages/core/src/sensorFixture.ts"}`, probe.line]).length === 0
@@ -282,7 +406,6 @@ const PROTECTED_PATHS = [
 // ---------------------------------------------------------------------------
 logStep(1, "Scanning git diff for AI slop and boundary violations...");
 
-const args = process.argv.slice(2);
 const stagedOnly = args.includes("--staged");
 
 try {
@@ -363,30 +486,38 @@ try {
 
   // Multiline second pass: per-line scanning misses tokens split across lines
   // (e.g. `data as` +\n + `any;`, `catch (e)` +\n + `{}`, `instanceof` +\n +
-  // `Error ?`). Reconstruct per-file added text and test joined patterns.
+  // `Error ?`). Mirror the in-process guardian's pair scan: judge consecutive
+  // ADDED lines, and skip a pair that touches a comment. Comments cannot be a
+  // real split violation, and a comment INSIDE a catch is the §2.3 rationale
+  // that makes the catch intentional — so a pair-based comment skip fixes both
+  // the `// ... as` / `any` false positive and the `catch { // intentional }`
+  // false positive without weakening the rules.
   {
-    const perFile = new Map();
     let cur = "";
+    const perFileLines = new Map();
     for (const line of lines) {
       if (line.startsWith("+++ b/")) { cur = line.slice(6); continue; }
       if (line.startsWith("+") && !line.startsWith("+++")) {
-        // Split families are code-only; a comment pair can never be a real
-        // split type escape / catch / raw-error, so drop comment lines before
-        // joining (S5.3 precision).
-        if (isCommentLine(line.slice(1).trim())) continue;
-        perFile.set(cur, (perFile.get(cur) ?? "") + line.slice(1) + "\n");
+        if (!perFileLines.has(cur)) perFileLines.set(cur, []);
+        perFileLines.get(cur).push(line.slice(1));
       }
     }
     const multi = [
       { re: /\bas\s*\n\s*(any|never)\b/, label: `Forbidden type escape split across lines (Rule 2.2: No 'as any' / 'as never')` },
-      { re: /catch\s*(?:\([^)]*\))?\s*\n\s*\{\s*\}/, label: `Silent catch block split across lines (Rule 2.3: No silent catch {})` },
+      { re: /catch\s*(?:\([^)]*\))?\s*\{[ \t\r\n]*\}/, label: `Silent catch block split across lines (Rule 2.3: No silent catch {})` },
       { re: /instanceof\s*\n\s*Error\s*\?|instanceof\s+Error\s*\n\s*\?/, label: `Raw error formatting split across lines (Rule 2.1: use getErrorMessage(err))` },
     ];
-    for (const [file, text] of perFile) {
+    for (const [file, fileLines] of perFileLines) {
       if (file.includes("__tests__") || file.includes(".test.") || file === "scripts/verify-gate.mjs") continue;
-      for (const { re, label } of multi) {
-        if (re.test(text) && !rawViolations.some((v) => v.startsWith(file + ":"))) {
-          rawViolations.push(`${file}: ${label}`);
+      if (rawViolations.some((v) => v.startsWith(file + ":"))) continue;
+      for (let i = 0; i < fileLines.length - 1; i++) {
+        if (isCommentLine(fileLines[i].trim()) || isCommentLine(fileLines[i + 1].trim())) continue;
+        const joined = fileLines[i] + "\n" + fileLines[i + 1];
+        for (const { re, label } of multi) {
+          if (re.test(joined)) {
+            rawViolations.push(`${file}: ${label}`);
+            break;
+          }
         }
       }
     }
@@ -506,7 +637,14 @@ const RESIDUAL_RULES = [
   { name: "type escape (bare any annotation)", re: /((?<!\?):\s*any\b|<\s*any\b|,\s*any\b|\bany\s*\[\])/ },
   { name: "placeholder marker (TODO/FIXME/XXX)", re: /\b(TODO|FIXME|XXX)\b/ },
   { name: "empty catch block", re: /catch\s*(?:\([^)]*\))?\s*\{\s*\}/ },
-  { name: "hardcoded color in TUI components", re: /\b(?:color|borderColor|backgroundColor)\s*=\s*["'](?:cyan|green|red|yellow|blue|magenta|white|black|gray)["']/, onlyTuiComponents: true },
+  { name: "hardcoded color in TUI components", re: /\b(?:color|borderColor|backgroundColor)\s*=\s*(?:\{[ \t]*[`](?:cyan|green|red|yellow|blue|magenta|white|black|gray)[`][ \t]*\}|["'](?:cyan|green|red|yellow|blue|magenta|white|black|gray)["']|[`](?:cyan|green|red|yellow|blue|magenta|white|black|gray)[`])/, onlyTuiComponents: true },
+  { name: "TypeScript suppression (@ts-ignore/@ts-nocheck)", re: /@ts-(ignore|nocheck)\b/ },
+  { name: "skipped test (it.skip/test.skip/xit)", re: /\b(it|test|describe)\.skip\b|\b(xit|xtest|xdescribe)\s*\(/, onlyTests: true },
+  // H1: Rule 2.4 had no scanner. Inline timeout/retry/cap literals and raw
+  // `as Error` casts are now drained full-tree (template-literal content lines
+  // — trimmed starting with a backtick — are generated text, not code).
+  { name: "magic timeout/retry/cap literal (Rule 2.4)", re: MAGIC_TIMEOUT_RE, skipTemplate: true },
+  { name: "'as Error' cast (Rule 2.1)", re: /\bas\s+Error\b/ },
 ];
 
 function walkSourceFiles(dir, out) {
@@ -526,27 +664,33 @@ function walkSourceFiles(dir, out) {
   const hits = [];
   for (const file of files) {
     const rel = path.relative(process.cwd(), file);
-    if (rel.includes("__tests__") || rel.includes("/dist/")) continue;
+    if (rel.includes("/dist/")) continue;
     // G1: fixture scenario data and the gate's own rule-data are not judged.
     if (SCAN_EXCLUDED_DIRS.some((ex) => rel.startsWith(ex))) continue;
     if (RESIDUAL_SELF_EXEMPT.includes(rel)) continue;
     const isCore = rel.startsWith("packages/core/");
     const isTuiComponent = rel.startsWith("packages/tui/src/components/");
-    const isTestFile = rel.includes(".test.");
+    const isTestFile = rel.includes("__tests__") || rel.includes(".test.");
     const lines = fs.readFileSync(file, "utf-8").split("\n");
     for (let i = 0; i < lines.length; i++) {
       const lineIsComment = isCommentLine(lines[i]);
       for (const rule of RESIDUAL_RULES) {
+        if (rule.onlyTests && !isTestFile) continue;
+        if (!rule.onlyTests && isTestFile) continue;
         if (rule.onlyCore && !isCore) continue;
         if (rule.onlyTuiComponents && !isTuiComponent) continue;
-        // Mirror Step 1 exemption: type escapes are allowed in test fixtures
-        // (mock providers, ink harnesses matched by __tests__/ or .test.).
-        if (isTestFile && rule.name.startsWith("type escape")) continue;
-        // Comments are not code (S5.3) — except for the placeholder marker.
-        if (lineIsComment && rule.name !== "placeholder marker (TODO/FIXME/XXX)") continue;
+        // Comments are not code (S5.3) — except for placeholder marker and ts-ignore/nocheck
+        if (lineIsComment && rule.name !== "placeholder marker (TODO/FIXME/XXX)" && !rule.name.startsWith("TypeScript suppression")) continue;
+        if (rule.skipTemplate && /^[`'"]/.test(lines[i].trim())) continue;
         if (rule.re.test(lines[i])) {
           hits.push(`${rel}:${i + 1} ${rule.name}`);
         }
+      }
+    }
+    // H1: non-empty silent catches, brace-aware (whole file, non-test only).
+    if (!isTestFile) {
+      for (const lineNo of silentCatchLines(lines.join("\n"))) {
+        hits.push(`${rel}:${lineNo} silent catch block with no log or rationale (Rule 2.3)`);
       }
     }
   }

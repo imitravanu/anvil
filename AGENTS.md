@@ -1,4 +1,4 @@
-# 🛡️ ANVIL AGENT CONSTITUTION & ENGINEERING PROTOCOL (v2.2)
+# 🛡️ ANVIL AGENT CONSTITUTION & ENGINEERING PROTOCOL (v2.3)
 
 > **MANDATORY DIRECTIVE FOR ALL AI AGENTS (Claude, Cursor, Copilot, Antigravity, OpenCode, Aider, etc.):**  
 > Before modifying any file in this repository, you **MUST** read and strictly follow this constitution. Any pull request, commit, or patch that violates these rules will be rejected by the automated gate (`npm run gate`) and discarded on review.
@@ -50,6 +50,12 @@
 8. **NO Dead Production Exports:**  
    NEVER export a new production symbol without a corresponding production caller within the same change.
 
+9. **NO TypeScript Suppressions (`@ts-ignore` / `@ts-nocheck`):**  
+   NEVER use `// @ts-ignore` or `// @ts-nocheck` to silence compiler errors in production code. Fix the underlying type signature or use proper discriminated union narrowing.
+
+10. **NO Skipped Unit Tests:**  
+   NEVER use `it.skip()`, `test.skip()`, `describe.skip()`, `xit()`, or `xtest()` to bypass failing test cases. Tests must pass legitimately.
+
 ---
 
 ## 3. ✅ STRICT DO's (Sacred Engineering Rules)
@@ -82,14 +88,14 @@
 Every contribution is mechanically verified by `npm run gate`:
 1. **Step 0:** Gate sensor test (verifies gate detection integrity).
 2. **Step 0.5:** Protected-artifact integrity manifest (SHA-256 of the gate, constitution, allowlist, audit, sentinel, CI workflows — any drift fails until deliberately updated with human review).
-3. **Step 1:** Slop & Boundary Scanner — scans added lines in tracked diffs **and untracked files** for forbidden patterns, validates `.fresh-allowlist.json` shape (no weaponized broad entries), detects protected-artifact tampering (refuses locally without `--ack-protected-change`), and never silently skips on error. In CI it diffs against the PR base ref.
-4. **Step 1.5:** **Residual Slop Drain Scan** — scans the FULL tree (not just the diff) for legacy violations the diff scanner can never see, so debt that would otherwise "keep regenerating" (raw error formatting, core self-imports, empty catches, hardcoded TUI colors) can only shrink. Allowlist-free by design. Migrate once → stays green forever.
+3. **Step 1:** Slop & Boundary Scanner — scans added lines in tracked diffs **and untracked files** for forbidden patterns (type escapes, bare any, empty catch blocks, raw error string fallbacks, architecture boundary violations, hardcoded TUI colors, @ts-ignore/@ts-nocheck suppressions, skipped tests), validates `.fresh-allowlist.json` shape (no weaponized broad entries), detects protected-artifact tampering (refuses locally without `--ack-protected-change`), and never silently skips on error. In CI it diffs against the PR base ref.
+4. **Step 1.5:** **Residual Slop Drain Scan** — scans the FULL tree (not just the diff) for legacy violations the diff scanner can never see, so debt that would otherwise "keep regenerating" (raw error formatting, core self-imports, empty catches, hardcoded TUI colors, TypeScript suppressions, skipped tests) can only shrink. Allowlist-free by design. Migrate once → stays green forever.
 5. **Step 2:** Monorepo sequential build (`core ➔ tui ➔ cli`) with explicit timeouts.
 6. **Step 3:** TypeScript type checking across all 3 workspaces (`npm run typecheck`).
 7. **Step 4:** Unit test suite execution (`npm test`) — includes the **gate sentinel test** (`packages/cli/src/__tests__/gate.sentinel.test.ts`) which independently asserts the gate still enforces every rule.
 8. **Step 5:** Verification harness mock runner (`npm run eval -- --fast --mock`).
 
-**Commit-time enforcement:** a versioned pre-commit hook (`.githooks/pre-commit`) runs on every commit in this clone. The hook is **self-contained by design** — it deliberately does NOT invoke `scripts/verify-gate.mjs`, because a hook that executes the worktree's gate script is attacker-controlled (an agent can weaken the script and flip its exit code, making the decision worthless). It decides from the STAGED diff alone: it refuses any commit touching a protected artifact, then runs a context-free slop scan (type escapes, silent catches, raw error formatting, placeholders, core→tui/cli imports). After cloning run `npm run hooks:install` once. Full auditability is `npm run gate` (build/typecheck/tests/eval + manifest + residual scan) plus CI and PR review, which no local process can skip; `node scripts/verify-gate.mjs --staged --quick` remains the manual fast path for stages 0–1.5. Legitimate protected-artifact commits require the human escape hatch `git commit --no-verify` (deliberate, visible) and still go through PR review + CI's full gate. The hook itself is a protected artifact.
+**Commit-time enforcement:** a versioned pre-commit hook (`.githooks/pre-commit`) runs on every commit in this clone. The hook is **self-contained by design** — it deliberately does NOT invoke `scripts/verify-gate.mjs`, because a hook that executes the worktree's gate script is attacker-controlled (an agent can weaken the script and flip its exit code, making the decision worthless). It decides from the STAGED diff alone: it refuses any commit touching a protected artifact, then runs a context-free slop scan (type escapes, silent catches, raw error formatting, placeholders, core→tui/cli imports, @ts-ignore/@ts-nocheck suppressions, skipped tests). After cloning run `npm run hooks:install` once. Full auditability is `npm run gate` (build/typecheck/tests/eval + manifest + residual scan) plus CI and PR review, which no local process can skip; `node scripts/verify-gate.mjs --staged --quick` remains the manual fast path for stages 0–1.5. Legitimate protected-artifact commits require the human escape hatch `git commit --no-verify` (deliberate, visible) and still go through PR review + CI's full gate. The hook itself is a protected artifact.
 
 ---
 

@@ -42,12 +42,25 @@ describe("gate integrity sentinel", () => {
     // catch it.
     const gate = read("scripts/verify-gate.mjs");
     const isCommentSrc = gate.match(/const isCommentLine = [^\n]+/)?.[0];
+    // H1: scanLinesForViolations now calls the shared helpers, so they must be
+    // injected into the evaluated function too — otherwise the extracted
+    // scanner would throw a ReferenceError the moment a probe reaches them.
+    const magicSrc = gate.match(/const MAGIC_TIMEOUT_RE =[\s\S]*?;/)?.[0];
+    const surfacesSrc = gate.match(/const CATCH_SURFACES_RE = [^\n]+/)?.[0];
+    const braceSrc = gate.match(/function matchBraceBody\(text, openIdx\) \{[\s\S]*?\n\}/)?.[0];
+    const silentSrc = gate
+      .match(/export function silentCatchLines\(text\) \{[\s\S]*?\n\}/)?.[0]
+      ?.replace(/^export /, "");
     const scanSrc = gate.match(/function scanLinesForViolations\(diffLines\) \{[\s\S]*?\n\}/)?.[0];
     expect(isCommentSrc, "gate must define isCommentLine").toBeTruthy();
+    expect(magicSrc, "gate must define MAGIC_TIMEOUT_RE").toBeTruthy();
+    expect(surfacesSrc, "gate must define CATCH_SURFACES_RE").toBeTruthy();
+    expect(braceSrc, "gate must define matchBraceBody").toBeTruthy();
+    expect(silentSrc, "gate must define silentCatchLines").toBeTruthy();
     expect(scanSrc, "gate must define scanLinesForViolations").toBeTruthy();
-    const scan = new Function(`${isCommentSrc}\n${scanSrc}\nreturn scanLinesForViolations;`)() as (
-      lines: string[]
-    ) => string[];
+    const scan = new Function(
+      `${isCommentSrc}\n${magicSrc}\n${surfacesSrc}\n${braceSrc}\n${silentSrc}\n${scanSrc}\nreturn scanLinesForViolations;`
+    )() as (lines: string[]) => string[];
 
     const CORE = "+++ b/packages/core/src/probe.ts";
     const TUI = "+++ b/packages/tui/src/components/Probe.tsx";
@@ -62,6 +75,12 @@ describe("gate integrity sentinel", () => {
       { label: "core imports tui", lines: [CORE, "+ import { App } from '@anvil/tui';"] },
       { label: "placeholder marker", lines: [CORE, "+ // TODO: finish later"] },
       { label: "hardcoded TUI color", lines: [TUI, '+ <Box color="cyan" />'] },
+      { label: "ts-ignore suppression", lines: [CORE, "+ // @ts-ignore"] },
+      { label: "ts-nocheck suppression", lines: [CORE, "+ // @ts-nocheck"] },
+      { label: "skipped test", lines: ["+++ b/packages/core/src/__tests__/probe.test.ts", '+ it.skip("test", () => {});'] },
+      { label: "as Error cast (H1)", lines: [CORE, "+ const m = (err as Error).message;"] },
+      { label: "magic timeout literal (H1)", lines: [CORE, "+ const r = fetch(url, { timeout: 5000 });"] },
+      { label: "silent non-empty catch (H1)", lines: [CORE, "+ try { a(); } catch { b = 1; }"] },
     ];
     for (const probe of probes) {
       expect(scan(probe.lines).length, `gate must flag: ${probe.label}`).toBeGreaterThan(0);
@@ -301,5 +320,11 @@ describe("gate integrity sentinel", () => {
     expect(wf).toContain("DISPATCH_MODEL: ${{ inputs.model }}");
     expect(wf).toContain('FLAGS+=(--provider "$DISPATCH_PROVIDER")');
     expect(wf).toContain('FLAGS+=(--model "$DISPATCH_MODEL")');
+  });
+
+  it("gate supports --version reporting and is v2.3", () => {
+    const gate = read("scripts/verify-gate.mjs");
+    expect(gate).toContain('GATE_VERSION = "2.3"');
+    expect(gate).toContain("--version");
   });
 });
