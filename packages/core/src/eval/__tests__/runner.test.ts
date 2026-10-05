@@ -106,6 +106,130 @@ exit 1
     expect(result.error).toBeUndefined();
   });
 
+  it("records cached input as a BREAKDOWN of input, never on top of it", async () => {
+    // Prompt caching (38.7) means most of an eval run's input is a cache read.
+    // The usage event reports it as a breakdown of `inputTokens`; the result
+    // must keep that relationship so pricing can discount it (and the report
+    // can show it) without double-counting the tokens.
+    const cacheProvider = {
+      id: "openai",
+      displayName: "cache scripted",
+      isConfigured: () => true,
+      async *streamCompletion() {
+        yield { type: "usage" as const, inputTokens: 1_000, outputTokens: 50, cachedInputTokens: 800 };
+        yield { type: "turn_end" as const, stopReason: "end_turn" as const };
+      },
+    };
+    const task = createMockTask("task-cache", true);
+    fs.writeFileSync(task.assertionScript, "#!/bin/bash\nexit 0\n");
+    fs.chmodSync(task.assertionScript, 0o755);
+    const provider = cacheProvider as unknown as NonNullable<EvalRunnerOptions["provider"]>;
+
+    const result = await runEvalTask(task, { provider });
+    expect(result.tokensUsed.input).toBe(1_000);
+    expect(result.tokensUsed.output).toBe(50);
+    expect(result.tokensUsed.cachedInput).toBe(800);
+  });
+
+  it("sends follow-up turns to the SAME session, so history accumulates (A4 multi-turn)", async () => {
+    // The invariant that makes a multi-turn task a task: turn 2 must see what
+    // turn 1 did. A runner that built a fresh session per turn would still
+    // "run" both prompts and every assertion would look identical.
+    const requests: string[] = [];
+    const recordingProvider = {
+      id: "openai",
+      displayName: "recording scripted",
+      isConfigured: () => true,
+      async *streamCompletion(request: { messages: Array<{ role: string; content: Array<{ type: string; text?: string }> }> }) {
+        requests.push(
+          request.messages
+            .flatMap((m) => m.content.filter((c) => c.type === "text").map((c) => c.text ?? ""))
+            .join("\n")
+        );
+        yield { type: "usage" as const, inputTokens: 1, outputTokens: 1 };
+        yield { type: "turn_end" as const, stopReason: "end_turn" as const };
+      },
+    };
+    const base = createMockTask("task-multiturn", true);
+    fs.writeFileSync(base.assertionScript, "#!/bin/bash\nexit 0\n");
+    fs.chmodSync(base.assertionScript, 0o755);
+    const task: EvalTask = {
+      ...base,
+      prompt: "first turn: add a helper",
+      followUps: ["second turn: now use it"],
+      timeoutMs: 30_000,
+    };
+
+    const result = await runEvalTask(task, {
+      provider: recordingProvider as unknown as NonNullable<EvalRunnerOptions["provider"]>,
+    });
+
+    expect(result.turns).toBe(2);
+    expect(requests).toHaveLength(2);
+    expect(requests[0]).toContain("first turn: add a helper");
+    // Turn 2's request carries turn 1 — same session, accumulated history.
+    expect(requests[1]).toContain("first turn: add a helper");
+    expect(requests[1]).toContain("second turn: now use it");
+  }, 30_000);
+
+  it("loadEvalTasks carries followUps and drops blank turns (A4 multi-turn)", () => {
+    const task = createMockTask("task-multiturn");
+    const configPath = path.join(task.taskDir, "task.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        name: "Multi-turn",
+        category: "feature",
+        prompt: "first",
+        timeoutMs: 60000,
+        fast: false,
+        followUps: ["second", "", "   ", "third"],
+      })
+    );
+
+    const [loaded] = loadEvalTasks(tmpDir);
+    // Blank entries are dropped: a stray "" would be an empty user turn, which
+    // reads to the model as a nudge and to the report as a turn that never
+    // happened.
+    expect(loaded.followUps).toEqual(["second", "third"]);
+  });
+
+  it("sends every follow-up on the SAME session, so history accumulates", async () => {
+    // The invariant multi-turn exists for: turn 2 must be graded on what turn 1
+    // actually left behind. A fresh session per turn would satisfy `turns: 2` and
+    // measure nothing, so this asserts the accumulated history itself.
+    const requestsSeen: string[] = [];
+    const recorder = {
+      id: "openai",
+      displayName: "recorder",
+      isConfigured: () => true,
+      async *streamCompletion(request: { messages: Array<{ content: unknown }> }) {
+        requestsSeen.push(JSON.stringify(request.messages.map((m) => m.content)));
+        yield { type: "usage" as const, inputTokens: 1, outputTokens: 1 };
+        yield { type: "turn_end" as const, stopReason: "end_turn" as const };
+      },
+    };
+    const base = createMockTask("task-turns", true);
+    fs.writeFileSync(base.assertionScript, "#!/bin/bash\nexit 0\n");
+    fs.chmodSync(base.assertionScript, 0o755);
+    const task = { ...base, followUps: ["second turn", "third turn"] };
+    const provider = recorder as unknown as NonNullable<EvalRunnerOptions["provider"]>;
+
+    const result = await runEvalTask(task, { provider, respectTaskTimeout: true });
+
+    expect(result.turns).toBe(3);
+    expect(requestsSeen.length).toBe(3);
+    // Turn 1 saw only its own prompt …
+    expect(requestsSeen[0]).toContain("Fix the bug in file.txt");
+    expect(requestsSeen[0]).not.toContain("second turn");
+    // … turn 2 saw turn 1 AND itself (same session), and turn 3 saw all three.
+    expect(requestsSeen[1]).toContain("Fix the bug in file.txt");
+    expect(requestsSeen[1]).toContain("second turn");
+    expect(requestsSeen[1]).not.toContain("third turn");
+    expect(requestsSeen[2]).toContain("second turn");
+    expect(requestsSeen[2]).toContain("third turn");
+  }, 30_000);
+
   it("respectTaskTimeout extends, never truncates, a fixture's own budget", async () => {
     // The time-shaped twin of AUDIT A1 (every run force-capped at 4,096 tokens):
     // the A/B harness passed a 120s clock that overrode the harder tier's declared
@@ -163,6 +287,7 @@ exit 1
         name: "Task 1",
         category: "bugfix",
         passed: true,
+        turns: 1,
         wallClockMs: 120,
         tokensUsed: { input: 100, output: 50 },
         toolCalls: 1,
@@ -172,6 +297,7 @@ exit 1
         name: "Task 2",
         category: "feature",
         passed: false,
+        turns: 1,
         wallClockMs: 150,
         tokensUsed: { input: 150, output: 60 },
         toolCalls: 2,
@@ -195,6 +321,7 @@ exit 1
         name: "Task 1",
         category: "bugfix",
         passed: true,
+        turns: 1,
         wallClockMs: 100,
         tokensUsed: { input: 50, output: 25 },
         toolCalls: 1,
@@ -220,6 +347,7 @@ exit 1
           name: "Task 1",
           category: "bugfix",
           passed: true,
+          turns: 1,
           wallClockMs: 100,
           tokensUsed: { input: 50, output: 25 },
           toolCalls: 1,

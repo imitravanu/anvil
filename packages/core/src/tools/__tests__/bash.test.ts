@@ -196,6 +196,40 @@ describe("run_command destructive-command guard", () => {
     expect(isBlockedCommand("chmod -R 777 /")).not.toBeNull();
   });
 
+  it("blocks home trees and root-equivalent spellings (audit probe, 2026-10-05)", () => {
+    // Probe results that motivated this: rm -rf /home, /Users, /./, // and
+    // chmod -R 777 /home all returned null — no guard fired.
+    for (const cmd of [
+      "rm -rf /home",
+      "rm -rf /home/me",
+      "rm -rf /home/me/projects/repo",
+      "rm -rf /Users",
+      "rm -rf /Users/me",
+      "rm -rf /./",
+      "rm -rf //",
+      "rm -rf /../",
+      "rm -rf /..",
+      "chmod -R 777 /home",
+      "chmod 755 -R /home",
+      "chmod -R 777 /etc",
+      "chmod --recursive 777 /home",
+    ]) {
+      expect(isBlockedCommand(cmd), cmd).not.toBeNull();
+    }
+    // The guard must not swallow project-local work (relative paths stay the
+    // supported way to delete inside a repo, including one under /home).
+    for (const cmd of [
+      "rm -rf ./build",
+      "rm -rf dist",
+      "rm -f file.txt",
+      "chmod -R 755 src",
+      "chmod -R u+w node_modules",
+      "chmod 644 README.md",
+    ]) {
+      expect(isBlockedCommand(cmd), cmd).toBeNull();
+    }
+  });
+
   it("allows ordinary commands including project-local rm -rf", () => {
     for (const cmd of [
       "echo hello",

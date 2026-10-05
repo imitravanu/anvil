@@ -82,6 +82,15 @@ export function loadEvalTasks(tasksDir: string): EvalTask[] {
           name: config.name || entry.name,
           category: config.category || "feature",
           prompt: config.prompt || "",
+          // Multi-turn: only non-empty strings; a malformed entry is dropped
+          // rather than sent as an empty user turn the model cannot act on.
+          ...(Array.isArray(config.followUps)
+            ? {
+                followUps: config.followUps.filter(
+                  (t: unknown): t is string => typeof t === "string" && t.trim().length > 0
+                ),
+              }
+            : {}),
           timeoutMs: config.timeoutMs || EVAL_TASK_TIMEOUT_MS,
           maxTokens: config.maxTokens,
           fast: config.fast ?? true,
@@ -123,7 +132,9 @@ export async function runEvalTask(
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `anvil-eval-${task.id}-`));
 
   let toolCalls = 0;
-  let tokensUsed = { input: 0, output: 0 };
+  /** User turns actually dispatched (A4 multi-turn) — 1 for a single-shot task. */
+  let turnsSent = 0;
+  let tokensUsed = { input: 0, output: 0, cachedInput: 0 };
   let passed = false;
   let errorMsg: string | undefined;
   let failureDiff: string | undefined;
@@ -204,20 +215,31 @@ export async function runEvalTask(
     }, timeoutLimit);
 
     try {
-      for await (const event of session.send(task.prompt)) {
-        if (abortController.signal.aborted) {
-          // A8: a timeout is a GRADED outcome (the model may be looping), so the
-          // structured origin is "task" — never excused as provider weather.
-          failureKind = "task";
-          throw new Error(`Task timed out after ${timeoutLimit}ms`);
-        }
-        if (event.type === "tool_finished") {
-          toolCalls++;
-        } else if (event.type === "usage") {
-          tokensUsed.input += event.inputTokens;
-          tokensUsed.output += event.outputTokens;
-        } else if (event.type === "error") {
-          errorMsg = event.message;
+      // Multi-turn (A4): every turn goes to the SAME session, so history
+      // accumulates and turn N is graded on what turn N-1 actually left behind.
+      // A fresh session per turn would make the follow-up meaningless.
+      for (const turnPrompt of [task.prompt, ...(task.followUps ?? [])]) {
+        turnsSent += 1;
+        for await (const event of session.send(turnPrompt)) {
+          if (abortController.signal.aborted) {
+            // A8: a timeout is a GRADED outcome (the model may be looping), so
+            // the structured origin is "task" — never excused as provider weather.
+            failureKind = "task";
+            throw new Error(`Task timed out after ${timeoutLimit}ms`);
+          }
+          if (event.type === "tool_finished") {
+            toolCalls++;
+          } else if (event.type === "usage") {
+            tokensUsed.input += event.inputTokens;
+            tokensUsed.output += event.outputTokens;
+            // Phase 38.2 contract: cached is a breakdown of `input`, absent when
+            // the provider does not report it — never a second input bucket.
+            if (typeof event.cachedInputTokens === "number") {
+              tokensUsed.cachedInput += event.cachedInputTokens;
+            }
+          } else if (event.type === "error") {
+            errorMsg = event.message;
+          }
         }
       }
     } finally {
@@ -316,6 +338,7 @@ export async function runEvalTask(
     name: task.name,
     category: task.category,
     passed,
+    turns: turnsSent,
     wallClockMs,
     tokensUsed,
     toolCalls,

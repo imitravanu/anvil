@@ -258,7 +258,9 @@ export const THEMES: Record<ThemeName, Theme> = {
       toolName: "yellow",
       toolRunning: "#e94560",
       toolDone: "green",
-      toolError: "#e94560",
+      // 28.9: the deleted diff lane composites toolError on diffDelBg; the
+      // original #e94560 measured 4.30:1 there. Lightened to reach AA.
+      toolError: "#f2647f",
       dim: "gray",
       border: "#7b68ee",
       accent: "#e94560",
@@ -269,7 +271,9 @@ export const THEMES: Record<ThemeName, Theme> = {
       brandDim: "#5650a0",
       surfaceElevated: "#23233d",
       surfaceActive: "#2e2e4d",
-      textSecondary: "#8a8aa3",
+      // 28.9: textSecondary carries the diff gutter on the lane tints;
+      // #8a8aa3 measured 4.20:1 on diffAddBg. Lightened to reach AA.
+      textSecondary: "#9698b3",
       textMuted: "#5c5c78",
       info: "#7b68ee",
       borderFocus: "#9d8fff",
@@ -297,7 +301,9 @@ export const THEMES: Record<ThemeName, Theme> = {
       brandDim: "green",
       surfaceElevated: "black",
       surfaceActive: "#0a1f0f",
-      textSecondary: "#008f11",
+      // 28.9: textSecondary carries the diff gutter on the lane tints;
+      // #008f11 measured 3.50:1 on diffAddBg. Lightened to reach AA.
+      textSecondary: "#00b81c",
       textMuted: "#003b00",
       info: "#00ff41",
       borderFocus: "greenBright",

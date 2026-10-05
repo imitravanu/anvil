@@ -158,6 +158,55 @@ function deshell(rawSegment: string): string {
 // top-level glob, or the user's home dir. Plain `rm -rf ./build` inside the
 // project stays allowed — the permission prompt remains the gate for those.
 // `segment` arrives de-shelled from isBlockedCommand.
+
+// Top-level directories that are never project-local: a recursive delete of
+// the whole subtree is refused (a repo that lives under /home is reached with
+// a cwd-relative path, which stays allowed below). `Users` is macOS's home root.
+const SYSTEM_DIRS = new Set([
+  "usr", "etc", "var", "dev", "boot", "lib", "lib64", "bin", "sbin", "opt",
+  "proc", "sys", "run", "srv", "tmp", "root", "mnt", "media", "home", "Users",
+]);
+
+/**
+ * Does this operand resolve to a system target?
+ *
+ * A textual `/(?:\s|$)` regex cannot see the spellings the shell accepts:
+ * `//`, `/./`, `/..`, `/../` all normalize to `/`, and `/home/**` / `/Users/**`
+ * must refuse as whole trees (the 2026-10-05 probe returned null for every one
+ * of them). The path is tokenized into a stack instead — `..` pops, but pops
+ * clamp at the root, because `/../..` is still `/`. Relative operands
+ * (`./build`, `dist`, `../x`) are never system targets.
+ */
+function isSystemTarget(token: string): boolean {
+  // Home spellings deshell leaves behind: `~`, `~/x`, `~alice`, `$HOME`,
+  // `$HOME/x`, `${HOME}`. A `~`-prefixed operand is somebody's home dir.
+  if (token.startsWith("~") || token.startsWith("$HOME") || token.startsWith("${HOME}")) return true;
+  if (!token.startsWith("/")) return false;
+  // A top-level glob or brace expands INSIDE the root tree (`/*`, `/??`,
+  // `/{etc,usr}`, `/[ab]`) — normalizing its literal characters would hide it.
+  if (/^\/[^/]*[*?{}[\]]/.test(token)) return true;
+  const stack: string[] = [];
+  for (const seg of token.split("/")) {
+    if (seg === "" || seg === ".") continue;
+    if (seg === "..") stack.pop(); // clamped at the root: /../.. is still /
+    else stack.push(seg);
+  }
+  if (stack.length === 0) return true; // normalizes to the filesystem root
+  return SYSTEM_DIRS.has(stack[0]);
+}
+
+/**
+ * The operands (non-flag words) of a command segment. The rewrite normalizes
+ * the flag/target boundary first — a fused target (`rm -rf$HOME`, `rm -fr/`)
+ * has no separator for a whitespace matcher to see. The lookahead excludes
+ * letters so a long option is never split mid-word (`--recursive` must stay one
+ * token, or the flag parse would miss it).
+ */
+function operands(segment: string): string[] {
+  const spaced = segment.replace(/(-[a-zA-Z-]+)(?=[^a-zA-Z-\s])/g, "-$1 ");
+  return spaced.trim().split(/\s+/).filter((w) => w.length > 0 && !w.startsWith("-"));
+}
+
 function isRootWipe(segment: string): boolean {
   const m = segment.match(/\brm\b(.*)$/);
   if (!m) return false;
@@ -170,21 +219,10 @@ function isRootWipe(segment: string): boolean {
     longFlags.some((f) => f.startsWith("recursive"));
   const force = shortFlags.includes("f") || longFlags.some((f) => f.startsWith("force"));
   if (!(recursive && force)) return false;
-  // The path patterns below need a separator before the target, and a fused
-  // target (`rm -rf$HOME`, `rm -fr/`, `rm -rf/etc`) has none — the same blind
-  // spot `$IFS` had. Normalize the flag/target boundary so the cluster and the
-  // target are space-separated before matching. The lookahead excludes letters
-  // so a long option is never split mid-word (`--recursive` must stay one
-  // token, or the flag parse above would miss it), and a cluster with nothing
-  // after it is left alone.
-  const spaced = rest.replace(/(-[a-zA-Z-]+)(?=[^a-zA-Z-\s])/g, "-$1 ");
-  // Block: bare root (/), root globs (/*, /?, /{a,b}, /[abc]), home (~,
-  // $HOME), AND any top-level system directory. The `?`/`{`/`[` forms are
-  // brace/glob expansions that still resolve to `/` — the old `*`-only class
-  // let `rm -rf /?` and `rm -rf /{etc,usr}` pass. A project-local
-  // `rm -rf ./build` stays allowed.
-  const SYSTEM_PATHS = /(?:^|\s)(?:\/(?:\s|$|\*|\?|\{|\[)|~|\$HOME|\$\{HOME\}|\/(?:usr|etc|var|dev|boot|lib|lib64|bin|sbin|opt|proc|sys|run|srv|tmp|root|mnt|media)(?:\s|\/|$))/;
-  return SYSTEM_PATHS.test(spaced);
+  // ANY operand resolving to a system target refuses the segment: bare root,
+  // root-equivalent spellings (//, /./, /../), top-level globs, and the whole
+  // /home/**, /Users/**, <system-dir>/** trees.
+  return operands(rest).some(isSystemTarget);
 }
 
 const WHOLE_COMMAND_CHECKS: { test: (cmd: string) => boolean; reason: string }[] = [
@@ -197,7 +235,18 @@ const SEGMENT_CHECKS: { test: (seg: string) => boolean; reason: string }[] = [
   { test: (s) => /\bmkfs(\s|\.)/.test(s), reason: "filesystem formatting (mkfs)" },
   { test: (s) => /\bdd\b.*\bof=\/dev\//.test(s), reason: "raw write to a /dev device (dd)" },
   { test: (s) => />(>)?\s*\/dev\/sd[a-z]/.test(s), reason: "raw write to a block device" },
-  { test: (s) => /\bchmod\s+[^\s]*-R/.test(s) && /(^|\s)\/(\s|$)/.test(s), reason: "recursive permission change on filesystem root" },
+  {
+    // The old rule required the flags before the mode (`chmod -R 777`) and a
+    // BARE `/` target, so `chmod 755 -R /home`, `chmod -R 777 /etc` and
+    // `chmod --recursive 777 /home` all walked through. Recursive is now any
+    // short cluster containing R (or the long form), and the target set is the
+    // SAME one the wipe rule refuses.
+    test: (s) =>
+      /\bchmod\b/.test(s) &&
+      /(?:^|\s)-[a-zA-Z]*R[a-zA-Z]*(?:\s|$)|--recursive(?:\s|$)/.test(s) &&
+      operands(s).some(isSystemTarget),
+    reason: "recursive permission change on a system directory or root",
+  },
 ];
 
 export function isBlockedCommand(command: string): string | null {

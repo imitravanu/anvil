@@ -119,6 +119,9 @@ export function ColorizedDiff({
         // Phase 28.2: the row, not just its glyphs, carries the tint so hunks
         // read as lanes. Theme-derived — never a literal colour here.
         const bg = row.kind === "add" ? addBg : delBg;
+        // Phase 28.9: the gutter rides that tint, so it uses textSecondary —
+        // textMuted cannot reach WCAG AA on these lanes (hacker's #003b00
+        // measures 1.15:1 on diffAddBg). See theme/__tests__/contrast.test.ts.
         const segs = words.get(i);
         // Word highlights are dropped for overlong lines: a curtailed line
         // can't keep segment alignment, and overflow is the worse failure.
@@ -129,7 +132,7 @@ export function ColorizedDiff({
             <Text color={base} bold>
               {sign}
             </Text>
-            <Text color={theme.colors.textMuted}>{gutter(row)}</Text>
+            <Text color={theme.colors.textSecondary}>{gutter(row)}</Text>
             {useWords ? (
               <WordText segs={segs} base={base} />
             ) : (

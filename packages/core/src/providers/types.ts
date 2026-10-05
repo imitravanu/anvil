@@ -247,5 +247,12 @@ export interface ModelInfo {
    */
   costPer1kInputTokens?: number;
   costPer1kOutputTokens?: number;
+  /**
+   * USD per 1,000 PROMPT-CACHE READ tokens (Phase 38.7 follow-up). Same rule
+   * as the two fields above: ABSENT MEANS UNKNOWN, and the estimator then
+   * bills cached input at `costPer1kInputTokens` — a deliberate upper bound,
+   * never an invented discount (the report labels it as one).
+   */
+  costPer1kCachedInputTokens?: number;
 }
 

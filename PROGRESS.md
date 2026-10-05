@@ -2,6 +2,74 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (the three recorded outstanding limits — bash guard gaps, the cache-priced cost
+> upper bound, and the per-theme rendered-colour/contrast audit — all three closed; every fail-first
+> receipt re-verified against the working tree, not inherited from prose):**
+> owns `packages/core/src/tools/bash.ts` + `packages/core/src/tools/__tests__/bash.test.ts`,
+> `packages/core/src/eval/{types,cost,report,runner}.ts` + `packages/core/src/eval/__tests__/{cost,runner,failureDiff,guardianFlag}.test.ts`,
+> `packages/core/src/providers/types.ts`, `packages/tui/src/theme/themes.ts` +
+> `packages/tui/src/theme/__tests__/contrast.test.ts` (new),
+> `packages/tui/src/diff/{colorizeDiff.tsx,SideBySideDiff.tsx}`, plus this file.
+> **No protected artifact touched; the other session's 37-file diff (incl. the 5 protected gate files and
+> the untracked `evals/tasks-hard/07-multiturn-ttl/` fixture tree) stays uncommitted and untouched.**
+>
+> **1. The destructive-command guard missed root-equivalent spellings and whole home trees (FIXED).**
+> `isBlockedCommand` matched literal path prefixes, so `rm -rf /usr//`, `/./usr`, `/var/../etc`, a
+> top-level glob (`/usr*`), tilde forms (`~`, `~root`, `$HOME/...`) and `rm -rf /home` (macOS `/Users`)
+> all passed, and a recursive `chmod` on a system path was checked with a literal substring. Fix:
+> a `SYSTEM_DIRS` set; a token-stack `isSystemTarget()` that normalizes repeated and self-referential
+> separators, resolves `..`, expands tilde/`$HOME` prefixes and reads a top-level glob as its parent
+> directory, while keeping RELATIVE targets never-system (a project-local `rm -rf build` still runs);
+> an `operands()` helper; a rewritten `isRootWipe()`; and a tokenized recursive-chmod check.
+> **RED (re-verified live against HEAD `bash.ts`):** `blocks home trees and root-equivalent spellings
+> (audit probe, 2026-10-05)` fails `rm -rf /home: expected null not to be null`; GREEN after.
+>
+> **2. Cost could not price prompt-cache reads, and the multi-turn lane had drifted back to a fresh
+> session per turn (FIXED).** Cache: `EvalResult.tokensUsed.cachedInput?`,
+> `EvalReport.totalTokens.cachedInput?` + `costUpperBound?`, `ModelInfo.costPer1kCachedInputTokens?`;
+> `estimateCostUsd` clamps cached to `[0, input]` because cached is a BREAKDOWN of input, never an
+> additive bucket, and when a model declares no cache-read price the total is billed at the full input
+> rate and LABELLED an upper bound instead of inventing a discount. **RED:** four probes fail against
+> HEAD — `bills cached input at the DECLARED cache-read price`, `carries a declared cache-read price
+> through pricingForModel`, `reports the cached share and flags an undeclared-discount total as an upper
+> bound`, `records cached input as a BREAKDOWN of input, never on top of it`. Multi-turn (A4): the loop
+> was constructing a fresh `AgentSession` per follow-up, so history was lost and turn N was graded as if
+> turn N-1 never happened — precisely what the feature's own docs forbid. One session now carries every
+> turn. **RED:** `sends follow-up turns to the SAME session…`, `sends every follow-up on the SAME
+> session…` and `loadEvalTasks carries followUps and drops blank turns` fail against HEAD (turns
+> `undefined`, history absent); GREEN after. `turns: number` is required on `EvalResult`, which caught
+> four fixtures still building results without it (`cost`, `failureDiff`, `guardianFlag`, `runner`
+> tests) — found by the real `tsc`, all updated here.
+> *Correction on the record:* the previous session's note claimed the A4 session fix was already in the
+> tree. It was NOT — the full-suite run caught the fresh-session construction still present on disk, so
+> the fix was re-applied and re-verified. Receipts below were re-derived from the tree for that reason.
+>
+> **3. The rendered-colour/contrast audit is now a contract, not a note (FIXED).** New
+> `packages/tui/src/theme/__tests__/contrast.test.ts` is a pure unit test over `THEMES` using WCAG 2.x
+> relative luminance, because the harness is non-TTY: chalk emits no ANSI, so no rendered frame or
+> visual baseline can carry colour. The inventory is grounded in production source (only six
+> `backgroundColor=` sites exist in the TUI, of which the readable composites are the diff lane's
+> `toolDone×diffAddBg`, `toolError×diffDelBg` and the lane gutter on both tints; Wordmark's heat ramp is
+> decorative animation chrome, and dark/light/highContrast use terminal keywords whose ratio depends on
+> the host palette — skipped, with an assertion that fails if the measurable set ever empties).
+> **Measured RED:** midnight `toolError #e94560` on `#341522` = 4.30, midnight `textSecondary #8a8aa3`
+> on `#153029` = 4.20, hacker `textSecondary #008f11` = 3.50 added / 4.24 deleted — all under AA 4.5;
+> and the quietest tier (`textMuted`) sat directly on the tints, where no tint can rescue it (hacker's
+> `#003b00` peaks at ~1.6:1 even against pure black). Fix: both diff components now paint the lane
+> gutter with `textSecondary`, and the palette was lightened to clear AA — midnight `toolError`
+> `#e94560`→`#f2647f` (5.41), midnight `textSecondary` `#8a8aa3`→`#9698b3` (5.00 / 5.83), hacker
+> `textSecondary` `#008f11`→`#00b81c` (5.57 / 6.76); forge already passed (5.81 / 6.83) and is
+> unchanged. A source-level guard keeps `textMuted` out of both diff components (whole-line comments
+> filtered, exactly as the 28.8 dim contract does), so the decision cannot silently regress.
+>
+> **Verification (tree still carries another session's uncommitted protected changes — no `--ack`
+> passed):** typecheck 0 across core/tui/cli + scripts; build core→tui→cli green; full suites **1,520**
+> (cli 152 / core 977 / tui 391); mock evals **25/25**; the faithful gate Step-1/1.5 replica over all
+> **15** changed files: **0 hits**; `npm run gate` passes Steps 0/0.5 and then correctly refuses at
+> Step 1 on the OTHER session's protected artifacts (`scripts/verify-gate.mjs`, `AGENTS.md`,
+> `.githooks/pre-commit`, `scripts/gate-manifest.json`, the sentinel test). The human's clean-tree gate
+> run remains the final word.
+>
 > **DONE 2026-10-05 (UX/UI deep dive — nine findings, nine fixed; fail-first receipts recorded):**
 > owns `packages/tui/src/components/{OverlayFrame.tsx (new),HelpOverlay.tsx (new),Header.tsx,MessageList.tsx,
 > ModelPicker.tsx,ThemePicker.tsx,SessionPicker.tsx,CommandPalette.tsx,RewindModal.tsx,DiffModal.tsx,

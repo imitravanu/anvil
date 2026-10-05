@@ -29,6 +29,11 @@ export function createEvalReport(
     }),
     { input: 0, output: 0 }
   );
+  // Prompt-cache reads (38.7): a BREAKDOWN of `input` (never added to it),
+  // summed for display and for deciding whether the cost figure is an upper
+  // bound. The key stays absent when no task reported cache hits, so the shape
+  // of an uncached run is unchanged.
+  const cachedInputTotal = results.reduce((sum, r) => sum + (r.tokensUsed.cachedInput ?? 0), 0);
 
   // 27.5: price the run from the model's registry row. Unknown pricing leaves
   // its tasks unpriced and the run total undefined — a partial sum is never
@@ -57,8 +62,19 @@ export function createEvalReport(
     passedCount,
     totalTasks,
     totalWallClockMs,
-    totalTokens,
+    totalTokens: {
+      input: totalTokens.input,
+      output: totalTokens.output,
+      ...(cachedInputTotal > 0 ? { cachedInput: cachedInputTotal } : {}),
+    },
     ...(estimatedCostUsd !== undefined ? { estimatedCostUsd } : {}),
+    // Cache reads are present and the model declares no cache price: they were
+    // billed at the full input rate, so the total OVERSTATES — say so.
+    ...(estimatedCostUsd !== undefined &&
+    cachedInputTotal > 0 &&
+    pricing?.cachedInputPer1k === undefined
+      ? { costUpperBound: true }
+      : {}),
     unpricedTasks,
   };
 }
@@ -126,8 +142,19 @@ export function formatEvalReport(report: EvalReport): string {
   lines.push(reportRule("="));
   lines.push(` ANVIL EVALUATION REPORT — ${report.provider} / ${report.model}`);
   lines.push(` Date: ${report.date} | Pass Rate: ${(report.passRate * 100).toFixed(1)}% (${report.passedCount}/${report.totalTasks})`);
-  lines.push(` Total Time: ${(report.totalWallClockMs / 1000).toFixed(1)}s | Total Tokens: in ${report.totalTokens.input.toLocaleString()} · out ${report.totalTokens.output.toLocaleString()}`);
-  lines.push(` Total Cost: ${formatCost(report.estimatedCostUsd, report.unpricedTasks ?? 0)}`);
+  lines.push(
+    ` Total Time: ${(report.totalWallClockMs / 1000).toFixed(1)}s | Total Tokens: in ${report.totalTokens.input.toLocaleString()}${
+      report.totalTokens.cachedInput
+        ? ` (${report.totalTokens.cachedInput.toLocaleString()} cached)`
+        : ""
+    } · out ${report.totalTokens.output.toLocaleString()}`
+  );
+  lines.push(
+    ` Total Cost: ${formatCost(report.estimatedCostUsd, report.unpricedTasks ?? 0)}` +
+      (report.costUpperBound
+        ? " — upper bound: cached input billed at the full input rate"
+        : "")
+  );
   lines.push(reportRule("-"));
   lines.push("| Task ID                        | Category   | Status | Time    | Tools | Tokens  | Cost      |");
   lines.push(reportRule("-"));

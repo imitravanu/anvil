@@ -67,6 +67,7 @@ describe("failure diff surfacing (27.3)", () => {
       name: "Fail",
       category: "bugfix",
       passed: false,
+      turns: 1,
       wallClockMs: 1,
       tokensUsed: { input: 1, output: 1 },
       toolCalls: 0,

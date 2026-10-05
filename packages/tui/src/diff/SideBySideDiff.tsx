@@ -95,17 +95,20 @@ export function SideBySideDiff({
         const rightNo = row.right.lineNo === null ? "    " : String(row.right.lineNo).padStart(4, " ");
         // Ink's Box takes no backgroundColor (only Text does), so the tint rides
         // each cell's own glyphs: line number + code. Context rows stay untinted.
+        // Phase 28.9: the line number sits on the tint with textSecondary —
+        // textMuted cannot reach WCAG AA on these lanes. See
+        // theme/__tests__/contrast.test.ts.
         const leftBg = cellBg(row.left.tone);
         const rightBg = cellBg(row.right.tone);
         return (
           <Box key={key} flexShrink={0}>
             <Box width={colWidth} flexShrink={0}>
-              <Text color={theme.colors.textMuted} backgroundColor={leftBg}>{leftNo} </Text>
+              <Text color={theme.colors.textSecondary} backgroundColor={leftBg}>{leftNo} </Text>
               <Text color={cellColor(row.left.tone)} backgroundColor={leftBg}>{curtailToCells(row.left.text, textWidth)}</Text>
             </Box>
             <Text color={theme.colors.separator}> │ </Text>
             <Box width={colWidth} flexShrink={0}>
-              <Text color={theme.colors.textMuted} backgroundColor={rightBg}>{rightNo} </Text>
+              <Text color={theme.colors.textSecondary} backgroundColor={rightBg}>{rightNo} </Text>
               <Text color={cellColor(row.right.tone)} backgroundColor={rightBg}>{curtailToCells(row.right.text, textWidth)}</Text>
             </Box>
           </Box>

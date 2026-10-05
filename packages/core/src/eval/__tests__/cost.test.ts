@@ -17,6 +17,7 @@ function result(taskId: string, input: number, output: number): EvalResult {
     name: taskId,
     category: "bugfix",
     passed: true,
+    turns: 1,
     wallClockMs: 1,
     tokensUsed: { input, output },
     toolCalls: 1,
@@ -116,5 +117,75 @@ describe("createEvalReport cost estimation (27.5)", () => {
     const text = formatEvalReport(rep);
     expect(text).toContain("Total Cost: $0.0000");
     expect(text).toContain("Cost");
+  });
+});
+
+describe("cached-input accounting (audit follow-up, 2026-10-05)", () => {
+  it("bills cached input at the DECLARED cache-read price", () => {
+    const anthropicish = { inputPer1k: 3, outputPer1k: 15, cachedInputPer1k: 0.3 };
+    // fresh 1,000×3 + cached 9,000×0.3 + out 1,000×15 = 3 + 2.7 + 15 = 20.7
+    expect(
+      estimateCostUsd({ input: 10_000, output: 1_000, cachedInput: 9_000 }, anthropicish)
+    ).toBeCloseTo(20.7, 6);
+  });
+
+  it("keeps the full-rate upper bound when NO cache price is declared", () => {
+    // No invented discount — an unknown cache price bills at the input rate,
+    // and the report says the figure is an upper bound (next test).
+    expect(
+      estimateCostUsd(
+        { input: 10_000, output: 1_000, cachedInput: 9_000 },
+        { inputPer1k: 3, outputPer1k: 15 }
+      )
+    ).toBeCloseTo(45, 6);
+  });
+
+  it("clamps a mis-reported cached count so the cost can never go negative", () => {
+    expect(
+      estimateCostUsd({ input: 100, output: 0, cachedInput: 500 }, { inputPer1k: 3, outputPer1k: 15 })
+    ).toBeCloseTo(0.3, 6);
+  });
+
+  it("carries a declared cache-read price through pricingForModel", () => {
+    expect(
+      pricingForModel(
+        model({ costPer1kInputTokens: 3, costPer1kOutputTokens: 15, costPer1kCachedInputTokens: 0.3 })
+      )
+    ).toEqual({ inputPer1k: 3, outputPer1k: 15, cachedInputPer1k: 0.3 });
+    // Absent means unknown — the pricing object must not invent the key.
+    expect(pricingForModel(model({ costPer1kInputTokens: 3, costPer1kOutputTokens: 15 }))).toEqual({
+      inputPer1k: 3,
+      outputPer1k: 15,
+    });
+  });
+
+  it("reports the cached share and flags an undeclared-discount total as an upper bound", () => {
+    const id = "phase38-cached-probe";
+    registerModel(
+      model({
+        id,
+        providerId: "openai",
+        displayName: "Cache Probe",
+        isFree: false,
+        costPer1kInputTokens: 2,
+        costPer1kOutputTokens: 8,
+        // deliberately NO costPer1kCachedInputTokens → cache reads unpriced
+      })
+    );
+    try {
+      const r = result("t1", 10_000, 500);
+      r.tokensUsed = { input: 10_000, output: 500, cachedInput: 8_000 };
+      const rep = createEvalReport([r], id, "openai");
+      expect(rep.totalTokens).toEqual({ input: 10_000, output: 500, cachedInput: 8_000 });
+      // 8,000 of the 10,000 input was a cache read, billed at the full rate:
+      // (10,000×2 + 500×8)/1000 = 24 — an UPPER BOUND, and it must say so.
+      expect(rep.estimatedCostUsd).toBeCloseTo(24, 6);
+      expect(rep.costUpperBound).toBe(true);
+      const text = formatEvalReport(rep);
+      expect(text).toContain("8,000 cached");
+      expect(text).toContain("upper bound");
+    } finally {
+      unregisterModels([id]);
+    }
   });
 });

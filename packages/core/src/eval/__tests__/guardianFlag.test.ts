@@ -13,6 +13,7 @@ function result(taskId: string, passed: boolean): EvalResult {
     name: taskId,
     category: "feature",
     passed,
+    turns: 1,
     wallClockMs: 100,
     tokensUsed: { input: 10, output: 5 },
     toolCalls: 1,

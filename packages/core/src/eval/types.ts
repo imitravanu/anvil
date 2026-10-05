@@ -9,6 +9,18 @@ export interface EvalTaskConfig {
   name: string;
   category: "bugfix" | "feature" | "migration" | "regression" | "multifile" | "config";
   prompt: string;
+  /**
+   * Phase A4 (multi-turn): the user turns sent AFTER `prompt`, in order, on the
+   * SAME session — history accumulates, so turn N can be asked to build on what
+   * turn N-1 actually did, and graded on whether it did. A4's spec calls for
+   * "long horizon, multi-turn, real repo"; single-shot prompts cannot measure
+   * whether an agent re-reads before editing or verifies before building on its
+   * own work, because there is nothing to build on.
+   *
+   * The whole task shares one timeout budget: the clock is the task's, not the
+   * turn's, so a model cannot pass by being slow across many cheap turns.
+   */
+  followUps?: string[];
   timeoutMs: number;
   maxTokens?: number;
   fast?: boolean;
@@ -26,8 +38,15 @@ export interface EvalResult {
   name: string;
   category: string;
   passed: boolean;
+  /** How many user turns were sent (1 for a single-shot task). */
+  turns: number;
   wallClockMs: number;
-  tokensUsed: { input: number; output: number };
+  /**
+   * Token totals for the run. `cachedInput` is a BREAKDOWN of `input`
+   * (prompt-cache reads are counted in `input`, never added on top of it —
+   * the provider-event contract from Phase 38.2), absent when unreported.
+   */
+  tokensUsed: { input: number; output: number; cachedInput?: number };
   toolCalls: number;
   error?: string;
   /**
@@ -63,7 +82,13 @@ export interface EvalReport {
   passedCount: number;
   totalTasks: number;
   totalWallClockMs: number;
-  totalTokens: { input: number; output: number };
+  totalTokens: { input: number; output: number; cachedInput?: number };
+  /**
+   * True when the cost total is an UPPER BOUND: prompt-cache reads were
+   * present and the model declares no cache-read price, so they were billed at
+   * the full input rate rather than an invented discount.
+   */
+  costUpperBound?: boolean;
   /**
    * Total USD cost (27.5). Undefined when ANY task's model price was unknown,
    * so a partial sum is never presented as the run total. `unpricedTasks`
