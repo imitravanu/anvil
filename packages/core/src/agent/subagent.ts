@@ -123,6 +123,9 @@ export async function* runSubAgentLive(opts: {
   let toolCalls = 0;
   let aborted = false;
   let failureReason: string | undefined;
+  // Tool-heavy runs can end terse: track what ran so a textless report still
+  // tells the parent something beyond bare counts.
+  const toolsSeen: string[] = [];
   try {
     for await (const event of sub.send(opts.task)) {
       switch (event.type) {
@@ -137,6 +140,7 @@ export async function* runSubAgentLive(opts: {
           toolCalls += 1;
           const input = (event.input ?? {}) as { command?: string; path?: string };
           const detail = input.command ?? input.path ?? "";
+          if (toolsSeen.length < 10) toolsSeen.push(detail ? `${event.name} ${detail}` : event.name);
           yield { type: "subagent_progress", id: opts.id, tool: event.name, detail };
           break;
         }
@@ -172,6 +176,11 @@ export async function* runSubAgentLive(opts: {
     await saveCheckpointsAsync(sub.id, []);
   } catch (err) {
     log.warn(`[anvil] sub-agent checkpoint cleanup failed for ${sub.id}: ${getErrorMessage(err)}`);
+  }
+  // A tool-heavy run with terse final text hands the parent "" plus counts.
+  // Fall back to the ran-tool list so the report carries what actually ran.
+  if (!report.trim() && toolsSeen.length > 0 && !aborted) {
+    report = `Ran ${toolCalls} tool call(s) with no summary text: ${toolsSeen.join("; ")}.`;
   }
   return {
     report: capReport(report),

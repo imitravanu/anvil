@@ -84,11 +84,15 @@ export class ToolCallAssembler {
     return events;
   }
 
-  /** Emit tool_call_end for every buffered call in index order. */
+  /** Emit tool_call_end for every buffered call in index order. Entries that
+   *  never resolved a name are dropped: with no name the executor can only
+   *  report `Unknown tool: ""`, so replaying them is never useful. Named calls
+   *  keep the `call_N` fallback id (pinned contract for id-less providers). */
   *drain(): Generator<StreamEvent> {
     const ordered = [...this.calls.entries()].sort((a, b) => a[0] - b[0]);
     this.calls.clear();
     for (const [index, entry] of ordered) {
+      if (!entry.name) continue;
       const id = entry.id || `call_${index}`;
       const parsed = parseToolCallJson(entry.args);
       yield { type: "tool_call_end", id, name: entry.name, input: parsed };

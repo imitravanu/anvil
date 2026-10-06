@@ -207,6 +207,12 @@ describe("toOpenAIMessages", () => {
   it("emits tool results before text in the same turn to satisfy OpenAI protocol", () => {
     const messages: ConversationMessage[] = [
       {
+        role: "assistant",
+        content: [
+          { type: "tool_call", call: { id: "call_1", name: "read_file", input: {} } },
+        ],
+      },
+      {
         role: "user",
         content: [
           { type: "text", text: "Note: please check files" },
@@ -215,7 +221,29 @@ describe("toOpenAIMessages", () => {
       },
     ];
     expect(toOpenAIMessages(messages)).toEqual([
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          { id: "call_1", type: "function", function: { name: "read_file", arguments: "{}" } },
+        ],
+      },
       { role: "tool", tool_call_id: "call_1", content: "done" },
+      { role: "user", content: "Note: please check files" },
+    ]);
+  });
+
+  it("skips orphaned tool results whose call was compacted away (no 400)", () => {
+    const messages: ConversationMessage[] = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Note: please check files" },
+          { type: "tool_result", result: { toolCallId: "call_1", content: "done" } },
+        ],
+      },
+    ];
+    expect(toOpenAIMessages(messages)).toEqual([
       { role: "user", content: "Note: please check files" },
     ]);
   });

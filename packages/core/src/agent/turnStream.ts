@@ -163,5 +163,19 @@ export async function* streamAssistantTurn(
     }
   }
 
+  // A FIRST-round empty (no text, no tool calls, no retry) would otherwise
+  // close silently: pushAssistant records nothing and finishTurn still reports
+  // turn_complete. Surface it as an error so the turn reads as failed, not
+  // done. Scoped to the first round only — empty follow-up rounds after tool
+  // calls are normal completion ("nothing further to add").
+  if (
+    textParts.length === 0 &&
+    toolCalls.length === 0 &&
+    rateLimitRetry === null &&
+    turn.iterationsUsed === 0
+  ) {
+    stopReason = "error";
+  }
+
   return { textParts, toolCalls, stopReason, rateLimitRetry, sawUsage };
 }

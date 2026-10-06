@@ -23,9 +23,14 @@ function symbolAt(content: string, line: number, character: number): string | nu
   return after ? after[0] : null;
 }
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 async function grepFallback(projectRoot: string, symbol: string, signal: AbortSignal): Promise<{ path: string; line: number }[]> {
   const { execute: grepExec } = await import("../tools/grep.js");
-  const result = await grepExec({ pattern: symbol }, { projectRoot, signal });
+  // The symbol is model- or file-derived: regex metachars must match literally.
+  const result = await grepExec({ pattern: `\\b${escapeRegExp(symbol)}\\b` }, { projectRoot, signal });
   const output = result.output as { matches: { path: string; line: number; text: string }[]; truncated: boolean };
   const matches = Array.isArray(output.matches) ? output.matches : [];
   return matches.slice(0, LSP_SYMBOL_MATCHES_MAX).map((m) => ({
@@ -92,7 +97,7 @@ export const gotoDefinitionExec: ToolExecutor = async (input, ctx: ToolContext) 
     if (!symbol) {
       return { output: { source: "fallback", locations: [] }, isError: false, summary: "No symbol at position" };
     }
-    const locations = await grepFallback(ctx.projectRoot, `\\b${symbol}\\b`, ctx.signal);
+    const locations = await grepFallback(ctx.projectRoot, symbol, ctx.signal);
     return { output: { source: "fallback", symbol, locations }, isError: false, summary: `Found ${locations.length} candidate(s) via fallback search` };
   } catch (err: unknown) {
     return { output: { error: getErrorMessage(err) }, isError: true, summary: `goto_definition failed: ${getErrorMessage(err)}` };

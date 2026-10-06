@@ -231,6 +231,9 @@ export const GATE_DIFF_SCAN_TIMEOUT_MS = getEnvNumber("ANVIL_GATE_DIFF_TIMEOUT_M
 // MCP transport retention (transport.ts) and tools/list cursor loop (client.ts).
 export const MAX_MCP_LINE_BYTES = 1024 * 1024;
 export const MAX_LIST_PAGES = 20;
+// D-batch: one tools/list page is also bounded — a single 1M-tool page must
+// not OOM boot when the page cap alone cannot see it.
+export const MAX_LIST_TOOLS_PER_PAGE = 500;
 
 // Goal engine (agent/goal).
 export const MAX_GOAL_TURNS = 10;

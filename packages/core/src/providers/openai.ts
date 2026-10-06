@@ -147,6 +147,14 @@ export function toOpenAIMessages(
   options?: { supportsVision?: boolean }
 ): Record<string, unknown>[] {
   const supportsVision = options?.supportsVision ?? true;
+  // Orphaned tool results (call compacted away) replay as `400 unknown
+  // tool_call_id` — same class as gemini.ts skips. Pre-pass the declared ids.
+  const declaredIds = new Set<string>();
+  for (const m of messages) {
+    for (const c of m.content) {
+      if (c.type === "tool_call") declaredIds.add(c.call.id);
+    }
+  }
   const out: Record<string, unknown>[] = [];
   if (systemPrompt && systemPrompt.trim()) {
     out.push({ role: "system", content: systemPrompt });
@@ -183,6 +191,7 @@ export function toOpenAIMessages(
       // must immediately follow the assistant message. Emit tool results first.
       for (const c of m.content) {
         if (c.type === "tool_result") {
+          if (!declaredIds.has(c.result.toolCallId)) continue;
           out.push({
             role: "tool",
             tool_call_id: c.result.toolCallId,

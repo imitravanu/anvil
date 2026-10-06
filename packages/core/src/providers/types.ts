@@ -149,22 +149,22 @@ export function classifyProviderError(err: unknown): {
     return { code: "INVALID_REQUEST", isRetryable: false, httpStatus: 400 };
   }
 
-  if (/rate limit|quota exceeded|429|resource exhausted|too many requests/i.test(msg)) {
+  if (/rate limit|quota exceeded|\b429\b|resource exhausted|too many requests/i.test(msg)) {
     return { code: "RATE_LIMIT", isRetryable: true, httpStatus: status ?? 429 };
   }
-  if (/503|502|504|overloaded|service unavailable|bad gateway|gateway timeout/i.test(msg)) {
+  if (/\b50[23]\b|\b504\b|overloaded|service unavailable|bad gateway|gateway timeout/i.test(msg)) {
     return { code: "SERVER_OVERLOADED", isRetryable: true, httpStatus: status ?? 503 };
   }
   if (/ECONNRESET|ETIMEDOUT|ENOTFOUND|network timeout|fetch failed|socket hang up/i.test(msg)) {
     return { code: "NETWORK_TIMEOUT", isRetryable: true, httpStatus: status };
   }
-  if (/401|403|unauthorized|forbidden|invalid api key|authentication|credentials/i.test(msg)) {
+  if (/\b40[13]\b|unauthorized|forbidden|invalid api key|authentication|credentials/i.test(msg)) {
     return { code: "AUTH_FAILED", isRetryable: false, httpStatus: status ?? 401 };
   }
-  if (/404|model not found|does not exist|unknown model/i.test(msg)) {
+  if (/\b404\b|model not found|does not exist|unknown model/i.test(msg)) {
     return { code: "MODEL_NOT_FOUND", isRetryable: false, httpStatus: status ?? 404 };
   }
-  if (/400|invalid_request|invalid argument/i.test(msg)) {
+  if (/\b400\b|invalid_request|invalid argument/i.test(msg)) {
     return { code: "INVALID_REQUEST", isRetryable: false, httpStatus: status ?? 400 };
   }
   return { code: "UNKNOWN", isRetryable: false, httpStatus: status };

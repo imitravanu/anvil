@@ -38,6 +38,25 @@ function makeInput(
 }
 
 describe("streamAssistantTurn", () => {
+  it("marks a first-round empty turn as error instead of silent completion", async () => {
+    const { input } = makeInput([{ type: "turn_end", stopReason: "end_turn" }]);
+    const { result } = await drain(streamAssistantTurn(input));
+    expect(result?.stopReason).toBe("error");
+    expect(result?.textParts).toEqual([]);
+    expect(result?.toolCalls).toEqual([]);
+  });
+
+  it("leaves empty follow-up rounds after tool calls alone (normal completion)", async () => {
+    const turn = new TurnState(5);
+    turn.markIteration();
+    const { result } = await drain(
+      streamAssistantTurn({
+        ...makeInput([{ type: "turn_end", stopReason: "end_turn" }]).input,
+        turn,
+      })
+    );
+    expect(result?.stopReason).toBe("end_turn");
+  });
   it("requests prompt caching on the turn (Phase 38.7)", async () => {
     const provider = new FakeProvider([[{ type: "text_delta", text: "Hi" }]]);
     await drain(

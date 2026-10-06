@@ -244,6 +244,7 @@ exit 1
       isConfigured: () => true,
       async *streamCompletion() {
         await new Promise((resolve) => setTimeout(resolve, 1200));
+        yield { type: "text_delta" as const, text: "slow work done" };
         yield { type: "usage" as const, inputTokens: 1, outputTokens: 1 };
         yield { type: "turn_end" as const, stopReason: "end_turn" as const };
       },

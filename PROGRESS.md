@@ -2,6 +2,31 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (chief-engineer Batch E agent loop, full cycle):**
+> Understand: read turnStream/verifier/streaming/openai/gemini/subagent live;
+> corrected two agent claims (call_N fallback pinned — kept; empty rounds after
+> tools are normal completion).
+> Plan: E1 first-round-empty→error, E2 drop nameless, E3 orphan skip, E4 report
+> fallback, E5 regex boundaries, E6 escape, E7 page cap.
+> Edit: 11 files. Run: build + typecheck 0.
+> Debug: scoped E1 to first round (2 failures), honest openai/runner fixtures.
+> Retest: 64+44 targeted, fail-first proven (1 RED on stash), probes OK,
+> gate Steps 0-5 green. Review: no protected artifacts.
+>
+> **IN-PROGRESS 2026-10-06 (chief-engineer Batch E agent loop):**
+> owns `packages/core/src/agent/turnStream.ts`,
+> `packages/core/src/providers/streaming.ts`,
+> `packages/core/src/providers/openai.ts`,
+> `packages/core/src/providers/types.ts`, `packages/core/src/agent/subagent.ts`,
+> `packages/core/src/lsp/tools.ts`, `packages/core/src/mcp/client.ts`,
+> `packages/core/src/config/constants.ts`,
+> `packages/core/src/providers/__tests__/openai.test.ts` (fixture honesty),
+> `packages/core/src/eval/__tests__/runner.test.ts` (clock double emits text),
+> `packages/core/src/agent/__tests__/turnStream.test.ts` (empty-turn tests).
+> E2 corrected live: `call_N` fallback is pinned by test (kept); only truly
+> nameless entries are dropped. E1 confirmed via turnVerifier read.
+> No protected artifact touched.
+>
 > **DONE 2026-10-06 (chief-engineer Batch D3b wire colorSupport, full cycle):**
 > Understand: highlight + wordmark used `Boolean(NO_COLOR)` truthiness —
 > `NO_COLOR=""` and dumb terminals still emitted ANSI.

@@ -174,7 +174,7 @@ export class McpClient {
 
 /** Cap on tools/list pages per connection (a cursor loop must not hang boot).
  * Centralized in config/constants (§2.4); re-exported so the public API is unchanged. */
-import { MAX_LIST_PAGES } from "../config/constants.js";
+import { MAX_LIST_PAGES, MAX_LIST_TOOLS_PER_PAGE } from "../config/constants.js";
 export { MAX_LIST_PAGES };
 
 function toToolDef(serverId: string, t: unknown): McpToolDef | null {
@@ -243,7 +243,7 @@ export async function connectServer(
         { timeoutMs }
       );
       const listed = Array.isArray(page.tools) ? page.tools : [];
-      for (const t of listed) {
+      for (const t of listed.slice(0, MAX_LIST_TOOLS_PER_PAGE)) {
         const def = toToolDef(id, t);
         if (def) tools.push(def);
       }
