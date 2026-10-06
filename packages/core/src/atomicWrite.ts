@@ -21,6 +21,39 @@ export function anvilHome(): string {
 }
 
 /**
+ * Serialize read-modify-write cycles across processes (credentials, settings).
+ * `mkdir` is atomic: the winner holds the lock, losers spin briefly, and a
+ * stale lock (crashed holder) fails open after ~100ms rather than deadlocking.
+ * Best-effort by design — worst case is today's last-wins, never worse.
+ */
+export function withFileLockSync<T>(file: string, fn: () => T): T {
+  const lockDir = `${file}.lock`;
+  let held = false;
+  for (let i = 0; i < 20; i++) {
+    try {
+      fs.mkdirSync(lockDir);
+      held = true;
+      break;
+    } catch {
+      // intentional: EEXIST means another process holds it — spin, then fail open.
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
+    }
+  }
+  try {
+    return fn();
+  } finally {
+    if (held) {
+      try {
+        fs.rmdirSync(lockDir);
+      } catch {
+        // intentional: lock release is best-effort — a stale dir fails the next
+        // holder open after its spin, never deadlocks it.
+      }
+    }
+  }
+}
+
+/**
  * Write JSON atomically: temp file in the same directory (+ optional mode,
  * applied BEFORE the rename so there is no world-readable window) then
  * rename over the target. Throws on failure — callers decide policy.

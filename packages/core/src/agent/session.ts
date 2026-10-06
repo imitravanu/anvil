@@ -244,7 +244,12 @@ export class AgentSession {
     if (this.isSending) {
       throw new Error("Cannot unwind history while a turn is in progress.");
     }
-    return this.history.popLastUserTurn();
+    const text = this.history.popLastUserTurn();
+    // Token/compaction bookkeeping belongs to the discarded history — stale
+    // counts would misfire the next compaction check (same rule as clearHistory).
+    this.lastInputTokens = 0;
+    this.lastUsage = null;
+    return text;
   }
 
   /** Wipe conversation history (the `/clear` command). */
@@ -422,6 +427,9 @@ export class AgentSession {
 
         const streamRes = yield* this.streamAssistantTurn(controller, turn);
         if (!streamRes) {
+          // Error path: no terminal usage to attribute — drop it so the next
+          // turn's first tool cannot inherit this turn's tokens (C13 leak).
+          this.lastUsage = null;
           return;
         }
 
@@ -470,6 +478,10 @@ export class AgentSession {
             turn.verifyRepairsUsed += 1;
             continue;
           }
+          // Terminal turn: a tool-less round leaves lastUsage set, and the
+          // next turn's first tool_finished would attribute these tokens to
+          // the wrong tool (C13 leak). Consume it here.
+          this.lastUsage = null;
           return;
         }
 

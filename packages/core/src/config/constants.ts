@@ -265,6 +265,10 @@ export const DEFAULT_SYNC_TTL_MS = 10 * 60 * 1000; // 10 minutes
 // Grep tool bounds (tools/grep.ts): pattern size and the longest line tested.
 export const GREP_PATTERN_MAX_LENGTH = 256;
 export const GREP_LINE_TEST_MAX = 4096;
+// Grep result cap bounds (tools/grep.ts): the model passes maxResults
+// straight through — negative reads as zero matches, huge OOMs the array.
+export const GREP_MAX_RESULTS = 1000;
+export const GREP_MIN_RESULTS = 1;
 
 // list_files walk bound (tools/listFiles.ts).
 export const MAX_FILES = 10_000;

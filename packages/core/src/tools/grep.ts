@@ -17,7 +17,7 @@ import { getErrorMessage } from "../errors.js";
 //    and plain alternation (a|b) without an outer repeat stay allowed.
 // Both caps are centralized in config/constants (§2.4); re-exported so the
 // public API is unchanged.
-import { GREP_PATTERN_MAX_LENGTH, GREP_LINE_TEST_MAX, GREP_MAX_FILE_BYTES, GREP_DEFAULT_MAX_RESULTS, GREP_LINE_DISPLAY_MAX } from "../config/constants.js";
+import { GREP_PATTERN_MAX_LENGTH, GREP_LINE_TEST_MAX, GREP_MAX_FILE_BYTES, GREP_DEFAULT_MAX_RESULTS, GREP_LINE_DISPLAY_MAX, GREP_MAX_RESULTS, GREP_MIN_RESULTS } from "../config/constants.js";
 export { GREP_PATTERN_MAX_LENGTH, GREP_LINE_TEST_MAX };
 
 /**
@@ -151,11 +151,17 @@ export const definition: ToolDefinition = {
 };
 
 export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
-  const { pattern, path: relDir = ".", maxResults = GREP_DEFAULT_MAX_RESULTS } = (input ?? {}) as {
+  const { pattern, path: relDir = ".", maxResults: maxResultsRaw = GREP_DEFAULT_MAX_RESULTS } = (input ?? {}) as {
     pattern?: string;
     path?: string;
     maxResults?: number;
   };
+  // Clamp the model-passed cap: negative reads as zero matches (with a lying
+  // truncated flag), huge OOMs the result array.
+  const maxResults =
+    Number.isFinite(maxResultsRaw) && maxResultsRaw !== undefined
+      ? Math.min(Math.max(Math.floor(maxResultsRaw), GREP_MIN_RESULTS), GREP_MAX_RESULTS)
+      : GREP_DEFAULT_MAX_RESULTS;
   if (typeof pattern !== "string" || !pattern) {
     return {
       output: { error: "grep requires a non-empty string argument: pattern" },

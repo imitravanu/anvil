@@ -2,6 +2,25 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (chief-engineer Batch H correctness round, full cycle):**
+> Understand: lock-free writes, retry/token staleness, terminal usage leak,
+> maxTokens 400s, grep lying truncation, list printf-zero — all read live.
+> Plan: lock helper, resets, consume-on-terminal, floor, clamp, file-report.
+> Edit: 8 files. Run: build + typecheck 0. Debug: repaired listFiles
+> helper ordering (safePattern0) before build.
+> Retest: 50 targeted, dist probes (clamp/cap/floor/lock/file) OK, gate green.
+> Review: no protected artifacts.
+>
+> **IN-PROGRESS 2026-10-06 (chief-engineer Batch H correctness round):**
+> owns `packages/core/src/atomicWrite.ts`, `packages/core/src/config/index.ts`,
+> `packages/core/src/index.ts`, `packages/core/src/agent/session.ts`,
+> `packages/core/src/config/agentProfile.ts`,
+> `packages/core/src/tools/grep.ts`, `packages/core/src/tools/listFiles.ts`,
+> `packages/core/src/config/constants.ts` (+ grep cap).
+> H1 lock-guarded credential/settings writes; H2 retry bookkeeping reset;
+> H3 terminal usage consumed; H4 maxTokens floor; H5 grep clamp; H6 file-path
+> list. No protected artifact touched.
+>
 > **DONE 2026-10-06 (chief-engineer Batch G frontier hardening, full cycle):**
 > Understand: search unbounded parse, restore 0644 default + diff OOM/binary,
 > scope cache forever, team budget 0/huge unclamped — all read live.

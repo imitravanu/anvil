@@ -56,6 +56,12 @@ export function buildAnvilAgentProfile(
     autoVerify = true,
   } = options;
 
+  // task.json/eval seams pass maxTokens straight through: 0, negative, NaN,
+  // and fractional values all 400 at the provider. Floor to the default —
+  // only the floor is ours to set; no upper cap (providers 400 the absurd).
+  const saneMaxTokens =
+    Number.isFinite(maxTokens) && maxTokens >= 1 ? Math.floor(maxTokens) : DEFAULT_MAX_TOKENS;
+
   const base =
     pluginPrompts.length > 0
       ? `${ANVIL_BASE_SYSTEM_PROMPT}\n\n${pluginPrompts.join("\n\n")}`
@@ -63,7 +69,7 @@ export function buildAnvilAgentProfile(
 
   return {
     systemPrompt: buildSystemPrompt(base, projectRoot),
-    maxTokens,
+    maxTokens: saneMaxTokens,
     autoVerify,
   };
 }

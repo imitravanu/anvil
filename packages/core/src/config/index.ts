@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { ProviderCredentials, ProviderId, MODEL_REGISTRY } from "../providers/index.js";
-import { atomicWriteJson, anvilHome } from "../atomicWrite.js";
+import { atomicWriteJson, withFileLockSync, anvilHome } from "../atomicWrite.js";
 import { AnvilSettings } from "./types.js";
 import { log } from "../logger.js";
 
@@ -62,15 +62,17 @@ export function loadSettings(): AnvilSettings {
 }
 
 export function saveSettings(settings: AnvilSettings): void {
-  atomicWriteJson(SETTINGS_PATH(), settings);
+  withFileLockSync(SETTINGS_PATH(), () => atomicWriteJson(SETTINGS_PATH(), settings));
 }
 
 export function saveCredential(field: keyof ProviderCredentials, value: string): void {
-  const current = loadCredentials();
-  const updated = { ...current, [field]: value };
-  // Mode applied BEFORE the rename inside atomicWriteJson — no world-readable
-  // window for API keys (the old write-then-chmod had one).
-  atomicWriteJson(CREDENTIALS_PATH(), updated, { mode: 0o600 });
+  withFileLockSync(CREDENTIALS_PATH(), () => {
+    const current = loadCredentials();
+    const updated = { ...current, [field]: value };
+    // Mode applied BEFORE the rename inside atomicWriteJson — no world-readable
+    // window for API keys (the old write-then-chmod had one).
+    atomicWriteJson(CREDENTIALS_PATH(), updated, { mode: 0o600 });
+  });
 }
 
 export {

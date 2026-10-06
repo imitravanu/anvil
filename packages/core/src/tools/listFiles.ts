@@ -88,6 +88,24 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   const { path: relDir = ".", pattern } = (input ?? {}) as { path?: string; pattern?: string };
   const safeRelDir = typeof relDir === "string" ? relDir : ".";
   const absDir = resolveWithinRoot(ctx.projectRoot, safeRelDir);
+  const safePattern = typeof pattern === "string" && pattern.trim() ? pattern : undefined;
+  // A file path is not an error — report the file itself so the model learns
+  // it exists (previously: readdir threw, caught below as "Listed 0 files").
+  try {
+    const stat = await fs.stat(absDir);
+    if (stat.isFile()) {
+      const rel = path.relative(ctx.projectRoot, absDir).split(path.sep).join("/");
+      const files = !safePattern || matchesPattern(rel, safePattern) ? [rel] : [];
+      return {
+        output: { files, count: files.length, pattern: safePattern },
+        isError: false,
+        summary: `Listed 1 file under ${safeRelDir}`,
+      };
+    }
+  } catch {
+    // intentional: absent/unreadable falls through to the walk, which reports
+    // the empty result the same way it always has.
+  }
   const all: string[] = [];
   // Walk from absDir, but report paths relative to the PROJECT ROOT — the model
   // feeds these straight into other tools, all of which are root-relative.
@@ -99,7 +117,6 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
       summary: "list_files cancelled",
     };
   }
-  const safePattern = typeof pattern === "string" && pattern.trim() ? pattern : undefined;
   const files = (safePattern ? all.filter((f) => matchesPattern(f, safePattern)) : all).sort();
   const truncated = capped;
   return {
