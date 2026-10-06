@@ -28,6 +28,8 @@ const RULES_REL = ".anvil/rules";
 /** Where the pre-commit hook lands inside the target repo. */
 export const GUARDIAN_INIT_HOOK_REL = ".githooks/pre-commit";
 
+import { GUARDIAN_HOOK_SHOWN } from "../config/constants.js";
+
 /** Bound mirrors core's MAX_CUSTOM_RULES so a runaway block can't stall commits. */
 const MAX_RULES = 32;
 /** git diff exit code with nothing staged (empty commit) — allow it. */
@@ -140,8 +142,8 @@ export function preCommitHookScript(): string {
     ``,
     `if (violations.length > 0) {`,
     `  process.stderr.write("[anvil-guardian] commit blocked — " + violations.length + " violation(s) in staged changes:\\n");`,
-    `  for (const v of violations.slice(0, 20)) process.stderr.write("  " + v + "\\n");`,
-    `  if (violations.length > 20) process.stderr.write("  … " + (violations.length - 20) + " more\\n");`,
+    `  for (const v of violations.slice(0, ${GUARDIAN_HOOK_SHOWN})) process.stderr.write("  " + v + "\\n");`,
+    `  if (violations.length > ${GUARDIAN_HOOK_SHOWN}) process.stderr.write("  … " + (violations.length - ${GUARDIAN_HOOK_SHOWN}) + " more\\n");`,
     `  process.stderr.write("[anvil-guardian] fix the violations, or bypass once with: git commit --no-verify\\n");`,
     `  process.exit(1);`,
     `}`,

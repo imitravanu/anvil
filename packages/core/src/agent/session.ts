@@ -7,7 +7,7 @@ import type { ToolExecutionResult, ToolDefinition } from "../tools/types.js";
 import { finishTurn } from "./turnVerifier.js";
 import { COMPACTION_THRESHOLD, KEEP_RECENT_MESSAGES, compactIfNeeded, estimateTokens } from "./compaction.js";
 import { nextCalibration } from "./context/scoring.js";
-import { FALLBACK_CONTEXT_WINDOW, MAX_VERIFY_REPAIRS } from "../config/constants.js";
+import { FALLBACK_CONTEXT_WINDOW, MAX_VERIFY_REPAIRS, SESSION_TITLE_ELLIPSIS_KEEP, SESSION_TITLE_MAX_CHARS } from "../config/constants.js";
 export { MAX_VERIFY_REPAIRS };
 import { SessionMetadata, StoredSession } from "../session/types.js";
 import { AgentEvent, AgentOptions, DEFAULT_MAX_INNER_ITERATIONS } from "./types.js";
@@ -379,7 +379,7 @@ export class AgentSession {
     if (this.title === null) {
       const firstLine = userText.trim().split("\n")[0] ?? "";
       const chars = Array.from(firstLine);
-      this.title = chars.length > 50 ? chars.slice(0, 49).join("") + "…" : firstLine;
+      this.title = chars.length > SESSION_TITLE_MAX_CHARS ? chars.slice(0, SESSION_TITLE_ELLIPSIS_KEEP).join("") + "…" : firstLine;
     }
     // A fresh controller per send() call — cancelling one turn must not poison the next.
     const controller = new AbortController();

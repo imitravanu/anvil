@@ -2,6 +2,7 @@ import type { ToolDefinition } from "./types.js";
 import type { ExternalToolExecutor } from "./index.js";
 import type { McpServerConnection, McpToolDef } from "../mcp/client.js";
 import { callTool } from "../mcp/client.js";
+import { MCP_TOOL_SERIALIZE_MAX, MCP_TOOL_VALUE_MAX } from "../config/constants.js";
 
 // ---------------------------------------------------------------------------
 // MCP tool adapter: namespaced definitions + dispatch.
@@ -110,7 +111,7 @@ export function describeMcpInput(_toolName: string, input: unknown): Promise<str
   }
   if (typeof input !== "object" || Array.isArray(input)) {
     const serialized = JSON.stringify(input);
-    const truncated = serialized.length > 200 ? `${serialized.slice(0, 200)}…` : serialized;
+    const truncated = serialized.length > MCP_TOOL_SERIALIZE_MAX ? `${serialized.slice(0, MCP_TOOL_SERIALIZE_MAX)}…` : serialized;
     return Promise.resolve(`Parameters: ${truncated}`);
   }
   const entries = Object.entries(input as Record<string, unknown>);
@@ -120,10 +121,10 @@ export function describeMcpInput(_toolName: string, input: unknown): Promise<str
   const lines = entries.map(([k, v]) => {
     let valStr: string;
     if (typeof v === "string") {
-      valStr = v.length > 120 ? `${JSON.stringify(v.slice(0, 120))}…` : JSON.stringify(v);
+      valStr = v.length > MCP_TOOL_VALUE_MAX ? `${JSON.stringify(v.slice(0, MCP_TOOL_VALUE_MAX))}…` : JSON.stringify(v);
     } else {
       const raw = JSON.stringify(v);
-      valStr = raw.length > 120 ? `${raw.slice(0, 120)}…` : raw;
+      valStr = raw.length > MCP_TOOL_VALUE_MAX ? `${raw.slice(0, MCP_TOOL_VALUE_MAX)}…` : raw;
     }
     return `  • ${k}: ${valStr}`;
   });

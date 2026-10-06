@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getErrorMessage } from "../errors.js";
-import { LSP_MAX_DIAGNOSTICS, LSP_DIAGNOSTICS_WAIT_MS, LSP_TSC_TIMEOUT_MS } from "../config/constants.js";
+import { LSP_MAX_DIAGNOSTICS, LSP_DIAGNOSTICS_WAIT_MS, LSP_TSC_TIMEOUT_MS, LSP_SENSOR_DIAGNOSTICS_MAX, LSP_SYMBOL_MATCHES_MAX, LSP_TSC_RAW_MAX } from "../config/constants.js";
 import { resolveWithinRoot } from "../tools/paths.js";
 import type { ToolContext, ToolDefinition, ToolExecutor } from "../tools/types.js";
 import { serverForPath } from "./detector.js";
@@ -28,7 +28,7 @@ async function grepFallback(projectRoot: string, symbol: string, signal: AbortSi
   const result = await grepExec({ pattern: symbol }, { projectRoot, signal });
   const output = result.output as { matches: { path: string; line: number; text: string }[]; truncated: boolean };
   const matches = Array.isArray(output.matches) ? output.matches : [];
-  return matches.slice(0, 20).map((m) => ({
+  return matches.slice(0, LSP_SYMBOL_MATCHES_MAX).map((m) => ({
     path: m.path,
     line: m.line,
   }));
@@ -228,7 +228,7 @@ export const getDiagnosticsExec: ToolExecutor = async (input, ctx: ToolContext) 
         return { output: { source: "tsc", diagnostics: [] }, isError: false, summary: "No diagnostics (tsc clean)" };
       } catch (err: unknown) {
         const out = getErrorMessage(err);
-        return { output: { source: "tsc", diagnostics: [], raw: out.slice(0, 4000) }, isError: false, summary: "Diagnostics via tsc fallback" };
+        return { output: { source: "tsc", diagnostics: [], raw: out.slice(0, LSP_TSC_RAW_MAX) }, isError: false, summary: "Diagnostics via tsc fallback" };
       }
     }
     return { output: { source: "none", diagnostics: [] }, isError: false, summary: "No language server or checker available" };

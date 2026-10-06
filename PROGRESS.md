@@ -2,6 +2,27 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (chief-engineer Batch D1 §2.4 cap drain, full cycle):**
+> Understand: inventoried inline caps via live grep (TUI 20 sites, core 12 sites).
+> Plan: hoist TUI display caps to `displayLimits.ts`, core serialize caps to
+> `constants.ts`, values verbatim; width-derived layout budgets untouched.
+> Edit: 20 files. Run: build core→tui→cli green, typecheck 0.
+> Debug: none needed beyond normal wiring. Retest: targeted 94/94,
+> constants/hook/dist probes OK, full gate Steps 0-5 green.
+> Review: no protected artifact touched.
+>
+> **IN-PROGRESS 2026-10-06 (chief-engineer Batch D1 §2.4 cap drain):**
+> owns `packages/tui/src/util/displayLimits.ts`,
+> `packages/tui/src/components/{GuardianReportCard,ToolCallView,HelpOverlay,StatusBar,Header,VerificationCard,MissionDeck,DiffModal}.tsx`,
+> `packages/tui/src/commands/handlers/{sync,diff,session}.ts`,
+> `packages/tui/src/hooks/useSessionCommands.ts`, `packages/tui/src/util/notify.ts`,
+> `packages/core/src/config/constants.ts`,
+> `packages/core/src/tools/{mcpTools,index}.ts`,
+> `packages/core/src/providers/gemini.ts`, `packages/core/src/guardian/hook.ts`,
+> `packages/core/src/agent/session.ts`, `packages/core/src/agent/goal/goalEngine.ts`,
+> `packages/core/src/lsp/{tools,sensor}.ts`.
+> Values preserved verbatim. No protected artifact touched.
+>
 > **DONE 2026-10-06 (chief-engineer Batch C2 slop-text §2.3+§2.8, verified live):**
 > owns the 17 files listed in the IN-PROGRESS entry below (all `// intentional:`
 > + dead-export removal). No protected artifact touched.

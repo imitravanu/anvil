@@ -1,7 +1,7 @@
 import { serverForPath } from "./detector.js";
 import { getLspClient } from "./client.js";
 import type { LspDiagnostic } from "./types.js";
-import { LSP_POST_MUTATION_DIAGNOSTICS_MS } from "../config/constants.js";
+import { LSP_POST_MUTATION_DIAGNOSTICS_MS, LSP_SENSOR_DIAGNOSTICS_MAX } from "../config/constants.js";
 
 /**
  * Phase 30.4 — Continuous Post-Mutation LSP Diagnostic Sensor.
@@ -26,13 +26,13 @@ export async function checkPostMutationDiagnostics(
 
     if (typeof client.diagnosticsForPath === "function") {
       const diags = await client.diagnosticsForPath(absPath, mutationTime, timeoutMs);
-      return diags.slice(0, 10);
+      return diags.slice(0, LSP_SENSOR_DIAGNOSTICS_MAX);
     }
 
     const all = await client.waitForDiagnostics(Math.min(timeoutMs, LSP_POST_MUTATION_DIAGNOSTICS_MS));
     return all
-      .filter((d) => d.path === absPath || d.path.endsWith(absPath) || absPath.endsWith(d.path))
-      .slice(0, 10);
+      .filter((d) => d.path === absPath)
+      .slice(0, LSP_SENSOR_DIAGNOSTICS_MAX);
   } catch {
     // intentional: a diagnostics fetch is an optional sensor reading — a
     // failure means "no diagnostics", not a failed mutation.

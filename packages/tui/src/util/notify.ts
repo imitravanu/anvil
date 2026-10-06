@@ -1,4 +1,5 @@
 import { LONG_TURN_NOTIFY_MS } from "@anvil/core";
+import { NOTIFY_CLEAN_MAX } from "./displayLimits.js";
 
 /**
  * DW-4.9 — turn completion attention signals. Bell + desktop notifications go
@@ -28,7 +29,7 @@ export function bellSequence(): string {
  * Unsupported terminals ignore both; nothing is ever printed as text.
  */
 export function desktopNotifySequence(title: string, body: string): string {
-  const clean = (s: string): string => s.replace(/[\x00-\x1f\x7f]/g, " ").slice(0, 200);
+  const clean = (s: string): string => s.replace(/[\x00-\x1f\x7f]/g, " ").slice(0, NOTIFY_CLEAN_MAX);
   const safeTitle = clean(title);
   const safeBody = clean(body);
   return (

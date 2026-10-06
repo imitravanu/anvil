@@ -5,6 +5,7 @@ import type { AgentSession, SessionFileChange } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 import { ColorizedDiff } from "../diff/colorizeDiff.js";
 import { curtail } from "../util/format.js";
+import { DIFF_PATH_MAX } from "../util/displayLimits.js";
 import { copyToClipboard } from "../util/clipboard.js";
 import {
   SideBySideDiff,
@@ -284,7 +285,7 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
               inverse={i === activeIdx}
             >
               {" "}
-              {i + 1}. {curtail(c.path, 24)}{" "}
+              {i + 1}. {curtail(c.path, DIFF_PATH_MAX)}{" "}
             </Text>
           );
         })}

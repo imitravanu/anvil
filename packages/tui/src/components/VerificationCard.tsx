@@ -4,6 +4,8 @@ import { useTheme } from "../theme/theme.js";
 import { inkBorderStyle } from "../util/chrome.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
 import { curtail } from "../util/format.js";
+import { MAX_VERIFY_REPAIRS } from "@anvil/core";
+import { VERIFY_SUMMARY_MAX } from "../util/displayLimits.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
 
 export function VerificationCard({ verification }: { verification: DisplayVerification }) {
@@ -54,14 +56,14 @@ export function VerificationCard({ verification }: { verification: DisplayVerifi
 
       {verification.summary && (
         <Box paddingLeft={3}>
-          <Text color={theme.colors.textSecondary}>{curtail(sanitizeTerminalText(verification.summary), 120)}</Text>
+          <Text color={theme.colors.textSecondary}>{curtail(sanitizeTerminalText(verification.summary), VERIFY_SUMMARY_MAX)}</Text>
         </Box>
       )}
 
       {verification.repairsUsed > 0 && (
         <Box paddingLeft={3} marginTop={0}>
           <Text color={theme.colors.accent}>
-            🔧 Auto-Repair Attempt {verification.repairsUsed}/2
+            🔧 Auto-Repair Attempt {verification.repairsUsed}/{MAX_VERIFY_REPAIRS}
             {verification.status === "running" ? " (analyzing failure & repairing...)" : " (applied)"}
           </Text>
         </Box>

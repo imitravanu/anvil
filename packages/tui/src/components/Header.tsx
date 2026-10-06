@@ -11,6 +11,14 @@ import {
   providerLabel,
   formatPricingTag,
 } from "../util/format.js";
+import {
+  HEADER_BRANCH_MAX,
+  HEADER_ECO_MAX,
+  HEADER_NAME_MAX,
+  HEADER_RULES_MAX,
+  HEADER_TEST_MAX,
+  HEADER_TITLE_MAX,
+} from "../util/displayLimits.js";
 
 export interface HeaderProps {
   model: string;
@@ -40,7 +48,7 @@ export function headerSessionPlan(
 ): { showTitle: boolean; titleV: string; turnsSuffix: string } {
   const named = typeof sessionTitle === "string" && sessionTitle.trim().length > 0;
   const showTitle = named && width >= 92;
-  const titleV = showTitle ? `"${curtail(sessionTitle ?? "", 24)}"` : "";
+  const titleV = showTitle ? `"${curtail(sessionTitle ?? "", HEADER_TITLE_MAX)}"` : "";
   const turnsSuffix =
     turnCount !== undefined && width >= 105
       ? ` · ${turnCount} ${turnCount === 1 ? "turn" : "turns"}`
@@ -121,11 +129,11 @@ export function Header({ model, isBusy, context, providerId, sessionTitle, turnC
   const showRules = !!context.projectRules && width >= 120;
   const showEnv = width >= 92;
 
-  const nameV = curtail(context.projectName, 18);
-  const branchV = curtail(gitBranch, 16);
-  const ecoV = curtail(eco, 16);
-  const testsV = context.ecosystem.testScript ? curtail(context.ecosystem.testScript, 18) : "";
-  const rulesV = context.projectRules ? curtail(context.projectRules.source, 16) : "";
+  const nameV = curtail(context.projectName, HEADER_NAME_MAX);
+  const branchV = curtail(gitBranch, HEADER_BRANCH_MAX);
+  const ecoV = curtail(eco, HEADER_ECO_MAX);
+  const testsV = context.ecosystem.testScript ? curtail(context.ecosystem.testScript, HEADER_TEST_MAX) : "";
+  const rulesV = context.projectRules ? curtail(context.projectRules.source, HEADER_RULES_MAX) : "";
 
   // Deterministic left-column display width: brand then each segment separated
   // by the Box's 1-cell gap + the "│" divider. Computed verbatim from the same

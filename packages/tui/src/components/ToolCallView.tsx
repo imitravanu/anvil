@@ -1,7 +1,7 @@
 import { Box, Text, useStdout } from "ink";
 import type { DisplayToolCall } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
-import { TOOL_SUMMARY_MAX } from "../util/displayLimits.js";
+import { TOOL_SUMMARY_MAX, TOOL_DIAGNOSTICS_SHOWN } from "../util/displayLimits.js";
 import { curtail, displayWidth, formatDuration } from "../util/format.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
 import { formatToolOutput } from "../util/toolOutput.js";
@@ -77,7 +77,7 @@ export function ToolCallView({ call, expanded }: { call: DisplayToolCall; expand
       </Box>
       {!expanded && call.status !== "running" && diagnostics.length > 0 && (
         <Box flexDirection="column" paddingLeft={5}>
-          {diagnostics.slice(0, 3).map((d, i) => (
+          {diagnostics.slice(0, TOOL_DIAGNOSTICS_SHOWN).map((d, i) => (
             <Text key={i} color={d.severity === "error" ? theme.colors.error : theme.colors.warning}>
               {d.severity === "error" ? "✖ " : "▲ "}line {d.line}:{" "}
               {curtail(sanitizeTerminalText(d.message ?? ""), Math.max(10, budget - 12))}

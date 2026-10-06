@@ -1,6 +1,6 @@
 import { getBranchDiff, createPullRequest, getErrorMessage } from "@anvil/core";
 import type { CommandHandlerDeps } from "../types.js";
-import { capLines } from "../../util/displayLimits.js";
+import { capLines, DIFF_CHANGES_SHOWN } from "../../util/displayLimits.js";
 
 export function handleShowDiff(deps: CommandHandlerDeps, branch?: string): void {
   const { isBusy, printSystemMessage, session, setIsDiffOpen, setBranchDiff } = deps;
@@ -53,7 +53,7 @@ export function handleShowDiff(deps: CommandHandlerDeps, branch?: string): void 
         );
         return;
       }
-      const shown = changes.slice(0, 8);
+      const shown = changes.slice(0, DIFF_CHANGES_SHOWN);
       const parts = shown.map((c) => {
         const mark = c.kind === "created" ? "+" : c.kind === "deleted" ? "−" : "~";
         const body = c.diff === null ? "(file deleted)" : capLines(c.diff.split("\n")).join("\n");

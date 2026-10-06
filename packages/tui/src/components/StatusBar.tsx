@@ -3,6 +3,7 @@ import type { UsageTotals } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { breakpointForWidth } from "../hooks/useTerminalSize.js";
 import { curtail, displayModelLabel, displayWidth, formatPricingTag, modelInfo } from "../util/format.js";
+import { STATUS_MODEL_MAX, STATUS_MODEL_MIN } from "../util/displayLimits.js";
 import { brailleSparkline } from "../util/braille.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
 import { ContextGauge, gaugeDisplayText } from "./ContextGauge.js";
@@ -80,7 +81,7 @@ export function StatusBar({
   // Width accounting in terminal CELLS (emoji are 2); reserve covers the DW-2.4
   // frame border (2) + inner padding + the outer frame's two border columns.
   const avail = Math.max(20, width - 2 * theme.spacing.panelPaddingX - 4);
-  const fixedPlain = `${curtail(modelLabel, 40)} │ ${statePlain}${checkpointPlain}${testPlain}${gaugePlain}${sparkPlain} │ `;
+  const fixedPlain = `${curtail(modelLabel, STATUS_MODEL_MAX)} │ ${statePlain}${checkpointPlain}${testPlain}${gaugePlain}${sparkPlain} │ `;
   const tokensShown = (() => {
     const room = avail - displayWidth(fixedPlain);
     if (displayWidth(tokens) <= room) return tokens;
@@ -104,7 +105,7 @@ export function StatusBar({
   const sep = <Text color={theme.colors.dim}> │ </Text>;
   const left = (
     <Text color={theme.colors.textSecondary}>
-      {curtail(modelLabel, 40)}
+      {curtail(modelLabel, STATUS_MODEL_MAX)}
       {sep}
       {state}
       {checkpointCount !== undefined && checkpointCount > 0 && (
@@ -145,7 +146,7 @@ export function StatusBar({
         <>
           <Box justifyContent="space-between" flexShrink={0}>
             <Text color={theme.colors.textSecondary}>
-              {curtail(modelLabel, 24)} <Text color={theme.colors.dim}>│</Text> {state}
+              {curtail(modelLabel, STATUS_MODEL_MIN)} <Text color={theme.colors.dim}>│</Text> {state}
             </Text>
             {gaugeText && (
               <ContextGauge inputTokens={usage.inputTokens} contextWindow={info?.contextWindow} width={width} />

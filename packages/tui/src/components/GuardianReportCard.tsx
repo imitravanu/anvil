@@ -4,6 +4,7 @@ import type { DisplayGuardianReport } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { inkBorderStyle } from "../util/chrome.js";
 import { curtail } from "../util/format.js";
+import { GUARDIAN_DETAIL_MAX, GUARDIAN_VIOLATIONS_SHOWN } from "../util/displayLimits.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
 
 /**
@@ -46,19 +47,19 @@ export function GuardianReportCard({ report }: { report: DisplayGuardianReport }
           {fixedLabel}
         </Text>
       </Box>
-      {report.violations.slice(0, 8).map((v, i) => (
+      {report.violations.slice(0, GUARDIAN_VIOLATIONS_SHOWN).map((v, i) => (
         <Box key={`${v.file}:${v.line}:${i}`} paddingLeft={2}>
           <Text color={theme.colors.userText}>
             {"• "}
             {sanitizeTerminalText(v.file)}:{v.line}
           </Text>
           <Text color={theme.colors.textSecondary}> [{familyLabel(v.family)}] </Text>
-          <Text color={theme.colors.userText}>{curtail(sanitizeTerminalText(v.detail), 80)}</Text>
+          <Text color={theme.colors.userText}>{curtail(sanitizeTerminalText(v.detail), GUARDIAN_DETAIL_MAX)}</Text>
         </Box>
       ))}
-      {report.violations.length > 8 && (
+      {report.violations.length > GUARDIAN_VIOLATIONS_SHOWN && (
         <Box paddingLeft={2}>
-          <Text color={theme.colors.textSecondary}>… {report.violations.length - 8} more</Text>
+          <Text color={theme.colors.textSecondary}>… {report.violations.length - GUARDIAN_VIOLATIONS_SHOWN} more</Text>
         </Box>
       )}
       <Box paddingLeft={2}>

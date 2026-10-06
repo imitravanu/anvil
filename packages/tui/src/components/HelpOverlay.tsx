@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
-import { HELP_VISIBLE_ROWS } from "../util/displayLimits.js";
+import { HELP_VISIBLE_ROWS, HELP_FILTER_MAX } from "../util/displayLimits.js";
 import { sectionRule } from "../util/chrome.js";
 import { curtail } from "../util/format.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
@@ -80,7 +80,7 @@ export function HelpOverlay({ onClose }: { onClose: () => void }) {
     >
       {filter && (
         <Text color={theme.colors.textSecondary}>
-          filter: <Text color={theme.colors.toolName}>{curtail(filter, 40)}</Text> — Backspace to erase
+          filter: <Text color={theme.colors.toolName}>{curtail(filter, HELP_FILTER_MAX)}</Text> — Backspace to erase
         </Text>
       )}
       {lines.length === 0 ? (

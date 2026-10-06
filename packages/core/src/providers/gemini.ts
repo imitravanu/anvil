@@ -1,4 +1,5 @@
 import { getErrorMessage } from "../errors.js";
+import { GEMINI_FALLBACK_MAX } from "../config/constants.js";
 import { GoogleGenAI } from "@google/genai";
 import { CompletionRequest, ConversationMessage, ModelProvider, StreamEvent } from "./types.js";
 import { BaseProvider } from "./base.js";
@@ -70,7 +71,7 @@ export function geminiErrorMessage(err: unknown): string {
     const deeper = unwrap(direct);
     return deeper ?? direct;
   }
-  return fallback.length > 600 ? fallback.slice(0, 600) + "…" : fallback;
+  return fallback.length > GEMINI_FALLBACK_MAX ? fallback.slice(0, GEMINI_FALLBACK_MAX) + "…" : fallback;
 }
 
 export async function* translateGeminiChunkStream(

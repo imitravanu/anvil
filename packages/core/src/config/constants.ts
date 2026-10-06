@@ -349,3 +349,19 @@ export const GATE_DIFF_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
 export const PROVIDER_RETRY_INITIAL_DELAY_MS = getEnvNumber("ANVIL_PROVIDER_RETRY_DELAY_MS", 50);
 export const PROVIDER_RETRY_MAX_DELAY_MS = getEnvNumber("ANVIL_PROVIDER_RETRY_MAX_MS", 2_000);
 
+// D1 (§2.4): model/transport/tool display + serialize caps hoisted from their
+// consumers — values preserved verbatim.
+export const MCP_TOOL_SERIALIZE_MAX = 200;
+export const MCP_TOOL_VALUE_MAX = 120;
+export const TOOL_DESCRIBE_MAX = 200;
+export const GEMINI_FALLBACK_MAX = 600;
+export const GUARDIAN_HOOK_SHOWN = 20;
+export const SESSION_TITLE_MAX_CHARS = 50;
+export const SESSION_TITLE_ELLIPSIS_KEEP = 49;
+export const GOAL_SHORT_GOAL_MAX_CHARS = 120;
+export const GOAL_TITLE_MAX_CHARS = 60;
+export const GOAL_TITLE_ELLIPSIS_KEEP = 57;
+export const LSP_SYMBOL_MATCHES_MAX = 20;
+export const LSP_TSC_RAW_MAX = 4000;
+export const LSP_SENSOR_DIAGNOSTICS_MAX = 10;
+

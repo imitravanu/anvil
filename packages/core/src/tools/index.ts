@@ -1,5 +1,6 @@
 import { getErrorMessage } from "../errors.js";
 import { log } from "../logger.js";
+import { TOOL_DESCRIBE_MAX } from "../config/constants.js";
 import { ToolContext, ToolDefinition, ToolExecutor, ToolExecutionResult, SessionToolExecutor } from "./types.js";
 import * as readFile from "./readFile.js";
 import * as writeFile from "./writeFile.js";
@@ -157,7 +158,7 @@ export async function describeToolInput(
   for (const ext of externalExecutors) {
     if (name.startsWith(ext.prefix) && ext.describe) return ext.describe(name, input, ctx);
   }
-  return `${name}(${JSON.stringify(input).slice(0, 200)})`;
+  return `${name}(${JSON.stringify(input).slice(0, TOOL_DESCRIBE_MAX)})`;
 }
 
 export { detectTestCommand, runTestVerification, type TestRunResult } from "./verifyTests.js";

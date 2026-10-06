@@ -9,6 +9,7 @@ import {
   type StoredSession,
 } from "@anvil/core";
 import type { TuiPermissionBroker } from "../permission/TuiPermissionBroker.js";
+import { SESSION_MRU_CAP } from "../util/displayLimits.js";
 import type { DisplayMessage, DisplayGoal } from "./useAgentController.js";
 import { useState } from "react";
 import { COMMANDS, makeHandlers, parseCommand } from "../commands/registry.js";
@@ -207,7 +208,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
       if (command) {
         try {
           await command.run(parsed.args, ctx);
-          setMruCommands((prev) => [parsed.name, ...prev.filter((n) => n !== parsed.name)].slice(0, 5));
+          setMruCommands((prev) => [parsed.name, ...prev.filter((n) => n !== parsed.name)].slice(0, SESSION_MRU_CAP));
         } catch (err: unknown) {
           const msg = getErrorMessage(err);
           printSystemMessage(`Command /${parsed.name} failed: ${msg}`);

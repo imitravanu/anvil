@@ -25,6 +25,27 @@ export const OUTPUT_RETAIN_MAX = 6000;
 export const PLAN_RETAIN_MAX = 4000;
 /** Max diff rows rendered in the permission overlay before an omission note. */
 export const MAX_DIFF_ROWS = 40;
+// D1 (§2.4): display caps hoisted from their consumers — values preserved.
+export const GUARDIAN_VIOLATIONS_SHOWN = 8;
+export const GUARDIAN_DETAIL_MAX = 80;
+export const TOOL_DIAGNOSTICS_SHOWN = 3;
+export const HELP_FILTER_MAX = 40;
+export const STATUS_MODEL_MAX = 40;
+export const STATUS_MODEL_MIN = 24;
+export const HEADER_TITLE_MAX = 24;
+export const HEADER_NAME_MAX = 18;
+export const HEADER_BRANCH_MAX = 16;
+export const HEADER_ECO_MAX = 16;
+export const HEADER_TEST_MAX = 18;
+export const HEADER_RULES_MAX = 16;
+export const VERIFY_SUMMARY_MAX = 120;
+export const MISSION_DETAIL_MAX = 30;
+export const DIFF_PATH_MAX = 24;
+export const SYNC_FREE_SHOWN = 6;
+export const DIFF_CHANGES_SHOWN = 8;
+export const SESSION_MRU_CAP = 5;
+export const NOTIFY_CLEAN_MAX = 200;
+export const SESSION_ID_SHORT_MAX = 8;
 
 // Code-block windowing: a 40-line block otherwise fills the whole transcript
 // and (via the flex clip) shows only its tail, silently. Render head+tail

@@ -9,7 +9,7 @@ import {
 import type { CommandHandlerDeps } from "../types.js";
 import { curtail, relativeTime } from "../../util/format.js";
 import { readImageForAttachment } from "./media.js";
-import { SESSION_TITLE_MAX } from "../../util/displayLimits.js";
+import { SESSION_ID_SHORT_MAX, SESSION_TITLE_MAX } from "../../util/displayLimits.js";
 
 export function handleClearHistory(deps: CommandHandlerDeps): void {
   const { isBusy, printSystemMessage, providers, activeProviderId, sessionOptions, currentModel, broker, setSession, clearMessages } = deps;
@@ -39,7 +39,7 @@ export function handleSessionList(deps: CommandHandlerDeps): void {
     metas
       .map(
         (m) =>
-          `${m.id.slice(0, 8)}  ${curtail(m.title, SESSION_TITLE_MAX)}  ·  ${m.model}  ·  ${relativeTime(m.updatedAt)}`
+          `${m.id.slice(0, SESSION_ID_SHORT_MAX)}  ${curtail(m.title, SESSION_TITLE_MAX)}  ·  ${m.model}  ·  ${relativeTime(m.updatedAt)}`
       )
       .join("\n")
   );
@@ -70,7 +70,7 @@ export function handleSessionSearch(deps: CommandHandlerDeps, query: string): vo
   }
   const blocks = matches.map((m) => {
     const titleHit = m.matchedTitle ? " (title)" : "";
-    const head = `${m.metadata.id.slice(0, 8)}  ${curtail(m.metadata.title, SESSION_TITLE_MAX)}  ·  ${relativeTime(m.metadata.updatedAt)}  ·  ${m.matchCount} message(s)${titleHit}`;
+    const head = `${m.metadata.id.slice(0, SESSION_ID_SHORT_MAX)}  ${curtail(m.metadata.title, SESSION_TITLE_MAX)}  ·  ${relativeTime(m.metadata.updatedAt)}  ·  ${m.matchCount} message(s)${titleHit}`;
     const body = m.snippets.map((s) => `    ${s.role}: ${s.text}`);
     return [head, ...body].join("\n");
   });

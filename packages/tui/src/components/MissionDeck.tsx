@@ -2,6 +2,7 @@ import { Box, Text, useStdout } from "ink";
 import { useTheme } from "../theme/theme.js";
 import { inkBorderStyle } from "../util/chrome.js";
 import { collapsePlan, curtail } from "../util/format.js";
+import { MISSION_DETAIL_MAX } from "../util/displayLimits.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
 import type { DisplayGoal } from "../hooks/useAgentController.js";
 
@@ -82,7 +83,7 @@ export function MissionDeck({ goal, plan, isBusy = false }: MissionDeckProps) {
               </Text>
               {m.detail && isRunning && (
                 <Text color={theme.colors.textSecondary}>
-                  ({curtail(m.detail, 30)})
+                  ({curtail(m.detail, MISSION_DETAIL_MAX)})
                 </Text>
               )}
             </Box>

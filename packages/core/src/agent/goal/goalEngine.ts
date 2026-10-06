@@ -18,6 +18,9 @@ import {
   MAX_GOAL_TURNS,
   GOAL_REPORT_EXCERPT_CHARS,
   GOAL_MILESTONE_SUMMARY_MAX_CHARS,
+  GOAL_SHORT_GOAL_MAX_CHARS,
+  GOAL_TITLE_ELLIPSIS_KEEP,
+  GOAL_TITLE_MAX_CHARS,
   DEFAULT_MAX_TOKENS,
 } from "../../config/constants.js";
 export { MAX_GOAL_TURNS };
@@ -193,11 +196,11 @@ export function parseMilestones(rawText: string, goal: string): GoalMilestone[] 
   const ACTION_VERBS =
     /\b(create|add|fix|refactor|update|remove|delete|implement|migrate|write|rewrite|extract|split|rename|move|port|replace)\b/gi;
   const verbCount = goal.match(ACTION_VERBS)?.length ?? 0;
-  if (verbCount <= 1 && goal.length < 120) {
+  if (verbCount <= 1 && goal.length < GOAL_SHORT_GOAL_MAX_CHARS) {
     return [
       {
         id: "1",
-        title: goal.length <= 60 ? goal : `${goal.slice(0, 57)}...`,
+        title: goal.length <= GOAL_TITLE_MAX_CHARS ? goal : `${goal.slice(0, GOAL_TITLE_ELLIPSIS_KEEP)}...`,
         criteria: goal,
         status: "pending",
       },

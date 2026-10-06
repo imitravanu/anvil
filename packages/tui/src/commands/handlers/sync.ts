@@ -3,6 +3,7 @@ import {
   createOrcarouterFreeSource,
   syncFreeModels,
 } from "@anvil/core";
+import { SYNC_FREE_SHOWN } from "../../util/displayLimits.js";
 
 export async function handleSyncFreeModels(printSystemMessage: (text: string) => void): Promise<void> {
   printSystemMessage("Checking free-model sources for live updates...");
@@ -19,10 +20,10 @@ export async function handleSyncFreeModels(printSystemMessage: (text: string) =>
       continue;
     }
     if (r.newlyFree.length > 0) {
-      msg += `\n  + ${r.newlyFree.length} new free: ${r.newlyFree.slice(0, 6).join(", ")}${r.newlyFree.length > 6 ? " …" : ""}`;
+      msg += `\n  + ${r.newlyFree.length} new free: ${r.newlyFree.slice(0, SYNC_FREE_SHOWN).join(", ")}${r.newlyFree.length > SYNC_FREE_SHOWN ? " …" : ""}`;
     }
     if (r.noLongerFree.length > 0) {
-      msg += `\n  - ${r.noLongerFree.length} became paid: ${r.noLongerFree.slice(0, 6).join(", ")}${r.noLongerFree.length > 6 ? " …" : ""}`;
+      msg += `\n  - ${r.noLongerFree.length} became paid: ${r.noLongerFree.slice(0, SYNC_FREE_SHOWN).join(", ")}${r.noLongerFree.length > SYNC_FREE_SHOWN ? " …" : ""}`;
     }
   }
   if (report.errors.length > 0) {
