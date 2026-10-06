@@ -2,6 +2,25 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (chief-engineer Batch D3 truecolor support, full cycle):**
+> Understand: Ink 7 `useInput` Key is keyboard-only (mouse deferred honestly —
+> raw SGR-1006 parsing out of scope); `useFocusManager` exists (focus next);
+> themes hex-based with no capability detection.
+> Plan: pure env detector `theme/colorSupport.ts` (`truecolor|palette256|
+> basic|none`) + `supportsTruecolor`, `adaptive.ts` precedent, no behavior
+> change to existing surfaces.
+> Edit: 2 new files. Run: build + typecheck 0. Debug: none.
+> Retest: 10/10 (6 new + 4 adaptive), gate Steps 0-5 green.
+> Review: no protected artifact touched. Panes deferred (frame rework).
+>
+> **IN-PROGRESS 2026-10-06 (chief-engineer Batch D3 truecolor support):**
+> owns `packages/tui/src/theme/colorSupport.ts` (new),
+> `packages/tui/src/theme/__tests__/colorSupport.test.ts` (new).
+> Pure env layer, no behavior change to existing surfaces.
+> Deferred honestly: mouse (Ink 7 `useInput` Key is keyboard-only, no SGR-1006
+> API — raw stdin parsing out of scope), panes (single-column frame rework).
+> No protected artifact touched.
+>
 > **DONE 2026-10-06 (chief-engineer Batch D2 circuit/retry §2.4, full cycle):**
 > Understand: inventoried freeModels locals (5, 60000, 1, 120, 20, 2).
 > Plan: centralize in constants (env-overridable, verbatim defaults),
