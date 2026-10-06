@@ -37,6 +37,8 @@ fi
 # --- Layer B: staged slop scan (context-free patterns; full scan = the gate) -
 # Pathspec mirrors the gate's scan roots and extensions (incl. *.cjs and
 # packages/*/scripts), so the hook no longer under-covers .cjs sources.
+# The skipped-test rule is deliberately NOT here: it is path-scoped in Layer B3
+# below, matching the gate and the in-process guardian.
 added=$(git diff --cached -- \
           ':(glob)packages/*/src/**/*.ts' ':(glob)packages/*/src/**/*.tsx' \
           ':(glob)packages/*/src/**/*.js' ':(glob)packages/*/src/**/*.mjs' \
@@ -72,15 +74,39 @@ if [ -n "$added" ]; then
   h=$(printf '%s\n' "$added" | grep -nE '@ts-(ignore|nocheck)\b' || true)
   [ -n "$h" ] && hits="$hits
 (hook) ts suppression (@ts-ignore/@ts-nocheck): $h"
-  h=$(printf '%s\n' "$added" | grep -nE '\b(it|test|describe)\.skip\b|\b(xit|xtest|xdescribe)[[:space:]]*\(' || true)
-  [ -n "$h" ] && hits="$hits
-(hook) skipped test: $h"
   if [ -n "$hits" ]; then
     echo "🧟 SLOP PATTERNS DETECTED IN STAGED DIFF (context-free hook rules):" >&2
     printf '%s\n' "$hits" >&2
     echo "   Migrate to getErrorMessage() / typed casts etc. Full rules: npm run gate" >&2
     exit 1
   fi
+fi
+
+# --- Layer B3: skipped-test rule, TEST PATHS ONLY --------------------------
+# Gate Step 1, the gate's residual scan, and the in-process guardian all scope
+# this rule with the same predicate (`__tests__` or `.test.`). Outside a test
+# file a skipped block has nothing to skip, so judging prose there is a pure
+# false positive — and it was one: a source file that must NAME the pattern (a
+# rule registry, a scanner) was refused at commit time while `npm run gate`
+# passed. Mirror the predicate exactly rather than approximating it.
+skip_hits=""
+for f in $(git diff --cached --name-only --diff-filter=ACM); do
+  case "$f" in
+    *__tests__*|*.test.*) ;;
+    *) continue ;;
+  esac
+  h=$(git diff --cached -- "$f" \
+        | grep -E '^\+' | grep -vE '^\+\+\+' \
+        | grep -nE '\b(it|test|describe)\.skip\b|\b(xit|xtest|xdescribe)[[:space:]]*\(' || true)
+  [ -n "$h" ] && skip_hits="$skip_hits
+$f: $h"
+done
+if [ -n "$skip_hits" ]; then
+  echo "🧟 SKIPPED TEST DETECTED (staged):" >&2
+  printf '%s\n' "$skip_hits" >&2
+  echo "   A skipped test is a test that never runs. Delete it or make it pass." >&2
+  echo "   Full rules: npm run gate" >&2
+  exit 1
 fi
 
 # --- Layer B2: core boundary (per-file, so legal imports are not blocked) ----

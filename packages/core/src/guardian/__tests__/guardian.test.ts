@@ -30,6 +30,12 @@ const FIX_MAGIC_TIMEOUT = "const r = fetch(url, { time" + "out: 5000 });";
 // `0` is the yield-to-event-loop idiom, not a magic timeout (found live against
 // an eval fixture's own harness: `setTimeout(resolve, 0)`).
 const FIX_YIELD_ZERO = "await new Promise((resolve) => set" + "Timeout(resolve, 0));";
+// The expression shape (rule 2.4): a retry schedule written as one arithmetic
+// expression has no assignment for the scanners to anchor on, so its inline
+// exponent base used to be invisible. Split like the others so this source
+// never contains the literal shape it describes.
+const FIX_MAGIC_EXPONENT = "const d = MIN_DELAY_MS * Math." + "pow(2, attempt);";
+const FIX_MAGIC_EXPONENT_NAMED = "const d = MIN_DELAY_MS * Math." + "pow(BACKOFF_BASE, attempt);";
 const FIX_SILENT_CATCH = "try { run(); } catch { value = 1; }";
 const FIX_COLOR_QUOTE = '<Box color="cyan" />';
 const FIX_COLOR_TEMPLATE = "<Box color={`" + "cyan`} />";
@@ -95,6 +101,20 @@ describe("scanTextForSlop", () => {
     expect(
       scanTextForSlop("src/a.ts", "set" + "Timeout(flush, 50);", "anvil").some((v) => v.rule === "no-magic-constant")
     ).toBe(true);
+  });
+
+  it("flags an inline exponent base, allows a named one (rule 2.4 expression shape)", () => {
+    // Fail-first: before the scanner learned this shape, both assertions below
+    // were false — the inline base was invisible and the whole schedule was
+    // written as one expression in providers/base.ts.
+    expect(
+      scanTextForSlop("src/a.ts", FIX_MAGIC_EXPONENT, "anvil").some((v) => v.rule === "no-magic-constant")
+    ).toBe(true);
+    expect(
+      scanTextForSlop("src/a.ts", FIX_MAGIC_EXPONENT_NAMED, "anvil").some(
+        (v) => v.rule === "no-magic-constant"
+      )
+    ).toBe(false);
   });
 
   it("flags non-empty silent catches, allows logged/explained ones (H1)", () => {

@@ -70,10 +70,13 @@ const isCommentLine = (text) => /^\s*(?:\/\/|\/\*|\*)/.test(text);
 //     constant has no digits, so it stays clean)
 //   - a raw `setTimeout(fn, N)` / `setInterval(fn, N)` call with a POSITIVE N
 //     (`0` is the yield-to-event-loop idiom, not an arbitrary timeout)
+//   - an inline exponent BASE in a retry schedule written as one expression
+//     (`Math.pow(2, attempt)` has no assignment for the two forms above to
+//     anchor on — the gap constants.ts used to document as unscannable)
 // A line inside a template literal (trimmed starting with a backtick) is
 // generated text, not executable code, and is skipped.
 const MAGIC_TIMEOUT_RE =
-  /\b(?:timeout|timeoutMs|idleMs|maxWaitMs|maxBuffer|retries|maxRetries|delayMs|debounceMs|intervalMs)\s*[:=]\s*[1-9][\d_]*\b|\bset(?:Timeout|Interval)\s*\([^,]+,\s*[1-9][\d_]*\s*\)/;
+  /\b(?:timeout|timeoutMs|idleMs|maxWaitMs|maxBuffer|retries|maxRetries|delayMs|debounceMs|intervalMs)\s*[:=]\s*[1-9][\d_]*\b|\bset(?:Timeout|Interval)\s*\([^,]+,\s*[1-9][\d_]*\s*\)|\bMath\.pow\(\s*[0-9][\d_]*(?:\.[\d]+)?\s*,/;
 
 // Rule 2.3, extended: a NON-empty catch is a violation when it neither surfaces
 // the failure (log/console/throw/getErrorMessage, or an `error`/`problem`/`fail`

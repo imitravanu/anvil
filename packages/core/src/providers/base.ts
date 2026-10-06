@@ -3,6 +3,7 @@ import {
   PROVIDER_STREAM_MAX_RETRIES,
   PROVIDER_RETRY_INITIAL_DELAY_MS,
   PROVIDER_RETRY_MAX_DELAY_MS,
+  PROVIDER_RETRY_BACKOFF_BASE,
 } from "../config/constants.js";
 import {
   CompletionRequest,
@@ -58,7 +59,7 @@ export abstract class BaseProvider implements ModelProvider {
             // event — close the abandoned iterator before retrying.
             await iterator.return(undefined);
             const delay = Math.min(
-              PROVIDER_RETRY_INITIAL_DELAY_MS * Math.pow(2, attempt),
+              PROVIDER_RETRY_INITIAL_DELAY_MS * Math.pow(PROVIDER_RETRY_BACKOFF_BASE, attempt),
               PROVIDER_RETRY_MAX_DELAY_MS
             );
             await sleepAbortable(delay, request.signal);
@@ -84,7 +85,7 @@ export abstract class BaseProvider implements ModelProvider {
           !surfaced
         ) {
           const delay = Math.min(
-            PROVIDER_RETRY_INITIAL_DELAY_MS * Math.pow(2, attempt),
+            PROVIDER_RETRY_INITIAL_DELAY_MS * Math.pow(PROVIDER_RETRY_BACKOFF_BASE, attempt),
             PROVIDER_RETRY_MAX_DELAY_MS
           );
           await sleepAbortable(delay, request.signal);

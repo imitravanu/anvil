@@ -80,6 +80,7 @@ describe("gate integrity sentinel", () => {
       { label: "skipped test", lines: ["+++ b/packages/core/src/__tests__/probe.test.ts", '+ it.skip("test", () => {});'] },
       { label: "as Error cast (H1)", lines: [CORE, "+ const m = (err as Error).message;"] },
       { label: "magic timeout literal (H1)", lines: [CORE, "+ const r = fetch(url, { timeout: 5000 });"] },
+      { label: "magic exponent base, expression shape (rule 2.4)", lines: [CORE, "+ const d = BASE_MS * Math.pow(2, attempt);"] },
       { label: "silent non-empty catch (H1)", lines: [CORE, "+ try { a(); } catch { b = 1; }"] },
     ];
     for (const probe of probes) {
@@ -88,6 +89,8 @@ describe("gate integrity sentinel", () => {
     // Negative controls: a clean line and a comment that merely names a pattern
     // must NOT be flagged.
     expect(scan([CORE, "+ const ok: string = 'hi';"])).toEqual([]);
+    // A NAMED exponent base is the fix, not a violation.
+    expect(scan([CORE, "+ const d = BASE_MS * Math.pow(BACKOFF_BASE, attempt);"])).toEqual([]);
     expect(scan([CORE, "+ // this prose mentions as any but is not code"])).toEqual([]);
   });
 
@@ -295,6 +298,14 @@ describe("gate integrity sentinel", () => {
     expect(hook).toContain("any|never"); // slop scan layer present
     expect(hook).toContain("TODO|FIXME|XXX"); // placeholder layer present
     expect(hook).toContain("@anvil/(tui|cli)"); // arch heuristic present
+    // The skipped-test rule is path-scoped (Layer B3), mirroring gate Step 1,
+    // the residual scan, and the in-process guardian. Outside a test file a
+    // skipped block has nothing to skip, so judging prose there is a pure
+    // false positive: a source file that must NAME the pattern was refused at
+    // commit time while `npm run gate` passed.
+    expect(hook).toContain("*__tests__*|*.test.*");
+    expect(hook).toContain("SKIPPED TEST DETECTED");
+    expect(hook).not.toContain("(hook) skipped test");
     // The hook must never smuggle the human-ack flag: a protected change must
     // always require the explicit flag (or --no-verify, which is loud).
     expect(hook).not.toContain("--ack-protected-change");

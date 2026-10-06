@@ -48,8 +48,11 @@ const TEST_SKIP_PATTERN = "\\b(?:it|test|describe)\\.skip\\b|\\b(?:xit|xtest|xde
 // A `0` delay is the standard yield-to-event-loop idiom (`setTimeout(fn, 0)`),
 // not an arbitrary timeout — `[1-9]` keeps the positive-number cases and drops
 // that false positive (found live against an eval fixture's own test harness).
+// The third alternative covers the EXPRESSION shape: a retry schedule written
+// as one arithmetic expression has no assignment for the forms above to anchor
+// on, so its inline exponent base used to be invisible to rule 2.4.
 const MAGIC_TIMEOUT_TERMS =
-  "(?:timeout|timeoutMs|idleMs|maxWaitMs|maxBuffer|retries|maxRetries|delayMs|debounceMs|intervalMs)\\s*[:=]\\s*[1-9][\\d_]*|set(?:Timeout|Interval)\\s*\\([^,]+,\\s*[1-9][\\d_]*";
+  "(?:timeout|timeoutMs|idleMs|maxWaitMs|maxBuffer|retries|maxRetries|delayMs|debounceMs|intervalMs)\\s*[:=]\\s*[1-9][\\d_]*|set(?:Timeout|Interval)\\s*\\([^,]+,\\s*[1-9][\\d_]*|Math\\.pow\\(\\s*[0-9][\\d_]*";
 
 const RULES: { rule: string; family: GuardianRuleFamily; scope: RuleScope; pattern: RegExp; detail: string }[] = [
   {

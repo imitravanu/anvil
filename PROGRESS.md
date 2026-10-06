@@ -2,6 +2,49 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-07 (chief-engineer Batch L gate-hook parity, full cycle):**
+> Understand: read both scanners, the hook, the sentinel and the manifest
+> protocol live, then MEASURED three divergences instead of assuming them.
+> The skipped-test rule was scoped to test paths in gate Step 1, in the gate's
+> residual scan, AND in the in-process guardian — but not in the commit hook,
+> so a source file that must name the pattern was refused at commit time while
+> `npm run gate` passed. Rule 2.4's scanner could not see an expression, so the
+> retry exponent base in providers/base.ts was still an inline literal that
+> constants.ts itself documented as unscannable.
+> Plan: move the hook's skip rule into a path-scoped layer using the gate's
+> exact predicate; add an inline-exponent-base alternative to both scanners;
+> name the retry base; pin all three with behavioral tests.
+> Edit: 8 files (3 protected: gate, hook, sentinel, + regenerated manifest).
+> Run: build + typecheck 0.
+> Debug: my first hook probe used a split string, so it passed against the OLD
+> hook too and proved nothing; re-probed with the contiguous form and the false
+> positive appeared. Same class of mistake as the split-literal fixtures.
+> Retest: hook probed OLD vs NEW behaviorally — skip-in-test still BLOCKED,
+> a pattern-naming source file now allowed, protected path still refused;
+> fail-first proven by reverting each fix in turn (all three new assertions go
+> RED, files restored byte-exact); 62 targeted; gate Steps 0-5 green under
+> --ack-protected-change.
+> Review: PROTECTED ARTIFACTS CHANGED — scripts/verify-gate.mjs,
+> .githooks/pre-commit, gate.sentinel.test.ts, with gate-manifest.json
+> regenerated in the same commit as the protocol requires. No rule weakened:
+> the scanners gain a shape, and the hook loses only a pure false positive.
+> Deliberately NOT changed (measured, needs a human call): the hook also
+> over-covers `as any`/bare-any/empty-catch inside test files — 13 test files
+> use sanctioned fixture casts that the gate exempts but the hook would refuse
+> on a new added line. Unlike the skip rule those are policy, not pure noise.
+>
+> **IN-PROGRESS 2026-10-07 (chief-engineer Batch L gate-hook parity):**
+> owns `scripts/verify-gate.mjs` (protected, acknowledged),
+> `.githooks/pre-commit` (protected, acknowledged),
+> `scripts/gate-manifest.json` (hashes regenerated),
+> `packages/cli/src/__tests__/gate.sentinel.test.ts` (protected, acknowledged),
+> `packages/core/src/guardian/scanner.ts`,
+> `packages/core/src/guardian/__tests__/guardian.test.ts`,
+> `packages/core/src/config/constants.ts` (+ provider retry backoff base),
+> `packages/core/src/providers/base.ts`.
+> L1 hook skip rule scoped to test paths; L2 inline exponent base scanned by
+> both scanners. Protected changes acknowledged via --ack-protected-change.
+>
 > **DONE 2026-10-06 (chief-engineer Batch K TUI polish, full cycle):**
 > Understand: read DiffModal/PermissionPrompt/Header/FirstRunSetup/App + cli
 > args/gate live. Found five real defects: chrome separators rode Ink's fixed
