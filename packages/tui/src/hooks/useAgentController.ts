@@ -51,7 +51,7 @@ function readNotifyPrefs(): { desktop?: boolean; sound?: boolean } {
   try {
     return loadSettings().notifications ?? {};
   } catch {
-    // Settings are best-effort here; a broken file must not mute or crash turns.
+    // intentional: settings are best-effort here; a broken file must not mute or crash turns.
     return {};
   }
 }

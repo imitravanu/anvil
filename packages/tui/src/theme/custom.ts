@@ -76,12 +76,14 @@ export function loadCustomThemes(): { themes: Record<string, Theme>; problems: C
   try {
     text = fs.readFileSync(customThemesPath(), "utf-8");
   } catch {
-    return { themes: {}, problems: [] }; // no file yet — normal, silent
+    // intentional: no file yet is normal — empty themes, never throws.
+    return { themes: {}, problems: [] };
   }
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
+    // intentional: the parse failure IS the reported problem entry below.
     return { themes: {}, problems: [{ name: "(file)", error: "themes.json is not valid JSON" }] };
   }
   if (!isRecord(raw)) {

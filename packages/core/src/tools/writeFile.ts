@@ -55,7 +55,7 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
     prevMode = stat.mode & 0o777;
     existed = true;
   } catch {
-    // new file
+    // intentional: stat fails for a new file — absence is the expected path.
   }
   await atomicWriteText(abs, content, { mode: prevMode, signal: ctx.signal });
 
@@ -66,7 +66,7 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
       index.indexFile(relPath, content);
     }
   } catch {
-    // Best-effort index update
+    // intentional: best-effort index update — a stale index never fails a write.
   }
 
   // Check post-mutation compiler diagnostics (bounded to LSP_POST_MUTATION_DIAGNOSTICS_MS)

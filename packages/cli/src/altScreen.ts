@@ -33,7 +33,7 @@ function writeSeq(seq: string, stream: AltScreenStream): void {
   try {
     stream.write(seq);
   } catch {
-    // A failed escape write must never crash boot or exit handling.
+    // intentional: a failed escape write must never crash boot or exit handling.
   }
 }
 

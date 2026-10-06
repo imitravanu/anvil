@@ -69,7 +69,8 @@ export function listSessions(dir: string = SESSIONS_DIR()): SessionMetadata[] {
         if (!isStoredSession(raw)) return null;
         return raw.metadata;
       } catch {
-        return null; // corrupt/partial file from a crash mid-write — skip, never throw
+        // intentional: corrupt/partial file from a crash mid-write — skip, never throw.
+        return null;
       }
     })
     .filter((m): m is SessionMetadata => m !== null)

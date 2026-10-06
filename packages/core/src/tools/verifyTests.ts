@@ -64,7 +64,7 @@ export function detectTestCommand(projectRoot: string): string | null {
       return "pytest";
     }
   } catch {
-    // ignore parse errors
+    // intentional: package.json probe is best-effort — unparseable means unknown runner.
   }
 
   return null;

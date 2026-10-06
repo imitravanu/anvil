@@ -67,12 +67,14 @@ export function loadMcpConfig(): McpConfig {
   try {
     text = fs.readFileSync(mcpConfigPath(), "utf-8");
   } catch {
-    return { servers: [], problems: [] }; // no file yet — normal, silent
+    // intentional: no file yet is normal — empty config, never throws.
+    return { servers: [], problems: [] };
   }
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
+    // intentional: the parse failure IS the reported problem entry below.
     return { servers: [], problems: [{ id: "(file)", error: "mcp.json is not valid JSON" }] };
   }
   if (!isRecord(raw)) {

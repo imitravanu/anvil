@@ -45,6 +45,7 @@ export function checkWindowsShellSupport(): { supported: boolean; error?: string
     execSync("where bash.exe", { stdio: "ignore" });
     return { supported: true };
   } catch {
+    // intentional: probe failure means unsupported shell — reported, never thrown.
     return {
       supported: false,
       error:
@@ -323,7 +324,7 @@ function isOperandInsideRoot(root: string, arg: string): boolean {
     resolveWithinRoot(root, arg);
     return true;
   } catch {
-    // Escape, missing path, or symlink loop — fail closed (prompt the user).
+    // intentional: escape, missing path, or symlink loop — fail closed (prompt the user).
     return false;
   }
 }
@@ -451,14 +452,14 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
         try {
           child.kill("SIGKILL");
         } catch {
-          // child already exited
+          // intentional: child already exited — expected teardown race.
         }
         return;
       }
       try {
         process.kill(-plan.pid, "SIGKILL");
       } catch {
-        // ESRCH — child already exited; expected race
+        // intentional: ESRCH — child already exited; expected race.
         child.kill("SIGKILL");
       }
     };

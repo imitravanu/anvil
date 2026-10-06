@@ -32,7 +32,7 @@ export function loadModelsCacheV2(): ModelsCacheV2 {
       return { version: 2, syncedAt: null, sources: { legacy: raw as ModelInfo[] } };
     }
   } catch {
-    // missing / corrupt → empty, never throw
+    // intentional: missing/corrupt cache reads as empty — never throws at boot.
   }
   return { version: 2, syncedAt: null, sources: {} };
 }

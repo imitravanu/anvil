@@ -2,6 +2,24 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (chief-engineer Batch C2 slop-text §2.3+§2.8, verified live):**
+> owns the 17 files listed in the IN-PROGRESS entry below (all `// intentional:`
+> + dead-export removal). No protected artifact touched.
+> Gate FULL GREEN Steps 0-5.
+>
+> **IN-PROGRESS 2026-10-06 (chief-engineer Batch C2 slop-text §2.3+§2.8):**
+> owns `packages/core/src/tools/writeFile.ts`, `packages/core/src/tools/listFiles.ts`,
+> `packages/core/src/tools/verifyTests.ts`, `packages/core/src/tools/grep.ts`,
+> `packages/core/src/tools/bash.ts`, `packages/core/src/config/mcp.ts`,
+> `packages/core/src/providers/cache.ts`, `packages/core/src/session/store.ts`,
+> `packages/core/src/mcp/transport.ts`, `packages/core/src/config/memory.ts`,
+> `packages/core/src/eval/__tests__/runner.test.ts`,
+> `packages/tui/src/components/SessionPicker.tsx`, `packages/tui/src/theme/custom.ts`,
+> `packages/tui/src/markdown/highlightCodeBlocks.ts`,
+> `packages/tui/src/hooks/useAgentController.ts`,
+> `packages/cli/src/index.tsx`, `packages/cli/src/altScreen.ts`.
+> No protected artifact touched.
+>
 > **DONE 2026-10-06 (chief-engineer Batch C TUI correctness, verified live):**
 > owns `packages/tui/src/hooks/eventReducer.ts`,
 > `packages/tui/src/hooks/useAgentController.ts`,

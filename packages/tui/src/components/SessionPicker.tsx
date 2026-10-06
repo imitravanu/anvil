@@ -28,6 +28,7 @@ export function SessionPicker({
     try {
       return { sessions: listSessions(), failed: false };
     } catch {
+      // intentional: a corrupt sessions dir reads as empty — never crash the frame.
       return { sessions: [], failed: true };
     }
   });

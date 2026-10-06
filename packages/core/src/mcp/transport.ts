@@ -145,7 +145,7 @@ export function killAllMcpServers(): void {
         }
       }
     } catch {
-      // already gone — never let shutdown cleanup throw
+      // intentional: already gone — never let shutdown cleanup throw.
     }
   }
   liveChildren.clear();
@@ -153,7 +153,7 @@ export function killAllMcpServers(): void {
     try {
       ctrl.abort();
     } catch {
-      // already gone — never let shutdown cleanup throw
+      // intentional: already gone — never let shutdown cleanup throw.
     }
   }
   liveSseControllers.clear();
@@ -208,7 +208,7 @@ export function createStdioTransport(
       try {
         child.stdin?.write(msg + "\n");
       } catch {
-        // write after death reads as a call error downstream, never a throw
+        // intentional: write after death reads as a call error downstream, never a throw.
       }
     },
     lines(): AsyncIterable<string> {
@@ -218,7 +218,7 @@ export function createStdioTransport(
       try {
         child.stdin?.end();
       } catch {
-        // ignore
+        // intentional: already-closed stdin — cleanup never throws.
       }
       // Graceful first: SIGTERM lets servers flush; SIGKILL follows after a
       // grace period. The timer is unref'd so it never holds the process open,
@@ -235,7 +235,7 @@ export function createStdioTransport(
             }
           }
         } catch {
-          // already gone — never let cleanup throw
+          // intentional: already gone — never let cleanup throw.
         }
       };
       killTree("SIGTERM");
@@ -379,7 +379,8 @@ export function isSameOrigin(a: string, b: string): boolean {
     const ub = new URL(b);
     return ua.protocol === ub.protocol && ua.host === ub.host;
   } catch {
-    return false; // fail closed on anything unparseable
+    // intentional: fail closed on anything unparseable.
+    return false;
   }
 }
 

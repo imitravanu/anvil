@@ -107,7 +107,7 @@ function crash(err: unknown): never {
   try {
     appInstance?.unmount();
   } catch {
-    // unmount is best-effort during a fatal crash
+    // intentional: unmount is best-effort during a fatal crash — never throw inside crash().
   }
   // Restore the main screen first so the crash detail is visible, not lost
   // in a discarded alt buffer.
@@ -116,7 +116,7 @@ function crash(err: unknown): never {
     // Ink owns raw mode while mounted; make sure a fatal crash can't strand it.
     (process.stdin as NodeJS.ReadStream).setRawMode?.(false);
   } catch {
-    // not a TTY — nothing to restore
+    // intentional: not a TTY — nothing to restore.
   }
   process.stderr.write(
     "Anvil hit an unexpected error:\n" + crashDetail(err) + "\n"

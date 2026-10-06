@@ -39,7 +39,8 @@ async function walk(
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch {
-    return false; // unreadable dir — skip silently
+    // intentional: unreadable dir contributes no entries — skip, never fail walk.
+    return false;
   }
   for (const entry of entries) {
     if (signal?.aborted) return false;

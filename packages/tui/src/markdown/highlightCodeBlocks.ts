@@ -18,7 +18,8 @@ export function highlightCodeBlocks(text: string): string {
     try {
       return highlight(code, { language: lang || undefined, ignoreIllegals: true });
     } catch {
-      return code; // unknown language or highlight failure — fall back to plain text
+      // intentional: unknown language or highlight failure falls back to plain text.
+      return code;
     }
   });
 }

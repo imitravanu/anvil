@@ -16,7 +16,9 @@ describe("Phase 17 Eval Harness", () => {
   afterEach(() => {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch {}
+    } catch {
+      // intentional: best-effort temp cleanup — a leftover dir never fails a test.
+    }
   });
 
   function createMockTask(taskId: string, shouldPass = true): EvalTask {

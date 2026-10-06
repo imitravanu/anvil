@@ -206,7 +206,8 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
       const stat = await fs.stat(abs);
       if (!stat.isFile() || stat.size > GREP_MAX_FILE_BYTES) continue;
     } catch {
-      continue; // raced unlink/permission — same policy as read failures below
+      // intentional: raced unlink/permission — same skip policy as read failures below.
+      continue;
     }
     const buf = await fs.readFile(abs);
     if (buf.includes(0)) continue; // skip binary files

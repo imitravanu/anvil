@@ -6,7 +6,6 @@ import { MAX_MEMORY_BYTES } from "./constants.js";
 
 export { MAX_MEMORY_BYTES };
 export const MEMORY_RELATIVE_PATH = ".anvil/memory.md";
-export const GITIGNORE_RELATIVE_PATH = ".anvil/.gitignore";
 
 export interface ProjectMemory {
   path: string; // .anvil/memory.md
@@ -87,7 +86,7 @@ export function appendToMemory(projectRoot: string, entry: string): void {
     try {
       fs.writeFileSync(gitignorePath, "memory.md\n", "utf8");
     } catch {
-      // Non-fatal if gitignore write fails
+      // intentional: non-fatal if gitignore write fails — memory still saves.
     }
   }
 
