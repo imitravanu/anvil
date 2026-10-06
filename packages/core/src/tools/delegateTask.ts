@@ -1,7 +1,7 @@
 import { ToolDefinition, ToolExecutionResult, ToolSessionContext } from "./types.js";
 import { runSubAgentLive, MAX_DELEGATIONS_PER_TURN, capReport, SINGLE_SUBAGENT_ID } from "../agent/subagent.js";
 import { runTeam } from "../agent/team/index.js";
-import { TEAM_DEFAULT_ITERATIONS } from "../config/constants.js";
+import { TEAM_DEFAULT_ITERATIONS, MEMBER_TASK_MAX_CHARS } from "../config/constants.js";
 import type {
   TeamSpec,
   TeamMemberSpec,
@@ -323,6 +323,22 @@ export async function* executeSession(
       output: { error: "delegate_task requires a string `task`." },
       isError: true,
       summary: "delegate_task: task must be a string.",
+    };
+  }
+  if (task.length > MEMBER_TASK_MAX_CHARS) {
+    ctx.recordLedger({
+      eventType: "tool_finished",
+      tool: "delegate_task",
+      inputHash: inputKey,
+      outcome: "error",
+      elapsedMs: 0,
+    });
+    return {
+      output: {
+        error: `delegate_task \`task\` is ${task.length} chars (cap ${MEMBER_TASK_MAX_CHARS}) — resubmit shorter.`,
+      },
+      isError: true,
+      summary: "delegate_task: task too long.",
     };
   }
   if (!ctx.tryConsumeDelegation(MAX_DELEGATIONS_PER_TURN)) {

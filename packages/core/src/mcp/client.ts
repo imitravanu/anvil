@@ -282,11 +282,18 @@ export async function createTransportForServer(
  * and `/mcp reconnect`. Servers removed from the config are closed and
  * dropped. NEVER throws — per-server failures land in `problems` and as
  * error-status connections.
+ *
+ * Single-flight: two concurrent boots used to interleave close/set/delete on
+ * the shared map, losing ready connections. Callers share one run.
  */
+let connectInflight: Promise<{ problems: string[]; connected: number; tools: number }> | null = null;
+
 export async function connectAllMcpServers(
   conns: Map<string, McpServerConnection>,
   opts?: { timeoutMs?: number }
 ): Promise<{ problems: string[]; connected: number; tools: number }> {
+  if (connectInflight) return connectInflight;
+  connectInflight = (async () => {
   const cfg = loadMcpConfig();
   const problems = cfg.problems.map((p) => `${p.id}: ${p.error}`);
   const wanted = new Set(cfg.servers.map((s) => s.id));
@@ -340,6 +347,12 @@ export async function connectAllMcpServers(
     }
   }
   return { problems, connected, tools };
+  })();
+  try {
+    return await connectInflight;
+  } finally {
+    connectInflight = null;
+  }
 }
 
 /**

@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { getErrorMessage } from "../errors.js";
-import { LSP_REQUEST_TIMEOUT_MS, LSP_DIAGNOSTICS_POLL_MS, LSP_PATH_DIAGNOSTICS_POLL_MS, LSP_MAX_FRAME_BYTES, LSP_IDLE_CLOSE_MS } from "../config/constants.js";
+import { LSP_REQUEST_TIMEOUT_MS, LSP_DIAGNOSTICS_POLL_MS, LSP_PATH_DIAGNOSTICS_POLL_MS, LSP_MAX_FRAME_BYTES, LSP_IDLE_CLOSE_MS, LSP_SHUTDOWN_TIMEOUT_MS } from "../config/constants.js";
 import type { LspClient, LspDiagnostic, LspLocation, LspPosition, LspServerCommand } from "./types.js";
 
 interface PendingRequest {
@@ -350,7 +350,7 @@ export class LspStdioClient implements LspClient {
     if (this.dead) return;
     this.dead = true;
     try {
-      await this.request("shutdown", null, 3000);
+      await this.request("shutdown", null, LSP_SHUTDOWN_TIMEOUT_MS);
     } catch {
       // shutdown is best-effort; the child is killed below regardless
     }

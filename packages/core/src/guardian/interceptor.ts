@@ -129,7 +129,10 @@ function canResolveGetErrorMessage(diff: string): boolean {
 
 /** Safe auto-fix: common raw-error ternary → getErrorMessage call. */
 export function autoFixRawErrorFormat(diff: string): string {
-  return diff
-    .replace(/(\w+)\s+instanceof\s+Error\s*\?\s*\1\.message\s*:\s*String\(\1\)/g, "getErrorMessage($1)")
-    .replace(/err\s+instanceof\s+Error\s*\?\s*err\.message\s*:\s*String\(err\)/g, "getErrorMessage(err)");
+  // The single generic pattern subsumes the `err`-specific one (kept history:
+  // a second replace for `err` used to sit here as dead code).
+  return diff.replace(
+    /(\w+)\s+instanceof\s+Error\s*\?\s*\1\.message\s*:\s*String\(\1\)/g,
+    "getErrorMessage($1)"
+  );
 }

@@ -242,6 +242,10 @@ export const GUARDIAN_SCOPE_TTL_MS = 30_000;
 // Team total-iteration budget bounds: below one share per member starves
 // members at zero; above this is runaway (5 members × 100 turns).
 export const TEAM_MAX_TOTAL_ITERATIONS = 500;
+// Delegation task-text cap: a megabyte task prompt burns context for every
+// member turn. Rejected loudly so the model resubmits shorter, never silently
+// truncated mid-instruction.
+export const MEMBER_TASK_MAX_CHARS = 8000;
 
 // Goal engine (agent/goal).
 export const MAX_GOAL_TURNS = 10;
@@ -291,6 +295,9 @@ export const READ_BINARY_SNIFF_BYTES = 8192;
 export const LSP_POST_MUTATION_DIAGNOSTICS_MS = 400;
 export const LSP_DIAGNOSTICS_WAIT_MS = 1500;
 export const LSP_TSC_TIMEOUT_MS = 30_000;
+// LSP shutdown handshake (lsp/client.ts close): best-effort, the child is
+// killed below regardless.
+export const LSP_SHUTDOWN_TIMEOUT_MS = 3000;
 
 // C17 (AUDIT-2026-09-30): the remaining flagged literals, hoisted (rule 2.4).
 // Git probes: awareness.ts's three status calls and gitUtils.ts's diff buffers.

@@ -118,12 +118,17 @@ export async function executeTool(
       try {
         const r = await ext.exec(name, input, ctx);
         if (r.claimed && r.result) return r.result;
+        // Claimed without a result is an executor bug, not an unknown tool —
+        // and a throwing executor must not veto the rest of the chain.
+        if (r.claimed) {
+          return {
+            output: { error: `${name} claimed but returned no result` },
+            isError: true,
+            summary: `${name} failed`,
+          };
+        }
       } catch (err: unknown) {
-        return {
-          output: { error: getErrorMessage(err) },
-          isError: true,
-          summary: `${name} failed`,
-        };
+        log.warn(`[tools] external executor for "${name}" threw (${getErrorMessage(err)}) — trying next`);
       }
     }
     return {

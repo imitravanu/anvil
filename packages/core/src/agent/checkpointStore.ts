@@ -2,7 +2,7 @@ import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
 import { anvilHome } from "../atomicWrite.js";
-import { CHECKPOINT_KEEP, type Checkpoint } from "./checkpoints.js";
+import { CHECKPOINT_KEEP, CHECKPOINT_FILE_MAX, type Checkpoint } from "./checkpoints.js";
 import { getErrorMessage } from "../errors.js";
 import { log } from "../logger.js";
 
@@ -65,8 +65,12 @@ export async function saveCheckpointsAsync(
   const tmp = `${targetPath}.tmp.${process.pid}.${Date.now()}.${++tmpSeq}`;
   try {
     await fsPromises.mkdir(path.dirname(targetPath), { recursive: true });
-    await fsPromises.writeFile(tmp, JSON.stringify({ version: 1, checkpoints: serialized }, null, 2), "utf-8");
-    await fsPromises.chmod(tmp, 0o600);
+    // Mode on creation, not after: writeFile-then-chmod left a world-readable
+    // window on every save of project bytes.
+    await fsPromises.writeFile(tmp, JSON.stringify({ version: 1, checkpoints: serialized }, null, 2), {
+      encoding: "utf-8",
+      mode: 0o600,
+    });
     await fsPromises.rename(tmp, targetPath);
   } catch (err) {
     // persistence is best-effort: an in-memory ring still covers this session
@@ -92,6 +96,8 @@ export function loadCheckpoints(sessionId: string, dir: string = checkpointsDir(
         skipped: typeof c.skipped === "number" ? c.skipped : 0,
         // Validate content per entry: one malformed entry must not throw out
         // of Buffer.from and discard the whole session's checkpoint history.
+        // Base64 inflates ~4/3: entries beyond twice the per-file snapshot cap
+        // cannot be legitimate — a corrupt file must not OOM Buffer.from.
         files: c.files
           .filter(
             (f): f is { path: string; content: string | null } =>
@@ -99,7 +105,9 @@ export function loadCheckpoints(sessionId: string, dir: string = checkpointsDir(
               f !== null &&
               typeof (f as { path?: unknown }).path === "string" &&
               ((f as { content?: unknown }).content === null ||
-                typeof (f as { content?: unknown }).content === "string")
+                (typeof (f as { content?: unknown }).content === "string" &&
+                  ((f as { content?: unknown }).content as string).length <=
+                    CHECKPOINT_FILE_MAX * 2))
           )
           .map((f) => {
             const recorded = (f as { postHash?: unknown }).postHash;

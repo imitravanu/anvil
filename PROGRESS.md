@@ -2,6 +2,28 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (chief-engineer Batch J core robustness, full cycle):**
+> Understand: all 10 sites read live; refuted 2 agent claims (bash describe
+> must stay full for consent; POST-overflow hang already bounded).
+> Plan: fallthrough-continue, shutdown/read/shar constants, sleep clamp, dead
+> branch removal, task caps, checkpoint perms/caps, connect single-flight.
+> Edit: 10 files. Run: build + typecheck 0.
+> Debug: corrected my own probe (duplicate-prefix guard), rest first-try green.
+> Retest: 87 targeted, dist probes OK, gate Steps 0-5 green.
+> Review: no protected artifacts.
+>
+> **IN-PROGRESS 2026-10-06 (chief-engineer Batch J core robustness):**
+> owns `packages/core/src/tools/index.ts`,
+> `packages/core/src/lsp/client.ts`, `packages/core/src/lsp/tools.ts`,
+> `packages/core/src/errors.ts`, `packages/core/src/guardian/interceptor.ts`,
+> `packages/core/src/tools/delegateTask.ts`,
+> `packages/core/src/agent/checkpointStore.ts`,
+> `packages/core/src/mcp/client.ts` (connect single-flight),
+> `packages/core/src/config/constants.ts` (+ shutdown/delegate/lsp caps).
+> Verified NON-FINDINGS (untouched): bash describe truncation (consent needs
+> full command), POST-overflow hang (bounded read, stale claim).
+> No protected artifact touched.
+>
 > **DONE 2026-10-06 (chief-engineer Batch I eval-lane parity, full cycle):**
 > Understand: batch lane truncated fixture budgets (A/B extended) — read
 > run.ts/ab.ts/runner live; fixture test copy lacked the runner's guards.

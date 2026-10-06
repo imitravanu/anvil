@@ -1,5 +1,5 @@
 import { getErrorMessage } from "../../errors.js";
-import { TEAM_DEFAULT_ITERATIONS, TEAM_MAX_AGENTS, TEAM_MAX_TOTAL_ITERATIONS, SUB_AGENT_REPORT_MAX_CHARS } from "../../config/constants.js";
+import { TEAM_DEFAULT_ITERATIONS, TEAM_MAX_AGENTS, TEAM_MAX_TOTAL_ITERATIONS, MEMBER_TASK_MAX_CHARS, SUB_AGENT_REPORT_MAX_CHARS } from "../../config/constants.js";
 import { instrumentRunner, isTeamStrategy, TEAM_STRATEGIES } from "./types.js";
 import { headChars } from "../../text.js";
 import type { TeamMemberResult, TeamMemberSpec, TeamRunnerDeps, TeamRunResult, TeamSpec } from "./types.js";
@@ -46,6 +46,9 @@ export function validateTeamSpec(spec: TeamSpec): string | null {
     if (ids.has(m.id)) return `duplicate member id: ${m.id}`;
     ids.add(m.id);
     if (!m.task || m.task.trim().length === 0) return `member ${m.id} needs a task`;
+    if (m.task.length > MEMBER_TASK_MAX_CHARS) {
+      return `member ${m.id} task is ${m.task.length} chars (cap ${MEMBER_TASK_MAX_CHARS})`;
+    }
   }
   if (spec.strategy === "pipeline" && spec.members.length < 2) {
     return "pipeline strategy needs at least two members (handoff chain)";

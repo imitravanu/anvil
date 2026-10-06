@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getErrorMessage } from "../errors.js";
-import { LSP_MAX_DIAGNOSTICS, LSP_DIAGNOSTICS_WAIT_MS, LSP_TSC_TIMEOUT_MS, LSP_SENSOR_DIAGNOSTICS_MAX, LSP_SYMBOL_MATCHES_MAX, LSP_TSC_RAW_MAX } from "../config/constants.js";
+import { LSP_MAX_DIAGNOSTICS, LSP_DIAGNOSTICS_WAIT_MS, LSP_TSC_TIMEOUT_MS, LSP_SENSOR_DIAGNOSTICS_MAX, LSP_SYMBOL_MATCHES_MAX, LSP_TSC_RAW_MAX, MAX_READ_FILE_BYTES } from "../config/constants.js";
 import { resolveWithinRoot } from "../tools/paths.js";
 import type { ToolContext, ToolDefinition, ToolExecutor } from "../tools/types.js";
 import { serverForPath } from "./detector.js";
@@ -27,6 +27,19 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Bounded file read for symbol fallbacks: unlike the LSP path above, a
+ * fallback needs the real content at an arbitrary line, so oversize throws a
+ * reportable error instead of degrading silently.
+ */
+async function readForFallback(abs: string): Promise<string> {
+  const stat = await fs.stat(abs);
+  if (!stat.isFile() || stat.size > MAX_READ_FILE_BYTES) {
+    throw new Error(`file exceeds the ${MAX_READ_FILE_BYTES}-byte lookup cap`);
+  }
+  return fs.readFile(abs, "utf8");
+}
+
 async function grepFallback(projectRoot: string, symbol: string, signal: AbortSignal): Promise<{ path: string; line: number }[]> {
   const { execute: grepExec } = await import("../tools/grep.js");
   // The symbol is model- or file-derived: regex metachars must match literally.
@@ -37,6 +50,22 @@ async function grepFallback(projectRoot: string, symbol: string, signal: AbortSi
     path: m.path,
     line: m.line,
   }));
+}
+
+/**
+ * Bounded file read for LSP/symbol lookups: a gigabyte file would OOM the
+ * tool. Oversized files read as empty (LSP degrades to no-result; fallbacks
+ * report their own too-large error below).
+ */
+async function readBoundedHead(abs: string): Promise<string> {
+  try {
+    const stat = await fs.stat(abs);
+    if (!stat.isFile() || stat.size > MAX_READ_FILE_BYTES) return "";
+    return await fs.readFile(abs, "utf8");
+  } catch {
+    // intentional: missing/unreadable degrades to empty like before.
+    return "";
+  }
 }
 
 async function withClient<T>(
@@ -57,7 +86,7 @@ async function withClient<T>(
   const client = await getLspClient(server, projectRoot);
   if (!client) return { value: undefined as T, source: "none" };
   // A1: open/sync the document so definition/references/hover actually resolve.
-  const text = await fs.readFile(abs, "utf8").catch(() => "");
+  const text = await readBoundedHead(abs);
   if (text) client.ensureOpen(abs, server.language, text);
   return { value: await fn(client, abs), source: "lsp" };
 }
@@ -92,7 +121,7 @@ export const gotoDefinitionExec: ToolExecutor = async (input, ctx: ToolContext) 
       return { output: { source: "lsp", locations }, isError: false, summary: `Found ${locations.length} definition(s) via LSP` };
     }
     const abs = resolveWithinRoot(ctx.projectRoot, args.path);
-    const content = await fs.readFile(abs, "utf8");
+    const content = await readForFallback(abs);
     const symbol = symbolAt(content, args.line, character);
     if (!symbol) {
       return { output: { source: "fallback", locations: [] }, isError: false, summary: "No symbol at position" };
@@ -134,7 +163,7 @@ export const findReferencesExec: ToolExecutor = async (input, ctx: ToolContext) 
       return { output: { source: "lsp", locations }, isError: false, summary: `Found ${locations.length} reference(s) via LSP` };
     }
     const abs = resolveWithinRoot(ctx.projectRoot, args.path);
-    const content = await fs.readFile(abs, "utf8");
+    const content = await readForFallback(abs);
     const symbol = symbolAt(content, args.line, character);
     if (!symbol) {
       return { output: { source: "fallback", locations: [] }, isError: false, summary: "No symbol at position" };
@@ -208,7 +237,7 @@ export const getDiagnosticsExec: ToolExecutor = async (input, ctx: ToolContext) 
         // A1/A7: open the document so the server actually computes diagnostics,
         // then wait a bounded drain for publishDiagnostics to arrive.
         if (isFile) {
-          const text = await fs.readFile(abs, "utf8").catch(() => "");
+          const text = await readBoundedHead(abs);
           if (text) client.ensureOpen(abs, server.language, text);
         }
         const all = await client.waitForDiagnostics(LSP_DIAGNOSTICS_WAIT_MS);

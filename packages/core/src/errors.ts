@@ -18,8 +18,11 @@ function hasMessage(err: unknown): err is { message: string } {
  * signal it behaves as a plain sleep.
  */
 export function sleepAbortable(ms: number, signal?: AbortSignal): Promise<void> {
+  // Clamp the wait: NaN/Infinity warn-and-fire-immediately in setTimeout,
+  // silently converting a backoff into a busy loop; negatives are meaningless.
+  const wait = Number.isFinite(ms) && ms > 0 ? ms : 0;
   if (!signal) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, wait));
   }
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
@@ -29,7 +32,7 @@ export function sleepAbortable(ms: number, signal?: AbortSignal): Promise<void> 
     const timer = setTimeout(() => {
       signal.removeEventListener("abort", onAbort);
       resolve();
-    }, ms);
+    }, wait);
     const onAbort = () => {
       clearTimeout(timer);
       reject(new Error("aborted"));
