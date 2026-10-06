@@ -42,9 +42,18 @@ function copyDirRecursive(src: string, dest: string): void {
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
     const from = path.join(src, entry.name);
     const to = path.join(dest, entry.name);
+    // Mirror runEvalTask: never follow symlinked dirs out of the fixture.
+    let stat: fs.Stats;
+    try {
+      stat = fs.lstatSync(from);
+    } catch {
+      // intentional: raced unlink during copy — skip.
+      continue;
+    }
+    if (stat.isSymbolicLink()) continue;
     if (entry.isDirectory()) {
       copyDirRecursive(from, to);
-    } else {
+    } else if (entry.isFile()) {
       fs.copyFileSync(from, to);
     }
   }

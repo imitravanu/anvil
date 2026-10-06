@@ -2,6 +2,20 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (chief-engineer Batch I eval-lane parity, full cycle):**
+> Understand: batch lane truncated fixture budgets (A/B extended) — read
+> run.ts/ab.ts/runner live; fixture test copy lacked the runner's guards.
+> Plan: respectTaskTimeout in run.ts + comment truth + copy lstat guard.
+> Edit: 3 files. Run: typecheck 0 (incl. scripts). Debug: none.
+> Retest: 23 targeted, 25/25 mock lane, gate Steps 0-5 green.
+> Review: no protected artifacts.
+>
+> **IN-PROGRESS 2026-10-06 (chief-engineer Batch I eval-lane parity):**
+> owns `evals/run.ts`, `packages/core/src/eval/runner.ts` (comment),
+> `packages/core/src/eval/__tests__/fixtureIntegrity.test.ts` (copy guard).
+> I1 batch lane extends-never-truncates like A/B; I2 test copy skips symlinks.
+> No protected artifact touched.
+>
 > **DONE 2026-10-06 (chief-engineer Batch H correctness round, full cycle):**
 > Understand: lock-free writes, retry/token staleness, terminal usage leak,
 > maxTokens 400s, grep lying truncation, list printf-zero — all read live.

@@ -131,6 +131,11 @@ async function main() {
     modelId,
     guardian,
     timeoutMs: timeoutOverride,
+    // A1 time-twin: a harder-tier fixture budgets 180s but the live default
+    // above is 120s — without this the harness grades long-horizon tasks as
+    // capability failures for a clock it chose. Extend, never truncate (A/B
+    // lane already does; the batch lane must agree).
+    respectTaskTimeout: true,
     concurrency,
     // 26.3: free-tier rate-limit pacing. Back-to-back tasks on a capped
     // provider (15–20 req/min) die on HTTP 429 before the model can work;

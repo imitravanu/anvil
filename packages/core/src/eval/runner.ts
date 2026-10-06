@@ -209,9 +209,8 @@ export async function runEvalTask(
 
     // A1 (tokens) had a time-shaped twin: a harness cap narrower than the
     // fixture's own budget grades a long-horizon task as a capability failure
-    // for a clock the harness chose. `respectTaskTimeout` (the A/B harness)
-    // takes the MAXIMUM — extend, never truncate; the plain eval CLI keeps its
-    // documented global override.
+    // for a clock the harness chose. `respectTaskTimeout` (both lanes now)
+    // takes the MAXIMUM — extend, never truncate.
     const runnerTimeout = options.timeoutMs;
     const taskTimeout = task.timeoutMs;
     const timeoutLimit = options.respectTaskTimeout
