@@ -51,15 +51,16 @@ function dimUseCount(path: string): number {
 /**
  * The complete inventory of sanctioned decorative uses, per file. Each entry
  * is decoration by inspection (28.8 pass, 2026-09-26):
- *  - Header/StatusBar/App: `│` and `─` rules and separators
- *  - InputBar: the busy-time border (borders are decoration by definition)
+ *  - StatusBar/App: `│` and `─` rules and separators
+ *  - Header: none — its separators ride the `separator` token (derived from
+ *    dim on built-ins, independently themable on customs)
+ *  - InputBar: the busy/unfocused border (borders are decoration by definition)
  *  - MarkdownView: strikethrough (semantic markdown attr), table rule, quote
  *    marker `▍`, horizontal rule, and the code-block bar `▎`
  * Everything else — hints, badges, summaries, notices, tab names, scroll
  * indicators, timestamps, gutter line numbers — must be text tiers.
  */
 const EXPECTED_DIM_USES: Record<string, number> = {
-  "components/Header.tsx": 3,
   "components/StatusBar.tsx": 3,
   "components/App.tsx": 1,
   "components/InputBar.tsx": 1,

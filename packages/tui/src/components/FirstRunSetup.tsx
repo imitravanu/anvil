@@ -63,7 +63,7 @@ export function FirstRunSetup({
         <Text color={theme.colors.primary}>{title}</Text>
         <Text color={theme.colors.textSecondary}>Step 1 of 2 — choose a provider, Enter to continue{onCancel ? ", Esc to cancel" : ""}:</Text>
         {PROVIDERS.map((p, i) => (
-          <Text key={p.id} color={i === selected ? theme.colors.primary : undefined}>
+          <Text key={p.id} color={i === selected ? theme.colors.primary : theme.colors.textSecondary}>
             {i === selected ? "❯ " : "  "}
             {p.marketLabel}
           </Text>

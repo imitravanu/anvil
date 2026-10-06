@@ -192,7 +192,7 @@ export function Header({ model, isBusy, context, providerId, sessionTitle, turnC
         </Text>
         {showEnv && (
           <>
-            <Text dimColor>│</Text>
+            <Text color={theme.colors.separator}>│</Text>
             <Text>
               <Text color={theme.colors.textSecondary}>env: </Text>
               <Text>{ecoV}</Text>
@@ -201,7 +201,7 @@ export function Header({ model, isBusy, context, providerId, sessionTitle, turnC
         )}
         {showTests && (
           <>
-            <Text dimColor>│</Text>
+            <Text color={theme.colors.separator}>│</Text>
             <Text>
               <Text color={theme.colors.textSecondary}>tests: </Text>
               <Text>{testsV}</Text>
@@ -210,7 +210,7 @@ export function Header({ model, isBusy, context, providerId, sessionTitle, turnC
         )}
         {showRules && (
           <>
-            <Text dimColor>│</Text>
+            <Text color={theme.colors.separator}>│</Text>
             <Text>
               <Text color={theme.colors.textSecondary}>rules: </Text>
               <Text color={theme.colors.accent}>{rulesV}</Text>

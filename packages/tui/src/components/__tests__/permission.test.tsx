@@ -168,6 +168,29 @@ describe("PermissionPrompt", () => {
     app3.unmount();
   });
 
+  it("Enter allows in compact mode; y/a/n work in diff mode (symmetric keys)", async () => {
+    const enter = makeRequest("run_command", "Run command: npm test");
+    const app1 = renderThemed(<PermissionPrompt request={enter.request} broker={brokerStub()} />);
+    await tick();
+    app1.stdin.write(ENTER);
+    await expect(enter.decided).resolves.toBe(true);
+    app1.unmount();
+
+    const y = makeRequest("edit_file", DIFF);
+    const app2 = renderThemed(<PermissionPrompt request={y.request} broker={brokerStub()} />);
+    await tick();
+    app2.stdin.write("y");
+    await expect(y.decided).resolves.toBe(true);
+    app2.unmount();
+
+    const n = makeRequest("edit_file", DIFF);
+    const app3 = renderThemed(<PermissionPrompt request={n.request} broker={brokerStub()} />);
+    await tick();
+    app3.stdin.write("n");
+    await expect(n.decided).resolves.toBe(false);
+    app3.unmount();
+  });
+
   it("Esc denies in compact and full modes", async () => {
     const compact = makeRequest("run_command", "Run command: npm test");
     const app1 = renderThemed(<PermissionPrompt request={compact.request} broker={brokerStub()} />);

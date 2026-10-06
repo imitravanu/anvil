@@ -73,13 +73,32 @@ export function PermissionPrompt({
       return;
     }
     if (compact) {
+      // Symmetric with diff mode below: Enter is allow-once everywhere, and
+      // y/a/n work in both modes (users shouldn't guess which keys this
+      // prompt speaks).
       const k = input.toLowerCase();
-      if (k === "y") request.resolve(true);
+      if (k === "y" || key.return) request.resolve(true);
       else if (k === "a") {
         broker.approveAlwaysForSession(request.toolName);
         request.resolve(true);
       } else if (k === "n") request.resolve(false);
       return;
+    }
+    {
+      const k = input.toLowerCase();
+      if (k === "y") {
+        request.resolve(true);
+        return;
+      }
+      if (k === "a") {
+        broker.approveAlwaysForSession(request.toolName);
+        request.resolve(true);
+        return;
+      }
+      if (k === "n") {
+        request.resolve(false);
+        return;
+      }
     }
     if (key.upArrow) setSelected((s) => Math.max(0, s - 1));
     else if (key.downArrow) setSelected((s) => Math.min(options.length - 1, s + 1));
@@ -155,7 +174,7 @@ export function PermissionPrompt({
             <Text color={theme.colors.textPrimary} bold>
               n
             </Text>
-            <Text color={theme.colors.textSecondary}> deny</Text>
+            <Text color={theme.colors.textSecondary}> deny · Enter allow</Text>
           </Text>
         </Box>
       ) : (
@@ -175,7 +194,7 @@ export function PermissionPrompt({
               </Text>
             </Box>
           ))}
-          <Text color={theme.colors.textSecondary}> ↑/↓ to move · Enter to confirm · Esc to deny</Text>
+          <Text color={theme.colors.textSecondary}> ↑/↓ to move · Enter/y to confirm · a always · n/Esc to deny</Text>
         </>
       )}
     </Box>

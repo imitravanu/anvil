@@ -2,6 +2,38 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (chief-engineer Batch K TUI polish, full cycle):**
+> Understand: read DiffModal/PermissionPrompt/Header/FirstRunSetup/App + cli
+> args/gate live. Found five real defects: chrome separators rode Ink's fixed
+> `dimColor` attribute (unthemeable — a custom theme could not restyle them);
+> unselected provider rows passed `color={undefined}` (terminal default, not a
+> text tier); compact and diff permission modes disagreed on keys; DiffModal's
+> `S`/`C` header hints matched case-sensitively in code; and branch-diff copy
+> feedback was set into state but never rendered in that branch.
+> Plan: route separators/dividers through the `separator`/`dim` tokens; theme
+> unselected rows as textSecondary; accept y/a/n in both permission modes plus
+> Enter-to-allow in compact; lowercase the DiffModal keys and render
+> `copiedNote`; make a dangling `--lang` an init usage error instead of a
+> silent typescript fallback; refuse `--full` alongside `--staged`/`--watch`.
+> Edit: 12 files. Run: build + typecheck 0.
+> Debug: none — every targeted suite green first try.
+> Retest: 37 targeted (permission/args/dimContract), visual 12/12, tui 404,
+> ast 126; gate Steps 0-5 green. Baseline + dim inventory updated in-change.
+> Review: no protected artifacts; dropped DiffModal's dead `BranchDiffInfo`
+> export (no importer outside the regenerated dist).
+>
+> **IN-PROGRESS 2026-10-06 (chief-engineer Batch K TUI polish):**
+> owns `packages/tui/src/components/DiffModal.tsx`,
+> `packages/tui/src/components/PermissionPrompt.tsx`,
+> `packages/tui/src/components/Header.tsx`,
+> `packages/tui/src/components/App.tsx`,
+> `packages/tui/src/components/FirstRunSetup.tsx`,
+> `packages/tui/src/components/__tests__/permission.test.tsx` (symmetry),
+> `packages/cli/src/args.ts`, `packages/cli/src/__tests__/args.test.ts`,
+> `packages/cli/src/gate.ts`,
+> `packages/tui/src/theme/__tests__/dimContract.test.ts` (inventory).
+> Barrel left: pre-existing public API (CLI + externals). No protected artifact.
+>
 > **DONE 2026-10-06 (chief-engineer Batch J core robustness, full cycle):**
 > Understand: all 10 sites read live; refuted 2 agent claims (bash describe
 > must stay full for consent; POST-overflow hang already bounded).

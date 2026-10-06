@@ -79,7 +79,12 @@ export function resolveInvocation(
   if (first === "init") {
     if (!argv.includes("--guarded")) return { kind: "init-usage-error" };
     const langFlag = argv.indexOf("--lang");
-    return { kind: "init", lang: langFlag >= 0 ? argv[langFlag + 1] : undefined };
+    if (langFlag < 0) return { kind: "init", lang: undefined };
+    const value = argv[langFlag + 1];
+    // A dangling --lang (nothing after it, or another flag) used to fall back
+    // to typescript silently — a typo'd language provisioned the wrong agents.
+    if (value === undefined || value.startsWith("-")) return { kind: "init-usage-error" };
+    return { kind: "init", lang: value };
   }
   // First run: no API keys at all — onboard instead of hard-failing.
   if (!opts.hasConfiguredProvider) return { kind: "setup", thenChat: true };

@@ -486,5 +486,5 @@ function Divider() {
   const { stdout } = useStdout();
   const theme = useTheme();
   const width = Math.max(0, (stdout?.columns ?? 80) - 2);
-  return <Text dimColor>{sectionRule(theme.typography.sectionDivider, width)}</Text>;
+  return <Text color={theme.colors.dim}>{sectionRule(theme.typography.sectionDivider, width)}</Text>;
 }

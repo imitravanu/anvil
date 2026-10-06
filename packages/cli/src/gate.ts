@@ -205,6 +205,12 @@ export function createDebouncer(opts: { delayMs: number; minGapMs: number; onSca
 export function runNativeGate(opts: NativeGateOptions): number {
   const cwd = opts.cwd ?? process.cwd();
   if (opts.full) {
+    // --full runs the whole pipeline: --staged/--watch select a different
+    // surface and are silently ignored below, so say so loudly instead.
+    if (opts.staged || opts.watch) {
+      process.stderr.write("anvil gate: --full ignores --staged/--watch (full pipeline scans everything).\n");
+      return 1;
+    }
     const child = spawnSync("npm", ["run", "gate"], {
       cwd,
       stdio: "inherit",

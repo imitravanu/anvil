@@ -15,7 +15,7 @@ import {
 } from "../diff/SideBySideDiff.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
 
-export interface BranchDiffInfo {
+interface BranchDiffInfo {
   branch: string;
   diff: string;
 }
@@ -90,7 +90,8 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
     }
 
     // DW-4.5: `s` toggles unified/side-by-side for the whole modal visit.
-    if (input === "s") {
+    // Case-insensitive: the header advertises capitals and Shift+key is common.
+    if (input.toLowerCase() === "s") {
       if (!sideBySideAvailable) {
         setHintNote(
           `Side-by-side needs at least ${SIDE_BY_SIDE_MIN_COLUMNS} columns (this terminal is ${termWidth}).`
@@ -103,11 +104,19 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
     }
 
     // DW-4.11: `c` copies the visible diff (branch or active file) via OSC 52.
-    if (input === "c") {
-      const text = branchDiff ? branchDiff.diff : (changes[activeIdx]?.diff ?? changes[activeIdx]?.path ?? "");
+    if (input.toLowerCase() === "c") {
+      const active = changes[activeIdx];
+      const text = branchDiff ? branchDiff.diff : (active?.diff ?? active?.path ?? "");
+      const copiedPathOnly = !branchDiff && !active?.diff && !!active?.path;
       const result = copyToClipboard(text);
       setHintNote(null);
-      setCopiedNote(result.ok ? `Copied ${result.bytes} bytes to the clipboard.` : `Copy failed (${result.reason}).`);
+      setCopiedNote(
+        result.ok
+          ? copiedPathOnly
+            ? `Copied file path (deleted, no diff): ${active?.path}.`
+            : `Copied ${result.bytes} bytes to the clipboard.`
+          : `Copy failed (${result.reason}).`
+      );
       return;
     }
 
@@ -188,6 +197,7 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
         </Box>
         <Box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} marginY={1} overflow="hidden">
           {hintNote && <Text color={theme.colors.textSecondary}>{hintNote}</Text>}
+          {copiedNote && <Text color={theme.colors.success}>{copiedNote}</Text>}
           {hasContent ? (
             showSideBySide ? (
               <SideBySideDiff diff={branchDiff.diff} maxRows={Math.max(3, height - 7)} />

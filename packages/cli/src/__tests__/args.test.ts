@@ -149,6 +149,12 @@ describe("resolveInvocation", () => {
       kind: "init",
       lang: "python",
     });
+    expect(resolveInvocation(["init", "--guarded", "--lang"], configured)).toEqual({
+      kind: "init-usage-error",
+    });
+    expect(resolveInvocation(["init", "--guarded", "--lang", "--verbose"], configured)).toEqual({
+      kind: "init-usage-error",
+    });
   });
 
   it("onboards when nothing is configured, runs otherwise", () => {
