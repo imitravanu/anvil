@@ -36,6 +36,9 @@ function isStoredSession(v: unknown): v is StoredSession {
 
 // All functions take an optional directory override so tests can run against a
 // temp dir instead of the real sessions dir.
+export function sessionsDir(dir?: string): string {
+  return dir ?? SESSIONS_DIR();
+}
 export function saveSession(session: StoredSession, dir: string = SESSIONS_DIR()): void {
   if (!SAFE_ID_RE.test(session.metadata.id)) {
     throw new Error(`Refusing to save session with unsafe id: ${session.metadata.id}`);

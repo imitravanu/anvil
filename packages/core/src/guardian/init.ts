@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { getErrorMessage } from "../errors.js";
 import { preCommitHookScript, GUARDIAN_INIT_HOOK_REL } from "./hook.js";
+import { clearGuardianScopeCache } from "./scope.js";
 import { languageRulesBlock, languageAdvice } from "./langRules.js";
 
 export interface GuardedInitResult {
@@ -72,6 +73,9 @@ export function guardedInit(targetDir: string, language: string = "typescript"):
     }
   }
 
+  // Rules were just provisioned into this process's project: drop any cached
+  // scope so the next scan re-detects instead of serving the pre-init answer.
+  clearGuardianScopeCache(targetDir);
   return { created, skipped };
 }
 

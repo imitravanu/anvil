@@ -234,7 +234,9 @@ export async function restoreCheckpoint(
         try {
           prevMode = (await fs.stat(resolved)).mode & 0o777;
         } catch {
-          // target absent — default mode applies
+          // intentional: target absent (deleted-then-restored) — default 0600,
+          // never the umask default, so restored secrets stay private.
+          prevMode = 0o600;
         }
         await atomicWriteBuffer(resolved, f.content, { mode: prevMode });
         restored.push(f.path);
@@ -291,7 +293,14 @@ async function diffBaseline(
     }
     let current: Buffer | null = null;
     try {
-      current = await fs.readFile(abs);
+      // Size-gate BEFORE reading: the baseline snapshot is capped but the live
+      // file is not — a gigabyte log created mid-session would OOM /diff.
+      const stat = await fs.stat(abs);
+      if (stat.size > CHECKPOINT_FILE_MAX) continue;
+      const buf = await fs.readFile(abs);
+      // Binary files diff as garbage — skip like the read_file tool does.
+      if (buf.includes(0)) continue;
+      current = buf;
     } catch {
       current = null; // missing now = created-then-deleted, or deleted
     }

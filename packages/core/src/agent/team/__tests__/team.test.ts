@@ -51,6 +51,28 @@ describe("validateTeamSpec", () => {
     const bogus = { strategy: "fan-out", members: [{ id: "a", task: "x" }] } as unknown as TeamSpec;
     expect(validateTeamSpec(bogus)).toContain("unknown strategy");
   });
+
+  it("rejects unusable totalIterations instead of starving or running away", () => {
+    const two = [
+      { id: "a", task: "x" },
+      { id: "b", task: "y" },
+    ];
+    expect(
+      validateTeamSpec({ strategy: "parallel", members: two, totalIterations: 0 })
+    ).toContain("at least one share");
+    expect(
+      validateTeamSpec({ strategy: "parallel", members: two, totalIterations: -4 })
+    ).toContain("at least one share");
+    expect(
+      validateTeamSpec({ strategy: "parallel", members: two, totalIterations: 2.5 })
+    ).toContain("integer");
+    expect(
+      validateTeamSpec({ strategy: "parallel", members: two, totalIterations: 10_000 })
+    ).toContain("runaway cap");
+    expect(
+      validateTeamSpec({ strategy: "parallel", members: two, totalIterations: 4 })
+    ).toBeNull();
+  });
 });
 
 describe("splitBudget", () => {

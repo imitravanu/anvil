@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { GUARDIAN_SCOPE_TTL_MS } from "../config/constants.js";
 
 /**
  * Phase S5 (F2) — who a scan is for.
@@ -15,8 +16,16 @@ import path from "node:path";
  */
 export type GuardianScope = "anvil" | "foreign";
 
-/** Sentinel so a missing/unreadable file is never re-read on every scan. */
-const CACHE = new Map<string, GuardianScope>();
+/** Sentinel so a missing/unreadable file is never re-read on every scan. Entries
+ *  expire after GUARDIAN_SCOPE_TTL_MS so `anvil init --guarded` mid-process
+ *  (or a fresh checkout) cannot serve a stale scope forever. */
+const CACHE = new Map<string, { scope: GuardianScope; at: number }>();
+
+/** Drop cached scopes (called after provisioning rules into a live process). */
+export function clearGuardianScopeCache(projectRoot?: string): void {
+  if (projectRoot === undefined) CACHE.clear();
+  else CACHE.delete(projectRoot);
+}
 
 /**
  * Detect whether `projectRoot` is Anvil's own monorepo. The signal is the
@@ -26,7 +35,9 @@ const CACHE = new Map<string, GuardianScope>();
  */
 export function detectGuardianScope(projectRoot: string): GuardianScope {
   const cached = CACHE.get(projectRoot);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined && Date.now() - cached.at < GUARDIAN_SCOPE_TTL_MS) {
+    return cached.scope;
+  }
 
   let scope: GuardianScope = "foreign";
   try {
@@ -39,6 +50,6 @@ export function detectGuardianScope(projectRoot: string): GuardianScope {
     // repo, which is the same answer as a malformed manifest.
   }
 
-  CACHE.set(projectRoot, scope);
+  CACHE.set(projectRoot, { scope, at: Date.now() });
   return scope;
 }

@@ -1,5 +1,5 @@
 import { getErrorMessage } from "../../errors.js";
-import { TEAM_DEFAULT_ITERATIONS, TEAM_MAX_AGENTS, SUB_AGENT_REPORT_MAX_CHARS } from "../../config/constants.js";
+import { TEAM_DEFAULT_ITERATIONS, TEAM_MAX_AGENTS, TEAM_MAX_TOTAL_ITERATIONS, SUB_AGENT_REPORT_MAX_CHARS } from "../../config/constants.js";
 import { instrumentRunner, isTeamStrategy, TEAM_STRATEGIES } from "./types.js";
 import { headChars } from "../../text.js";
 import type { TeamMemberResult, TeamMemberSpec, TeamRunnerDeps, TeamRunResult, TeamSpec } from "./types.js";
@@ -28,6 +28,17 @@ export function validateTeamSpec(spec: TeamSpec): string | null {
   if (spec.members.length === 0) return "team needs at least one member";
   if (spec.members.length > TEAM_MAX_AGENTS) {
     return `team exceeds max agents (${TEAM_MAX_AGENTS})`;
+  }
+  // An unbounded, zero, or fractional budget either starves members at zero
+  // shares or runs away — validate loudly instead of silently mis-splitting.
+  if (spec.totalIterations !== undefined) {
+    if (!Number.isInteger(spec.totalIterations)) return "totalIterations must be an integer";
+    if (spec.totalIterations < spec.members.length) {
+      return `totalIterations (${spec.totalIterations}) must cover at least one share per member (${spec.members.length})`;
+    }
+    if (spec.totalIterations > TEAM_MAX_TOTAL_ITERATIONS) {
+      return `totalIterations (${spec.totalIterations}) exceeds the runaway cap (${TEAM_MAX_TOTAL_ITERATIONS})`;
+    }
   }
   const ids = new Set<string>();
   for (const m of spec.members) {

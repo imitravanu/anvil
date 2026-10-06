@@ -1,12 +1,15 @@
+import fs from "node:fs";
+import path from "node:path";
 import { MessageContent, Role } from "../providers/types.js";
 import {
+  SESSION_SEARCH_FILE_MAX_BYTES,
   SESSION_SEARCH_MAX_RESULTS,
   SESSION_SEARCH_MAX_SNIPPETS,
   SESSION_SEARCH_MIN_QUERY_CHARS,
   SESSION_SEARCH_SNIPPET_CHARS,
 } from "../config/constants.js";
 import { SessionMetadata } from "./types.js";
-import { listSessions, loadSession } from "./store.js";
+import { listSessions, loadSession, sessionsDir } from "./store.js";
 
 export { SESSION_SEARCH_MIN_QUERY_CHARS };
 
@@ -73,9 +76,19 @@ export function searchSessions(query: string, dir?: string): SessionSearchMatch[
   const needle = trimmed.toLowerCase();
 
   const matches: SessionSearchMatch[] = [];
+  const dirPath = sessionsDir(dir);
   for (const metadata of listSessions(dir)) {
     if (matches.length >= SESSION_SEARCH_MAX_RESULTS) break;
 
+    // Size-gate BEFORE parsing: a 100MB history would block/OOM the turn for
+    // a substring match. Oversized files are skipped (search-only; resume via
+    // loadSession is unaffected).
+    try {
+      const size = fs.statSync(path.join(dirPath, `${metadata.id}.json`)).size;
+      if (size > SESSION_SEARCH_FILE_MAX_BYTES) continue;
+    } catch {
+      // intentional: raced delete between list and stat — loadSession misses below.
+    }
     const stored = dir === undefined ? loadSession(metadata.id) : loadSession(metadata.id, dir);
     // null = shape-checked rejection of a partial/corrupt file.
     if (!stored) continue;

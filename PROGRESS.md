@@ -2,6 +2,26 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (chief-engineer Batch G frontier hardening, full cycle):**
+> Understand: search unbounded parse, restore 0644 default + diff OOM/binary,
+> scope cache forever, team budget 0/huge unclamped — all read live.
+> Plan: stat-gates + 0600 default + TTL/clearer + validation, values documented.
+> Edit: 9 files. Run: build + typecheck 0. Debug: none.
+> Retest: 73 + 23 targeted, dist probes OK, gate Steps 0-5 green.
+> Review: no protected artifacts.
+>
+> **IN-PROGRESS 2026-10-06 (chief-engineer Batch G frontier hardening):**
+> owns `packages/core/src/session/search.ts`,
+> `packages/core/src/agent/checkpoints.ts`,
+> `packages/core/src/guardian/scope.ts`,
+> `packages/core/src/guardian/init.ts`, `packages/core/src/guardian/index.ts`,
+> `packages/core/src/agent/team/runner.ts`,
+> `packages/core/src/agent/team/__tests__/team.test.ts` (budget bounds),
+> `packages/core/src/config/constants.ts` (+ search/scope/team caps).
+> G1 search skips oversized files; G2 restore defaults 0600 + diff stat-gate;
+> G3 scope TTL + clearer wired into guardedInit; G4 totalIterations validated.
+> No protected artifact touched.
+>
 > **DONE 2026-10-06 (chief-engineer Batch F focus coordinator 23.9, full cycle):**
 > Understand: Tab taken by slash-fill, overlays exclusive, DW-3.3 dim language
 > exists, Ink useInput keyboard-only, baselines cover empty/help/rewind.

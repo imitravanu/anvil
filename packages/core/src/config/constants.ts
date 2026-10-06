@@ -231,9 +231,17 @@ export const GATE_DIFF_SCAN_TIMEOUT_MS = getEnvNumber("ANVIL_GATE_DIFF_TIMEOUT_M
 // MCP transport retention (transport.ts) and tools/list cursor loop (client.ts).
 export const MAX_MCP_LINE_BYTES = 1024 * 1024;
 export const MAX_LIST_PAGES = 20;
-// D-batch: one tools/list page is also bounded — a single 1M-tool page must
-// not OOM boot when the page cap alone cannot see it.
+// D-batch (§2.4): search/scope/team hardening caps — values documented inline.
 export const MAX_LIST_TOOLS_PER_PAGE = 500;
+// Session search (`/session search`): skip session files larger than this —
+// parsing a 100MB history to match two characters blocks and OOMs the turn.
+export const SESSION_SEARCH_FILE_MAX_BYTES = 2 * 1024 * 1024;
+// Guardian scope cache TTL: re-detect cheaply so `anvil init --guarded`
+// mid-process (or a fresh checkout) cannot serve a stale scope forever.
+export const GUARDIAN_SCOPE_TTL_MS = 30_000;
+// Team total-iteration budget bounds: below one share per member starves
+// members at zero; above this is runaway (5 members × 100 turns).
+export const TEAM_MAX_TOTAL_ITERATIONS = 500;
 
 // Goal engine (agent/goal).
 export const MAX_GOAL_TURNS = 10;
