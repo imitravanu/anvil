@@ -4,8 +4,9 @@
 ║ ── Keys                                                                                          ║
 ║ Enter             Send the message (queues while a turn runs)                                    ║
 ║ /                 Open the command palette                                                       ║
-║ Tab               Complete the highlighted command                                               ║
-║ ↑ / ↓             Recall sent messages; navigate menus and pickers                               ║
+║ Tab               Complete the highlighted command, else move focus input↔transcript             ║
+║ ↑ / ↓             Recall sent messages (input focused); scroll transcript (transcript focused);  ║
+║ navigate menus                                                                                   ║
 ║ Esc               Cancel the running turn, or dismiss a menu or overlay                          ║
 ║ Ctrl+C            Cancel while busy; exit when idle                                              ║
 ║ PgUp / PgDn       Scroll the transcript (5 messages per press)                                   ║

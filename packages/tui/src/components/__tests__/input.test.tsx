@@ -134,4 +134,39 @@ describe("InputBar", () => {
     expect(frameText(app.lastFrame)).toContain("a  bc");
     app.unmount();
   });
+
+  it("unfocused bar shows the transcript hint and ignores history recall", async () => {
+    const onSubmit = vi.fn();
+    const onCancel = vi.fn();
+    const app = renderThemed(
+      <InputBar isBusy={false} hasFocus={false} onSubmit={onSubmit} onCancel={onCancel} sentHistory={["old"]} />
+    );
+    await tick();
+    expect(frameText(app.lastFrame)).toContain("transcript focused \u2014 Tab to type");
+    app.stdin.write(UP);
+    await tick();
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(frameText(app.lastFrame)).not.toContain("old");
+    app.unmount();
+  });
+
+  it("reports slash-menu open state for App-level Tab routing", async () => {
+    const seen: boolean[] = [];
+    const app = renderThemed(
+      <InputBar
+        isBusy={false}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+        onSlashMenuChange={(open) => { seen.push(open); }}
+      />
+    );
+    await tick();
+    app.stdin.write("/");
+    await tick();
+    expect(seen).toContain(true);
+    app.stdin.write(ESC);
+    await tick();
+    expect(seen).toContain(false);
+    app.unmount();
+  });
 });

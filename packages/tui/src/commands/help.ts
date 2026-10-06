@@ -28,14 +28,15 @@ export interface HelpSection {
 
 /**
  * Verified against the handlers — not aspirational documentation:
- * InputBar (Enter/`/`/Tab/↑↓/Esc/Ctrl+C), App (PgUp/PgDn transcript pin),
- * ModelPicker&co. (↑↓/Enter/Esc), `?` (InputBar empty-prompt help).
+ * InputBar (Enter/`/`/Tab/↑↓/Esc/Ctrl+C), App (Tab focus zones, PgUp/PgDn/↑↓
+ * transcript scroll when focused), ModelPicker&co. (↑↓/Enter/Esc),
+ * `?` (InputBar empty-prompt help).
  */
 export const HELP_KEYS: readonly HelpRow[] = [
   { primary: "Enter", secondary: "Send the message (queues while a turn runs)" },
   { primary: "/", secondary: "Open the command palette" },
-  { primary: "Tab", secondary: "Complete the highlighted command" },
-  { primary: "↑ / ↓", secondary: "Recall sent messages; navigate menus and pickers" },
+  { primary: "Tab", secondary: "Complete the highlighted command, else move focus input↔transcript" },
+  { primary: "↑ / ↓", secondary: "Recall sent messages (input focused); scroll transcript (transcript focused); navigate menus" },
   { primary: "Esc", secondary: "Cancel the running turn, or dismiss a menu or overlay" },
   { primary: "Ctrl+C", secondary: "Cancel while busy; exit when idle" },
   { primary: "PgUp / PgDn", secondary: "Scroll the transcript (5 messages per press)" },

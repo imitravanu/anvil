@@ -18,6 +18,7 @@ import {
 } from "@anvil/core";
 import type { TuiPermissionBroker } from "../permission/TuiPermissionBroker.js";
 import { useAgentController } from "../hooks/useAgentController.js";
+import { useFocusZone } from "../hooks/useFocusZone.js";
 import { usePermissionBroker } from "../hooks/usePermissionBroker.js";
 import { useThemeManager } from "../hooks/useThemeManager.js";
 import { useSessionCommands } from "../hooks/useSessionCommands.js";
@@ -186,14 +187,44 @@ export function App({
     isThemePickerOpen ||
     isHelpOpen ||
     isConnectOpen;
+  // 23.9 focus coordinator: Tab toggles input↔transcript (slash-fill and
+  // overlays keep their Tab), Esc returns to input. The transcript zone lets
+  // Up/Down scroll one message; the input keeps them for history recall.
+  const { zone: focusZone, onTab, onEscape, onOverlaysChanged } = useFocusZone();
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  useEffect(() => {
+    onOverlaysChanged(overlaysOpen);
+  }, [overlaysOpen, onOverlaysChanged]);
   useInput((_input, key) => {
     if (overlaysOpen) return;
+    if (key.tab) {
+      onTab(overlaysOpen, slashMenuOpen);
+      // Leaving the input for the transcript keeps the live tail; coming back
+      // returns to live follow so the reply is visible.
+      if (focusZone === "transcript") setTranscriptPinned(0);
+      return;
+    }
+    if (key.escape && focusZone === "transcript") {
+      onEscape();
+      setTranscriptPinned(0);
+      return;
+    }
     if (key.pageUp) {
       setTranscriptPinned((prev) => prev + TRANSCRIPT_SCROLL_PAGE);
       return;
     }
     if (key.pageDown) {
       setTranscriptPinned((prev) => Math.max(0, prev - TRANSCRIPT_SCROLL_PAGE));
+      return;
+    }
+    if (focusZone === "transcript") {
+      if (key.upArrow) {
+        setTranscriptPinned((prev) => prev + 1);
+        return;
+      }
+      if (key.downArrow) {
+        setTranscriptPinned((prev) => Math.max(0, prev - 1));
+      }
     }
   });
   // Clamp the pin when the transcript shrinks (clear/resume/switch).
@@ -420,6 +451,8 @@ export function App({
         ) : (
           <InputBar
             isBusy={isBusy}
+            hasFocus={focusZone === "input"}
+            onSlashMenuChange={setSlashMenuOpen}
             onSubmit={(text) => {
               // New turn returns to live follow so the reply is visible.
               setTranscriptPinned(0);

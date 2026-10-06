@@ -2,6 +2,28 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (chief-engineer Batch F focus coordinator 23.9, full cycle):**
+> Understand: Tab taken by slash-fill, overlays exclusive, DW-3.3 dim language
+> exists, Ink useInput keyboard-only, baselines cover empty/help/rewind.
+> Plan: `useFocusZone` machine (Tab toggles, slash/overlay win, Esc returns),
+> App wiring + lifted slash state, InputBar hasFocus (TextInput focus prop —
+> type-ahead while busy preserved), help rows, no default visuals changed.
+> Edit: 8 files. Run: build + typecheck 0.
+> Debug: fixed busy-unfocus (type-ahead), PNG capture noise reverted (32 files),
+> help-overlay.txt re-approved after inspecting exact 2-row diff.
+> Retest: hook 4/4 + input/app/help suites, visual 12/12, gate Steps 0-5 green.
+> Review: no protected artifacts. Mouse/panes deferred honestly (no Ink API,
+> frame rework).
+>
+> **IN-PROGRESS 2026-10-06 (chief-engineer Batch F focus coordinator 23.9):**
+> owns `packages/tui/src/hooks/useFocusZone.ts` (new) + test,
+> `packages/tui/src/components/App.tsx`,
+> `packages/tui/src/components/InputBar.tsx`,
+> `packages/tui/src/commands/help.ts` (+ visual baseline re-approval),
+> `packages/tui/src/components/__tests__/input.test.tsx` (focus tests).
+> Tab conflicts resolved: slash-fill wins when menu open (via lifted state),
+> zone toggle otherwise. No protected artifact touched.
+>
 > **DONE 2026-10-06 (chief-engineer Batch E agent loop, full cycle):**
 > Understand: read turnStream/verifier/streaming/openai/gemini/subagent live;
 > corrected two agent claims (call_N fallback pinned — kept; empty rounds after

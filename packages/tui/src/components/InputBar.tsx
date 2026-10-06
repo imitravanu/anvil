@@ -9,6 +9,10 @@ import { sanitizeTerminalText } from "../util/sanitize.js";
 
 interface InputBarProps {
   isBusy: boolean;
+  /** 23.9 focus zone: false routes keystrokes away (transcript owns arrows). */
+  hasFocus?: boolean;
+  /** Reports slash-menu open state so App keeps Tab for command fill. */
+  onSlashMenuChange?: (open: boolean) => void;
   onSubmit: (text: string) => void;
   onCancel: () => void;
   sentHistory?: string[]; // this session's sent messages, for Up/Down recall
@@ -16,7 +20,7 @@ interface InputBarProps {
   onOpenHelp?: () => void; // `?` on an empty prompt — the key/command reference
 }
 
-export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [], mruCommands = [], onOpenHelp }: InputBarProps) {
+export function InputBar({ isBusy, hasFocus = true, onSlashMenuChange, onSubmit, onCancel, sentHistory = [], mruCommands = [], onOpenHelp }: InputBarProps) {
   const theme = useTheme();
   const { exit } = useApp();
   const [value, setValue] = useState("");
@@ -40,7 +44,29 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [], mruComm
     setCommandIndex(0);
   }, [matchingCommands.length, slashText]);
 
+  // Lift slash-menu state so App never steals Tab for focus while it fills.
+  useEffect(() => {
+    onSlashMenuChange?.(showCommandMenu);
+  }, [showCommandMenu, onSlashMenuChange]);
+
   useInput((input, key) => {
+    // Without focus, only the safety keys work — recall, menu nav, and `?`
+    // belong to the transcript zone then. Esc-cancel and Ctrl+C always work.
+    if (!hasFocus) {
+      if (key.escape && isBusy) {
+        onCancel();
+        return;
+      }
+      if (key.ctrl && (input === "c" || input === "\x03")) {
+        if (isBusy) {
+          onCancel();
+          return;
+        }
+        exit();
+        return;
+      }
+      return;
+    }
     // Esc: cancel a busy turn FIRST (the one thing a user must always be able
     // to reach), then dismiss the slash menu.
     if (key.escape) {
@@ -181,8 +207,9 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [], mruComm
       <Box
         borderStyle={theme.borders.panel}
         // DW-3.3 focus signal: bright (focus border) while ready for input,
-        // dimmed while a turn streams (the box is non-interactive then).
-        borderColor={isBusy ? theme.colors.dim : theme.colors.borderFocus}
+        // dimmed while a turn streams (the box is non-interactive then) or the
+        // transcript owns focus.
+        borderColor={isBusy || !hasFocus ? theme.colors.dim : theme.colors.borderFocus}
         paddingX={theme.spacing.panelPaddingX}
       >
         <Text color={theme.colors.brand}>{"❯ "}</Text>
@@ -195,9 +222,12 @@ export function InputBar({ isBusy, onSubmit, onCancel, sentHistory = [], mruComm
             {value === "" && <Text color={theme.colors.brand}>{"█"}</Text>}
             <TextInput
               value={value}
+              // Type-ahead while busy queues (never unfocus for busy) — only
+              // the transcript zone routes keystrokes away.
+              focus={hasFocus}
               showCursor={value.length > 0}
               onChange={handleTextInputChange}
-              placeholder={isBusy ? "working… (Esc to cancel)" : "Type a message, / for commands"}
+              placeholder={isBusy ? "working… (Esc to cancel)" : !hasFocus ? "transcript focused — Tab to type" : "Type a message, / for commands"}
               onSubmit={(text) => {
                 // Enter with the slash menu open runs the highlighted command.
                 if (showCommandMenu && matchingCommands[commandIndex]) {
