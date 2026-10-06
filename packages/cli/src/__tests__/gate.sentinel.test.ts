@@ -298,19 +298,49 @@ describe("gate integrity sentinel", () => {
     expect(hook).toContain("any|never"); // slop scan layer present
     expect(hook).toContain("TODO|FIXME|XXX"); // placeholder layer present
     expect(hook).toContain("@anvil/(tui|cli)"); // arch heuristic present
-    // The skipped-test rule is path-scoped (Layer B3), mirroring gate Step 1,
-    // the residual scan, and the in-process guardian. Outside a test file a
-    // skipped block has nothing to skip, so judging prose there is a pure
-    // false positive: a source file that must NAME the pattern was refused at
-    // commit time while `npm run gate` passed.
+    // The skipped-test rule is path-scoped, mirroring gate Step 1, the residual
+    // scan, and the in-process guardian: outside a test file a skipped block
+    // has nothing to skip, so judging prose there is a pure false positive —
+    // a source file that must NAME the pattern was refused at commit time
+    // while `npm run gate` passed. Both halves are pinned: the rule, and the
+    // predicate that decides who it judges.
     expect(hook).toContain("*__tests__*|*.test.*");
-    expect(hook).toContain("SKIPPED TEST DETECTED");
+    expect(hook).toContain("it|test|describe");
+    expect(hook).toContain("xit|xtest|xdescribe");
+    // One failure path, still loud and still refusing.
+    expect(hook).toContain("SLOP PATTERNS DETECTED IN STAGED FILES");
     expect(hook).not.toContain("(hook) skipped test");
     // The hook must never smuggle the human-ack flag: a protected change must
     // always require the explicit flag (or --no-verify, which is loud).
     expect(hook).not.toContain("--ack-protected-change");
     const gate = read("scripts/verify-gate.mjs");
     expect(gate).toContain(".githooks/pre-commit"); // protected path coverage
+  });
+
+  it("the hook mirrors the gate's scan roots, extensions and path split (Batch M parity)", () => {
+    const gate = read("scripts/verify-gate.mjs");
+    const hook = read(".githooks/pre-commit");
+    const rootsBlock = gate.match(/const SCAN_ROOTS = \[([\s\S]*?)\];/)?.[1] ?? "";
+    const extsBlock = gate.match(/const SCAN_EXTS = \[([^\]]*)\]/)?.[1] ?? "";
+    const roots = [...rootsBlock.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    const exts = [...extsBlock.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    expect(roots.length, "gate must declare its scan roots").toBeGreaterThan(4);
+    expect(exts.length, "gate must declare its scan extensions").toBeGreaterThan(3);
+    // A root or extension the gate gains that the hook never learns is silent
+    // UNDER-coverage: the hook would accept a line the gate rejects. Behavior
+    // is proven in packages/cli/src/__tests__/preCommitHook.test.ts; this pins
+    // the static shape so a new root cannot slip through unnoticed.
+    for (const root of roots) expect(hook, `hook must scan ${root}`).toContain(root);
+    for (const ext of exts) expect(hook, `hook must scan *.${ext}`).toContain(`*.${ext}`);
+    // The gate's fixture exclusion and its two Step-1 self-exempt paths.
+    expect(hook).toContain("evals/tasks/*");
+    expect(hook).toContain("scripts/verify-gate.mjs");
+    expect(hook).toContain("packages/cli/src/__tests__/gate.sentinel.test.ts");
+    // One predicate, the gate's: a test path is judged by the skipped-test rule
+    // alone. Getting this wrong is the false positive Batch M removed.
+    expect(hook).toContain("*__tests__*|*.test.*");
+    // The two checks grep cannot express are ported rather than dropped.
+    expect(hook).toContain("PARITY_AWK");
   });
 
   it("CI still enforces tests, the gate, and full clone depth", () => {

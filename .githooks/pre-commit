@@ -15,6 +15,18 @@
 #
 # AUDIT-06: this header used to name a fixed test count ("566 tests") that
 # silently rotted as the suite grew. It now names the step, not a number.
+#
+# PARITY CONTRACT (Batch M): Layer B is a PRE-FLIGHT of the gate's Step 1, not
+# a second opinion. It reads the same scan roots and extensions, splits its
+# rules by the same path predicate, and carries the same rules — so a commit is
+# never refused on work `npm run gate` accepts, and the hook never accepts a
+# line the gate's own rule set rejects. Getting the path split wrong diverges
+# in one of two directions and both are bugs: a rule applied to a path the gate
+# exempts blocks sanctioned work (13 test files hold fixture casts the gate
+# allows), and a rule missing here lets slop through that the gate would stop.
+# The gate stays the authority — this layer only fails faster. A rule added
+# there belongs here in the same commit; the differential suite in
+# packages/cli/src/__tests__/hookGateParity.test.ts fails if the two drift.
 set -u
 
 # --- Layer A: protected-path tamper refusal (self-contained) ----------------
@@ -34,104 +46,216 @@ if [ -n "$blocked" ]; then
   exit 1
 fi
 
-# --- Layer B: staged slop scan (context-free patterns; full scan = the gate) -
-# Pathspec mirrors the gate's scan roots and extensions (incl. *.cjs and
-# packages/*/scripts), so the hook no longer under-covers .cjs sources.
-# The skipped-test rule is deliberately NOT here: it is path-scoped in Layer B3
-# below, matching the gate and the in-process guardian.
-added=$(git diff --cached -- \
-          ':(glob)packages/*/src/**/*.ts' ':(glob)packages/*/src/**/*.tsx' \
-          ':(glob)packages/*/src/**/*.js' ':(glob)packages/*/src/**/*.mjs' \
-          ':(glob)packages/*/src/**/*.cjs' \
-          ':(glob)packages/*/scripts/**/*.ts' ':(glob)packages/*/scripts/**/*.mjs' \
-          ':(glob)scripts/**/*.ts' ':(glob)scripts/**/*.mjs' \
-          ':(glob)evals/**/*.ts' ':(glob)evals/**/*.mjs' \
-          ':(glob,exclude)evals/tasks/**' \
-        | grep -E '^\+' | grep -vE '^\+\+\+' || true)
-if [ -n "$added" ]; then
-  # A comment line cannot execute, so the code rules below judge only code
-  # lines (S5.3: this layer refused a doc phrase containing "was never"
-  # because `as never` has no word boundary, and flagged comments naming the
-  # package boundary). The placeholder rule keeps the FULL text — a TODO
-  # comment is exactly what it hunts.
-  code=$(printf '%s\n' "$added" | grep -vE '^\+[[:space:]]*(//|\*|/\*)' || true)
+# --- Layer B: staged slop scan — the gate's Step 1 rule set, split by path ---
+#
+# The gate judges a TEST path (`__tests__` or `.test.`) by the skipped-test
+# rule ALONE and everything else by the remaining rules; that split is
+# reproduced exactly here. Scope mirrors the gate's SCAN_ROOTS x SCAN_EXTS,
+# minus its fixture dir and its two Step-1 self-exempt paths.
+#
+# Two gate checks cannot be expressed as a per-line grep: the brace-aware
+# non-empty silent catch, and the multiline pass that catches a rule evaded by
+# splitting it across two added lines. Both are ported to POSIX awk below. If
+# awk is missing the pair runs LOUDLY reduced: it then under-refuses (the gate
+# still catches it) instead of ever over-refusing a commit the gate accepts.
+#
+# The magic-literal regex is the gate's MAGIC_TIMEOUT_RE translated for POSIX
+# ERE: `(?:...)` -> `(...)` (ERE has no non-capturing groups), `\d` -> `[0-9]`,
+# `\s` -> `[[:space:]]`. Every literal and quantifier is otherwise verbatim.
+MAGIC_RE='\b(timeout|timeoutMs|idleMs|maxWaitMs|maxBuffer|retries|maxRetries|delayMs|debounceMs|intervalMs)[[:space:]]*[:=][[:space:]]*[1-9][0-9_]*\b|\bset(Timeout|Interval)[[:space:]]*\([^,]+,[[:space:]]*[1-9][0-9_]*[[:space:]]*\)|\bMath\.pow\([[:space:]]*[0-9][0-9_]*(\.[0-9]+)?[[:space:]]*,'
+
+# Reads one file's added lines on stdin, `+` already stripped. `hasraw=1` means
+# the line-oriented rules already flagged this file, which (exactly as in the
+# gate) suppresses the multiline pass. Prints one line per finding.
+PARITY_AWK=$(cat <<'PARITY_AWK'
+function iscomment(s) { return (s ~ /^[[:space:]]*(\/\/|[*]|\/[*])/) }
+{
+  src[++nlines] = $0
+  text = text $0 "\n"
+}
+END {
+  # (1) Multiline pass: a rule split across two ADJACENT added lines, skipping
+  #     a pair that touches a comment (a comment cannot execute, and a comment
+  #     inside a catch is the Section 2.3 rationale).
+  if (hasraw != 1) {
+    for (i = 1; i < nlines; i++) {
+      if (iscomment(src[i]) || iscomment(src[i + 1])) continue
+      joined = src[i] "\n" src[i + 1]
+      if (joined ~ /(^|[^A-Za-z0-9_])as[[:space:]]*\n[[:space:]]*(any|never)([^A-Za-z0-9_]|$)/) {
+        printf "lines %d-%d: type escape split across lines\n", i, i + 1
+      } else if (joined ~ /catch[[:space:]]*(\([^)]*\))?[[:space:]]*\{[[:space:]]*\}/) {
+        printf "lines %d-%d: silent catch split across lines\n", i, i + 1
+      } else if (joined ~ /instanceof[[:space:]]*\n[[:space:]]*Error[[:space:]]*\?/ ||
+                 joined ~ /instanceof[[:space:]]+Error[[:space:]]*\n[[:space:]]*\?/) {
+        printf "lines %d-%d: raw error formatting split across lines\n", i, i + 1
+      }
+    }
+  }
+  # (2) Silent catch (the gate's silentCatchLines): a NON-empty catch body that
+  #     neither surfaces the failure nor carries any comment. `0` false: the
+  #     first "{" at or after the match — not always the body brace — is what
+  #     the gate brace-matches, and a "fixed" hook would refuse a line the gate
+  #     accepts, so the quirk is reproduced rather than corrected.
+  n = length(text)
+  pos = 1
+  while (pos <= n) {
+    p = index(substr(text, pos), "catch")
+    if (p == 0) break
+    m = pos + p - 1
+    i = skipspace(text, m + 5, n)
+    if (substr(text, i, 1) == "(") {
+      j = i + 1
+      while (j <= n && substr(text, j, 1) != ")") j++
+      if (j > n) { pos = m + 1; continue }
+      i = skipspace(text, j + 1, n)
+    }
+    if (substr(text, i, 1) != "{") { pos = m + 1; continue }
+    matchEnd = i
+    oi = m
+    while (oi <= n && substr(text, oi, 1) != "{") oi++
+    if (oi > n) { pos = matchEnd + 1; continue }
+    k = m
+    while (k >= 1 && substr(text, k, 1) != "\n") k--
+    ls = k + 1
+    le = index(substr(text, m), "\n")
+    if (le == 0) le = n + 1; else le = m + le - 1
+    line = substr(text, ls, le - ls)
+    before = substr(text, ls, m - ls)
+    if (line ~ /^[[:space:]]*(\/\/|[*]|\/[*])/ || before ~ /\/\//) { pos = matchEnd + 1; continue }
+    depth = 0; body = ""; closed = 0
+    t = oi
+    while (t <= n) {
+      c = substr(text, t, 1)
+      if (c == "{") depth++
+      else if (c == "}") { depth--; if (depth == 0) { body = substr(text, oi + 1, t - oi - 1); closed = 1; break } }
+      t++
+    }
+    if (!closed) body = substr(text, oi + 1)
+    b = body
+    gsub(/^[[:space:]]+/, "", b)
+    gsub(/[[:space:]]+$/, "", b)
+    if (b == "") { pos = matchEnd + 1; continue }
+    if (tolower(b) ~ /log[.]|console[.]|printsystemmessage|geterrormessage|(^|[^a-z0-9_])throw([^a-z0-9_]|$)|error|problem|fail|warn|\/\/|\/\*/) {
+      pos = matchEnd + 1
+      continue
+    }
+    ln = 1
+    for (q = 1; q < m; q++) if (substr(text, q, 1) == "\n") ln++
+    printf "line %d: silent catch with no log or rationale\n", ln
+    pos = matchEnd + 1
+  }
+}
+function skipspace(s, i, n) {
+  while (i <= n && substr(s, i, 1) ~ /[[:space:]]/) i++
+  return i
+}
+PARITY_AWK
+)
+
+if ! command -v awk >/dev/null 2>&1; then
+  echo "⚠ pre-commit: awk not found — the multiline and brace-aware silent-catch families are NOT checked here (npm run gate still enforces them)." >&2
+  PARITY_AWK=""
+fi
+
+violations=""
+# An unquoted heredoc performs no field splitting, so a path with spaces stays
+# one line (a `for` over command substitution would split it).
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  case "$f" in
+    packages/core/src/*|packages/core/scripts/*|packages/tui/src/*|\
+    packages/tui/scripts/*|packages/cli/src/*|scripts/*|evals/*) ;;
+    *) continue ;;
+  esac
+  case "$f" in
+    evals/tasks/*|scripts/verify-gate.mjs|\
+    packages/cli/src/__tests__/gate.sentinel.test.ts) continue ;;
+  esac
+  case "$f" in
+    *.ts|*.tsx|*.js|*.mjs|*.cjs) ;;
+    *) continue ;;
+  esac
+
+  added=$(git diff --cached -- "$f" | grep -E '^\+' | grep -vE '^\+\+\+' | sed 's/^\+//' || true)
+  if [ -z "$added" ]; then continue; fi
+
   hits=""
-  h=$(printf '%s\n' "$code" | grep -nE 'instanceof[[:space:]]+Error[[:space:]]*\?' || true)
-  [ -n "$h" ] && hits="$hits
-(hook) raw error ternary/instanceof: $h"
-  h=$(printf '%s\n' "$code" | grep -nE '\.message[[:space:]]*\?\?[[:space:]]*String\(' || true)
-  [ -n "$h" ] && hits="$hits
-(hook) ?.message ?? String: $h"
-  h=$(printf '%s\n' "$code" | grep -nE '\bas[[:space:]]+(any|never)\b' || true)
-  [ -n "$h" ] && hits="$hits
-(hook) type escape: $h"
-  h=$(printf '%s\n' "$code" | grep -nE 'catch[[:space:]]*(\([^)]*\))?[[:space:]]*\{[[:space:]]*\}' || true)
-  [ -n "$h" ] && hits="$hits
-(hook) empty catch: $h"
-  h=$(printf '%s\n' "$added" | grep -nE '\b(TODO|FIXME|XXX)\b' || true)
-  [ -n "$h" ] && hits="$hits
-(hook) placeholder marker: $h"
-  h=$(printf '%s\n' "$added" | grep -nE '@ts-(ignore|nocheck)\b' || true)
-  [ -n "$h" ] && hits="$hits
-(hook) ts suppression (@ts-ignore/@ts-nocheck): $h"
-  if [ -n "$hits" ]; then
-    echo "🧟 SLOP PATTERNS DETECTED IN STAGED DIFF (context-free hook rules):" >&2
-    printf '%s\n' "$hits" >&2
-    echo "   Migrate to getErrorMessage() / typed casts etc. Full rules: npm run gate" >&2
-    exit 1
-  fi
-fi
+  add_hit() { hits="$hits
+  $1: $2"; }
 
-# --- Layer B3: skipped-test rule, TEST PATHS ONLY --------------------------
-# Gate Step 1, the gate's residual scan, and the in-process guardian all scope
-# this rule with the same predicate (`__tests__` or `.test.`). Outside a test
-# file a skipped block has nothing to skip, so judging prose there is a pure
-# false positive — and it was one: a source file that must NAME the pattern (a
-# rule registry, a scanner) was refused at commit time while `npm run gate`
-# passed. Mirror the predicate exactly rather than approximating it.
-skip_hits=""
-for f in $(git diff --cached --name-only --diff-filter=ACM); do
   case "$f" in
-    *__tests__*|*.test.*) ;;
-    *) continue ;;
-  esac
-  h=$(git diff --cached -- "$f" \
-        | grep -E '^\+' | grep -vE '^\+\+\+' \
-        | grep -nE '\b(it|test|describe)\.skip\b|\b(xit|xtest|xdescribe)[[:space:]]*\(' || true)
-  [ -n "$h" ] && skip_hits="$skip_hits
-$f: $h"
-done
-if [ -n "$skip_hits" ]; then
-  echo "🧟 SKIPPED TEST DETECTED (staged):" >&2
-  printf '%s\n' "$skip_hits" >&2
-  echo "   A skipped test is a test that never runs. Delete it or make it pass." >&2
-  echo "   Full rules: npm run gate" >&2
-  exit 1
-fi
+    *__tests__*|*.test.*)
+      # gate Rule 2.10 — the ONLY rule a test path is judged by.
+      h=$(printf '%s\n' "$added" | grep -nE '\b(it|test|describe)\.skip\b|\b(xit|xtest|xdescribe)[[:space:]]*\(' || true)
+      [ -n "$h" ] && add_hit "skipped test" "$h"
+      ;;
+    *)
+      # A comment cannot execute, so the code rules judge code lines only. Two
+      # gate rules are deliberately comment-visible: the placeholder marker (a
+      # marker in a comment is the target) and the TypeScript suppression.
+      code=$(printf '%s\n' "$added" | grep -vE '^[[:space:]]*(//|\*|/\*)' || true)
 
-# --- Layer B2: core boundary (per-file, so legal imports are not blocked) ----
-# G7 (AUDIT-2026-09-30): the old grep ran over the WHOLE multi-package diff and
-# flagged `@anvil/(tui|cli)` anywhere, so a legal CLI->TUI import (cli/index.tsx
-# already does this) failed the hook. Only `packages/core/` files may never
-# import tui/cli, and tests are exempt exactly as the gate exempts them.
-core_hits=""
-for f in $(git diff --cached --name-only --diff-filter=ACM); do
-  case "$f" in
-    packages/core/*) ;;
-    *) continue ;;
+      h=$(printf '%s\n' "$added" | grep -nE '@ts-(ignore|nocheck)\b' || true)
+      [ -n "$h" ] && add_hit "ts suppression" "$h"
+
+      h=$(printf '%s\n' "$code" | grep -nE '\bas[[:space:]]+(any|never)\b' || true)
+      [ -n "$h" ] && add_hit "type escape" "$h"
+
+      # The gate's `(?<!\?)` lookbehind, spelled as an alternation: grep -E has
+      # no lookbehind, so "a colon at line start, or preceded by anything but a
+      # question mark" is exact — it keeps `(?:any` from reading as `: any`.
+      h=$(printf '%s\n' "$code" | grep -nE '(^|[^?]):[[:space:]]*any\b|<[[:space:]]*any\b|,[[:space:]]*any\b|\bany[[:space:]]*\[' || true)
+      [ -n "$h" ] && add_hit "bare any annotation" "$h"
+
+      h=$(printf '%s\n' "$code" | grep -nE '\bas[[:space:]]+Error\b' || true)
+      [ -n "$h" ] && add_hit "as Error cast" "$h"
+
+      h=$(printf '%s\n' "$code" | grep -nE 'instanceof[[:space:]]+Error[[:space:]]*\?' || true)
+      if [ -z "$h" ]; then
+        h=$(printf '%s\n' "$code" | grep -nE '\.message[[:space:]]*\?\?[[:space:]]*String[[:space:]]*\(' || true)
+      fi
+      [ -n "$h" ] && add_hit "raw error formatting" "$h"
+
+      h=$(printf '%s\n' "$code" | grep -nE 'catch[[:space:]]*(\([^)]*\))?[[:space:]]*\{[[:space:]]*\}' || true)
+      [ -n "$h" ] && add_hit "empty catch" "$h"
+
+      # Template-literal content is generated text, not code — skipped.
+      h=$(printf '%s\n' "$code" | grep -vE "^[[:space:]]*[\`'\"]" | grep -nE "$MAGIC_RE" || true)
+      [ -n "$h" ] && add_hit "magic timeout/retry/cap literal" "$h"
+
+      case "$f" in
+        packages/core/*)
+          h=$(printf '%s\n' "$code" | grep -nE '@anvil/(tui|cli)' || true)
+          [ -n "$h" ] && add_hit "core boundary" "$h" ;;
+      esac
+
+      case "$f" in
+        packages/tui/src/components/*)
+          h=$(printf '%s\n' "$code" | grep -nE '\b(color|borderColor|backgroundColor)[[:space:]]*=[[:space:]]*(\{[[:space:]]*`(cyan|green|red|yellow|blue|magenta|white|black|gray)`[[:space:]]*\}|["'\''](cyan|green|red|yellow|blue|magenta|white|black|gray)["'\'']|`(cyan|green|red|yellow|blue|magenta|white|black|gray)`)' || true)
+          [ -n "$h" ] && add_hit "hardcoded TUI color" "$h" ;;
+      esac
+
+      h=$(printf '%s\n' "$added" | grep -nE '\b(TODO|FIXME|XXX)\b' || true)
+      [ -n "$h" ] && add_hit "placeholder marker" "$h"
+
+      if [ -n "$PARITY_AWK" ]; then
+        if [ -n "$hits" ]; then raw=1; else raw=0; fi
+        h=$(printf '%s\n' "$added" | awk -v hasraw="$raw" "$PARITY_AWK" || true)
+        [ -n "$h" ] && add_hit "multiline/silent catch" "$h"
+      fi
+      ;;
   esac
-  case "$f" in
-    *__tests__*|*.test.*) continue ;;
-  esac
-  h=$(git diff --cached -- "$f" \
-        | grep -E '^\+' | grep -vE '^\+\+\+' | grep -vE '^\+[[:space:]]*(//|\*|/\*)' \
-        | grep -nE '@anvil/(tui|cli)' || true)
-  [ -n "$h" ] && core_hits="$core_hits
-$f: $h"
-done
-if [ -n "$core_hits" ]; then
-  echo "🧟 CORE BOUNDARY VIOLATION (packages/core must never import tui/cli):" >&2
-  printf '%s\n' "$core_hits" >&2
+
+  [ -n "$hits" ] && violations="$violations
+$f:$hits"
+done <<EOF
+$(git diff --cached --name-only --diff-filter=ACM)
+EOF
+
+if [ -n "$violations" ]; then
+  echo "🧟 SLOP PATTERNS DETECTED IN STAGED FILES (gate Step 1 rules, pre-flighted):" >&2
+  printf '%s\n' "$violations" >&2
+  echo "   Migrate to getErrorMessage() / typed casts / config constants. Full rules: npm run gate" >&2
   exit 1
 fi
 

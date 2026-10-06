@@ -2,6 +2,55 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-07 (chief-engineer Batch M hook/gate parity, full cycle):**
+> Understand: read the gate's whole Step 1 — all eleven rules, its guards, and
+> both passes grep cannot express — then MEASURED the divergence instead of
+> trusting the note. The gate judges a TEST path (`__tests__` or `.test.`) by
+> the skipped-test rule ALONE and every other path by the rest; the hook applied
+> every rule to every path. 13 test files hold fixture casts the gate exempts,
+> so a new line of that kind was refused at commit time while `npm run gate`
+> passed. The reverse direction leaked too: bare-any, as-Error, magic literals,
+> TUI colors, multi-line evasions, the brace-aware silent catch, and *.cjs
+> under scripts/ were never carried at all.
+> Plan: make Layer B ONE path-aware scan mirroring the gate — same
+> SCAN_ROOTS x SCAN_EXTS, same fixture dir and two Step-1 self-exempt paths,
+> same rules split by the same predicate. The two shapes grep cannot express
+> (the multiline adjacent-pair pass and the brace-aware silent catch) are
+> ported to POSIX awk inside the hook rather than approximated, and a missing
+> awk is loud and fails OPEN (under-refuse, never over-refuse).
+> Edit: 5 files (3 protected: the hook, the sentinel, the manifest).
+> Run: build + typecheck 0.
+> Debug: two bugs of my own — awk rejects `line` as both an array and a scalar
+> (renamed), and my first differential corpus gave several cases the SAME path,
+> so staging them together overwrote each other and blurred the verdicts.
+> Retest: 39 hook tests (28 per-rule probes + 3 differential suites) and 19
+> sentinel tests. The differential stages one corpus and requires the hook's
+> refused-file set to EQUAL the real `verify-gate.mjs --quick --staged` set,
+> per case and in total. The awk port is byte-identical under gawk, mawk, nawk
+> and busybox awk on 15 adversarial inputs (CI ships mawk; a dev box may ship
+> gawk). Fail-first proven by reverting the hook: 16 assertions go RED while 38
+> stay green — the pre-existing G7 boundary tests are the control that proves
+> the suite is not simply always-red — files restored byte-exact.
+> Review: PROTECTED ARTIFACTS CHANGED — .githooks/pre-commit,
+> gate.sentinel.test.ts (a static drift guard: a scan root or extension the
+> gate gains but the hook never learns now fails), and gate-manifest.json
+> regenerated in the same commit. No gate semantics changed: the gate file is
+> untouched, the under-coverage direction is closed by carrying its rules, and
+> the hook only stopped refusing what the gate already allows.
+> Deliberately NOT changed: the hook still does not honour
+> `.fresh-allowlist.json`. Reading worktree data would make its decision
+> attacker-controlled, which its own header forbids; the list is empty and only
+> shrinks, so the asymmetry is presently inert.
+>
+> **IN-PROGRESS 2026-10-07 (chief-engineer Batch M hook/gate parity):**
+> owns `packages/cli/src/__tests__/preCommitHook.test.ts` (28 per-rule probes,
+> 3 differential suites against the real gate),
+> `packages/cli/src/__tests__/gate.sentinel.test.ts` (protected: drift guard),
+> `scripts/gate-manifest.json` (hashes regenerated),
+> `.githooks/pre-commit` (protected: one path-aware Layer B).
+> No core/tui/cli source touched. Protected changes acknowledged via
+> --ack-protected-change.
+>
 > **DONE 2026-10-07 (chief-engineer Batch L gate-hook parity, full cycle):**
 > Understand: read both scanners, the hook, the sentinel and the manifest
 > protocol live, then MEASURED three divergences instead of assuming them.
