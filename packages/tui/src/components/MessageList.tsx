@@ -5,6 +5,7 @@ import type { DisplayMessage } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { MessageView } from "./MessageView.js";
 import { WordmarkAnimation, wordmarkMode } from "./Wordmark.js";
+import { detectColorSupport } from "../theme/colorSupport.js";
 import { displayModelLabel, providerLabel, providerOfModel } from "../util/format.js";
 import { hiddenMessageCount, applyTranscriptPin } from "../util/transcriptWindow.js";
 
@@ -19,7 +20,7 @@ function EmptyState({ model, providerId }: { model: string; providerId?: string 
     cols: stdout?.columns ?? 80,
     rows: stdout?.rows ?? 24,
     isTTY: stdout?.isTTY,
-    noColor: Boolean(process.env.NO_COLOR),
+    noColor: detectColorSupport() === "none",
     noAnim: process.env.ANVIL_NO_ANIM === "1",
   });
   // The hints ARE the onboarding contract, so they are never held back longer

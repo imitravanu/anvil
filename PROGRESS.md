@@ -2,6 +2,23 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (chief-engineer Batch D3b wire colorSupport, full cycle):**
+> Understand: highlight + wordmark used `Boolean(NO_COLOR)` truthiness —
+> `NO_COLOR=""` and dumb terminals still emitted ANSI.
+> Plan: wire `detectColorSupport()==="none"` into both call sites (§2.8
+> production callers for the detector).
+> Edit: 2 files. Run: build + typecheck 0.
+> Debug: verified pre-change parity (plain in non-TTY both before/after;
+> FORCE_COLOR proves highlight path intact).
+> Retest: markdown+theme 28/28, gate Steps 0-5 green.
+> Review: no protected artifact touched.
+>
+> **IN-PROGRESS 2026-10-06 (chief-engineer Batch D3b wire colorSupport):**
+> owns `packages/tui/src/markdown/highlightCodeBlocks.ts`,
+> `packages/tui/src/components/MessageList.tsx`.
+> Spec fix: NO_COLOR presence (even empty) + TERM=dumb disable; was truthiness.
+> No protected artifact touched.
+>
 > **DONE 2026-10-06 (chief-engineer Batch D3 truecolor support, full cycle):**
 > Understand: Ink 7 `useInput` Key is keyboard-only (mouse deferred honestly —
 > raw SGR-1006 parsing out of scope); `useFocusManager` exists (focus next);
