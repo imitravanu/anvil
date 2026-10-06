@@ -11,7 +11,17 @@ import { loadModelsCacheV2, saveModelsCacheV2, ModelsCacheV2 } from "./cache.js"
 
 export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 // Centralized in config/constants (§2.4); re-exported so the public API is unchanged.
-import { DEFAULT_SYNC_TTL_MS, OPENROUTER_SYNC_TIMEOUT_MS, ORCAROUTER_SYNC_TIMEOUT_MS } from "../config/constants.js";
+import {
+  DEFAULT_SYNC_TTL_MS,
+  OPENROUTER_SYNC_TIMEOUT_MS,
+  ORCAROUTER_SYNC_TIMEOUT_MS,
+  FREE_MODEL_CIRCUIT_THRESHOLD,
+  FREE_MODEL_CIRCUIT_TIMEOUT_MS,
+  FREE_MODEL_RETRY_MIN_S,
+  FREE_MODEL_RETRY_MAX_S,
+  FREE_MODEL_RETRY_DEFAULT_S,
+  FREE_MODEL_BACKOFF_MULTIPLIER,
+} from "../config/constants.js";
 export { DEFAULT_SYNC_TTL_MS };
 const REFERER = "https://github.com/imitravanu/anvil";
 const TITLE = "Anvil";
@@ -266,8 +276,8 @@ export function createOrcarouterFreeSource(): FreeModelSource {
 const rateLimited = new Map<string, Set<string>>(); // sourceId -> model ids
 const consecutiveRateLimits = new Map<string, number>(); // sourceId:modelId -> consecutive count
 
-const CIRCUIT_BREAKER_THRESHOLD = 5;
-const CIRCUIT_BREAKER_TIMEOUT_MS = 60_000;
+const CIRCUIT_BREAKER_THRESHOLD = FREE_MODEL_CIRCUIT_THRESHOLD;
+const CIRCUIT_BREAKER_TIMEOUT_MS = FREE_MODEL_CIRCUIT_TIMEOUT_MS;
 type CircuitState = "closed" | "open" | "half-open";
 interface CircuitBreakerEntry {
   state: CircuitState;
@@ -419,10 +429,10 @@ export function isQuotaExhaustedMessage(message: string): boolean {
   );
 }
 
-const MIN_RETRY_WAIT_S = 1;
-const MAX_RETRY_WAIT_S = 120;
-const DEFAULT_RETRY_WAIT_S = 20;
-const BACKOFF_MULTIPLIER = 2;
+const MIN_RETRY_WAIT_S = FREE_MODEL_RETRY_MIN_S;
+const MAX_RETRY_WAIT_S = FREE_MODEL_RETRY_MAX_S;
+const DEFAULT_RETRY_WAIT_S = FREE_MODEL_RETRY_DEFAULT_S;
+const BACKOFF_MULTIPLIER = FREE_MODEL_BACKOFF_MULTIPLIER;
 
 /**
  * Wait seconds before an automatic retry, parsed from the provider message

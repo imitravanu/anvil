@@ -2,6 +2,19 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (chief-engineer Batch D2 circuit/retry §2.4, full cycle):**
+> Understand: inventoried freeModels locals (5, 60000, 1, 120, 20, 2).
+> Plan: centralize in constants (env-overridable, verbatim defaults),
+> alias locals, re-export path unchanged.
+> Edit: 2 files. Run: build + typecheck 0. Debug: none.
+> Retest: freeModels 14/14, rateLimit 4/4, dist probes OK, gate Steps 0-5 green.
+> Review: no protected artifact touched.
+>
+> **IN-PROGRESS 2026-10-06 (chief-engineer Batch D2 circuit/retry §2.4):**
+> owns `packages/core/src/config/constants.ts`,
+> `packages/core/src/providers/freeModels.ts`.
+> Values preserved verbatim. No protected artifact touched.
+>
 > **DONE 2026-10-06 (chief-engineer Batch D1 §2.4 cap drain, full cycle):**
 > Understand: inventoried inline caps via live grep (TUI 20 sites, core 12 sites).
 > Plan: hoist TUI display caps to `displayLimits.ts`, core serialize caps to

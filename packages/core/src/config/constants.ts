@@ -365,3 +365,12 @@ export const LSP_SYMBOL_MATCHES_MAX = 20;
 export const LSP_TSC_RAW_MAX = 4000;
 export const LSP_SENSOR_DIAGNOSTICS_MAX = 10;
 
+// D2 (§2.4): free-model circuit-breaker + Retry-After backoff, hoisted from
+// providers/freeModels.ts — values preserved verbatim.
+export const FREE_MODEL_CIRCUIT_THRESHOLD = getEnvNumber("ANVIL_FREE_MODEL_CIRCUIT_THRESHOLD", 5);
+export const FREE_MODEL_CIRCUIT_TIMEOUT_MS = getEnvNumber("ANVIL_FREE_MODEL_CIRCUIT_TIMEOUT_MS", 60_000);
+export const FREE_MODEL_RETRY_MIN_S = getEnvNumber("ANVIL_FREE_MODEL_RETRY_MIN_S", 1);
+export const FREE_MODEL_RETRY_MAX_S = getEnvNumber("ANVIL_FREE_MODEL_RETRY_MAX_S", 120);
+export const FREE_MODEL_RETRY_DEFAULT_S = getEnvNumber("ANVIL_FREE_MODEL_RETRY_DEFAULT_S", 20);
+export const FREE_MODEL_BACKOFF_MULTIPLIER = getEnvNumber("ANVIL_FREE_MODEL_BACKOFF_MULTIPLIER", 2);
+
