@@ -2,6 +2,58 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-07 (chief-engineer Batch N — ONE test-file exemption policy):**
+> Understand: Batch M left one cross-checkpoint divergence REPORTED rather than
+> fixed. The gate exempts a test path from every non-skip rule, but the
+> in-process guardian (packages/core/src/guardian/scanner.ts) exempted only the
+> cast, as-Error and suppression families — it still judged empty catches, raw
+> error formatting, placeholder markers, magic literals, boundary imports and
+> TUI colors inside test files the gate accepts. Advisory only, so it could not
+> block a commit, but the repo had three checkpoints implementing two policies
+> and the description "green gate, guardian nagging" is not a policy.
+> Plan: make the gate's Step 1 split the ONE documented policy; align the
+> guardian to it (the hook already mirrors it since Batch M); write it down
+> once, in AGENTS.md §2 rule 11; and add a drift test that drives the REAL gate
+> scanner and the REAL guardian over one corpus and fails on any disagreement.
+> Direction matters: the GATE is the authority, so the advisory checkpoint moved
+> to the gate — never the reverse — and nothing that can block a commit was
+> weakened. Project-declared custom rules stay unconditional in every path,
+> deliberately outside this policy.
+> Edit: 7 files (3 protected: AGENTS.md, .githooks/pre-commit, the sentinel).
+> Run: build + typecheck 0.
+> Debug: the drift test was run against the OLD built guardian first — vitest
+> resolves @anvil/core to the built artifact, so it read
+> `empty catch: expected [true, true, false, true]`, which is exactly the
+> divergence and proves both the test's teeth and that the gate's Step 2 build
+> is load-bearing for this assertion. Second: my first AGENTS.md edit touched
+> rule 2, whose text NAMES the forbidden casts — an edit re-adds that literal to
+> the added-line scan, so the reference moved into the new rule 11 and rule 2
+> was left byte-identical.
+> Retest: core guardian suite 39/39 (fail-first: 1 RED, 38 GREEN against HEAD's
+> scanner — the 38 are the control that the suite is not always-red), sentinel
+> 20 tests incl. the 12-row verdict-equality corpus. Fail-first for the doc
+> pointer was measured against HEAD's hook, which named
+> packages/cli/src/__tests__/hookGateParity.test.ts — a file that does not
+> exist; the drift test now fails on a pointer to a missing suite. Scanner
+> restored byte-exact (sha256 5548e33c…).
+> Review: PROTECTED ARTIFACTS CHANGED — AGENTS.md (new rule 11: the policy, in
+> one place), .githooks/pre-commit (header names the real parity suite and the
+> policy's home), gate.sentinel.test.ts (drift test + a gateScanner() helper
+> shared with the rule-family probe), gate-manifest.json regenerated in the same
+> commit. No gate semantics changed: scripts/verify-gate.mjs is untouched.
+> Still deliberately open: the hook does not read .fresh-allowlist.json (reading
+> worktree data would make its decision attacker-controlled — inert while the
+> list is empty).
+>
+> **IN-PROGRESS 2026-10-07 (chief-engineer Batch N policy unification):**
+> owns `packages/core/src/guardian/scanner.ts` (one path split),
+> `packages/core/src/guardian/__tests__/guardian.test.ts` (12-fixture policy
+> probe + source-path controls), `AGENTS.md` (protected, acknowledged),
+> `.githooks/pre-commit` (protected, acknowledged),
+> `packages/cli/src/__tests__/gate.sentinel.test.ts` (protected, acknowledged),
+> `packages/cli/src/__tests__/preCommitHook.test.ts` (header only),
+> `scripts/gate-manifest.json` (hashes regenerated).
+>
 > **DONE 2026-10-07 (chief-engineer Batch M hook/gate parity, full cycle):**
 > Understand: read the gate's whole Step 1 — all eleven rules, its guards, and
 > both passes grep cannot express — then MEASURED the divergence instead of

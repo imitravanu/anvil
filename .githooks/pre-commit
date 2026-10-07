@@ -26,7 +26,11 @@
 # allows), and a rule missing here lets slop through that the gate would stop.
 # The gate stays the authority — this layer only fails faster. A rule added
 # there belongs here in the same commit; the differential suite in
-# packages/cli/src/__tests__/hookGateParity.test.ts fails if the two drift.
+# packages/cli/src/__tests__/preCommitHook.test.ts fails if the two drift, and
+# the cross-checkpoint drift test in packages/cli/src/__tests__/
+# gate.sentinel.test.ts fails if this layer, the gate and the in-process
+# guardian stop answering identically for the same path. The exemption policy
+# itself is documented once, in AGENTS.md Section 2 rule 11.
 set -u
 
 # --- Layer A: protected-path tamper refusal (self-contained) ----------------
@@ -49,9 +53,10 @@ fi
 # --- Layer B: staged slop scan — the gate's Step 1 rule set, split by path ---
 #
 # The gate judges a TEST path (`__tests__` or `.test.`) by the skipped-test
-# rule ALONE and everything else by the remaining rules; that split is
-# reproduced exactly here. Scope mirrors the gate's SCAN_ROOTS x SCAN_EXTS,
-# minus its fixture dir and its two Step-1 self-exempt paths.
+# rule ALONE and everything else by the remaining rules; that split (AGENTS.md
+# Section 2 rule 11, TEST-FILE EXEMPTION POLICY) is reproduced exactly here.
+# Scope mirrors the gate's SCAN_ROOTS x SCAN_EXTS, minus its fixture dir and
+# its two Step-1 self-exempt paths.
 #
 # Two gate checks cannot be expressed as a per-line grep: the brace-aware
 # non-empty silent catch, and the multiline pass that catches a rule evaded by

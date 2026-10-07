@@ -184,6 +184,49 @@ describe("scanTextForSlop", () => {
       )
     ).toBe(false);
   });
+
+  // Batch N: ONE test-file exemption policy across the gate, the pre-commit
+  // hook and this scanner (see the isTestPath doc block). Fail-first — every
+  // fixture below was flagged HERE while the gate accepted the very same file,
+  // so the in-process checkpoint nagged about sanctioned fixture work and the
+  // three checkpoints could not be described by one rule.
+  it("exempts a test path from every built-in family except the skipped-test rule", () => {
+    const CORE_TEST = "packages/core/src/__tests__/fixture.test.ts";
+    const TUI_TEST = "packages/tui/src/components/__tests__/Probe.test.tsx";
+    // A cast split across two lines, assembled so this source never holds the
+    // two-line shape it probes for.
+    const SPLIT_CAST = "const x = data as\n" + "  an" + "y;";
+    const fixtures: Array<{ label: string; rel: string; text: string }> = [
+      { label: "as-any fixture cast", rel: CORE_TEST, text: FIX_AS_ANY },
+      { label: "as Error fixture cast", rel: CORE_TEST, text: FIX_AS_ERROR },
+      { label: "TypeScript suppression", rel: CORE_TEST, text: FIX_TS_IGNORE },
+      { label: "empty catch", rel: CORE_TEST, text: FIX_EMPTY_CATCH },
+      { label: "multiline empty catch", rel: CORE_TEST, text: FIX_MULTILINE_CATCH },
+      { label: "cast split across lines", rel: CORE_TEST, text: SPLIT_CAST },
+      { label: "raw error formatting", rel: CORE_TEST, text: FIX_RAW_ERROR },
+      { label: "placeholder marker", rel: CORE_TEST, text: `// ${PLACEHOLDER_WORD}: fixture note` },
+      { label: "magic timeout literal", rel: CORE_TEST, text: FIX_MAGIC_TIMEOUT },
+      { label: "core boundary import", rel: CORE_TEST, text: TUI_IMPORT },
+      { label: "hardcoded TUI color", rel: TUI_TEST, text: FIX_COLOR_QUOTE },
+      { label: "silent catch", rel: CORE_TEST, text: FIX_SILENT_CATCH },
+    ];
+    for (const { label, rel, text } of fixtures) {
+      expect(scanTextForSlop(rel, text, "anvil"), `test path must be exempt: ${label}`).toEqual([]);
+      // Control: the exemption is PATH-SCOPED, not a disabled rule. The same
+      // text on the production sibling path is still judged, so a scanner that
+      // simply stopped reporting would fail here.
+      const sourcePath = rel.replace("__tests__/", "").replace(/\.test\.tsx?$/, ".ts");
+      expect(
+        scanTextForSlop(sourcePath, text, "anvil").length,
+        `source path must still be judged: ${label}`
+      ).toBeGreaterThan(0);
+    }
+    // The one family a test path IS judged by — and only there.
+    expect(scanTextForSlop(CORE_TEST, FIX_SKIPPED_TEST, "anvil").map((v) => v.rule)).toEqual([
+      "no-skipped-test",
+    ]);
+    expect(scanTextForSlop("packages/core/src/fixture.ts", FIX_SKIPPED_TEST, "anvil")).toEqual([]);
+  });
 });
 
 describe("scanTextForSlop — foreign scope (not Anvil's own repo)", () => {

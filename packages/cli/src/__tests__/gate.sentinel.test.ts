@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
-import { isValidSourceFilePath } from "@anvil/core";
+import { isValidSourceFilePath, scanTextForSlop } from "@anvil/core";
 
 /**
  * GATE INTEGRITY SENTINEL (hardening, 2026-09-13)
@@ -28,6 +28,34 @@ import { isValidSourceFilePath } from "@anvil/core";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../");
 const read = (rel: string): string => fs.readFileSync(path.join(ROOT, rel), "utf-8");
 
+/**
+ * Extract the gate's REAL `scanLinesForViolations`, plus the helpers it calls,
+ * from its source and evaluate them — behavioral probes rather than a
+ * restatement of the regex text (G2). Shared by the rule-family probe and the
+ * Batch N exemption-policy parity test; the existence assertions live here so a
+ * gate that stops defining any of these fails both callers.
+ */
+function gateScanner(): (lines: string[]) => string[] {
+  const gate = read("scripts/verify-gate.mjs");
+  const isCommentSrc = gate.match(/const isCommentLine = [^\n]+/)?.[0];
+  const magicSrc = gate.match(/const MAGIC_TIMEOUT_RE =[\s\S]*?;/)?.[0];
+  const surfacesSrc = gate.match(/const CATCH_SURFACES_RE = [^\n]+/)?.[0];
+  const braceSrc = gate.match(/function matchBraceBody\(text, openIdx\) \{[\s\S]*?\n\}/)?.[0];
+  const silentSrc = gate
+    .match(/export function silentCatchLines\(text\) \{[\s\S]*?\n\}/)?.[0]
+    ?.replace(/^export /, "");
+  const scanSrc = gate.match(/function scanLinesForViolations\(diffLines\) \{[\s\S]*?\n\}/)?.[0];
+  expect(isCommentSrc, "gate must define isCommentLine").toBeTruthy();
+  expect(magicSrc, "gate must define MAGIC_TIMEOUT_RE").toBeTruthy();
+  expect(surfacesSrc, "gate must define CATCH_SURFACES_RE").toBeTruthy();
+  expect(braceSrc, "gate must define matchBraceBody").toBeTruthy();
+  expect(silentSrc, "gate must define silentCatchLines").toBeTruthy();
+  expect(scanSrc, "gate must define scanLinesForViolations").toBeTruthy();
+  return new Function(
+    `${isCommentSrc}\n${magicSrc}\n${surfacesSrc}\n${braceSrc}\n${silentSrc}\n${scanSrc}\nreturn scanLinesForViolations;`
+  )() as (lines: string[]) => string[];
+}
+
 describe("gate integrity sentinel", () => {
   it("gate script exists and is non-empty", () => {
     const gate = read("scripts/verify-gate.mjs");
@@ -40,27 +68,7 @@ describe("gate integrity sentinel", () => {
     // `if (false)` still passed. Extract the real scanner and assert each
     // family actually fires. A disabled rule now fails the probe that exists to
     // catch it.
-    const gate = read("scripts/verify-gate.mjs");
-    const isCommentSrc = gate.match(/const isCommentLine = [^\n]+/)?.[0];
-    // H1: scanLinesForViolations now calls the shared helpers, so they must be
-    // injected into the evaluated function too — otherwise the extracted
-    // scanner would throw a ReferenceError the moment a probe reaches them.
-    const magicSrc = gate.match(/const MAGIC_TIMEOUT_RE =[\s\S]*?;/)?.[0];
-    const surfacesSrc = gate.match(/const CATCH_SURFACES_RE = [^\n]+/)?.[0];
-    const braceSrc = gate.match(/function matchBraceBody\(text, openIdx\) \{[\s\S]*?\n\}/)?.[0];
-    const silentSrc = gate
-      .match(/export function silentCatchLines\(text\) \{[\s\S]*?\n\}/)?.[0]
-      ?.replace(/^export /, "");
-    const scanSrc = gate.match(/function scanLinesForViolations\(diffLines\) \{[\s\S]*?\n\}/)?.[0];
-    expect(isCommentSrc, "gate must define isCommentLine").toBeTruthy();
-    expect(magicSrc, "gate must define MAGIC_TIMEOUT_RE").toBeTruthy();
-    expect(surfacesSrc, "gate must define CATCH_SURFACES_RE").toBeTruthy();
-    expect(braceSrc, "gate must define matchBraceBody").toBeTruthy();
-    expect(silentSrc, "gate must define silentCatchLines").toBeTruthy();
-    expect(scanSrc, "gate must define scanLinesForViolations").toBeTruthy();
-    const scan = new Function(
-      `${isCommentSrc}\n${magicSrc}\n${surfacesSrc}\n${braceSrc}\n${silentSrc}\n${scanSrc}\nreturn scanLinesForViolations;`
-    )() as (lines: string[]) => string[];
+    const scan = gateScanner();
 
     const CORE = "+++ b/packages/core/src/probe.ts";
     const TUI = "+++ b/packages/tui/src/components/Probe.tsx";
@@ -243,6 +251,10 @@ describe("gate integrity sentinel", () => {
     expect(agents).toContain("getErrorMessage");
     expect(agents).toContain("PHASE-21-25-AUDIT.md");
     expect(agents).toContain("Protected Artifact");
+    // Batch N: the exemption policy the three checkpoints implement is written
+    // down exactly once, in the constitution, and pinned here so it cannot be
+    // silently dropped while the code keeps depending on it.
+    expect(agents).toContain("TEST-FILE EXEMPTION POLICY");
   });
 
   it("integrity manifest covers every protected artifact and matches live content", () => {
@@ -341,6 +353,88 @@ describe("gate integrity sentinel", () => {
     expect(hook).toContain("*__tests__*|*.test.*");
     // The two checks grep cannot express are ported rather than dropped.
     expect(hook).toContain("PARITY_AWK");
+  });
+
+  // Batch N: ONE test-file exemption policy, implemented by three checkpoints
+  // (the gate's Step 1, the pre-commit hook's Layer B, and the in-process
+  // guardian). A test path is judged by the skipped-test rule ALONE; every other
+  // built-in family is exempt there, because a fixture legitimately needs casts,
+  // silent catches, marker strings and inline timing literals to reproduce the
+  // failure it pins. The guardian used to carry a NARROWER exemption — it judged
+  // empty catches, raw error formatting, marker strings, magic literals,
+  // boundary imports and TUI colors in test files the gate accepts, so the
+  // in-process checkpoint nagged about work the commit gate blessed. This drives
+  // the real gate scanner and the real guardian over one corpus and fails if
+  // their verdicts ever diverge again (the gate's Step 2 build makes the guardian
+  // module under test the current source, as with the allowlist parity above).
+  it("one test-file exemption policy across the gate, the hook and the guardian (Batch N)", () => {
+    const gate = read("scripts/verify-gate.mjs");
+    const hook = read(".githooks/pre-commit");
+    const scan = gateScanner();
+    const CORE_SRC = "packages/core/src/probe.ts";
+    const CORE_TEST = "packages/core/src/__tests__/probe.test.ts";
+    const TUI_SRC = "packages/tui/src/components/Probe.tsx";
+    const TUI_TEST = "packages/tui/src/components/__tests__/Probe.test.tsx";
+    const gateRejects = (rel: string, text: string): boolean =>
+      scan([`+++ b/${rel}`, `+ ${text}`]).length > 0;
+    const guardianRejects = (rel: string, text: string): boolean =>
+      scanTextForSlop(rel, text, "anvil").length > 0;
+
+    // Only shapes BOTH checkpoints implement: the parity claim is about the
+    // exemption, not about the guardian's rule set (the gate alone carries the
+    // bare-any annotation and `?? String(` families).
+    const corpus: Array<{
+      label: string;
+      srcRel: string;
+      testRel: string;
+      text: string;
+      testOnly?: boolean;
+    }> = [
+      { label: "as-any cast", srcRel: CORE_SRC, testRel: CORE_TEST, text: "const x = data as any;" },
+      { label: "as-never cast", srcRel: CORE_SRC, testRel: CORE_TEST, text: "const y = data as never;" },
+      { label: "as Error cast", srcRel: CORE_SRC, testRel: CORE_TEST, text: "const m = (err as Error).message;" },
+      { label: "empty catch", srcRel: CORE_SRC, testRel: CORE_TEST, text: "try { a(); } catch {}" },
+      { label: "raw error ternary", srcRel: CORE_SRC, testRel: CORE_TEST, text: "const m = err instanceof Error ? err.message : String(err);" },
+      { label: "TypeScript suppression", srcRel: CORE_SRC, testRel: CORE_TEST, text: "// @ts-ignore" },
+      { label: "placeholder marker", srcRel: CORE_SRC, testRel: CORE_TEST, text: "// TODO: later" },
+      { label: "magic timeout literal", srcRel: CORE_SRC, testRel: CORE_TEST, text: "const r = fetch(url, { timeout: 5000 });" },
+      { label: "core boundary import", srcRel: CORE_SRC, testRel: CORE_TEST, text: "import { App } from '@anvil/tui';" },
+      { label: "hardcoded TUI color", srcRel: TUI_SRC, testRel: TUI_TEST, text: '<Box color="cyan" />' },
+      { label: "silent non-empty catch", srcRel: CORE_SRC, testRel: CORE_TEST, text: "try { a(); } catch { b = 1; }" },
+      { label: "skipped test", srcRel: CORE_SRC, testRel: CORE_TEST, text: 'it.skip("test", () => {});', testOnly: true },
+    ];
+    for (const row of corpus) {
+      // [gate.src, guardian.src, gate.test, guardian.test] — the whole policy in
+      // one assertion: the checkpoints must agree, in both directions.
+      expect(
+        [
+          gateRejects(row.srcRel, row.text),
+          guardianRejects(row.srcRel, row.text),
+          gateRejects(row.testRel, row.text),
+          guardianRejects(row.testRel, row.text),
+        ],
+        `${row.label}: gate/guardian verdicts must match on both path classes`
+      ).toEqual(row.testOnly ? [false, false, true, true] : [true, true, false, false]);
+    }
+
+    // The split-across-two-lines family lives in a Step-1 block OUTSIDE the
+    // extracted scanner, so it is pinned by its path predicate plus a behavioral
+    // probe on the guardian, which carries the pair scan in-process.
+    expect(gate).toContain(
+      'if (file.includes("__tests__") || file.includes(".test.") || file === "scripts/verify-gate.mjs") continue;'
+    );
+    const splitCast = "const x = data as\n" + "  an" + "y;";
+    expect(guardianRejects(CORE_TEST, splitCast), "a split cast is exempt in a test path").toBe(false);
+    expect(guardianRejects(CORE_SRC, splitCast), "a split cast is still judged on a source path").toBe(true);
+
+    // The hook implements the same split, and it names the suite that guards it:
+    // a pointer to a renamed file is rot, not documentation.
+    expect(hook).toContain("*__tests__*|*.test.*");
+    const named = [...hook.matchAll(/packages\/cli\/src\/__tests__\/[A-Za-z0-9_.-]+\.test\.ts/g)].map((m) => m[0]);
+    expect(named.length, "the hook must name the parity suite that guards it").toBeGreaterThan(0);
+    for (const rel of named) {
+      expect(fs.existsSync(path.join(ROOT, rel)), `the hook points at a missing suite: ${rel}`).toBe(true);
+    }
   });
 
   it("CI still enforces tests, the gate, and full clone depth", () => {

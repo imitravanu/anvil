@@ -128,6 +128,27 @@ const RULES: { rule: string; family: GuardianRuleFamily; scope: RuleScope; patte
   },
 ];
 
+/**
+ * TEST-FILE EXEMPTION POLICY (Batch N) — ONE policy, every checkpoint.
+ *
+ * A TEST path (any path containing `__tests__` or `.test.`) is judged by the
+ * skipped-test rule ALONE. Every other built-in rule is exempt there because a
+ * fixture legitimately needs casts, silent-catch blocks, marker strings and
+ * inline timing literals to reproduce the failure it pins. The authority is the
+ * gate's Step 1 (`scripts/verify-gate.mjs`); the pre-commit hook (Layer B) and
+ * this scanner are PRE-FLIGHTS of it, not second opinions, so all three must
+ * answer the same way for the same path (the gate's Step 1.5 residual pass
+ * encodes the same split through its `onlyTests` rule flag). The drift test in
+ * `packages/cli/src/__tests__/gate.sentinel.test.ts` fails if any of the three
+ * diverges.
+ *
+ * This scanner used to carry its own, narrower exemption: it judged empty
+ * catches, raw error formatting, placeholder markers, magic literals, core
+ * boundary imports and TUI colors in test files the gate accepted, so the
+ * in-process checkpoint nagged about work the commit gate blessed. Project-
+ * declared custom rules stay unconditional in every path — a project that
+ * writes a rule for a file means it everywhere.
+ */
 function isTestPath(file: string): boolean {
   return file.includes("__tests__") || file.includes(".test.");
 }
@@ -259,9 +280,13 @@ export function scanTextForSlop(
   // writes a rule for a doc file means it.
   const scanBuiltins = !isNonCodePath(file);
 
+  const testFile = isTestPath(file);
+
   // Multiline split detection: scan consecutive line pairs for patterns that
-  // span two lines to evade single-line rule checks.
-  if (scanBuiltins) {
+  // span two lines to evade single-line rule checks. The split families are
+  // all non-skipped-test rules, so a test path is exempt from this pass
+  // entirely — exactly as the gate's Step 1 pair scan skips test paths.
+  if (scanBuiltins && !testFile) {
     for (let i = 0; i < lines.length - 1; i++) {
       const joined = lines[i] + "\n" + lines[i + 1];
       // A comment pair cannot execute; the split families carry no placeholder
@@ -269,7 +294,6 @@ export function scanTextForSlop(
       const commentPair = isCommentLine(lines[i]) || isCommentLine(lines[i + 1]);
       for (const { rule, family, scope: ruleScope, pattern, detail } of SPLIT_PATTERNS) {
         if (ruleScope === "anvil" && scope !== "anvil") continue;
-        if (rule === "no-as-any" && isTestPath(file)) continue;
         if (commentPair) continue;
         if (pattern.test(joined)) {
           violations.push({ file, line: i + 1, rule, family, detail });
@@ -284,10 +308,9 @@ export function scanTextForSlop(
       const comment = isCommentLine(lineText);
       for (const { rule, family, scope: ruleScope, pattern, detail } of RULES) {
         if (ruleScope === "anvil" && scope !== "anvil") continue;
-        if (rule === "no-as-any" && isTestPath(file)) continue;
-        if (rule === "no-as-error" && isTestPath(file)) continue;
-        if (rule === "no-ts-suppression" && isTestPath(file)) continue;
-        if (rule === "no-skipped-test" && !isTestPath(file)) continue;
+        // TEST-FILE EXEMPTION POLICY (see isTestPath): a test path is judged by
+        // the skipped-test rule alone; every other path by every other rule.
+        if (testFile ? rule !== "no-skipped-test" : rule === "no-skipped-test") continue;
         if (rule === "no-architecture-breach" && !isCorePackageFile(file)) continue;
         if (rule === "no-hardcoded-color" && !isTuiComponentFile(file)) continue;
         if (rule === "no-magic-constant" && /^[`'"]/.test(lineText.trim())) continue;
@@ -306,12 +329,13 @@ export function scanTextForSlop(
     }
   });
 
-  // H1: brace-aware non-empty silent catches. Tests are exempt (fixtures).
+  // H1: brace-aware non-empty silent catches. Test paths are exempt by the
+  // policy above (fixtures) — and the gate's residual pass does the same.
   // Anvil scope only: unlike a truly empty catch, a non-empty silent catch is
   // an ordinary defensive fallback idiom in foreign code, and blocking it would
   // make the guardian unusable outside this repo (the same reason
   // no-raw-error-format is anvil-scoped).
-  if (scanBuiltins && scope === "anvil" && !isTestPath(file)) {
+  if (scanBuiltins && scope === "anvil" && !testFile) {
     for (const lineNo of silentCatchLineNumbers(text)) {
       violations.push({
         file,

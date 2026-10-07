@@ -22,9 +22,11 @@ import { fileURLToPath } from "node:url";
  * gate over the SAME staged index as the hook and compares verdicts, so this is
  * a differential proof against the authority rather than a restatement of it.
  *
- * Every forbidden shape below is ASSEMBLED AT RUNTIME. The commit hook judges a
- * test path by the skipped-test rule alone, but the in-process guardian judges
- * several families in test files too, and this file must stay clean for both.
+ * Every forbidden shape below is ASSEMBLED AT RUNTIME. All three checkpoints —
+ * the gate, this hook and the in-process guardian — judge a test path by the
+ * skipped-test rule alone (AGENTS.md Section 2 rule 11, TEST-FILE EXEMPTION
+ * POLICY), so a fixture cast in a test file is sanctioned everywhere; this file
+ * still assembles its own shapes so the probes never depend on that exemption.
  */
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../");
 const HOOK = path.join(ROOT, ".githooks", "pre-commit");
