@@ -285,11 +285,11 @@ export function DiffModal({ session, onClose, branchDiff }: DiffModalProps) {
       {/* File Tabs */}
       <Box flexShrink={0} marginY={1} gap={1} width={tabsWidth} overflow="hidden">
         {start > 0 && <Text color={theme.colors.textSecondary}>…</Text>}
-        {tabs.map((c: SessionFileChange) => {
-          const i = changes.indexOf(c);
+        {tabs.map((c: SessionFileChange, ti: number) => {
+          const i = start + ti;
           return (
             <Text
-              key={c.path}
+              key={`${c.path}#${i}`}
               bold={i === activeIdx}
               color={i === activeIdx ? theme.colors.accent : theme.colors.textSecondary}
               inverse={i === activeIdx}

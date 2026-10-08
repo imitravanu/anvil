@@ -166,6 +166,31 @@ describe("runGoalHeadless", () => {
     expect(stderrOutput).toContain("Goal failed");
   });
 
+  it("exits 1 when the provider stream is empty (planning cannot proceed)", async () => {
+    // The mission always opens with awareness + planning; an empty provider
+    // stream errors the planning turn, so the run ends goal_failed — never a
+    // silent 0. (The runner needs no empty-loop guard: runGoalMission always
+    // yields awareness_ready first, so a zero-event run is unreachable.)
+    const empty = {
+      id: "openai",
+      displayName: "empty",
+      isConfigured: () => true,
+      async *streamCompletion() {
+        // No events at all: planning turn sees an empty stream.
+        if (false) yield { type: "text_delta" as const, text: "unreachable" };
+      },
+    };
+    const code = await runGoalHeadless({
+      goal: "do nothing",
+      provider: empty as never,
+      model: "test-model",
+      projectRoot: tmpDir,
+      autoApprove: false,
+      raw: false,
+    });
+    expect(code).toBe(1);
+  });
+
   describe("SIGINT lifecycle", () => {
     // No mocks: the handler is genuinely prepended to the real process and
     // must be genuinely gone when the run resolves — a leak would keep

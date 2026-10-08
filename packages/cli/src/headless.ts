@@ -84,6 +84,13 @@ export async function readStdin(
       chunks.push(buf);
       if (totalBytes >= maxBytes) {
         if (!quiet) process.stderr.write(`[anvil] stdin exceeded ${Math.round(maxBytes / 1024)} KB — truncating\n`);
+        // Symmetric with the idle path: release the pipe instead of holding
+        // backpressure on a producer we will never read again.
+        try {
+          process.stdin.destroy();
+        } catch {
+          // intentional: destroy is cleanup — the buffered text below is final.
+        }
         finish(Buffer.concat(chunks).subarray(0, maxBytes).toString("utf8"));
         return;
       }

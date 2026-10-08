@@ -2,6 +2,74 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-06 (chief-engineer Batch R TUI/CLI leftovers, full cycle):**
+> Understand: all sites read live; R3 dropped after App render-chain proof
+> (defers, not drops); R1 reverted after proof that zero-event runs are
+> unreachable (awareness_ready always first) — empty streams already exit 1
+> via planning-error (pinned by test, fail-first proven by timeout on old).
+> Plan/Edit: stdin destroy, tab index/key, enabled counter, honest copy
+> (DiffModal/ModelPicker/headless + goalRunner regression test).
+> HELD UNCOMMITTED (collision): `gate.ts` --full/--staged loud-refusal hunk
+> lives in the worktree but Batch O lane owns that file's uncommitted diff —
+> recorded here per §3.3, their lane merges or drops it.
+> Run: builds + typecheck 0. Debug: none needed (R1/R3 resolved by proof,
+> not code). Retest: CLI suites + TUI visual/component suites green;
+> full-suite green except docTruth, which fails ONLY on Batch O lane's
+> untracked review doc (88 vs 89 — not this diff, file untouched per
+> collision guard); eval mock lane 25/25. The full `npm run gate` Step 1
+> refusal is Batch O's held protected files (correct behavior, no --ack
+> passed). Review: no protected artifacts.
+>
+> **IN-PROGRESS 2026-10-06 (chief-engineer Batch R TUI/CLI leftovers):**
+> owns `packages/cli/src/headless.ts`,
+> `packages/cli/src/__tests__/goalRunner.test.ts` (empty-stream path),
+> `packages/tui/src/components/DiffModal.tsx`,
+> `packages/tui/src/components/ModelPicker.tsx`.
+> R1 reverted after live proof: runGoalMission always yields awareness_ready,
+> so zero-event runs are unreachable; empty streams already exit 1 via the
+> planning-error path (pinned by test). R2 stdin destroy on truncate;
+> R4 tab index/key; R5 enabled-position counter. R3 dropped: overlay intents
+> defer-render behind priority, not dropped (verified live in App.tsx
+> render chain).
+> No protected artifact touched; gate/guardian files owned by Batch O lane.
+>
+> **DONE 2026-10-08 (chief-engineer Batch O — checkpoint fidelity: per-file diff resolution + the two missing rule families):**
+> Understand: a chief-engineer deep dive over gate/eval/sentinel (assessment in
+> docs/CHIEF-ENGINEER-REVIEW-2026-10-08.md) MEASURED two divergences instead of
+> trusting the notes. (1) The in-product `anvil gate` handed its whole
+> multi-file diff to the scanner under ONE synthetic label, so every path-aware
+> decision was judged against that label — a fixture cast in a test file was
+> reported while a skipped test in it was missed, both opposite to the
+> authority — and the reported location was an index into the concatenated
+> added text, not a line in a file (measured: "(working tree) 1/3/4" for three
+> different files). (2) The in-process guardian carried neither the gate's bare
+> annotation family nor its nullish raw-error fallback, so the checkpoint that
+> runs BEFORE a write exists was thinner than the commit gate.
+> Plan: resolve diffs per file in core (new parseUnifiedDiffSections +
+> scanUnifiedDiffForSlop, hunk-aware with a loud fallback for header-less
+> lines), switch the CLI gate to it, and give the guardian the two families —
+> no policy fork, the scanner stays the one owner. AGENTS.md rule 11 now names
+> the in-product scanner as a fourth surface.
+> Edit: 9 files (2 protected: AGENTS.md, the sentinel; manifest regenerated).
+> Run: quick gate (Steps 0-1.5) green with the manifest regen; core build 0.
+> Debug: two bugs of my own, both caught by probes. (a) My first parser dropped
+> hunk-less added lines — the probe printed an empty AFTER where the old path
+> printed three violations — so a `+` line with no hunk header now numbers from
+> 1 within its section instead of vanishing. (b) `git diff | head` HUNG this
+> repo's terminal for 300s (pager interaction); switched to --no-pager.
+> Retest: core guardian suite 46 tests (fail-first against HEAD's scanner: the
+> two new rule tests + the widened policy probe RED, the rest green); sentinel
+> 21 tests (14-row corpus now covers both closed families, plus a per-file
+> resolution test and the CLI wiring pin); CLI gate.native 5 tests incl. real
+> file/line across a multi-file diff and a non-code-path control.
+> Review: PROTECTED ARTIFACTS CHANGED — AGENTS.md rule 11 (the fourth surface +
+> per-file resolution requirement), gate.sentinel.test.ts (widened corpus +
+> resolution test), gate-manifest.json regenerated in the same commit. Nothing
+> that can block a commit was weakened; custom rules stay unconditional. Still
+> deliberately open (recorded in the review doc): the in-product gate scans
+> `git diff HEAD` only, so untracked files are invisible (Batch P), and A/B
+> evidence is printed but never persisted (Batch Q).
+>
 > **DONE 2026-10-07 (chief-engineer Batch N — ONE test-file exemption policy):**
 > Understand: Batch M left one cross-checkpoint divergence REPORTED rather than
 > fixed. The gate exempts a test path from every non-skip rule, but the

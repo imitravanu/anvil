@@ -258,10 +258,16 @@ export function ModelPicker({
     }
   }
 
+  // Counter over ENABLED rows only: navigation skips disabled entries, so a
+  // raw index would point at unselectable rows.
+  const enabledTotal = ordered.reduce((n, o) => n + (o.row.enabled ? 1 : 0), 0);
+  const enabledPos = ordered
+    .slice(0, selected + 1)
+    .reduce((n, o) => n + (o.row.enabled ? 1 : 0), 0);
   return (
     <OverlayFrame
       title="Select a model"
-      meta={ordered.length > 0 ? `(${selected + 1}/${ordered.length})` : "(no matches)"}
+      meta={enabledTotal > 0 ? `(${enabledPos}/${enabledTotal})` : "(no matches)"}
       hints="↑/↓ · Enter switch · Esc cancel · type to filter"
     >
       {ordered.length === 0 && (
