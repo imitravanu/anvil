@@ -17,6 +17,7 @@ import {
   AgentSession,
   killAllMcpServers,
   loadCredentials,
+  resolveProviderCredentials,
   loadSettings,
   saveSettings,
   loadModelsCacheV2,
@@ -238,7 +239,7 @@ async function resolveBootContext(
   opts: { mode: "chat" | "headless" | "goal" }
 ): Promise<BootContext> {
   restoreCachedModels();
-  const creds = loadCredentials();
+  const creds = resolveProviderCredentials();
   const settings = loadSettings();
   const selection = resolveSelectionOrExit(flags, creds, settings);
 
@@ -513,7 +514,7 @@ if (argv.includes("--verbose")) {
   process.env.ANVIL_LOG = process.env.ANVIL_LOG ?? "info";
 }
 const invocation = resolveInvocation(argv, {
-  hasConfiguredProvider: hasAnyConfiguredProvider(loadCredentials()),
+  hasConfiguredProvider: hasAnyConfiguredProvider(resolveProviderCredentials()),
 });
 
 switch (invocation.kind) {

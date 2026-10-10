@@ -133,6 +133,60 @@ exit 1
     expect(result.tokensUsed.cachedInput).toBe(800);
   });
 
+  // Takeover 2026-10-10 (A8 done at the source): the provider classifies its
+  // own deaths and turnStream now carries that origin on the error event.
+  // Before, a provider-killed run fell through to check.sh, failed it, and was
+  // graded "task" — an outage was recorded as "the model is bad at coding", and
+  // the A/B harness counted it as capability evidence. RED first: both rows
+  // returned failureKind "task" against the pre-change runner.
+  it("grades a provider-killed run as provider weather, not capability", async () => {
+    const deadProvider = {
+      id: "openai",
+      displayName: "dead scripted",
+      isConfigured: () => true,
+      async *streamCompletion() {
+        yield {
+          type: "error" as const,
+          message: "HTTP 500: upstream exploded",
+          code: "SERVER_OVERLOADED" as const,
+          isRetryable: false,
+        };
+      },
+    };
+    const task = createMockTask("task-provider-death", true);
+    fs.writeFileSync(task.assertionScript, "#!/bin/bash\nexit 1\n");
+    fs.chmodSync(task.assertionScript, 0o755);
+    const provider = deadProvider as unknown as NonNullable<EvalRunnerOptions["provider"]>;
+
+    const result = await runEvalTask(task, { provider });
+    expect(result.passed).toBe(false);
+    expect(result.failureKind, "a 5xx outage is not a capability failure").toBe("provider");
+  });
+
+  it("grades a network death as network, distinctly from other provider weather", async () => {
+    const unreachableProvider = {
+      id: "openai",
+      displayName: "unreachable scripted",
+      isConfigured: () => true,
+      async *streamCompletion() {
+        yield {
+          type: "error" as const,
+          message: "fetch failed: ECONNRESET",
+          code: "NETWORK_TIMEOUT" as const,
+          isRetryable: true,
+        };
+      },
+    };
+    const task = createMockTask("task-network-death", true);
+    fs.writeFileSync(task.assertionScript, "#!/bin/bash\nexit 1\n");
+    fs.chmodSync(task.assertionScript, 0o755);
+    const provider = unreachableProvider as unknown as NonNullable<EvalRunnerOptions["provider"]>;
+
+    const result = await runEvalTask(task, { provider });
+    expect(result.passed).toBe(false);
+    expect(result.failureKind).toBe("network");
+  });
+
   it("sends follow-up turns to the SAME session, so history accumulates (A4 multi-turn)", async () => {
     // The invariant that makes a multi-turn task a task: turn 2 must see what
     // turn 1 did. A runner that built a fresh session per turn would still

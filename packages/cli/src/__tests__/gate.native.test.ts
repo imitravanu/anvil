@@ -125,4 +125,29 @@ describe("runNativeGate (in-process scan)", () => {
     expect(runNativeGate({ cwd: dir })).toBe(0);
     expect(io.stdout()).toContain("clean tree");
   });
+
+  // Batch P (F3, takeover 2026-10-10): `git diff HEAD` cannot see a brand-new
+  // untracked file, so the most common first act of slop — a new file — was the
+  // one thing the product gate never reported. RED first: this repo exited 0
+  // ("clean tree") before the untracked pass.
+  it("reports violations in UNTRACKED files at their real file and line", () => {
+    const dir = tmp();
+    git(dir, "init", "-q");
+    fs.writeFileSync(path.join(dir, "base.ts"), "export const base = 1;\n");
+    git(dir, "add", "-A");
+    git(dir, "commit", "-qm", "init");
+
+    // A slop-carrying untracked source file, judged at its own path and line.
+    fs.writeFileSync(path.join(dir, "fresh.ts"), "export const y = data as " + "any;\n");
+    // An untracked TEST path is judged by the skipped-test rule alone: the
+    // fixture cast inside it must be exempt, exactly as for tracked files.
+    fs.mkdirSync(path.join(dir, "__tests__"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "__tests__", "fresh.test.ts"), "const fixture = data as " + "any;\n");
+
+    const io = capture();
+    expect(runNativeGate({ cwd: dir })).toBe(1);
+    const out = io.stdout();
+    expect(out).toContain("fresh.ts:1");
+    expect(out).not.toContain("__tests__/fresh.test.ts:1");
+  });
 });

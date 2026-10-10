@@ -227,6 +227,10 @@ export const STDIN_IDLE_TIMEOUT_MS = getEnvNumber("ANVIL_STDIN_IDLE_MS", 5_000);
 export const STDIN_CONTEXT_PEEK_MS = getEnvNumber("ANVIL_STDIN_CONTEXT_PEEK_MS", 150);
 // G12: one `git diff` invocation in the native gate must not hang the CLI.
 export const GATE_DIFF_SCAN_TIMEOUT_MS = getEnvNumber("ANVIL_GATE_DIFF_TIMEOUT_MS", 30_000);
+// Takeover 2026-10-10: platforms without recursive fs.watch (Linux) watch every
+// source directory individually; the cap keeps a pathological workspace from
+// opening thousands of inotify watchers.
+export const GATE_WATCH_MAX_DIRS = getEnvNumber("ANVIL_GATE_WATCH_MAX_DIRS", 256);
 
 // MCP transport retention (transport.ts) and tools/list cursor loop (client.ts).
 export const MAX_MCP_LINE_BYTES = 1024 * 1024;

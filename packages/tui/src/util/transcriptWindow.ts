@@ -142,3 +142,15 @@ export function applyTranscriptPin(
   const start = Math.min(Math.max(0, hidden), Math.max(0, end - 1));
   return { start, end, pinned };
 }
+
+/**
+ * The ceiling a pin may hold in STATE: the newest message (total - 1) — the
+ * same bound `applyTranscriptPin` applies for display. Takeover 2026-10-10:
+ * App's PgUp/Up-arrow increments did not clamp, so a held PgUp drove state far
+ * past the ceiling while the display silently absorbed the surplus; the next
+ * PgDn presses then drained invisible state and scroll read as dead. Clamping
+ * at every mutation site makes state and display agree forever.
+ */
+export function clampTranscriptPin(pin: number, total: number): number {
+  return Math.max(0, Math.min(pin, Math.max(0, total - 1)));
+}

@@ -15,7 +15,7 @@ import {
   clearRateLimitRecord,
 } from "../providers/freeModels.js";
 import { setModelCertification } from "../providers/registry.js";
-import { loadCredentials } from "../config/index.js";
+import { resolveProviderCredentials } from "../config/index.js";
 import { CERT_MAX_TOKENS_STREAMING, CERT_MAX_TOKENS_MULTI_TURN } from "../config/constants.js";
 import type { ProviderCredentials } from "../providers/index.js";
 import type {
@@ -48,21 +48,9 @@ export const PROVIDER_CERT_MODELS: Record<ProviderId, string> = {
  * Resolves credentials combining ~/.anvil/credentials.json with environment variables.
  */
 export function resolveCertificationCredentials(): ProviderCredentials {
-  const fileCreds = loadCredentials();
-  return {
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY || fileCreds.anthropicApiKey,
-    openaiApiKey: process.env.OPENAI_API_KEY || fileCreds.openaiApiKey,
-    geminiApiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || fileCreds.geminiApiKey,
-    openrouterApiKey: process.env.OPENROUTER_API_KEY || fileCreds.openrouterApiKey,
-    orcarouterApiKey: process.env.ORCAROUTER_API_KEY || fileCreds.orcarouterApiKey,
-    groqApiKey: process.env.GROQ_API_KEY || fileCreds.groqApiKey,
-    cerebrasApiKey: process.env.CEREBRAS_API_KEY || fileCreds.cerebrasApiKey,
-    githubApiKey: process.env.GITHUB_TOKEN || process.env.GITHUB_API_KEY || fileCreds.githubApiKey,
-    mistralApiKey: process.env.MISTRAL_API_KEY || fileCreds.mistralApiKey,
-    inceptionApiKey: process.env.INCEPTION_API_KEY || fileCreds.inceptionApiKey,
-    ollamaApiKey: process.env.OLLAMA_API_KEY || fileCreds.ollamaApiKey,
-    qwencloudApiKey: process.env.QWENCLOUD_API_KEY || process.env.DASHSCOPE_API_KEY || fileCreds.qwencloudApiKey,
-  };
+  // One table, both surfaces (takeover 2026-10-10): the product boot and the
+  // certification scripts resolve the same env-over-file mapping.
+  return resolveProviderCredentials();
 }
 
 /**

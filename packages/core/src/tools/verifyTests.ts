@@ -299,7 +299,8 @@ export const definition: ToolDefinition = {
   name: "verify_tests",
   description:
     "Run the project test suite or a targeted test pattern to verify regressions. " +
-    "Automatically discovers the test runner (npm test, cargo test, pytest, go test). Non-mutating.",
+    "Automatically discovers the test runner (npm test, cargo test, pytest, go test). " +
+    "Runs the project's own test script, so it asks permission like other mutating tools.",
   inputSchema: {
     type: "object",
     properties: {
@@ -311,7 +312,17 @@ export const definition: ToolDefinition = {
       },
     },
   },
-  mutating: false,
+  // Mutating (2026-10-10 takeover): the no-pattern path runs the project's OWN
+  // test script through a shell (`shell: true` in runTestVerification), and a
+  // test script is arbitrary project-authored code — exactly what
+  // `run_command "npm test"` gates. `mutating: false` let the model trigger it
+  // with no prompt while run_command prompted for the identical effect.
+  // Unchanged paths: the user's `autoVerify` setting goes through
+  // turnVerifier, which calls runTestVerification directly and never consults
+  // this registry entry; eval and headless lanes pass their own brokers
+  // (AUTO_APPROVE_BROKER / HeadlessPermissionBroker). Precedent: update_memory
+  // flipped for the same trust-boundary reason.
+  mutating: true,
 };
 
 export const execute: ToolExecutor = async (input, ctx: ToolContext): Promise<ToolExecutionResult> => {

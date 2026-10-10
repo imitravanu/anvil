@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimatedLines, hiddenMessageCount, applyTranscriptPin } from "../transcriptWindow.js";
+import { estimatedLines, hiddenMessageCount, applyTranscriptPin, clampTranscriptPin } from "../transcriptWindow.js";
 import type { DisplayMessage } from "../../hooks/useAgentController.js";
 
 function msg(text: string, role: DisplayMessage["role"] = "assistant", toolCalls = 0): DisplayMessage {
@@ -84,5 +84,41 @@ describe("transcript pin window", () => {
 
   it("never starts past the pinned end", () => {
     expect(applyTranscriptPin(5, 4, 4)).toEqual({ start: 0, end: 1, pinned: 4 });
+  });
+});
+
+// Takeover 2026-10-10: App's pin increments did not clamp, so a held PgUp
+// drove STATE far past what the display clamp could show, and the next PgDn
+// presses drained invisible surplus — scroll read as dead. The demonstration:
+// 40 auto-repeats of +5 on a 12-message transcript put 200 in state while the
+// screen clamped at 11; the first 38 PgDns changed nothing on screen. These
+// tests pin the STATE contract App now uses at every pin mutation site.
+describe("clampTranscriptPin (state-side pin ceiling)", () => {
+  it("caps a held PgUp at the newest message instead of accumulating surplus", () => {
+    let pin = 0;
+    for (let i = 0; i < 40; i++) pin = clampTranscriptPin(pin + 5, 12);
+    expect(pin).toBe(11);
+    // The very next PgDn must move the window on screen — no invisible surplus.
+    pin = Math.max(0, pin - 5);
+    expect(pin).toBe(6);
+  });
+
+  it("never goes below follow, tolerates empty transcripts, and keeps small pins", () => {
+    expect(clampTranscriptPin(-3, 12)).toBe(0);
+    expect(clampTranscriptPin(4, 12)).toBe(4);
+    expect(clampTranscriptPin(99, 0)).toBe(0);
+    expect(clampTranscriptPin(99, 1)).toBe(0);
+  });
+
+  it("agrees with applyTranscriptPin's display clamp at every boundary", () => {
+    for (const [pin, total] of [
+      [0, 10],
+      [9, 10],
+      [10, 10],
+      [250, 10],
+      [7, 0],
+    ] as const) {
+      expect(clampTranscriptPin(pin, total)).toBe(applyTranscriptPin(total, 0, pin).pinned);
+    }
   });
 });

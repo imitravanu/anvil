@@ -387,6 +387,25 @@ describe("run_command read-only safe-list", () => {
     expect(isReadOnlyCommand("git status")).toBe(false);
   });
 
+  it("rejects brace expansion — bash rewrites the argument list after the check", async () => {
+    const { isReadOnlyCommand } = await import("../bash.js");
+    // Takeover 2026-10-10, proven live: `bash -c 'cat {,/etc/hostname}'` reads
+    // the host file. `{,X}` looks like ONE harmless literal operand to every
+    // lexical check here (path.resolve sees a relative name inside the root),
+    // but bash expands it to TWO words — `"" X` — before the binary runs.
+    // Every safe-listed reader and subcommand inherits the hole.
+    for (const cmd of [
+      "cat {,/etc/passwd}",
+      "head {,/home/x/.ssh/id_rsa}",
+      "tail {,../../etc/shadow}",
+      "git diff {,/etc/hostname}",
+      "ls {,~/.ssh}",
+      "cat a{b}.txt",
+    ]) {
+      expect(isReadOnlyCommand(cmd, root), cmd).toBe(false);
+    }
+  });
+
   it("documents the verdict for every safe-listed binary (S4.1 auto-approval audit)", async () => {
     const { isReadOnlyCommand } = await import("../bash.js");
     // Each row records the DELIBERATE verdict and its basis, so the safe-list

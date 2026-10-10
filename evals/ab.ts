@@ -24,6 +24,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runPromptExperiment, type AbArm } from "../packages/core/src/eval/index.js";
+import { saveAbResult } from "../packages/core/src/eval/report.js";
 import {
   EVAL_AB_TASK_DELAY_MS,
   EVAL_LIVE_TASK_TIMEOUT_MS,
@@ -174,6 +175,12 @@ async function main(): Promise<void> {
     }
   }
   console.log("=".repeat(74));
+  // Batch Q (F4, takeover 2026-10-10): the verdict is only printable evidence
+  // until it is also a durable artifact — persist it beside the batch reports
+  // so a later prompt change can be compared against the run that justified
+  // the current one, and `evals/run.ts --report` can surface it.
+  const artifactPath = saveAbResult(result);
+  console.log(`\nA/B artifact persisted: ${artifactPath}`);
   process.exit(0);
 }
 

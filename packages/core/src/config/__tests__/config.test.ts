@@ -8,6 +8,7 @@ import {
   hasAnyConfiguredProvider,
   loadCredentials,
   loadSettings,
+  resolveProviderCredentials,
   resolveProviderSelection,
   saveCredential,
   saveSettings,
@@ -182,6 +183,39 @@ describe("anvilHome relocation", () => {
     expect(fs.existsSync(path.join(tmp, "settings.json"))).toBe(true);
     expect(loadCredentials()).toEqual({ geminiApiKey: "test-key" });
     expect(loadSettings()).toEqual({ defaultModel: "gemini-3.6-flash" });
+  });
+
+  // Takeover 2026-10-10: .env.example and the README provider table have always
+  // said env vars take precedence over credentials.json, but the product boot
+  // read only the file — `ANTHROPIC_API_KEY=… anvil` reported "No provider is
+  // configured" while certify-provider.ts honored the same variable. RED first:
+  // the resolver did not exist against the pre-change tree (documented live
+  // failure in the takeover audit).
+  it("resolveProviderCredentials honors documented env vars over the file", () => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-home-"));
+    process.env.ANVIL_HOME = tmp;
+    fs.writeFileSync(
+      path.join(tmp, "credentials.json"),
+      JSON.stringify({ openaiApiKey: "file-openai", anthropicApiKey: "file-anthropic" }),
+      "utf-8"
+    );
+    const savedAnthropic = process.env.ANTHROPIC_API_KEY;
+    const savedOpenai = process.env.OPENAI_API_KEY;
+    try {
+      process.env.ANTHROPIC_API_KEY = "env-anthropic";
+      delete process.env.OPENAI_API_KEY;
+      const creds = resolveProviderCredentials();
+      expect(creds.anthropicApiKey, "env takes precedence, as documented").toBe("env-anthropic");
+      expect(creds.openaiApiKey, "the file still fills what env does not set").toBe("file-openai");
+      // The file-only loader stays pure — saveCredential must never persist an
+      // env override to disk.
+      expect(loadCredentials().anthropicApiKey).toBe("file-anthropic");
+    } finally {
+      if (savedAnthropic === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = savedAnthropic;
+      if (savedOpenai === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = savedOpenai;
+    }
   });
 
   it("falls back to ~/.anvil when ANVIL_HOME is unset", () => {

@@ -1,5 +1,6 @@
 import { execSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import path from "node:path";
 import {
   detectGuardianScope,
   getErrorMessage,
@@ -8,6 +9,7 @@ import {
   scanUnifiedDiffForSlop,
   GATE_DIFF_MAX_BUFFER_BYTES,
   GATE_DIFF_SCAN_TIMEOUT_MS,
+  GATE_WATCH_MAX_DIRS,
   GUARDIAN_WATCH_INTERVAL_MS,
   GUARDIAN_WATCH_MAX_SCANS_PER_MIN,
   type GuardianViolation,
@@ -35,6 +37,9 @@ const DIFF_PATHSPEC = '-- . ":!node_modules" ":!dist"';
 const STAGED_PATHSPEC =
   'diff --cached --unified=0 --no-color -- . ":(exclude)node_modules" ":(exclude)dist"';
 
+/** Untracked-file discovery for the working-tree surface — same exclusions. */
+const UNTRACKED_PATHSPEC = 'ls-files --others --exclude-standard -- . ":!node_modules" ":!dist"';
+
 export interface WorkingTreeScan {
   /** Violations carry the REAL repo-relative path and new-file line (Batch O). */
   violations: GuardianViolation[];
@@ -45,7 +50,7 @@ export interface WorkingTreeScan {
 
 /** Scan the working-tree diff vs HEAD (dirty files only). */
 export function scanWorkingTree(cwd: string): WorkingTreeScan {
-  return scanGitDiff(cwd, `git diff HEAD ${DIFF_PATHSPEC}`, "(working tree)", true);
+  return scanGitDiff(cwd, `git diff HEAD ${DIFF_PATHSPEC}`, "(working tree)", true, true);
 }
 
 /**
@@ -55,10 +60,16 @@ export function scanWorkingTree(cwd: string): WorkingTreeScan {
  * provisioned hook must agree on them.
  */
 export function scanStaged(cwd: string): WorkingTreeScan {
-  return scanGitDiff(cwd, `git ${STAGED_PATHSPEC}`, "(staged)", true);
+  return scanGitDiff(cwd, `git ${STAGED_PATHSPEC}`, "(staged)", true, false);
 }
 
-function scanGitDiff(cwd: string, command: string, label: string, recordTelemetry: boolean): WorkingTreeScan {
+function scanGitDiff(
+  cwd: string,
+  command: string,
+  label: string,
+  recordTelemetry: boolean,
+  includeUntracked: boolean
+): WorkingTreeScan {
   let diff = "";
   try {
     diff = execSync(command, {
@@ -70,8 +81,42 @@ function scanGitDiff(cwd: string, command: string, label: string, recordTelemetr
   } catch (err: unknown) {
     return { violations: [], error: `cannot read git diff: ${getErrorMessage(err)}` };
   }
-  const scannedLines = diff.split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++"))
-    .length;
+  // Batch P (2026-10-10): `git diff` cannot see a brand-new untracked file, so
+  // the most common first act of slop — a new file — was the one thing the
+  // product gate never reported (F3 in docs/CHIEF-ENGINEER-REVIEW-2026-10-08.md).
+  // Untracked files are injected as hunk-less synthetic `+++ b/<file>` sections,
+  // exactly the authority's shape; the Batch O resolver attributes and numbers
+  // them per file. `--staged` deliberately does NOT inherit the pass: the
+  // staged surface judges the index a commit would ship, and an untracked file
+  // is not in it.
+  if (includeUntracked) {
+    try {
+      const untracked = execSync(`git ${UNTRACKED_PATHSPEC}`, {
+        cwd,
+        encoding: "utf8",
+        maxBuffer: GATE_DIFF_MAX_BUFFER_BYTES,
+        timeout: GATE_DIFF_SCAN_TIMEOUT_MS,
+      });
+      if (untracked.trim()) {
+        const parts = [diff.trimEnd()];
+        for (const file of untracked.trim().split(/\r?\n/)) {
+          const rel = file.trim();
+          if (!rel) continue;
+          try {
+            const content = fs.readFileSync(path.join(cwd, rel), "utf8");
+            parts.push(`+++ b/${rel}`);
+            for (const ln of content.split(/\r?\n/)) parts.push(`+ ${ln}`);
+          } catch {
+            // intentional: an unreadable untracked file must not break the scan
+          }
+        }
+        diff = parts.join("\n");
+      }
+    } catch {
+      // intentional: outside a repo the diff read above already reported the error
+    }
+  }
+  const scannedLines = diff.split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).length;
   // Scope by project identity: in a user's own project only the universal rules
   // apply, because the Anvil-specific families name APIs that live here. Project
   // rules apply everywhere — a project that writes a rule means it.
@@ -118,7 +163,7 @@ export function formatWatchBanner(cwd: string, opts?: { staged?: boolean }): str
 export function watchScan(cwd: string, staged: boolean): WorkingTreeScan {
   const command = staged ? `git ${STAGED_PATHSPEC}` : `git diff HEAD ${DIFF_PATHSPEC}`;
   const label = staged ? "(staged)" : "(working tree)";
-  return scanGitDiff(cwd, command, label, false);
+  return scanGitDiff(cwd, command, label, false, !staged);
 }
 
 /**
@@ -179,6 +224,38 @@ export function watchTransitionMessage(
 export interface Debouncer {
   schedule(): void;
   cancel(): void;
+}
+
+/**
+ * Directories to watch on platforms without recursive `fs.watch` (Linux): the
+ * whole source tree, excluding dependency/generated/VCS dirs, capped so a
+ * pathological workspace cannot open thousands of inotify watchers. Pure so
+ * the walk is testable on any host. Takeover 2026-10-10: the old code watched
+ * only the top TWO levels and its comment claimed deeper saves "still surface
+ * via the diff rescan on save" — nothing scheduled that rescan, so a save
+ * anywhere under a `packages/<name>/src` tree (most of a real repo) fired no
+ * event at all on the primary development platform.
+ */
+export function watchDirectories(root: string, maxDirs: number): string[] {
+  const dirs: string[] = [];
+  const walk = (dir: string): void => {
+    if (dirs.length >= maxDirs) return;
+    dirs.push(dir);
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return; // intentional: an unreadable dir still leaves its parent watched
+    }
+    for (const entry of entries) {
+      if (dirs.length >= maxDirs) return;
+      if (!entry.isDirectory()) continue;
+      if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "dist") continue;
+      walk(path.join(dir, entry.name));
+    }
+  };
+  walk(root);
+  return dirs;
 }
 
 /**
@@ -282,11 +359,12 @@ export function runNativeGateWatch(opts: NativeGateOptions): Promise<number> {
   let watcher: fs.FSWatcher;
   try {
     if (process.platform === "linux") {
-      // `recursive: true` is macOS/Windows only — on Linux it watches the top
-      // dir alone, so subdir writes never rescan. Watch the top two levels
-      // explicitly; deeper changes still surface via the diff rescan on save.
+      // `recursive: true` is macOS/Windows only. Watch EVERY source directory
+      // (capped) so a save at any depth fires an event — the old two-level walk
+      // missed */src/* saves, and the "diff rescan on save" it promised never
+      // existed (takeover 2026-10-10).
       const watchers: fs.FSWatcher[] = [];
-      const watchDir = (dir: string): void => {
+      for (const dir of watchDirectories(cwd, GATE_WATCH_MAX_DIRS)) {
         try {
           watchers.push(
             fs.watch(dir, (_event, filename) => {
@@ -296,18 +374,8 @@ export function runNativeGateWatch(opts: NativeGateOptions): Promise<number> {
             })
           );
         } catch {
-          // intentional: an unreadable subdir must not break the whole watch.
+          // intentional: an unreadable dir must not break the whole watch.
         }
-      };
-      watchDir(cwd);
-      try {
-        for (const entry of fs.readdirSync(cwd, { withFileTypes: true })) {
-          if (!entry.isDirectory()) continue;
-          if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "dist") continue;
-          watchDir(`${cwd}/${entry.name}`);
-        }
-      } catch {
-        // intentional: a readdir failure still leaves the top-level watch live.
       }
       watcher = { close: () => { for (const w of watchers) w.close(); } } as fs.FSWatcher;
     } else {

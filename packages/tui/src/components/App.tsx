@@ -4,7 +4,7 @@ import { Box, Text, useInput, useStdout } from "ink";
 import {
   AgentSession,
   createProviders,
-  loadCredentials,
+  resolveProviderCredentials,
   loadSession,
   loadSettings,
   saveSettings,
@@ -40,6 +40,7 @@ import { ThemePicker } from "./ThemePicker.js";
 import { HelpOverlay } from "./HelpOverlay.js";
 import { StatusBar } from "./StatusBar.js";
 import { TRANSCRIPT_SCROLL_PAGE } from "../util/displayLimits.js";
+import { clampTranscriptPin } from "../util/transcriptWindow.js";
 import { sectionRule } from "../util/chrome.js";
 
 // Provider labels live in util/labels.ts — single source of truth.
@@ -210,7 +211,10 @@ export function App({
       return;
     }
     if (key.pageUp) {
-      setTranscriptPinned((prev) => prev + TRANSCRIPT_SCROLL_PAGE);
+      // Clamp at the increment (2026-10-10): the display clamp silently
+      // absorbed state that grew past the ceiling, so held-PgUp surplus made
+      // later PgDn presses invisible no-ops — scroll read as dead.
+      setTranscriptPinned((prev) => clampTranscriptPin(prev + TRANSCRIPT_SCROLL_PAGE, messages.length));
       return;
     }
     if (key.pageDown) {
@@ -219,7 +223,7 @@ export function App({
     }
     if (focusZone === "transcript") {
       if (key.upArrow) {
-        setTranscriptPinned((prev) => prev + 1);
+        setTranscriptPinned((prev) => clampTranscriptPin(prev + 1, messages.length));
         return;
       }
       if (key.downArrow) {
@@ -229,7 +233,7 @@ export function App({
   });
   // Clamp the pin when the transcript shrinks (clear/resume/switch).
   useEffect(() => {
-    setTranscriptPinned((prev) => Math.max(0, Math.min(prev, Math.max(0, messages.length - 1))));
+    setTranscriptPinned((prev) => clampTranscriptPin(prev, messages.length));
   }, [messages.length]);
 
   const { handleSubmit, resumeFromStored, persist, mruCommands } = useSessionCommands({
@@ -313,7 +317,7 @@ export function App({
   // and hot-apply it if it belongs to the active provider (same provider id,
   // so switchModel keeps history while swapping the underlying API key).
   const handleConnectDone = (providerId: ProviderId) => {
-    const refreshed = createProviders(loadCredentials());
+    const refreshed = createProviders(resolveProviderCredentials());
     setProviders(refreshed);
     setIsConnectOpen(false);
     const label = PROVIDER_LABELS[providerId] ?? providerId;

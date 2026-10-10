@@ -354,7 +354,13 @@ const SUBCOMMAND_ESCAPE_FLAG = /^--(?:no-i|out|textc|ext-d)/;
 // Any redirection, pipe, chain, substitution, or expansion means the command
 // is not the plain read-only invocation it claims to be (`cat a > b` writes,
 // `echo hi; rm -rf x` chains). The permission prompt remains the gate there.
-const SHELL_METACHARS = /[|;&<>()`$\\\n]/;
+// Braces belong in the set because bash BRACE EXPANSION rewrites the argument
+// list AFTER every lexical check here passes: `{,/etc/passwd}` looks like one
+// harmless literal operand to `path.resolve` (a relative name inside the
+// root), but expands to two words — `"" /etc/passwd` — before the binary runs.
+// Proven live on this host (2026-10-10 takeover): `bash -c 'cat {,/etc/hostname}'`
+// reads the host file with no prompt. Over-blocking costs only a prompt.
+const SHELL_METACHARS = /[|;&<>()`$\\\n{}]/;
 
 /**
  * True iff the command is a plain single invocation of a known read-only

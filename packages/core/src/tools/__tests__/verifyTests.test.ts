@@ -251,9 +251,14 @@ describe("verify_tests tool executor", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("has non-mutating tool definition", () => {
+  it("gates the tool like the mutation it performs (takeover 2026-10-10)", () => {
     expect(definition.name).toBe("verify_tests");
-    expect(definition.mutating).toBe(false);
+    // The no-pattern path runs the project's OWN test script through a shell —
+    // arbitrary project-authored code, exactly what `run_command "npm test"`
+    // gates. `mutating: false` let the model trigger that with no prompt while
+    // run_command prompted for the identical effect. RED first: this asserted
+    // `false` before the flip (receipt in PROGRESS 2026-10-10).
+    expect(definition.mutating).toBe(true);
   });
 
   it("reports a non-string pattern as a tool error instead of throwing", async () => {

@@ -10,6 +10,7 @@ import {
   isSignalClaimed,
   releaseSignal,
   scanWorkingTree,
+  watchDirectories,
   watchScan,
   watchTransitionMessage,
   type WorkingTreeScan,
@@ -21,6 +22,54 @@ describe("formatWatchBanner", () => {
     expect(banner).toContain("/tmp/proj");
     expect(banner).toContain("working-tree diff vs HEAD");
     expect(banner).toContain("NOT full-tree coverage");
+  });
+
+  // Takeover 2026-10-10: the Linux watcher (no recursive fs.watch) used to
+  // watch only the top TWO levels, so a save to packages/*/src/* — most of a
+  // real repo — fired no event, and the comment promising a "diff rescan on
+  // save" described code that never existed. The walk is now the whole tree.
+  describe("watchDirectories (the Linux watch surface)", () => {
+    it("covers the whole tree, excluding dependency/generated/VCS dirs", () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-watch-walk-"));
+      try {
+        for (const rel of [
+          "packages/core/src/tools",
+          "packages/cli/src/nested/deep",
+          "docs",
+          "node_modules/leftpad",
+          "dist/out",
+          ".git/objects",
+        ]) {
+          fs.mkdirSync(path.join(root, rel), { recursive: true });
+        }
+        const dirs = watchDirectories(root, 256);
+        // Depth-4 source dirs are watched — the exact saves the old two-level
+        // walk never saw.
+        expect(dirs).toContain(path.join(root, "packages", "cli", "src", "nested", "deep"));
+        expect(dirs).toContain(path.join(root, "docs"));
+        // Generated/dependency/VCS trees are never watched.
+        expect(dirs.some((d) => d.includes("node_modules"))).toBe(false);
+        expect(dirs.some((d) => d.includes(`${path.sep}dist`))).toBe(false);
+        expect(dirs.some((d) => d.includes(".git"))).toBe(false);
+        // The root itself is always watched first.
+        expect(dirs[0]).toBe(root);
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    });
+
+    it("respects the watcher cap so a pathological workspace cannot open thousands of watchers", () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-watch-cap-"));
+      try {
+        for (let i = 0; i < 40; i++) {
+          fs.mkdirSync(path.join(root, `d${i}`), { recursive: true });
+        }
+        expect(watchDirectories(root, 5)).toHaveLength(5);
+        expect(watchDirectories(root, 256)).toHaveLength(41); // root + 40 children
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    });
   });
 
   // G8 (AUDIT-2026-09-30): --staged used to be silently dropped; the banner

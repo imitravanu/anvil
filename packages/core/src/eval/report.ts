@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { EvalReport, EvalResult } from "./types.js";
-import { atomicWriteText } from "../atomicWrite.js";
+import type { AbResult } from "./experiment.js";
+import { atomicWriteJson, atomicWriteText } from "../atomicWrite.js";
 import { getModel } from "../providers/registry.js";
 import { estimateCostUsd, formatCost, pricingForModel } from "./cost.js";
 
@@ -103,6 +104,48 @@ export async function saveEvalReport(
     await atomicWriteText(path.join(failuresDir, `${r.taskId}.diff`), r.failureDiff, { mode: 0o600 });
   }
   return reportPath;
+}
+
+/**
+ * Batch Q (2026-10-10, F4 in docs/CHIEF-ENGINEER-REVIEW-2026-10-08.md): an A/B
+ * prompt experiment's evidence used to exist only in CI stdout —
+ * `runPromptExperiment` returned a structured AbResult and nothing wrote it
+ * down, so the decision a prompt change rested on could never be re-read or
+ * compared against a later run. Artifacts land under `<evalsDir>/ab/` with the
+ * same timestamped-name convention as the batch reports.
+ */
+export function saveAbResult(result: AbResult, customOutputDir?: string): string {
+  const baseDir = path.join(resolveEvalsDir(customOutputDir), "ab");
+  fs.mkdirSync(baseDir, { recursive: true });
+  const stamp = result.date.replace(/[:.]/g, "-");
+  const arms = result.arms.map((a) => a.name).join("-vs-");
+  const artifactPath = path.join(baseDir, `${stamp}-${arms}.json`);
+  atomicWriteJson(artifactPath, result, { mode: 0o600 });
+  return artifactPath;
+}
+
+/** The persisted A/B artifacts, newest first; corrupted files are skipped. */
+export function loadRecentAbResults(evalsDir?: string, limit = 3): AbResult[] {
+  const baseDir = path.join(resolveEvalsDir(evalsDir), "ab");
+  if (!fs.existsSync(baseDir)) return [];
+  const files = fs
+    .readdirSync(baseDir)
+    .filter((f) => f.endsWith(".json"))
+    .sort()
+    .reverse();
+  const results: AbResult[] = [];
+  for (const file of files) {
+    if (results.length >= limit) break;
+    try {
+      const data: unknown = JSON.parse(fs.readFileSync(path.join(baseDir, file), "utf8"));
+      if (typeof data === "object" && data !== null && "verdict" in data && "significant" in data) {
+        results.push(data as AbResult);
+      }
+    } catch {
+      // intentional: a corrupted artifact is skipped, never fatal to the report
+    }
+  }
+  return results;
 }
 
 export function loadRecentReports(evalsDir?: string, limit = 5): EvalReport[] {

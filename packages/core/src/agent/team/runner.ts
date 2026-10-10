@@ -81,10 +81,51 @@ export async function runTeam(spec: TeamSpec, deps: TeamRunnerDeps, signal: Abor
   // is the identity wrapper — zero behavior change for existing callers.
   const instrumented = instrumentRunner(deps);
 
-  if (spec.strategy === "parallel" || spec.strategy === "review") {
+  if (spec.strategy === "review") {
+    // Takeover 2026-10-10: review is SEQUENTIAL by definition — the reviewer
+    // judges work that has already happened. The first cut reused the parallel
+    // fan-out, so the reviewer started at the same instant as the worker and
+    // reviewed an untouched workspace; the in-code justification ("references
+    // the worker's scope by id") cannot work concurrently. The handoff mirrors
+    // pipeline's: each later member receives its predecessor's report as
+    // "Work to review". Budgets and merging are unchanged.
+    const settled: TeamMemberResult[] = [];
+    for (let i = 0; i < spec.members.length; i++) {
+      const member = spec.members[i];
+      if (signal.aborted) {
+        settled.push({
+          id: member.id,
+          report: "aborted before start",
+          toolCalls: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          aborted: true,
+        });
+        continue;
+      }
+      const prior = settled[settled.length - 1];
+      const handoff: TeamMemberSpec =
+        prior !== undefined
+          ? { ...member, task: `${member.task}\n\nWork to review (report from ${prior.id}):\n${prior.report}` }
+          : member;
+      try {
+        const result = await instrumented.runMember(handoff, budgets[i] ?? TEAM_DEFAULT_ITERATIONS, signal);
+        settled.push(result);
+      } catch (err: unknown) {
+        settled.push({
+          id: member.id,
+          report: `member failed: ${getErrorMessage(err)}`,
+          toolCalls: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          aborted: false,
+          failureReason: getErrorMessage(err),
+        });
+      }
+    }
+    members.push(...settled);
+  } else if (spec.strategy === "parallel") {
     // Parallel fan-out: independent histories, shared filesystem.
-    // Review uses the same fan-out; the reviewer task references the
-    // worker's scope by id (inter-agent messaging via task text).
     const settled = await Promise.all(
       spec.members.map(async (member: TeamMemberSpec, i: number): Promise<TeamMemberResult> => {
         if (signal.aborted) {

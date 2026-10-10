@@ -2,6 +2,66 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-10 (2) (chief-engineer takeover — security, honest features, frontier closures):**
+> Understand: five defects from the takeover audit plus both review-doc closures (F3, F4), all
+> reproduced or live-demonstrated before fixing. No protected artifact touched in this batch.
+> Files owned: `tools/bash.ts`, `tools/verifyTests.ts`, `agent/team/runner.ts`, `agent/types.ts`,
+> `agent/turnStream.ts`, `agent/session.ts` (one line), `eval/runner.ts`, `eval/report.ts`,
+> `config/index.ts`, `config/constants.ts`, `cert/runner.ts`, `packages/cli/src/gate.ts`,
+> `packages/cli/src/index.tsx`, `packages/tui/src/components/App.tsx`,
+> `packages/tui/src/util/transcriptWindow.ts`, `evals/ab.ts`, `evals/run.ts`, and the paired tests.
+> Plan/RED→GREEN receipts:
+> - SECURITY 1 — bash brace expansion: `isReadOnlyCommand` missed `{`/`}`, so
+>   `cat {,/etc/passwd}` passed every lexical check and bash rewrote the argument list at
+>   execution — a no-prompt host-file read (proven live: `bash -c 'cat {,/etc/hostname}'`).
+>   RED: "cat {,/etc/passwd}: expected true to be false". Braces are now metachars; the
+>   subcommand and reader paths inherit the fix.
+> - SECURITY 2 — `verify_tests` is now `mutating: true`: its no-pattern path shells out to the
+>   project's OWN test script (arbitrary project code) while `run_command "npm test"` prompts
+>   for the identical effect. RED: "expected false to be true". Unchanged paths: `autoVerify`
+>   (turnVerifier calls runTestVerification directly), eval lane (AUTO_APPROVE_BROKER),
+>   headless (its own broker). Precedent: update_memory flipped for the same reason.
+> - FAKE FEATURE — team `review` now runs the reviewer AFTER the worker with the work in scope
+>   (pipeline-style handoff); it previously shared the parallel fan-out, so the reviewer
+>   "reviewed" a workspace whose changes had not happened. RED: "the reviewer must not start
+>   before the worker's work exists: expected true to be false" (worker gated until released).
+> - TUI — transcript pin clamps at the increment (`clampTranscriptPin`, used at every mutation
+>   site): held PgUp drove state to 200 while the display clamped at 11, and the next 38 PgDns
+>   drained invisible surplus (the demonstration; the unit suite pins state/display agreement
+>   with applyTranscriptPin at every boundary).
+> - EVAL HONESTY — A8 done at the source: turnStream carries the provider's own classification
+>   (`failureKind` on the error event, from StreamEvent.code; breaker message included), and the
+>   runner records it instead of grading a provider-killed run as capability. RED (source
+>   stashed): "expected 'task' to be 'provider'" / "expected 'task' to be 'network'".
+> - BATCH P (F3 CLOSED) — `anvil gate` sees untracked files: hunk-less synthetic sections, the
+>   authority's shape, fed through the Batch O resolver. RED (source stashed): "expected +0 to
+>   be 1" — a slop-filled untracked `fresh.ts` exited "clean tree". `--staged` deliberately
+>   does not inherit the pass (the staged surface judges the index; noted as a deliberate
+>   divergence from the authority's staged mode, which the audit flagged as contradictory).
+> - BATCH Q (F4 CLOSED) — `saveAbResult`/`loadRecentAbResults` in core; `evals/ab.ts` persists
+>   the AbResult beside the batch reports (`<evalsDir>/ab/`), `--report` surfaces the recent
+>   verdicts; corrupted artifacts are skipped. Round-trip + newest-first + corruption tests.
+> - DOC-LIE FIXED — `resolveProviderCredentials()`: env API keys now actually override
+>   credentials.json in the product boot (CLI, TUI refresh, live eval lane), exactly as
+>   .env.example and the README provider table always promised. One table, both surfaces —
+>   certify-provider.ts delegates; `saveCredential` stays file-only so env never persists to
+>   disk. RED (source stashed): the resolver did not exist; the live failure
+>   "ANTHROPIC_API_KEY=… anvil → No provider is configured" is the audit's receipt.
+> - LINUX WATCH — `watchDirectories` walks the WHOLE source tree (capped by the new
+>   `GATE_WATCH_MAX_DIRS`, excluding node_modules/dist/.git); the old two-level walk missed
+>   `packages/<name>/src` saves and its "diff rescan on save" mitigation never existed (the
+>   false comment is gone with it). Pure function, walk + cap pinned by tests.
+> Run: `npm run build -w @anvil/core` 0; typecheck 0 across all workspaces + scripts tsconfig.
+> Debug: one self-inflicted TS2304 — a `*/` inside a doc-comment (`packages/*/src/*`)
+> terminated the block comment; reworded. Retest: **cli 198/198, core 1,075/1,075, tui
+> 407/407 — 1,680 total, exit 0**; quick gate Steps 0-1.5 green, no protected artifacts.
+> Review: deliberately still open (declared next, not silently dropped): TUI slop consolidation
+> (flush logic ×3 in useAgentController, colorize word-width must count CELLS, MarkdownView
+> hr width), guardian interceptor index-based line numbers, theme.responsive token routing,
+> `classifyProviderError` HTTP-500 retryability decision, dead-export prune, and the
+> supply-chain caveat that gating cannot remove (running a foreign test suite executes foreign
+> code — the permission prompt now makes that consent explicit).
+>
 > **DONE 2026-10-10 (chief-engineer takeover — Batch O completed, corrected, landed):**
 > Understand: no other agent session is active (user-declared); Batch O's working tree sat
 > uncommitted with its DONE receipt above, and the takeover audit (RED-first, everything

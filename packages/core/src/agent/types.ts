@@ -48,7 +48,7 @@ export type AgentEvent =
   | { type: "compacted"; summary: string }
   | { type: "turn_complete" }
   | { type: "cancelled" }
-  | { type: "error"; message: string }
+  | { type: "error"; message: string; failureKind?: "provider" | "network" }
   // Rate limit hit mid-turn: the session waits out the retry window (once
   // per turn) and re-issues the request automatically.
   | { type: "rate_limit_wait"; seconds: number }

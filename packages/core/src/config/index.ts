@@ -50,6 +50,35 @@ export function loadCredentials(): ProviderCredentials {
   }
 }
 
+/**
+ * Product-boot credential resolution: `~/.anvil/credentials.json` merged with
+ * the documented provider env vars, env taking precedence — `.env.example` and
+ * the README provider table have promised this since the beginning, but the
+ * product path read only the file, so `ANTHROPIC_API_KEY=… anvil` reported
+ * "No provider is configured" while certification scripts honored the very
+ * same variable (takeover 2026-10-10). One table, both surfaces:
+ * certify-provider.ts resolves through this function. `saveCredential`
+ * deliberately stays on file-only `loadCredentials()` so an env override is
+ * never persisted to disk.
+ */
+export function resolveProviderCredentials(): ProviderCredentials {
+  const file = loadCredentials();
+  return {
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY || file.anthropicApiKey,
+    openaiApiKey: process.env.OPENAI_API_KEY || file.openaiApiKey,
+    geminiApiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || file.geminiApiKey,
+    openrouterApiKey: process.env.OPENROUTER_API_KEY || file.openrouterApiKey,
+    orcarouterApiKey: process.env.ORCAROUTER_API_KEY || file.orcarouterApiKey,
+    groqApiKey: process.env.GROQ_API_KEY || file.groqApiKey,
+    cerebrasApiKey: process.env.CEREBRAS_API_KEY || file.cerebrasApiKey,
+    githubApiKey: process.env.GITHUB_TOKEN || process.env.GITHUB_API_KEY || file.githubApiKey,
+    mistralApiKey: process.env.MISTRAL_API_KEY || file.mistralApiKey,
+    inceptionApiKey: process.env.INCEPTION_API_KEY || file.inceptionApiKey,
+    ollamaApiKey: process.env.OLLAMA_API_KEY || file.ollamaApiKey,
+    qwencloudApiKey: process.env.QWENCLOUD_API_KEY || process.env.DASHSCOPE_API_KEY || file.qwencloudApiKey,
+  };
+}
+
 export function loadSettings(): AnvilSettings {
   try {
     const raw = JSON.parse(fs.readFileSync(SETTINGS_PATH(), "utf-8"));

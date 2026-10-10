@@ -421,7 +421,7 @@ export class AgentSession {
         yield* this.maybeCompact(controller, turn);
 
         if (isCircuitOpen(this.provider.id, this.options.model)) {
-          yield { type: "error", message: `Provider circuit breaker is open. Wait before retrying.` };
+          yield { type: "error", message: "Provider circuit breaker is open. Wait before retrying.", failureKind: "provider" };
           return;
         }
 

@@ -16,6 +16,7 @@ import {
   formatGuardianDelta,
   formatTrendComparison,
   loadRecentReports,
+  loadRecentAbResults,
   resolveEvalsDir,
   findGuardianDeltaPair,
 } from "../packages/core/src/eval/index.js";
@@ -51,6 +52,18 @@ async function main() {
     console.log(formatTrendComparison(reports));
     const { on, off } = findGuardianDeltaPair(reports);
     console.log(formatGuardianDelta(on, off));
+    // Batch Q (F4, takeover 2026-10-10): persisted A/B prompt experiments, so
+    // the measurement behind the current prompt is re-readable — the batch
+    // trend above covers capability; this covers the prompt decision itself.
+    const abResults = loadRecentAbResults(resolveEvalsDir(), 3);
+    if (abResults.length > 0) {
+      console.log("\n--- recent A/B prompt experiments (persisted artifacts) ---");
+      for (const ab of abResults) {
+        console.log(`  ${ab.date} [${ab.provider}/${ab.model}]`);
+        console.log(`    verdict    : ${ab.verdict}`);
+        console.log(`    significant: ${ab.significant ? "yes" : "no — do not act on it"}`);
+      }
+    }
     process.exit(0);
   }
 

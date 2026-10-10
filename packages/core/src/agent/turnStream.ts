@@ -136,6 +136,17 @@ export async function* streamAssistantTurn(
         yield event;
         break;
       case "error": {
+        // A8's structured origin, carried instead of dropped: the provider
+        // already classified this error (`code` on the StreamEvent); re-yielding
+        // a bare message forced every consumer — the eval harness above all —
+        // to guess the failure's origin from prose.
+        const asAgentError = {
+          type: "error" as const,
+          message: event.message,
+          ...(event.code !== undefined
+            ? { failureKind: event.code === "NETWORK_TIMEOUT" ? ("network" as const) : ("provider" as const) }
+            : {}),
+        };
         if (isRateLimitMessage(event.message)) {
           noteRateLimited(provider.id, input.model);
           recordFailure(provider.id, input.model);
@@ -144,7 +155,7 @@ export async function* streamAssistantTurn(
             // cannot succeed, and the futile wait burned whole turn budgets
             // (observed as 120s stalls with zero tool calls). Health is
             // recorded above; the provider's own message is the honest report.
-            yield { type: "error", message: event.message };
+            yield asAgentError;
             return null;
           }
           if (!turn.rateLimitRetried) {
@@ -154,7 +165,7 @@ export async function* streamAssistantTurn(
             break;
           }
         }
-        yield { type: "error", message: event.message };
+        yield asAgentError;
         return null;
       }
       case "turn_end":

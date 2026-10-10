@@ -8,9 +8,9 @@ import { captureFailureDiff } from "./failureDiff.js";
 import { createEvalMockProvider } from "./mockProvider.js";
 import { AgentSession } from "../agent/session.js";
 import { AUTO_APPROVE_BROKER } from "../agent/types.js";
-import { ModelProvider } from "../providers/types.js";
+import { ModelProvider, classifyProviderError } from "../providers/types.js";
 import { createProviders } from "../providers/index.js";
-import { loadCredentials } from "../config/index.js";
+import { resolveProviderCredentials } from "../config/index.js";
 import { buildAnvilAgentProfile } from "../config/agentProfile.js";
 import { getErrorMessage, sleepAbortable } from "../errors.js";
 import { scanTextForSlop } from "../guardian/scanner.js";
@@ -154,6 +154,11 @@ export async function runEvalTask(
   // A8: structured failure origin, set at the site that knows it (never inferred
   // from the message by the A/B harness).
   let failureKind: "provider" | "network" | "task" | undefined;
+  // Batch Q-prep (2026-10-10): the provider already classified stream deaths
+  // (turnStream carries `failureKind` on error events). A run the provider
+  // killed is not capability evidence, whatever check.sh then says about the
+  // half-finished workspace.
+  let streamFailureKind: "provider" | "network" | undefined;
 
   try {
     // 1. Prepare isolated workspace
@@ -171,7 +176,7 @@ export async function runEvalTask(
       provider = createEvalMockProvider(task);
       modelId = "eval-mock";
     } else {
-      const creds = loadCredentials();
+      const creds = resolveProviderCredentials();
       const allProviders = createProviders(creds);
       const chosen = (allProviders as Record<string, ModelProvider>)[options.providerId];
       if (!chosen || !chosen.isConfigured()) {
@@ -251,6 +256,9 @@ export async function runEvalTask(
             }
           } else if (event.type === "error") {
             errorMsg = event.message;
+            // A8 done at the source: the provider classified the failure, so a
+            // provider-killed run is never graded as a capability failure below.
+            if (event.failureKind) streamFailureKind = event.failureKind;
           }
         }
       }
@@ -312,9 +320,12 @@ export async function runEvalTask(
       passed = true;
     } else {
       passed = false;
-      // A8: an assertion failure is a TASK failure by construction. Without
-      // this, a check.sh message containing an environmental word was excused.
-      failureKind = "task";
+      // A8: an assertion failure is a TASK failure by construction — UNLESS the
+      // provider killed the run first (rate limits, 5xx, auth): a compromised
+      // trajectory is not capability evidence, and the A/B harness excludes it
+      // from significance via the structured kind. Without this, an outage was
+      // graded as "the model is bad at coding".
+      failureKind = streamFailureKind ?? "task";
       const stderr = checkResult.stderr?.toString("utf8").trim();
       const stdout = checkResult.stdout?.toString("utf8").trim();
       errorMsg = stderr || stdout || `check.sh failed with exit code ${checkResult.status}`;
@@ -322,6 +333,12 @@ export async function runEvalTask(
   } catch (err: unknown) {
     passed = false;
     errorMsg = getErrorMessage(err);
+    // A8: classify at the site that holds the thrown object. Known provider/
+    // network classes are infrastructure; UNKNOWN stays unclassified — a
+    // harness error (sandbox copy, spawn) is not provider weather either.
+    const cls = classifyProviderError(err);
+    failureKind =
+      cls.code === "UNKNOWN" ? undefined : cls.code === "NETWORK_TIMEOUT" ? "network" : "provider";
   } finally {
     // 27.3: capture WHAT the model wrote BEFORE the sandbox is destroyed — the
     // diff is the diagnostic, and it is discarded with the temp dir otherwise.

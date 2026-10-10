@@ -141,6 +141,49 @@ describe("runTeam", () => {
     expect(result.members[0].failureReason).toBe("boom");
   });
 
+  // Takeover 2026-10-10: `review` used the parallel fan-out, so the reviewer
+  // started at the same instant as the worker and "reviewed" a workspace whose
+  // changes had not happened yet — the strategy silently did nothing it
+  // promised. RED receipt: under the fan-out the reviewer is invoked while the
+  // worker is still gated, and its task is the raw one.
+  it("review runs the reviewer AFTER the worker, with the work in scope", async () => {
+    let releaseWorker: () => void = () => {};
+    const workerGate = new Promise<void>((resolve) => {
+      releaseWorker = resolve;
+    });
+    let reviewerCalled = false;
+    let reviewerTask = "";
+    const deps = {
+      projectRoot: "/tmp",
+      runMember: async (spec: { id: string; task: string }): Promise<TeamMemberResult> => {
+        if (spec.id === "worker") {
+          await workerGate; // the work is "in progress" until the test releases it
+          return { id: spec.id, report: "WORKER-REPORT", toolCalls: 2, inputTokens: 5, outputTokens: 3, aborted: false };
+        }
+        reviewerCalled = true;
+        reviewerTask = spec.task;
+        return { id: spec.id, report: "REVIEWER-REPORT", toolCalls: 1, inputTokens: 2, outputTokens: 1, aborted: false };
+      },
+    };
+    const spec: TeamSpec = {
+      strategy: "review",
+      members: [
+        { id: "worker", task: "implement the feature" },
+        { id: "reviewer", task: "review the implementation" },
+      ],
+    };
+    const teamPromise = runTeam(spec, deps, new AbortController().signal);
+    // A macrotask is enough: under a concurrent fan-out the reviewer has been
+    // invoked by now; sequentially it cannot have been.
+    await new Promise((r) => setTimeout(r, 10));
+    expect(reviewerCalled, "the reviewer must not start before the worker's work exists").toBe(false);
+    releaseWorker();
+    const result = await teamPromise;
+    expect(result.members.map((m) => m.id)).toEqual(["worker", "reviewer"]);
+    expect(reviewerTask).toContain("review the implementation");
+    expect(reviewerTask, "the reviewer must see the worker's report").toContain("WORKER-REPORT");
+  });
+
   it("rejects invalid specs", async () => {
     await expect(
       runTeam({ strategy: "parallel", members: [] }, fakeRunner({}), new AbortController().signal)
