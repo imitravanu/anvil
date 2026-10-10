@@ -2,7 +2,34 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-10 (6) (chief-engineer takeover — protected-artifact hardening):**
+> Understand: the last structural backlog group — the two enforcement artifacts themselves.
+> **PROTECTED ARTIFACTS CHANGED, manifest regenerated in the same commit:**
+> `scripts/verify-gate.mjs`, `.githooks/pre-commit`, `scripts/gate-manifest.json`.
+> - HOOK LAYER A WORD-SPLIT: `for f in $(git diff --cached --name-only)` broke on spaces — a file
+>   NAMED "AGENTS.md mydoc.txt" was read as the tokens "AGENTS.md" + "mydoc.txt" and falsely
+>   refused as a tamper attempt (the mirror shape let a spaced protected path slip). Now the
+>   same POSIX while-read heredoc idiom Layer B already used. RED→GREEN:
+>   "expected 1 to be +0" against the stashed old hook; suite 199/199 with the fix.
+> - EXTENSION PARITY: jsx/mts/cts join the gate's SCAN_EXTS — Step 1.5's
+>   `/\.[cm]?[jt]sx?$/` always covered them, so a brand-new .jsx file escaped Step 1 entirely —
+>   and the hook gains the same three (the sentinel's static pin forced the pair, exactly as
+>   designed).
+> - WINDOWS PATHSPEC: the gate's pathspecs are double-quoted now (single quotes are not
+>   quoting under cmd.exe — the same G12 fix the product gate already carried).
+> - STAGED-SURFACE CONTRACT: the authority's untracked pass no longer runs in `--staged`
+>   mode. The pass used to inject untracked files into a surface whose contract is "exactly
+>   what a commit would ship" — the audit's contradiction, and the product gate (Batch P)
+>   already made the opposite, correct call. The two authorities now agree.
+> Run: CLI suite **199/199** (sentinel hook⇄gate parity green with the new extensions; the
+> differential suite green end-to-end); quick gate 5/5 green with the regenerated manifest.
+> Review: this closes the structural backlog. Remaining declared items are small:
+> TUI dead-export prune, README `guardian_blocked` claim check, and the standing
+> scanner-trigger assessment (tree-sitter spike decision) — plus the deliberate standing
+> decisions recorded earlier, which stay closed.
+>
 > **DONE 2026-10-10 (5) (chief-engineer takeover — provider taxonomy honest + three quick wins):**
+>
 > Files owned: `providers/types.ts`, `agent/session.ts`, `agent/turnStream.ts`, `agent/checkpointStore.ts`,
 > `tools/grep.ts`, `scripts/certify-provider.ts`, `providers/__tests__/classifyError.test.ts`.
 > No protected artifact.

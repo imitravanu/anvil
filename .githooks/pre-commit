@@ -34,15 +34,23 @@
 set -u
 
 # --- Layer A: protected-path tamper refusal (self-contained) ----------------
+# `while read` over the newline-delimited list, not `for f in $(...)`: word
+# splitting broke paths containing spaces (2026-10-10), so a staged protected
+# path with a space could slip the refusal. Layer B below already used this
+# heredoc idiom; Layer A now matches it. Paths with embedded newlines remain
+# out of scope exactly as before — git C-quotes those, and they arrive as one
+# quoted string that matches no case pattern.
 blocked=""
-for f in $(git diff --cached --name-only); do
+while IFS= read -r f; do
   case "$f" in
     scripts/verify-gate.mjs|scripts/gate-manifest.json|.githooks/pre-commit|\
     AGENTS.md|.fresh-allowlist.json|docs/PHASE-21-25-AUDIT.md|\
     packages/cli/src/__tests__/gate.sentinel.test.ts|.github/workflows/*)
       blocked="$blocked $f" ;;
   esac
-done
+done <<EOF
+$(git diff --cached --name-only)
+EOF
 if [ -n "$blocked" ]; then
   echo "🔴 PROTECTED ARTIFACT CHANGE DETECTED (staged):$blocked" >&2
   echo "   Human review required." >&2
@@ -177,7 +185,9 @@ while IFS= read -r f; do
     packages/cli/src/__tests__/gate.sentinel.test.ts) continue ;;
   esac
   case "$f" in
-    *.ts|*.tsx|*.js|*.mjs|*.cjs) ;;
+    # Parity with the gate's SCAN_EXTS (pinned by the sentinel): a new
+    # extension there without its twin here is silent under-refusal.
+    *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs|*.mts|*.cts) ;;
     *) continue ;;
   esac
 

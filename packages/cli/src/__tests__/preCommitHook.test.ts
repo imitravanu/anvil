@@ -113,6 +113,16 @@ describe("pre-commit hook (G7: core boundary is per-file)", () => {
     );
     expect(code, "raw error formatting must be refused").toBe(1);
   });
+
+  // Takeover 2026-10-10: Layer A word-split its staged path list, so a file
+  // NAMED "AGENTS.md mydoc.txt" was read as the tokens "AGENTS.md" +
+  // "mydoc.txt" — a false tamper refusal on an innocent file (and the mirror
+  // shape: a protected path with a space could slip the refusal). RED first:
+  // this exited 1 against the `for f in $(...)` loop.
+  it("judges a staged path with spaces as ONE path (Layer A word-split)", () => {
+    const code = runHookOnStaged("AGENTS.md mydoc.txt", "const x = 1;\n");
+    expect(code, "a file NAMED 'AGENTS.md mydoc.txt' is not the protected AGENTS.md").toBe(0);
+  });
 });
 
 /**

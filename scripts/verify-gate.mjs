@@ -418,10 +418,16 @@ try {
   // `:(glob)` magic is required: without it git's fnmatch treats `**/` as "at
   // least one directory", so a file directly under a root (e.g. src/x.ts) is
   // silently missed.
-  const SCAN_EXTS = ["ts", "tsx", "js", "mjs", "cjs"];
+  //
+  // 2026-10-10 (takeover): jsx/mts/cts join the list — Step 1.5's
+  // `/\.[cm]?[jt]sx?$/` always covered them, so a brand-new .jsx file escaped
+  // Step 1 entirely. Double quotes, not single (the same G12 reason the CLI
+  // gate switched): single quotes are not quoting under cmd.exe, and this
+  // command runs through a shell on every platform.
+  const SCAN_EXTS = ["ts", "tsx", "js", "jsx", "mjs", "cjs", "mts", "cts"];
   const PATHSPEC = [
-    ...SCAN_ROOTS.flatMap((root) => SCAN_EXTS.map((ext) => `':(glob)${root}/**/*.${ext}'`)),
-    ...SCAN_EXCLUDED_DIRS.map((dir) => `':(glob,exclude)${dir}/**'`),
+    ...SCAN_ROOTS.flatMap((root) => SCAN_EXTS.map((ext) => `":(glob)${root}/**/*.${ext}"`)),
+    ...SCAN_EXCLUDED_DIRS.map((dir) => `":(glob,exclude)${dir}/**"`),
   ].join(" ");
   const ciMode = process.env.CI === "true";
   const ackProtected = args.includes("--ack-protected-change");
@@ -463,25 +469,32 @@ try {
 
   // Untracked files are invisible to `git diff` — without this a brand-new
   // source file full of slop would ship on its first commit unscanned.
-  try {
-    const untracked = execSync(`git ls-files --others --exclude-standard -- ${PATHSPEC}`, {
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-      timeout: 30_000,
-    });
-    if (untracked.trim()) {
-      const parts = [diff.trim()];
-      for (const file of untracked.trim().split(/\r?\n/)) {
-        const rel = file.trim();
-        if (!rel) continue;
-        const content = fs.readFileSync(rel, "utf-8");
-        parts.push(`+++ b/${rel}`);
-        for (const ln of content.split(/\r?\n/)) parts.push(`+ ${ln}`);
+  // The STAGED surface deliberately does NOT inherit the pass (2026-10-10):
+  // `--staged` judges exactly what a commit would ship (the index), and an
+  // untracked file is not in it. The product gate (packages/cli gate.ts,
+  // Batch P) made the same call; the two authorities now agree instead of
+  // contradicting each other.
+  if (!stagedOnly) {
+    try {
+      const untracked = execSync(`git ls-files --others --exclude-standard -- ${PATHSPEC}`, {
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+        timeout: 30_000,
+      });
+      if (untracked.trim()) {
+        const parts = [diff.trim()];
+        for (const file of untracked.trim().split(/\r?\n/)) {
+          const rel = file.trim();
+          if (!rel) continue;
+          const content = fs.readFileSync(rel, "utf-8");
+          parts.push(`+++ b/${rel}`);
+          for (const ln of content.split(/\r?\n/)) parts.push(`+ ${ln}`);
+        }
+        diff = parts.join("\n");
       }
-      diff = parts.join("\n");
+    } catch (untrackedErr) {
+      console.warn(`${YELLOW}⚠ Could not scan untracked sources (${untrackedErr.message}).${RESET}`);
     }
-  } catch (untrackedErr) {
-    console.warn(`${YELLOW}⚠ Could not scan untracked sources (${untrackedErr.message}).${RESET}`);
   }
 
   const lines = diff.split("\n");
