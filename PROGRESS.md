@@ -2,6 +2,30 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-10 (7) (chief-engineer takeover — dead-export prune + standing state):**
+> Understand: the audit's last declared item, done systematically — an export-usage audit over
+> all 324 TUI exports classifying each as cross-file-used / own-file-used / test-only / dead,
+> reviewed by hand before touching anything. Files owned: `commands/palette.ts`,
+> `theme/themes.ts`, `util/chrome.ts`, `util/format.ts`, `theme/colorSupport.ts`, their paired
+> tests, `util/__tests__/gauge.test.ts` (deleted), `docs/CURRENT-FOCUS.md`, this file.
+> No protected artifact.
+> Edit: five exports had no production consumer ANYWHERE — `RankedCommand` (an orphaned
+> interface the palette's inline object literals never adopted), `ThemeColorKey` (an unused
+> alias), `ChromeGroup` (an unused alias), `contextGauge` (the pre-DW-4.2 flat "ctx NN%"
+> gauge, superseded by the ContextGauge component), and `supportsTruecolor` (a one-line
+> wrapper whose four assertions all delegate to detectColorSupport's own pinned suite).
+> All five deleted, tombstone tests with them (gauge.test.ts deleted; the supportsTruecolor
+> describe removed). The other 76 audit candidates are ALIVE by design — own-file helpers
+> whose export is their test seam (the repo's own pure-helper pattern), test-utils, or type
+> contracts of exported signatures — deliberately kept.
+> Retest: TUI typecheck 0; TUI suite **406/406** (64 files; the four tombstone tests removed
+> with their functions — 410 − 4 = 406, the arithmetic is the receipt that nothing else
+> depended on them).
+> Review: the takeover's declared backlog is now EMPTY. Standing state recorded in
+> docs/CURRENT-FOCUS.md (the docs index's Current-work row). Remaining open items are the
+> repo's own standing decisions (38.5 prompt, tokeniser DEFER, mock-certified rows, the
+> scanner-trigger assessment) — decisions on record, not defects.
+>
 > **DONE 2026-10-10 (6) (chief-engineer takeover — protected-artifact hardening):**
 > Understand: the last structural backlog group — the two enforcement artifacts themselves.
 > **PROTECTED ARTIFACTS CHANGED, manifest regenerated in the same commit:**

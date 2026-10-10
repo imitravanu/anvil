@@ -12,9 +12,6 @@ export type LegacyColorKey =
   | "primary" | "userText" | "assistantText" | "toolName" | "toolRunning"
   | "toolDone" | "toolError" | "dim" | "border" | "accent" | "surface";
 
-/** Backwards-compatible alias: the file format's required keys. */
-export type ThemeColorKey = LegacyColorKey;
-
 export type SemanticColorKey =
   | "brand" | "brandDim"
   | "surfaceElevated" | "surfaceActive"

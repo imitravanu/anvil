@@ -6,12 +6,6 @@ import type { Command } from "./types.js";
  * order. Empty query lists everything with MRU boosted to the top.
  */
 
-export interface RankedCommand {
-  command: Command;
-  /** 0 = prefix/name match, 1 = fuzzy — lower ranks first. */
-  rank: number;
-}
-
 function isSubsequence(query: string, target: string): boolean {
   let qi = 0;
   for (let ti = 0; ti < target.length && qi < query.length; ti++) {

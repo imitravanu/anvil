@@ -243,19 +243,6 @@ export function collapsePlan(
   const lines = all.slice(0, maxLines).map((l) => curtail(l, avail));
   return { lines, hidden: Math.max(0, all.length - maxLines) };
 }
-/**
- * Context-window gauge for the status bar: "ctx 34%" from the provider's
- * latest measured input tokens. Warn color past 75% (where compaction kicks
- * in); hidden entirely when the model is unknown to the registry.
- */
-export function contextGauge(
-  inputTokens: number,
-  contextWindow: number | undefined
-): { text: string; fraction: number } | null {
-  if (!contextWindow || contextWindow <= 0) return null;
-  const fraction = Math.max(0, Math.min(1, inputTokens / contextWindow));
-  return { text: `ctx ${Math.round(fraction * 100)}%`, fraction };
-}
 
 /**
  * Message timestamp for card headers ("14:02"). Manual fields — locale

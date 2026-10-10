@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectColorSupport, supportsTruecolor } from "../colorSupport.js";
+import { detectColorSupport } from "../colorSupport.js";
 
 describe("detectColorSupport", () => {
   it("NO_COLOR wins over everything (presence, any value)", () => {
@@ -26,14 +26,5 @@ describe("detectColorSupport", () => {
   it("falls back to basic, never throws on empty env", () => {
     expect(detectColorSupport({ TERM: "xterm" })).toBe("basic");
     expect(detectColorSupport({})).toBe("basic");
-  });
-});
-
-describe("supportsTruecolor", () => {
-  it("is true only for truecolor", () => {
-    expect(supportsTruecolor({ COLORTERM: "truecolor" })).toBe(true);
-    expect(supportsTruecolor({ TERM: "xterm-256color" })).toBe(false);
-    expect(supportsTruecolor({ TERM: "xterm" })).toBe(false);
-    expect(supportsTruecolor({ NO_COLOR: "1", COLORTERM: "truecolor" })).toBe(false);
   });
 });

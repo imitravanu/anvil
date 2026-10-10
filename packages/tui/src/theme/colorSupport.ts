@@ -22,10 +22,3 @@ export function detectColorSupport(
   if (term.length > 0) return "basic";
   return "basic";
 }
-
-/** True when hex theme colors render as authored (no chalk downgrade). */
-export function supportsTruecolor(
-  env: Record<string, string | undefined> = process.env
-): boolean {
-  return detectColorSupport(env) === "truecolor";
-}

@@ -13,8 +13,6 @@ export const CHROME = {
   braille: { dot1: "⠁", dot12: "⠃", dot123: "⠇", dot1234: "⡇", full: "⣿", empty: "⠀" },
 } as const;
 
-export type ChromeGroup = keyof typeof CHROME;
-
 /** Border styles Ink accepts (its own `BoxStyle` set, minus the internal ones). */
 export type InkBorderStyle =
   | "single"

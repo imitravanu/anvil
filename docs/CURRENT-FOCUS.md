@@ -4,6 +4,42 @@
 > what is true right now, kept current alongside any open phase, and what
 > reopens work.
 
+## Chief-engineer takeover — closed (2026-10-10)
+
+A full-tree deep-dive audit took over the orphaned Batch O working tree, corrected and
+landed it, then closed the audit's entire backlog in one day (receipts per change in
+`PROGRESS.md`, entries 1–7). What is now true that was not true on 2026-10-04:
+
+- **Security:** the bash brace-expansion bypass of the read-only auto-allow (a proven
+  no-prompt host-file read) and the ungated `verify_tests` shell path both prompt now.
+- **Feature honesty:** team `review` runs the reviewer AFTER the worker with the work in
+  scope (was: a concurrent no-op); provider outages are graded `provider`/`network`,
+  never capability (A8 done at the source); HTTP 500 is retryable overload; the circuit
+  breaker feeds on 5xx weather instead of clearing on it.
+- **Review findings closed:** F3 (`anvil gate` sees untracked files — Batch P) and F4
+  (A/B artifacts persisted under `<evalsDir>/ab/` and surfaced by `--report` — Batch Q).
+- **Docs true:** env API keys override `credentials.json` in the product boot (as always
+  documented); the docs banner counts itself; the `guardian_blocked` stable line is
+  documented as `--raw`-only.
+- **Enforcement artifacts hardened** (manifest regenerated in-commit): the hook no longer
+  word-splits staged paths; gate + hook cover jsx/mts/cts; pathspecs are double-quoted
+  for Windows; `--staged` judges the index only, on all three surfaces.
+- **TUI:** the transcript pin clamps at every mutation site (held PgUp no longer
+  dead-scrolls); `theme.responsive` tokens route the gauge/sparkline/header tiers; one
+  throttler owns the streaming flush trio; the TUI's dead exports are pruned
+  (RankedCommand, ThemeColorKey, ChromeGroup, contextGauge, supportsTruecolor — with
+  their tombstone tests).
+- **Interpreter honesty:** the pre-write checkpoint reports real file lines and never
+  drops `++ `-content slop lines (the Batch O resolver, now fed by the interceptor too).
+
+Standing deliberately (recorded decisions, not backlog): Phase 38.5's prompt rewrite
+stays unlanded (measured four ways, no reproducible advantage); the tokeniser stays
+DEFER with its written triggers; the 43 mock-certified model rows stay labeled; the
+scanner-trigger assessment (tree-sitter spike) remains due on its own evidence rule.
+
+Measured at close: **core 1,081 · TUI 406 · CLI 199 — 1,686 tests green**; full gate
+green (receipt in `PROGRESS.md` entry 7).
+
 ## Where the project stands (2026-10-04)
 
 - **Phase 39 is COMPLETE** (2026-09-30 → 2026-10-04) — remediation of the full-tree adversarial
