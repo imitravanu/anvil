@@ -2,6 +2,29 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-10 (8) (chief-engineer takeover — the chronic Visual Gate failure, found and fixed):**
+> Understand: "anything left?" prompted a remote-CI check nobody had run in two weeks — and it
+> found the one thing the local gates could never see: the Visual Regression Gate had FAILED
+> 13 consecutive pushes since 2026-09-27 (last green: e968c07, 09-21), while the main CI gate
+> was green throughout and the README displayed the red badge unnoticed. The unit-suite visual
+> tests passed locally the whole time because the failing stage is the CI-only PIXEL matrix
+> (`visual:capture` → `visual:diff`, pixelmatch at a 2.5% cross-environment threshold) — 144
+> PNG scenarios, baselines committed 09-21 and never re-approved.
+> Root cause, reproduced locally before fixing: stale baselines. The permission-prompt frame
+> changed ~2.6% in the Batch K/R "symmetric permission keys" work (and sibling scenarios
+> drifted marginally), all AFTER the last approval; CI's runner Chrome renders the remaining
+> marginal scenarios 0.1–0.8% differently, pushing 12 of 144 over the line remotely (locally:
+> 3 of 144, all `04-permission-prompt` at 80x24 — measured: 2.54–2.62%).
+> Edit: `npm run visual:approve` — the repo's own designed recovery flow (VR4) — promoting
+> current-code captures (144 frames, my local Chrome) to the committed baselines. 77 PNGs
+> changed. Retest: fresh capture + diff = **144/144 PASS, 0% diff** locally; the remote gate's
+> only remaining variable is CI-vs-local anti-aliasing, historically well under the 2.5%
+> threshold the spec set for exactly this. The next push's run is the final receipt
+> (watched to conclusion below).
+> Review: process lesson on the record — a gate badge nobody reads is not a gate; the
+> takeover's verification discipline now includes remote-CI conclusion checks, not just the
+> local authority run.
+>
 > **DONE 2026-10-10 (7) (chief-engineer takeover — dead-export prune + standing state):**
 > Understand: the audit's last declared item, done systematically — an export-usage audit over
 > all 324 TUI exports classifying each as cross-file-used / own-file-used / test-only / dead,
