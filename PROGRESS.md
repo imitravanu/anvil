@@ -2,6 +2,30 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-10 (9) (chief-engineer takeover — v1.3.0: the first real release):**
+> Understand: "what are you waiting for" → ship it. The release surfaced three layers of hidden state,
+> each fixed in order: (1) CORE_VERSION had drifted from package.json (docTruth now pins all three
+> together — the badge edit was the RED); (2) the version label lives in the empty-state TEXT frame
+> and two "no credentials" boot tests needed env isolation — ambient provider keys count as
+> configuration since resolveProviderCredentials, and an OPENROUTER_API_KEY on this very machine
+> rerouted the boot under test (found by running the FULL suite after the bump; the lesson from the
+> first failed tag is now standing discipline); (3) the deepest one: **the project has never
+> actually released anything** — @anvil/core is not on npm (404), and the repo had ZERO GitHub
+> releases; the v1.2.0 "release" in the CHANGELOG never shipped, and the release workflow's
+> NPM_TOKEN secret is empty (ENEEDAUTH at the publish step).
+> Edit/Run: v1.3.0 tagged (a50bfa4 failed on the text frame; re-tagged on 018e7ce after the fixes).
+> The release pipeline then passed EVERYTHING in CI — build, typecheck, 1,686 tests, 25/25 mock
+> evals, provider certification, and the FULL Guardian Gate (Steps 0-5, "GUARDIAN GATE PASSED" in
+> the release job's own log) — and failed only at `npm publish` on the empty secret. The GitHub
+> Release was therefore created directly (the workflow's designed artifact set): v1.3.0 live with
+> anvil-cli/core/tui tarballs + SHA256SUMS, installable today via
+> `npm i -g ./anvil-cli-1.3.0.tgz`.
+> Review: the ONE genuinely human item left in this takeover: npm publishing needs the owner's npm
+> account token as the NPM_TOKEN repo secret (npmjs.com → Access Tokens → Granular token with
+> publish rights for @anvil/core, @anvil/tui, @anvil/cli → repo Settings → Secrets → Actions).
+> The moment it exists, re-running the failed Release & Publish run publishes all three packages;
+> everything else in that job is already green. CI on 018e7ce: Visual Gate ✅, Typecheck & Tests ✅.
+>
 > **DONE 2026-10-10 (8) (chief-engineer takeover — the chronic Visual Gate failure, found and fixed):**
 > Understand: "anything left?" prompted a remote-CI check nobody had run in two weeks — and it
 > found the one thing the local gates could never see: the Visual Regression Gate had FAILED
