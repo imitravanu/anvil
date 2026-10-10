@@ -2,6 +2,23 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-10 (3) (chief-engineer takeover — TUI polish batch):**
+> Understand: the takeover audit's TUI slop findings, the three cheap-and-certain ones landed now;
+> the two structural ones are declared below, not rushed (a streaming-backpressure refactor
+> done hastily is riskier than the drift it removes). Files owned: `diff/colorizeDiff.tsx`,
+> `markdown/MarkdownView.tsx`, `commands/palette.ts`. No protected artifact.
+> Edit: (1) word-highlight width now counts CELLS via `displayWidth` — the F5 doctrine the
+> file's own siblings follow; a CJK line under the cap in code points was ~2x over in cells and
+> kept its word segments, wrapping the row past the frame. (2) `MarkdownView` computes ONE
+> `usableWidth` for the code window AND the text wrap (they were the same expression computed
+> twice, free to drift), and the `hr` spans it instead of a hardcoded 40 (stubby at 200 cols,
+> overflowing at 45). (3) the palette gains its missing `copy` icon (it silently fell back to
+> the generic dot — the hand-kept-list drift the file's own comments warn about).
+> Retest: TUI suite 407/407, exit 0; quick gate Steps 0-1.5 green. Visual baselines unaffected
+> (the suite carries them where they run).
+> Review: still declared next — `useAgentController` flush dedup (×3), `theme.responsive`
+> routing through Header/ContextGauge/StatusBar, guardian interceptor real line numbers.
+>
 > **DONE 2026-10-10 (2) (chief-engineer takeover — security, honest features, frontier closures):**
 > Understand: five defects from the takeover audit plus both review-doc closures (F3, F4), all
 > reproduced or live-demonstrated before fixing. No protected artifact touched in this batch.

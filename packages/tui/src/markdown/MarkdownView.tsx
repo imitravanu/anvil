@@ -105,10 +105,12 @@ function TableView({ headers, rows }: { headers: MarkdownSpan[][]; rows: Markdow
 export function MarkdownView({ blocks }: { blocks: MarkdownBlock[] }) {
   const theme = useTheme();
   const { stdout } = useStdout();
-  const maxCodeLen = Math.max(20, (stdout?.columns ?? 80) - 6);
-  // Wrap width mirrors the transcript estimator's usable width (padding +
-  // frame reserve); list continuation lines hang-indent to the marker column.
-  const wrapWidth = Math.max(20, (stdout?.columns ?? 80) - 6);
+  // One expression, two names, zero drift: the usable width (padding + frame
+  // reserve) bounds BOTH the code-block window and the text wrap, and the `hr`
+  // spans it. The three used to be computed twice plus a hardcoded 40, which
+  // made the rule stubby on a 200-col terminal and overflowing on a 45-col one
+  // (takeover 2026-10-10).
+  const usableWidth = Math.max(20, (stdout?.columns ?? 80) - 6);
   return (
     <Box flexDirection="column">
       {blocks.map((block, i) => {
@@ -117,7 +119,7 @@ export function MarkdownView({ blocks }: { blocks: MarkdownBlock[] }) {
           // flexDirection column: Box defaults to row, which laid the
           // table's rule/rows out side by side on one physical line.
           <Box key={i} flexDirection="column" marginTop={spaced ? 1 : 0}>
-            {renderBlock(block, theme, maxCodeLen, wrapWidth)}
+            {renderBlock(block, theme, usableWidth, usableWidth)}
           </Box>
         );
       })}
@@ -181,7 +183,7 @@ function renderBlock(
     case "hr":
       return (
         <Text dimColor>
-          {"─".repeat(40)}
+          {"─".repeat(wrapWidth)}
         </Text>
       );
     case "table":

@@ -3,7 +3,7 @@ import { Box, Text, useStdout } from "ink";
 import { parseDiff, type DiffRow } from "./parseDiff.js";
 import { pairRows, type WordSeg } from "./wordDiff.js";
 import { useTheme } from "../theme/theme.js";
-import { curtail } from "../util/format.js";
+import { curtail, displayWidth } from "../util/format.js";
 import { MAX_DIFF_ROWS } from "../util/displayLimits.js";
 
 /** Max diff rows rendered in the permission overlay before an omission note. */
@@ -125,8 +125,11 @@ export function ColorizedDiff({
         const segs = words.get(i);
         // Word highlights are dropped for overlong lines: a curtailed line
         // can't keep segment alignment, and overflow is the worse failure.
+        // CELLS, not code points (the F5 doctrine): a CJK-heavy line under
+        // the cap in code points is ~2x over it in terminal cells, and keeping
+        // its word segments wrapped the row past the frame (takeover 2026-10-10).
         const plain = segs ? segs.map((s) => s.text).join("") : row.text;
-        const useWords = segs !== undefined && Array.from(plain).length <= maxText;
+        const useWords = segs !== undefined && displayWidth(plain) <= maxText;
         return (
           <Text key={key} backgroundColor={bg}>
             <Text color={base} bold>

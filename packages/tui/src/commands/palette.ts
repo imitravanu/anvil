@@ -61,6 +61,7 @@ const COMMAND_ICONS: Record<string, string> = {
   team: "👥",
   plugin: "🧩",
   context: "📏",
+  copy: "📋",
 };
 
 export function commandIcon(name: string): string {
