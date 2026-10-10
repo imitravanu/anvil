@@ -2,7 +2,86 @@
 
 All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
+
 ## [Unreleased]
+
+## [1.3.0] — 2026-10-10
+
+### Chief-engineer takeover (2026-10-10)
+
+**Security**
+
+- The read-only command safe-list now rejects bash **brace expansion** —
+  `cat {,/etc/passwd}` passed every lexical check and read host files with no
+  permission prompt (proven live); every safe-listed reader and subcommand
+  inherits the fix.
+- `verify_tests` is a mutating tool: its no-pattern path runs the project's
+  own test script through a shell, exactly what `run_command "npm test"` gates.
+  It prompts now (the `autoVerify` setting, eval lanes and headless
+  auto-approve are unchanged).
+
+**Added**
+
+- `anvil gate` sees **untracked files** (Batch P): brand-new files are injected
+  as synthetic diff sections and judged at their real paths and lines; the
+  `--staged` surface judges the index only, on all three enforcement surfaces.
+- **A/B verdicts are durable artifacts** (Batch Q): prompt experiments persist
+  under `<evalsDir>/ab/` and are surfaced by `evals/run.ts --report`.
+- **Env API keys work in the product boot**, exactly as `.env.example` and the
+  README provider table always promised: `ANTHROPIC_API_KEY=… anvil` boots.
+  One `resolveProviderCredentials()` table serves the product and the
+  certification scripts; env is never persisted to disk.
+- Linux `anvil gate --watch` covers the whole source tree (capped, excluding
+  node_modules/dist/.git) — the old two-level walk missed
+  `packages/<name>/src` saves, and the rescan it promised never existed.
+
+**Changed**
+
+- Team `review` runs the reviewer **after** the worker with the work in scope
+  (pipeline-style handoff); it previously fanned out concurrently and
+  "reviewed" a workspace whose changes had not happened yet.
+- Provider outages are graded, not guessed: the provider's own classification
+  is carried on the agent's error events (`failureKind: "provider" |
+  "network"`), so an outage is never recorded as a capability failure.
+- HTTP 500 is retryable `SERVER_OVERLOADED` (it previously fell to UNKNOWN —
+  never retried — while 502/503/504 retried); prose-inferred statuses are
+  trusted only for availability classes ("retry after 400 tokens" no longer
+  misclassifies as a terminal invalid request); the circuit breaker feeds on
+  5xx weather on both error paths instead of clearing on it.
+- `theme.responsive` tokens actually route the TUI: the gauge variant ladder,
+  the status-bar sparkline, and the header's compact/rules tiers follow the
+  theme (the tokens were validated for custom themes and then ignored).
+- The transcript scroll pin clamps at every mutation site — holding PgUp no
+  longer accumulates invisible surplus that makes PgDn read as dead.
+- One throttler owns the streaming-text flush trio (immediate flush, ~16ms
+  timer, paragraph breaks) that chat and goal turns each carried.
+- The pre-write guardian checkpoint reports real file lines (was: an index
+  into the added text) and scans `++ `-content lines instead of dropping them.
+- A corrupt checkpoint file warns in plain words what it costs the user.
+- `certify-provider` fails loudly on dangling, unknown, or malformed
+  arguments.
+
+**Fixed**
+
+- Batch O's two shipped defects (the mistranscribed `any[]` rule in the
+  scanner and hook; the `+++ `-content phantom-file misparse) — the orphaned
+  batch completed and landed with the corrected integrity manifest.
+- The pre-commit hook no longer word-splits staged paths — a file named
+  `AGENTS.md mydoc.txt` was falsely refused as a tamper attempt.
+- Gate and hook cover `.jsx`/`.mts`/`.cts`; gate pathspecs are double-quoted
+  for Windows cmd.exe.
+- The docs index banner counts itself; the README's `guardian_blocked` stable
+  line is documented as `--raw`-only; the pixel baselines re-approved after
+  the rendering overhaul (the Visual Gate had been red in CI for two weeks,
+  unnoticed).
+- TUI: diff word-highlights count terminal cells (CJK rows no longer wrap past
+  the frame); the markdown `hr` spans the usable width; the palette gained its
+  missing `copy` icon; five dead exports pruned with their tombstone tests.
+
+**Standing decisions (unchanged, on record)**: the 38.5 prompt rewrite stays
+unlanded (measured four ways, no reproducible advantage); the tokeniser stays
+deferred with written adoption triggers.
+
 
 ### Audit remediation, waves 3–8 (Phase 39)
 
