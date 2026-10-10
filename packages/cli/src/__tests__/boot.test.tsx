@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
+import { withoutProviderEnv } from "./providerEnv.js";
 import path from "node:path";
 import React from "react";
 
@@ -239,6 +240,10 @@ describe("boot paths", () => {
     // the key BEFORE calling onDone; simulate that, or the chained chat
     // boot exits 1 at provider selection. bootChat awaits MCP/plugin
     // resolution before mounting — poll for the second mount.
+    // "No credentials" must also mean no ENV credentials: ambient provider
+    // env vars count as configuration now (resolveProviderCredentials,
+    // 2026-10-10) and would reroute this boot away from first-run setup.
+    const restoreEnv = withoutProviderEnv();
     const tty = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
     Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
     try {
@@ -263,6 +268,7 @@ describe("boot paths", () => {
     } finally {
       if (tty) Object.defineProperty(process.stdin, "isTTY", tty);
       else delete (process.stdin as { isTTY?: boolean }).isTTY;
+      restoreEnv();
     }
   });
 

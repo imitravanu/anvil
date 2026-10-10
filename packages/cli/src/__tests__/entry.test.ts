@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
+import { withoutProviderEnv } from "./providerEnv.js";
 import path from "node:path";
 
 /**
@@ -128,9 +129,17 @@ describe("CLI entry dispatch", () => {
     // routes to first-run setup BEFORE the run path. stdin is not a TTY
     // under vitest, so runSetup's interactive-terminal guard fires: a clear
     // error and exit 1 instead of rendering raw-mode UI into a pipe.
-    const { exit, err } = await runEntry([]);
-    expect(exit).toEqual([1]);
-    expect(err.join(" ")).toContain("interactive terminal");
+    // "No credentials" must also mean no ENV credentials: ambient provider
+    // env vars count as configuration now (resolveProviderCredentials,
+    // 2026-10-10) and would reroute this boot away from first-run setup.
+    const restoreEnv = withoutProviderEnv();
+    try {
+      const { exit, err } = await runEntry([]);
+      expect(exit).toEqual([1]);
+      expect(err.join(" ")).toContain("interactive terminal");
+    } finally {
+      restoreEnv();
+    }
   });
 
   it("run path in a non-TTY stdin with no prompt exits 1 with guidance", async () => {
