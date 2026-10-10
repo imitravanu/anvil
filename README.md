@@ -220,7 +220,7 @@ Server tools are exposed as `mcp_<server>__<tool>` and undergo the same strict p
 
 Anvil ships a built-in hygiene system against AI slop (type escapes, silent catches, raw error formatting, stray placeholders):
 
-- **Turn report:** after any turn with guardian activity, the TUI shows what was blocked, which rule fired, and what was auto-fixed. Headless mode prints a stable `guardian_blocked count=N fixed=M` stderr line.
+- **Turn report:** after any turn with guardian activity, the TUI shows what was blocked, which rule fired, and what was auto-fixed. Headless mode prints a human-readable summary; with `--raw` it prints the stable `guardian_blocked count=N fixed=M` stderr line — the exact shape scripts and CI key off.
 - **`anvil gate [--full|--watch|--staged]`:** scans the working-tree diff (`--watch` re-scans continuously, `--staged` scans staged additions only, `--full` runs the full `npm run gate` pipeline).
 - **`anvil health`:** per-project freshness, cleanliness, allowlist drain rate, and top blocked rules, tracked across sessions under `ANVIL_HOME/health/`.
 - **`anvil init --guarded [--lang <id>]`:** provisions `AGENTS.md`, `.anvil/rules`, and a dependency-free pre-commit hook into any repo (TypeScript, Python, Rust, Go), so other agents' edits are gated too. Bypass once with `git commit --no-verify`.
