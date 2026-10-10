@@ -38,6 +38,8 @@ const TS_IGNORE = "@ts-" + "ignore";
 const AS_ANY = "as " + "any";
 const AS_ERROR = "as " + "Error";
 const BARE_ANY = ": Record<string, " + "any>";
+const BARE_ANY_ARRAY = ": " + "any" + "[] = []";
+const ANY_INDEX = ".any" + "[0]";
 const NON_CAPTURING = "/(?:" + "any)+/";
 const PLACEHOLDER = "TO" + "DO: tighten this later";
 const MAGIC_LITERAL = "timeo" + "ut: 5000";
@@ -142,6 +144,12 @@ const PATH_PROBES: Probe[] = [
   { label: "a skipped block in a source path is out of the rule's scope", relPath: srcFile("skipDoc"), body: `export const doc = "${SKIP_DESCRIBE}";\n`, want: 0, was: 0 },
   { label: "bare any annotation is carried (the hook never had it)", relPath: srcFile("bareAny"), body: `const m${BARE_ANY} = {};\n`, want: 1, was: 0 },
   { label: "a non-capturing group is not a bare any", relPath: srcFile("nonCapturing"), body: `const re = ${NON_CAPTURING};\n`, want: 0, was: 0 },
+  // Batch O+ (chief-engineer takeover, 2026-10-10): the hook's array position
+  // was `any[` — the gate's shape is the empty pair `any[]` — so it refused
+  // legal indexed access the authority blesses. `was: 1` is the pre-fix hook
+  // verdict, the receipt for this row.
+  { label: "an indexed access on an any-named member is not an annotation", relPath: srcFile("anyIndex"), body: `const v = conf${ANY_INDEX};\n`, want: 0, was: 1 },
+  { label: "a bare any array annotation is refused like the comma position", relPath: srcFile("bareAnyArray"), body: `const arr${BARE_ANY_ARRAY};\n`, want: 1, was: 1 },
   { label: "as Error casts are carried (the hook never had them)", relPath: srcFile("asError"), body: `const msg = (err ${AS_ERROR}).message;\n`, want: 1, was: 0 },
   { label: "?.message ?? String is carried, and now with the gate's spacing", relPath: srcFile("dotMessage"), body: `const msg = ${DOT_MESSAGE};\n`, want: 1, was: 1 },
   { label: "magic literals are carried (the hook never had them)", relPath: srcFile("magicLiteral"), body: `const r = fetch(url, { ${MAGIC_LITERAL} });\n`, want: 1, was: 0 },

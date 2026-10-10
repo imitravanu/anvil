@@ -74,4 +74,55 @@ describe("runNativeGate (in-process scan)", () => {
     expect(io.stdout()).toContain("violation");
     expect(io.stdout()).toContain("npm run gate");
   });
+
+  // Batch O: the diff is resolved per file BEFORE judging, so a violation names
+  // the file that holds it and the line it will occupy — and the path-aware
+  // policy (test-file exemption, non-code paths) is the authority's, not one
+  // synthetic label's.
+  it("names the real file and line, per file, across a multi-file diff", () => {
+    const dir = tmp();
+    git(dir, "init", "-q");
+    fs.mkdirSync(path.join(dir, "src"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "src", "a.ts"), "export const a = 1;\n");
+    git(dir, "add", "-A");
+    git(dir, "commit", "-qm", "init");
+
+    fs.writeFileSync(
+      path.join(dir, "src", "a.ts"),
+      "export const a = 1;\nexport const b = data as " + "any;\n"
+    );
+    // A test path is judged by the skipped-test rule alone: the fixture cast on
+    // line 1 is exempt, the skip on line 2 is caught at its own line.
+    fs.mkdirSync(path.join(dir, "src", "__tests__"), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "src", "__tests__", "b.test.ts"),
+      "const fixture = data as " + "any;\n" + "it." + 'skip("later", () => {});\n'
+    );
+    git(dir, "add", "-A");
+
+    const io = capture();
+    expect(runNativeGate({ cwd: dir })).toBe(1);
+    const out = io.stdout();
+    expect(out).toContain("src/a.ts:2");
+    expect(out).toContain("src/__tests__/b.test.ts:2");
+    // The fixture cast on the test file's line 1 must NOT be reported.
+    expect(out).not.toContain("src/__tests__/b.test.ts:1");
+    // Neither a synthetic whole-diff label nor an index into the added text.
+    expect(out).not.toContain("(working tree)");
+  });
+
+  it("does not judge a non-code path with the built-in rules", () => {
+    const dir = tmp();
+    git(dir, "init", "-q");
+    fs.writeFileSync(path.join(dir, "README.md"), "# Notes\n");
+    git(dir, "add", "-A");
+    git(dir, "commit", "-qm", "init");
+    // A doc line that would be a placeholder violation if the file were read as
+    // code; it used to be judged under the synthetic label.
+    fs.writeFileSync(path.join(dir, "README.md"), "# Notes\nnever leave a " + "TO" + "DO in code\n");
+
+    const io = capture();
+    expect(runNativeGate({ cwd: dir })).toBe(0);
+    expect(io.stdout()).toContain("clean tree");
+  });
 });

@@ -1,5 +1,10 @@
-export { scanTextForSlop, scanDiffForSlop } from "./scanner.js";
-export type { GuardianViolation, GuardianRuleFamily } from "./scanner.js";
+export {
+  scanTextForSlop,
+  scanDiffForSlop,
+  parseUnifiedDiffSections,
+  scanUnifiedDiffForSlop,
+} from "./scanner.js";
+export type { GuardianViolation, GuardianRuleFamily, DiffAddedLine, DiffFileSection } from "./scanner.js";
 export { detectGuardianScope, clearGuardianScopeCache } from "./scope.js";
 export type { GuardianScope } from "./scope.js";
 export { interceptTurn, autoFixRawErrorFormat } from "./interceptor.js";

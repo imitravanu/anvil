@@ -2,6 +2,48 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-10 (chief-engineer takeover — Batch O completed, corrected, landed):**
+> Understand: no other agent session is active (user-declared); Batch O's working tree sat
+> uncommitted with its DONE receipt above, and the takeover audit (RED-first, everything
+> reproduced before fixing) found the tree RED on docTruth (docs banner 88 vs 89 — the
+> untracked review doc was never counted) and two defects inside the batch itself:
+> (a) PARITY — the bare-any ARRAY position was transcribed as `any[` where the authority
+> (verify-gate.mjs:258) requires the EMPTY pair `any[]`; the pre-commit hook carried the
+> same typo (.githooks/pre-commit:212). Effect: legal indexed access (`conf.any[0]`) was
+> refused on source paths by the guardian AND the hook while the gate blessed it — a new
+> divergence shipped by the batch that claimed to close the last one.
+> (b) IDENTITY — `parseUnifiedDiffSections` honored ANY `+++ `-shaped line as a file
+> header, including an in-hunk ADDED line whose own text begins "++ " (git renders those
+> as exactly `+++ …`): the line was swallowed and every later added line of the real file
+> re-attributed to a phantom path with restarted numbering — more aggressive than the
+> pre-batch code it replaced.
+> Plan: fix both with fail-first receipts, pin the fixes against overreach, land the whole
+> batch (wiring + tests + review doc + docs banner) as one honest commit.
+> Edit: `scanner.ts` (array pair + hunk-count-driven header detection via
+> `HUNK_HEADER_RE`'s new count group; deletion-only hunks open at 0 where no `+` line can
+> exist; the hunk-less synthetic shape keeps unconditional headers), `.githooks/pre-commit`
+> (same array-pair fix), `guardian.test.ts` + `gate.sentinel.test.ts` +
+> `preCommitHook.test.ts` (RED-first tests + regression pins), `docs/README.md` (banner
+> 88→89, review doc indexed), manifest regenerated (`.githooks/pre-commit`,
+> `gate.sentinel.test.ts`; unchanged entries verified byte-identical first).
+> RED→GREEN receipts: guardian "indexed access" RED `[{file 'src/a.ts', line 1, …}] ≠ []`;
+> guardian "'++ ' is content, not a phantom header" RED `['src/a.ts', 'payload line'] ≠
+> ['src/a.ts']`; sentinel corpus RED "guardian must agree with the gate: expected true to
+> be false"; hook differential RED "expected 1 to be +0" (`was: 1` rows record the pre-fix
+> verdicts). Regression pins green before AND after by design: `any[]` still refuses; a
+> `+++` header after an exhausted hunk still resolves.
+> Run: quick gate green (Steps 0/0.5/1/1.5, protected-change acknowledged, manifest
+> verified); `npm run build -w @anvil/core` 0 (the sentinel drives the dist).
+> Retest: full suites **cli 195/195, core 1,067/1,067, tui 404/404 — 1,666 total, exit 0**,
+> docTruth back to green.
+> Review: PROTECTED ARTIFACTS CHANGED — `.githooks/pre-commit`, `gate.sentinel.test.ts`,
+> `scripts/gate-manifest.json` (AGENTS.md was already Batch O's own edit). Nothing weakened;
+> the two protected changes tighten parity with the authority. Still deliberately open
+> (unchanged from the review doc): F3 untracked files invisible to `anvil gate` (Batch P),
+> F4 A/B evidence printed but never persisted (Batch Q). Next batches in flight:
+> security (bash brace-expansion auto-allow bypass + verify_tests gating), team `review`
+> strategy sequencing, TUI transcript scroll clamp, Linux gate --watch depth.
+>
 > **DONE 2026-10-06 (chief-engineer Batch R TUI/CLI leftovers, full cycle):**
 > Understand: all sites read live; R3 dropped after App render-chain proof
 > (defers, not drops); R1 reverted after proof that zero-event runs are

@@ -63,10 +63,27 @@ const RULES: { rule: string; family: GuardianRuleFamily; scope: RuleScope; patte
     detail: "Forbidden type escape (use narrowing, generics, or unknown + guards)",
   },
   {
+    rule: "no-bare-any",
+    family: "type-escape",
+    scope: "universal",
+    // Batch O: the gate Step 1 bare-annotation family (Rule 2.2) — the four
+    // ANNOTATION positions a cast rule cannot see (colon, generic, comma,
+    // array). Batch O+ (chief-engineer takeover, 2026-10-10): the array
+    // position is the authority's EMPTY pair — an indexed access
+    // (`conf.any[0]`) is property access, not an annotation, and the `any[`
+    // transcription refused it on source paths while the gate blessed it.
+    // Split so this source file never contains a literal instance of the
+    // shape it describes.
+    pattern: new RegExp("(?<!\\?):\\s*" + "any\\b|<\\s*" + "any\\b|,\\s*" + "any\\b|\\b" + "any\\s*\\[\\]"),
+    detail: "Bare any annotation (use unknown + narrowing)",
+  },
+  {
     rule: "no-raw-error-format",
     family: "raw-error",
     scope: "anvil",
-    pattern: /instanceof\s+Error\s*\?/,
+    // Batch O: both shapes the gate Step 1 labels Raw error formatting — the
+    // ternary and the nullish fallback.
+    pattern: /instanceof\s+Error\s*\?|\.\s*message\s*\?\?\s*String\s*\(/,
     detail: "Raw error formatting (use getErrorMessage(err) from @anvil/core)",
   },
   {
@@ -186,9 +203,9 @@ const GUARDIAN_CODE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", 
 
 /**
  * True only when the name carries a POSITIVELY non-code extension. A name with
- * no extension is NOT classified as non-code, so a caller that passes a
- * synthetic label (the `anvil gate` working-tree scan's "(working tree)") keeps
- * full coverage.
+ * no extension is NOT classified as non-code, so an unlabeled fallback section
+ * (see `scanUnifiedDiffForSlop`) keeps full coverage instead of being read as
+ * prose.
  */
 function isNonCodePath(file: string): boolean {
   const match = /\.([A-Za-z0-9]+)$/.exec(file);
@@ -349,7 +366,7 @@ export function scanTextForSlop(
   return violations;
 }
 
-/** Scan a unified diff body (added lines only). */
+/** Scan a unified diff body (added lines only) for ONE known file. */
 export function scanDiffForSlop(
   file: string,
   diff: string,
@@ -362,4 +379,148 @@ export function scanDiffForSlop(
     .map((l) => l.slice(1))
     .join("\n");
   return scanTextForSlop(file, added, scope, customRules);
+}
+
+/** One added line of a unified diff, at the line number it will occupy in the NEW file. */
+export interface DiffAddedLine {
+  line: number;
+  text: string;
+}
+
+/** Added lines grouped per file; `file` is the path git printed (`b/` stripped). */
+export interface DiffFileSection {
+  file: string;
+  added: DiffAddedLine[];
+}
+
+/**
+ * `@@ -oldStart,oldCount +newStart,newCount @@` — group 1 is the new-file
+ * start, group 2 the new-file count (absent means 1). The count drives hunk
+ * exhaustion in `parseUnifiedDiffSections` (see its Batch O+ header note).
+ */
+const HUNK_HEADER_RE = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/;
+
+/**
+ * A `+++` header's path: strip a tab-appended timestamp, unquote git's C-style
+ * quoting for unusual paths, drop the `a/`/`b/` prefix, and treat `/dev/null`
+ * (a deletion) as "no file".
+ */
+function diffHeaderPath(raw: string): string {
+  let value = raw.trim();
+  const tab = value.indexOf("\t");
+  if (tab !== -1) value = value.slice(0, tab);
+  if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+    value = value.slice(1, -1).replace(/\\(["\\])/g, "$1");
+  }
+  if (value === "/dev/null") return "";
+  if (value.startsWith("b/") || value.startsWith("a/")) value = value.slice(2);
+  return value;
+}
+
+/**
+ * Split a unified diff into per-file added lines at their REAL new-file line
+ * numbers.
+ *
+ * Batch O: the in-product `anvil gate` used to hand a whole multi-file diff to
+ * the scanner under ONE synthetic label. Everything the scanner decides per
+ * PATH then saw that label instead of a path — the test-file exemption, the
+ * core boundary and the TUI color rule were all judged against it — and a
+ * reported line was an index into the concatenated added text, not a line in a
+ * file. Resolution lives HERE, in front of the scanner, so one authority
+ * decides what each added line is.
+ *
+ * Batch O+ (chief-engineer takeover, 2026-10-10): a `+++`-shaped line INSIDE a
+ * hunk is ADDED CONTENT, not a file header. Git renders an added line whose own
+ * text begins "++ " as exactly "+++ …", shape-identical to a header; honoring it
+ * there swallowed the line and re-attributed every later added line of the real
+ * file to a phantom path with restarted line numbers. A `+++` line is a header
+ * only once the current hunk's new-file lines are exhausted (`newSideLeft`) —
+ * git's exact hunk counts make that precise for real diffs, and the hunk-less
+ * synthetic sections (the authority's untracked-file shape) carry no `@@`
+ * header at all, so their `+++` lines stay headers. Deletion-only hunks open at
+ * 0, which is safe: `+` lines cannot exist inside them.
+ *
+ * A line that never reaches a `+++` header (a hand-built diff, an unborn index)
+ * lands in the `fallbackFile` section, and a `+` line with no hunk header is
+ * still collected — numbered from 1 within its section — so a malformed diff
+ * keeps its coverage instead of silently dropping it.
+ */
+export function parseUnifiedDiffSections(diff: string, fallbackFile: string): DiffFileSection[] {
+  const sections: DiffFileSection[] = [];
+  const byFile = new Map<string, DiffFileSection>();
+  const unlabeled: DiffFileSection = { file: fallbackFile, added: [] };
+  let current: DiffFileSection | null = null;
+  // The new-file line number the next body line will occupy; 0 outside a hunk.
+  let nextLine = 0;
+  // New-file lines still expected in the current hunk. 0 = no active hunk —
+  // the only state in which a `+++` line is honored as a file header (see the
+  // Batch O+ note above).
+  let newSideLeft = 0;
+  const sectionFor = (file: string): DiffFileSection => {
+    let section = byFile.get(file);
+    if (!section) {
+      section = { file, added: [] };
+      byFile.set(file, section);
+      sections.push(section);
+    }
+    return section;
+  };
+  for (const raw of diff.split("\n")) {
+    if (newSideLeft === 0 && raw.startsWith("+++ ")) {
+      const file = diffHeaderPath(raw.slice(4));
+      current = file.length > 0 ? sectionFor(file) : null;
+      nextLine = 0;
+      continue;
+    }
+    const hunk = HUNK_HEADER_RE.exec(raw);
+    if (hunk !== null) {
+      nextLine = Number(hunk[1]);
+      newSideLeft = hunk[2] !== undefined ? Number(hunk[2]) : 1;
+      continue;
+    }
+    if (raw.startsWith("+")) {
+      const target = current ?? unlabeled;
+      // Some producers emit a header and the added lines with NO hunk header
+      // (a hand-built diff). Number those from 1 rather than dropping them: an
+      // unscanned line is worse than an approximate position, and for the
+      // new-file shape the added stream 1..n IS the file's own numbering.
+      if (nextLine === 0) nextLine = target.added.length + 1;
+      target.added.push({ line: nextLine, text: raw.slice(1) });
+      nextLine += 1;
+      if (newSideLeft > 0) newSideLeft -= 1;
+      continue;
+    }
+    if (nextLine === 0) continue;
+    if (!raw.startsWith("-") && !raw.startsWith("\\")) {
+      nextLine += 1; // a context line advances the new-file numbering
+      if (newSideLeft > 0) newSideLeft -= 1; // and consumes one new-file slot
+    }
+  }
+  if (unlabeled.added.length > 0) sections.push(unlabeled);
+  return sections.filter((section) => section.added.length > 0);
+}
+
+/**
+ * Scan a unified diff FILE BY FILE: every file's added lines are judged under
+ * its real path and reported at its real new-file line number. The CLI gate
+ * and the guardian interceptor both feed the same scanner, so this layer only
+ * supplies identity — the rules and their path policy stay in one place.
+ */
+export function scanUnifiedDiffForSlop(
+  diff: string,
+  scope: GuardianScope,
+  customRules: readonly CustomGuardianRule[] = [],
+  fallbackFile = "(unlabeled diff)"
+): GuardianViolation[] {
+  const violations: GuardianViolation[] = [];
+  for (const section of parseUnifiedDiffSections(diff, fallbackFile)) {
+    const text = section.added.map((line) => line.text).join("\n");
+    for (const violation of scanTextForSlop(section.file, text, scope, customRules)) {
+      // The scanner reports a position in the added-lines text it was handed,
+      // so map that back to the file's own numbering before reporting.
+      const source = section.added[violation.line - 1];
+      violations.push(source ? { ...violation, line: source.line } : violation);
+    }
+  }
+  return violations;
 }

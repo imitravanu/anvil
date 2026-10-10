@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
-import { isValidSourceFilePath, scanTextForSlop } from "@anvil/core";
+import { isValidSourceFilePath, scanTextForSlop, scanUnifiedDiffForSlop } from "@anvil/core";
 
 /**
  * GATE INTEGRITY SENTINEL (hardening, 2026-09-13)
@@ -380,9 +380,10 @@ describe("gate integrity sentinel", () => {
     const guardianRejects = (rel: string, text: string): boolean =>
       scanTextForSlop(rel, text, "anvil").length > 0;
 
-    // Only shapes BOTH checkpoints implement: the parity claim is about the
-    // exemption, not about the guardian's rule set (the gate alone carries the
-    // bare-any annotation and `?? String(` families).
+    // Every family all three checkpoints implement is judged here, in both
+    // directions, on both path classes. Batch O closed the last rule gap — the
+    // gate alone carried the bare-annotation and nullish-fallback families — so
+    // the corpus is now the full built-in set the three surfaces share.
     const corpus: Array<{
       label: string;
       srcRel: string;
@@ -395,6 +396,8 @@ describe("gate integrity sentinel", () => {
       { label: "as Error cast", srcRel: CORE_SRC, testRel: CORE_TEST, text: "const m = (err as Error).message;" },
       { label: "empty catch", srcRel: CORE_SRC, testRel: CORE_TEST, text: "try { a(); } catch {}" },
       { label: "raw error ternary", srcRel: CORE_SRC, testRel: CORE_TEST, text: "const m = err instanceof Error ? err.message : String(err);" },
+      { label: "bare any annotation", srcRel: CORE_SRC, testRel: CORE_TEST, text: "const z: " + "any = 1;" },
+      { label: "nullish raw-error fallback", srcRel: CORE_SRC, testRel: CORE_TEST, text: "const m = e." + "message ?? String(e);" },
       { label: "TypeScript suppression", srcRel: CORE_SRC, testRel: CORE_TEST, text: "// @ts-ignore" },
       { label: "placeholder marker", srcRel: CORE_SRC, testRel: CORE_TEST, text: "// TODO: later" },
       { label: "magic timeout literal", srcRel: CORE_SRC, testRel: CORE_TEST, text: "const r = fetch(url, { timeout: 5000 });" },
@@ -417,6 +420,17 @@ describe("gate integrity sentinel", () => {
       ).toEqual(row.testOnly ? [false, false, true, true] : [true, true, false, false]);
     }
 
+    // Batch O+ (chief-engineer takeover, 2026-10-10): the array position of the
+    // bare-annotation family must be the authority's EMPTY pair. The scanner
+    // transcribed `any[` — refusing legal indexed access (`conf.any[0]`) on
+    // source paths while the gate blessed it, and the pre-commit hook carried
+    // the same typo. Pinned in both directions; the RED run of the
+    // indexed-access row against the pre-fix guardian is the receipt.
+    expect(gateRejects(CORE_SRC, "const v = conf.any[0];"), "indexed access is not an annotation").toBe(false);
+    expect(guardianRejects(CORE_SRC, "const v = conf.any[0];"), "the guardian must agree with the gate").toBe(false);
+    expect(gateRejects(CORE_SRC, "const arr: " + "any[] = [];"), "the empty pair IS an annotation").toBe(true);
+    expect(guardianRejects(CORE_SRC, "const arr: " + "any[] = [];"), "the guardian must agree with the gate").toBe(true);
+
     // The split-across-two-lines family lives in a Step-1 block OUTSIDE the
     // extracted scanner, so it is pinned by its path predicate plus a behavioral
     // probe on the guardian, which carries the pair scan in-process.
@@ -435,6 +449,50 @@ describe("gate integrity sentinel", () => {
     for (const rel of named) {
       expect(fs.existsSync(path.join(ROOT, rel)), `the hook points at a missing suite: ${rel}`).toBe(true);
     }
+  });
+
+  // Batch O: the in-product `anvil gate` is a fourth surface on the same
+  // policy. It resolves a diff per file BEFORE judging: one synthetic label for
+  // a whole multi-file diff made every path-aware decision wrong in one
+  // direction or the other (a fixture cast in a test file was refused while a
+  // skipped test was not caught), and reported an index into the concatenated
+  // added text as if it were a file line. Resolution is the only new layer — it
+  // feeds the same scanner the guardian uses — so this pins the verdicts AND
+  // the wiring.
+  it("the in-product gate resolves a diff per file before judging (Batch O)", () => {
+    const diff = [
+      "+++ b/packages/core/src/probe.ts",
+      "@@ -0,0 +1,2 @@",
+      "+const ok = 1;",
+      "+const y = data as " + "any;",
+      "+++ b/packages/core/src/__tests__/probe.test.ts",
+      "@@ -0,0 +1,2 @@",
+      "+const fixture = data as " + "any;",
+      "+" + "it." + 'skip("test", () => {});',
+    ].join("\n");
+    const violations = scanUnifiedDiffForSlop(diff, "anvil");
+    const at = (file: string, line: number, rule: string): boolean =>
+      violations.some((v) => v.file === file && v.line === line && v.rule === rule);
+    // Real path, real line — and the split the authority enforces: the fixture
+    // cast on the test path is exempt, the skip on it is caught.
+    expect(at("packages/core/src/probe.ts", 2, "no-as-any"), "the source cast must be reported at its own line").toBe(true);
+    expect(
+      at("packages/core/src/__tests__/probe.test.ts", 2, "no-skipped-test"),
+      "a skipped test must be caught on its real line"
+    ).toBe(true);
+    expect(
+      violations.some((v) => v.file.endsWith("probe.test.ts") && v.rule !== "no-skipped-test"),
+      "a test path is judged by the skipped-test rule alone"
+    ).toBe(false);
+    // The authority's own scanner agrees, per path class, on the same text.
+    const scan = gateScanner();
+    expect(scan(["+++ b/packages/core/src/probe.ts", "+ const y = data as " + "any;"]).length).toBeGreaterThan(0);
+    expect(scan(["+++ b/packages/core/src/__tests__/probe.test.ts", "+ const fixture = data as " + "any;"]).length).toBe(0);
+    // Wiring: the CLI gate must call the resolver, never hand a whole
+    // multi-file diff to the one-file helper under a synthetic label.
+    const cli = read("packages/cli/src/gate.ts");
+    expect(cli).toContain("scanUnifiedDiffForSlop");
+    expect(cli).not.toContain("scanDiffForSlop(");
   });
 
   it("CI still enforces tests, the gate, and full clone depth", () => {

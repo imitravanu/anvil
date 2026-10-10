@@ -5,7 +5,7 @@ import {
   getErrorMessage,
   loadCustomGuardianRules,
   recordHealthScan,
-  scanDiffForSlop,
+  scanUnifiedDiffForSlop,
   GATE_DIFF_MAX_BUFFER_BYTES,
   GATE_DIFF_SCAN_TIMEOUT_MS,
   GUARDIAN_WATCH_INTERVAL_MS,
@@ -36,6 +36,7 @@ const STAGED_PATHSPEC =
   'diff --cached --unified=0 --no-color -- . ":(exclude)node_modules" ":(exclude)dist"';
 
 export interface WorkingTreeScan {
+  /** Violations carry the REAL repo-relative path and new-file line (Batch O). */
   violations: GuardianViolation[];
   error?: string;
   /** Added lines observed by the scan (0 when the diff could not be read). */
@@ -74,7 +75,18 @@ function scanGitDiff(cwd: string, command: string, label: string, recordTelemetr
   // Scope by project identity: in a user's own project only the universal rules
   // apply, because the Anvil-specific families name APIs that live here. Project
   // rules apply everywhere — a project that writes a rule means it.
-  const violations = scanDiffForSlop(label, diff, detectGuardianScope(cwd), loadCustomGuardianRules(cwd));
+  //
+  // Batch O: resolve the diff per file BEFORE judging it. The scanner's
+  // path-aware rules (test-file exemption, core boundary, TUI colors) and its
+  // reported line numbers are only correct when each added line carries its own
+  // file; `label` is now just the honest name for lines a malformed diff never
+  // gave a file header.
+  const violations = scanUnifiedDiffForSlop(
+    diff,
+    detectGuardianScope(cwd),
+    loadCustomGuardianRules(cwd),
+    label
+  );
   if (recordTelemetry) {
     // 26.5: one observation per real scan. Watch-mode repeats are NOT recorded
     // (they re-scan the same diff, which would inflate the counters); the

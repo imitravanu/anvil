@@ -209,7 +209,9 @@ while IFS= read -r f; do
       # The gate's `(?<!\?)` lookbehind, spelled as an alternation: grep -E has
       # no lookbehind, so "a colon at line start, or preceded by anything but a
       # question mark" is exact — it keeps `(?:any` from reading as `: any`.
-      h=$(printf '%s\n' "$code" | grep -nE '(^|[^?]):[[:space:]]*any\b|<[[:space:]]*any\b|,[[:space:]]*any\b|\bany[[:space:]]*\[' || true)
+      # Batch O+ (takeover): the array position is the authority's EMPTY pair —
+      # an indexed access (`conf.any[0]`) is property access, not an annotation.
+      h=$(printf '%s\n' "$code" | grep -nE '(^|[^?]):[[:space:]]*any\b|<[[:space:]]*any\b|,[[:space:]]*any\b|\bany[[:space:]]*\[\]' || true)
       [ -n "$h" ] && add_hit "bare any annotation" "$h"
 
       h=$(printf '%s\n' "$code" | grep -nE '\bas[[:space:]]+Error\b' || true)
