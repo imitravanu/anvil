@@ -126,7 +126,13 @@ export function loadCheckpoints(sessionId: string, dir: string = checkpointsDir(
   } catch (err) {
     const filePath = path.join(dir, `${sessionId}.json`);
     if (fs.existsSync(filePath)) {
-      log.error(`[anvil] Warning: failed to load checkpoints for session ${sessionId}: ${getErrorMessage(err)}`);
+      // A corrupt/unreadable checkpoint file is degraded, not fatal: the
+      // session keeps working, but /rewind history for it starts empty. Say
+      // THAT in plain words — a raw JSON parse error told the user neither
+      // what broke nor what it costs them (2026-10-10).
+      log.warn(
+        `[anvil] The checkpoint file for session ${sessionId} is unreadable — /rewind history for this session is unavailable until a new checkpoint is created. (cause: ${getErrorMessage(err)})`
+      );
     }
     return []; // missing/corrupt file = no history, never a crash
   }

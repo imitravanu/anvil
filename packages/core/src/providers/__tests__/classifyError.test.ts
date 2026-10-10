@@ -65,4 +65,40 @@ describe("classifyProviderError", () => {
     expect(info.code).toBe("UNKNOWN");
     expect(info.isRetryable).toBe(false);
   });
+
+  // Takeover 2026-10-10: HTTP 500 is transient upstream weather for every major
+  // LLM API (their own SDKs retry it), but it fell through to UNKNOWN —
+  // non-retryable — while 502/503/504 retried. RED first: both rows returned
+  // UNKNOWN against the pre-change classifier.
+  it("classifies a real HTTP 500 as retryable server overload", () => {
+    const info = classifyProviderError(Object.assign(new Error("Internal Server Error"), { status: 500 }));
+    expect(info.code).toBe("SERVER_OVERLOADED");
+    expect(info.isRetryable).toBe(true);
+  });
+
+  it("infers 'HTTP 500' from prose as retryable overload", () => {
+    const info = classifyProviderError(new Error("HTTP 500: something broke upstream"));
+    expect(info.code).toBe("SERVER_OVERLOADED");
+    expect(info.isRetryable).toBe(true);
+  });
+
+  it("does not let incidental prose numbers become error classes (inferred-status misfire)", () => {
+    // "retry after 400 tokens" is rate-limit prose; the bare 400 used to be
+    // read as a status and the message classified INVALID_REQUEST — a
+    // retryable truth turned non-retryable by a number that was never a
+    // status. RED first: this returned INVALID_REQUEST.
+    const info = classifyProviderError(new Error("Rate limit exceeded — retry after 400 tokens"));
+    expect(info.code).toBe("RATE_LIMIT");
+    expect(info.isRetryable).toBe(true);
+  });
+
+  it("keeps trusting an error class that arrives on the message the old way", () => {
+    // The availability-only inference must not weaken the message-carried
+    // error classes: bare "401/404/invalid_request" prose still classifies
+    // through their message patterns (same verdicts as before, by a different
+    // route now that an inferred 400/401/404 is no longer trusted as a status).
+    expect(classifyProviderError(new Error("401 Unauthorized")).code).toBe("AUTH_FAILED");
+    expect(classifyProviderError(new Error("404 model not found: no such model")).code).toBe("MODEL_NOT_FOUND");
+    expect(classifyProviderError(new Error("400 invalid_request: bad field")).code).toBe("INVALID_REQUEST");
+  });
 });

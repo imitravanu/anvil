@@ -14,6 +14,7 @@ import { AgentEvent, AgentOptions, DEFAULT_MAX_INNER_ITERATIONS } from "./types.
 import { RunLedgerEntry } from "./ledger.js";
 import { SessionLedger } from "./sessionLedger.js";
 import { clearRateLimitRecord, isCircuitOpen, isRateLimitMessage, noteRateLimited, recordFailure, recordSuccess } from "../providers/freeModels.js";
+import { classifyProviderError } from "../providers/types.js";
 import { MAX_DELEGATIONS_PER_TURN, runSubAgentLive } from "./subagent.js";
 import { loadCustomGuardianRules, type CustomGuardianRule } from "../guardian/rules.js";
 import { detectGuardianScope, type GuardianScope } from "../guardian/scope.js";
@@ -539,6 +540,12 @@ export class AgentSession {
       }
       if (isRateLimitMessage(getErrorMessage(err))) {
         noteRateLimited(this.provider.id, this.options.model);
+        recordFailure(this.provider.id, this.options.model);
+      } else if (classifyProviderError(err).code === "SERVER_OVERLOADED") {
+        // 2026-10-10: overload (5xx) is availability weather too — it must trip
+        // the breaker like a rate limit does, not CLEAR it. The old
+        // message-heuristic path only recognized rate-limit prose, so every
+        // other error class reset the very breaker it should have fed.
         recordFailure(this.provider.id, this.options.model);
       } else {
         clearRateLimitRecord(this.provider.id, this.options.model);

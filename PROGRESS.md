@@ -2,6 +2,73 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-10 (5) (chief-engineer takeover — provider taxonomy honest + three quick wins):**
+> Files owned: `providers/types.ts`, `agent/session.ts`, `agent/turnStream.ts`, `agent/checkpointStore.ts`,
+> `tools/grep.ts`, `scripts/certify-provider.ts`, `providers/__tests__/classifyError.test.ts`.
+> No protected artifact.
+> - TAXONOMY: HTTP 500 joins its 5xx siblings as retryable SERVER_OVERLOADED (every major LLM
+>   API treats it as transient; it fell through to UNKNOWN — non-retryable — while 502/503/504
+>   retried). RED→GREEN: "expected 'UNKNOWN' to be 'SERVER_OVERLOADED'" for both a real
+>   `status: 500` and prose "HTTP 500: …".
+> - MISFIRE: a prose-inferred status is now trusted only for the AVAILABILITY classes (429/5xx).
+>   "Rate limit exceeded — retry after 400 tokens" used to read the bare 400 as a status and
+>   classify INVALID_REQUEST — a retryable truth turned terminal by a number that was never a
+>   status. RED→GREEN: "expected 'INVALID_REQUEST' to be 'RATE_LIMIT'". All message-carried
+>   error classes keep their verdicts by their own message patterns (pinned by a new
+>   keeps-trusting test: 401/404/400 prose unchanged).
+> - BREAKER: overload (5xx) now trips the circuit breaker on BOTH error paths — the session's
+>   thrown-error catch (which previously CLEARED the breaker for any non-rate-limit error,
+>   resetting the very failure budget it should have fed) and turnStream's error events. The
+>   classifier sees the thrown object, not just rate-limit prose.
+> - CHECKPOINT MESSAGE: a corrupt checkpoint file now warns in plain words what it costs
+>   ("/rewind history for this session is unavailable until a new checkpoint is created",
+>   cause in parens, log.warn) instead of a raw JSON parse error at log.error labeled
+>   "Warning".
+> - GREP: the stat-race comment referenced "read failures below" — a skip policy that did not
+>   exist; a read failure between stat and readFile aborted the WHOLE search. The policy now
+>   exists (skip the file, keep scanning), making the comment true and one flaky file
+>   non-fatal.
+> - CERTIFY ARGS (G13 parity): dangling value flags, unknown arguments, and a non-numeric
+>   --timeout now fail loudly with the known-flags line (--timeout banana used to run at the
+>   default; a trailing --provider vanished).
+> Run: typecheck 0 (all workspaces + scripts); core suite **1,081/1,081** (+5 classifier tests),
+> provider suites 44/44 incl. all pinned message shapes; quick gate 5/5 steps green.
+> Review: remaining backlog unchanged (protected-artifact hardening: hook word-splitting,
+> verify-gate SCAN_EXTS/Windows pathspec, authority --staged untracked contradiction;
+> dead-export prune; README guardian_blocked claim check).
+>
+> **DONE 2026-10-10 (4) (chief-engineer takeover — the three declared refactors, landed):**
+> Understand: the takeover's declared-next list, executed with receipts where the seam allowed them.
+> Files owned: `guardian/interceptor.ts`, `guardian/__tests__/guardian.test.ts`, `hooks/useAgentController.ts`,
+> `util/displayLimits.ts`, `components/{ContextGauge,StatusBar,Header}.tsx`, `components/__tests__/contextGauge.test.ts`
+> (new). No protected artifact.
+> - INTERCEPTOR REAL LINES: the pre-write checkpoint now resolves diffs per file through the
+>   Batch O scanner (scanUnifiedDiffForSlop) instead of scanning the added-only stream —
+>   violations carry REAL new-file lines (was: an index into the added text), and an added
+>   line whose own text begins "++ " is scanned instead of dropped. RED→GREEN:
+>   "expected false to be true" (line 3 vs 2) and "the slop line must not vanish from the
+>   pre-write checkpoint: expected true to be false". `scanDiffForSlop` stays exported: it is
+>   core's pre-Batch-O public API, still pinned by its own suite — removing it is a breaking
+>   surface change, not this batch's call.
+> - FLUSH DEDUP: the streaming-text backpressure trio (immediate flush, ~16ms throttle timer,
+>   paragraph-break marker) existed twice — chat turn and goal turn — with the drain logic
+>   alone appearing four times. One `createTextThrottler` factory now owns it; the interval
+>   is a named constant (`TEXT_FLUSH_INTERVAL_MS` in displayLimits, the magic-literal rule's
+>   home for TUI display numbers). Behavior-identical by construction (no unit seam existed
+>   for the inlined copies); the TUI suite + typecheck are the net.
+> - THEME.ROUTING: `gaugeVariantForWidth`/`gaugeDisplayText` read `theme.responsive` (tokens
+>   were validated for custom themes and then ignored); StatusBar's sparkline rides
+>   `normalWidth` instead of a hardcoded 120; Header's compact tier reads `compactWidth` and
+>   its rules segment `normalWidth` (the 92/105 steps stay as documented fitTag budgets).
+>   RED→GREEN: custom tokens {100/140/180} — width 99 read "normal" from the hardcoded 80
+>   ("expected 'normal' to be 'compact'") and 130 showed the wide counts
+>   ("not to contain '50 / 100'"); both follow the tokens now.
+> Run: TUI typecheck 0, core typecheck 0; TUI suite **410/410** (65 files; +3 contextGauge
+> tests), guardian suite 52/52.
+> Review: no new open items from this batch; the remaining backlog is unchanged
+> (provider error taxonomy, checkpoint message, certify args, grep comment, hook/gate
+> protected-artifact hardening, dead-export prune).
+>
 > **DONE 2026-10-10 (3) (chief-engineer takeover — TUI polish batch):**
 > Understand: the takeover audit's TUI slop findings, the three cheap-and-certain ones landed now;
 > the two structural ones are declared below, not rushed (a streaming-backpressure refactor

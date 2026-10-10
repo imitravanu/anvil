@@ -10,7 +10,7 @@ import {
   type GoalMilestone,
   type GoalTurnOutcome,
 } from "@anvil/core";
-import { HISTORY_RECALL_CAP, TRANSCRIPT_STATE_CAP, MESSAGE_QUEUE_CAP } from "../util/displayLimits.js";
+import { HISTORY_RECALL_CAP, TRANSCRIPT_STATE_CAP, MESSAGE_QUEUE_CAP, TEXT_FLUSH_INTERVAL_MS } from "../util/displayLimits.js";
 import { friendlyError } from "../util/errors.js";
 import { notifyTurnComplete } from "../util/notify.js";
 import {
@@ -58,6 +58,57 @@ function readNotifyPrefs(): { desktop?: boolean; sound?: boolean } {
 export interface UseAgentControllerOptions {
   /** Called after every settled turn (completion, cancel, or error) — used to persist. */
   onTurnSettled?: () => void;
+}
+
+/**
+ * One owner of the streaming-text backpressure trio (takeover 2026-10-10): the
+ * immediate flush, the throttle timer, and the paragraph-break marker. Chat
+ * turns and goal turns each carried their own copy of all three — the drain
+ * logic alone existed four times across the two functions — and the copies
+ * were free to drift, the exact bug class this takeover fixed elsewhere.
+ * Behavior is identical to the inlined code it replaces; the timer interval
+ * lives in displayLimits with its own name.
+ */
+function createTextThrottler(
+  flushTimerRef: { current: NodeJS.Timeout | null },
+  updateAssistant: (fn: (m: DisplayMessage) => DisplayMessage) => void
+) {
+  let textNeedsBreak = false;
+  let textBuffer = "";
+  const drain = (): void => {
+    if (!textBuffer) return;
+    const chunk = textBuffer;
+    textBuffer = "";
+    updateAssistant((m) => ({ ...m, text: m.text + chunk }));
+  };
+  return {
+    /** Buffer one delta; the shared timer renders at the throttle window. */
+    push(text: string): void {
+      if (textNeedsBreak) {
+        textBuffer += "\n\n";
+        textNeedsBreak = false;
+      }
+      textBuffer += text;
+      if (!flushTimerRef.current) {
+        flushTimerRef.current = setTimeout(() => {
+          flushTimerRef.current = null;
+          drain();
+        }, TEXT_FLUSH_INTERVAL_MS);
+      }
+    },
+    /** Immediately render pending text (any non-text event, turn end, error). */
+    flush(): void {
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+      drain();
+    },
+    /** The next delta opens a new paragraph (after a tool call). */
+    markBreak(): void {
+      textNeedsBreak = true;
+    },
+  };
 }
 
 export function useAgentController(session: AgentSession, opts: UseAgentControllerOptions = {}) {
@@ -176,57 +227,33 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
       // several loop iterations (text → tools → text). Without a separator
       // each iteration's prose concatenates directly onto the previous
       // ("Let me look around first.All checks pass…"); a blank line between
-      // them reads as the paragraphs the model actually produced.
-      let textNeedsBreak = false;
-      let textBuffer = "";
-      const flushTextBuffer = () => {
-        if (flushTimerRef.current) {
-          clearTimeout(flushTimerRef.current);
-          flushTimerRef.current = null;
-        }
-        if (!textBuffer) return;
-        const chunk = textBuffer;
-        textBuffer = "";
-        updateAssistant((m) => ({ ...m, text: m.text + chunk }));
-      };
+      // them reads as the paragraphs the model actually produced. The
+      // separator/buffer/timer trio is the shared throttler (2026-10-10).
+      const throttler = createTextThrottler(flushTimerRef, updateAssistant);
 
       try {
         for await (const event of session.send(text, attached)) {
           if (event.type === "text_delta") {
-            if (textNeedsBreak) {
-              textBuffer += "\n\n";
-              textNeedsBreak = false;
-            }
-            textBuffer += event.text;
-            if (!flushTimerRef.current) {
-              flushTimerRef.current = setTimeout(() => {
-                flushTimerRef.current = null;
-                if (textBuffer) {
-                  const chunk = textBuffer;
-                  textBuffer = "";
-                  updateAssistant((m) => ({ ...m, text: m.text + chunk }));
-                }
-              }, 16); // 60 FPS throttle window (~16ms)
-            }
+            throttler.push(event.text);
           } else {
             // Any non-text event (tool call, turn end) immediately flushes pending text
-            flushTextBuffer();
+            throttler.flush();
             if (event.type === "tool_finished" || event.type === "tool_permission_denied") {
-              textNeedsBreak = true;
+              throttler.markBreak();
             }
             if (event.type === "cancelled") turnCancelled = true;
             applyEvent(event, updateAssistant, trackUsage, setMessages, setPlan, setTestStatus);
           }
         }
       } catch (err: unknown) {
-        flushTextBuffer();
+        throttler.flush();
         const msg = getErrorMessage(err);
         updateAssistant((m) => ({
           ...m,
           errorText: friendlyError(msg),
         }));
       } finally {
-        flushTextBuffer();
+        throttler.flush();
         // DW-4.3 sparkline sample + DW-4.9 long-turn attention signal.
         const delta = Math.max(0, cumulativeRef.current - lastCumulativeRef.current);
         lastCumulativeRef.current = cumulativeRef.current;
@@ -375,18 +402,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         permissionDenied: false,
         cancelled: false,
       };
-      let textNeedsBreak = false;
-      let textBuffer = "";
-      const flushTextBuffer = () => {
-        if (flushTimerRef.current) {
-          clearTimeout(flushTimerRef.current);
-          flushTimerRef.current = null;
-        }
-        if (!textBuffer) return;
-        const chunk = textBuffer;
-        textBuffer = "";
-        updateAssistant((m) => ({ ...m, text: m.text + chunk }));
-      };
+      const throttler = createTextThrottler(flushTimerRef, updateAssistant);
 
       try {
         for await (const event of session.send(prompt)) {
@@ -396,33 +412,19 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
           // failure sticky even after a successful repair.
           accumulateGoalOutcome(outcome, event);
           if (event.type === "text_delta") {
-            if (textNeedsBreak) {
-              textBuffer += "\n\n";
-              textNeedsBreak = false;
-            }
-            textBuffer += event.text;
-            if (!flushTimerRef.current) {
-              flushTimerRef.current = setTimeout(() => {
-                flushTimerRef.current = null;
-                if (textBuffer) {
-                  const chunk = textBuffer;
-                  textBuffer = "";
-                  updateAssistant((m) => ({ ...m, text: m.text + chunk }));
-                }
-              }, 16); // 60 FPS throttle window (~16ms)
-            }
+            throttler.push(event.text);
           } else {
             // Any non-text event (tool call, turn end) immediately flushes pending text
-            flushTextBuffer();
+            throttler.flush();
             if (event.type === "tool_finished" || event.type === "tool_permission_denied") {
-              textNeedsBreak = true;
+              throttler.markBreak();
             }
             applyEvent(event, updateAssistant, trackUsage, setMessages, setPlan, setTestStatus);
           }
           onEvent?.(event);
         }
       } catch (err: unknown) {
-        flushTextBuffer();
+        throttler.flush();
         outcome.errored = true;
         const msg = getErrorMessage(err);
         updateAssistant((m) => ({
@@ -430,7 +432,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
           errorText: friendlyError(msg),
         }));
       } finally {
-        flushTextBuffer();
+        throttler.flush();
         updateAssistant((m) => ({ ...m, streaming: false }));
         // Mission turns count for the sparkline and the long-turn bell too —
         // previously only chat turns sampled, so missions were invisible.

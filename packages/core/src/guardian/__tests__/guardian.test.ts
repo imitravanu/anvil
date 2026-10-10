@@ -469,6 +469,37 @@ describe("interceptTurn", () => {
     expect(result.violations).toEqual([]);
   });
 
+  // Takeover 2026-10-10: the interceptor scanned the ADDED-ONLY text, so a
+  // violation's `line` was an index into that stream — not the line the file
+  // will actually have — and an added line whose own text begins "++ " (rendered
+  // by git as exactly "+++ …") was DROPPED from the scan entirely. Both are the
+  // Batch O resolver's job; the interceptor now feeds it.
+  it("reports violations at real file lines, not indexes into the added text", () => {
+    const diff = [
+      "+++ b/src/a.ts",
+      "@@ -1,1 +1,3 @@",
+      " line one",
+      "+const ok = 1;",
+      "+const y = data as " + "any;",
+    ].join("\n");
+    const result = interceptTurn([{ path: "src/a.ts", diff }], "anvil");
+    expect(result.allowed).toBe(false);
+    // Line 3 is the file's real new-file line; the pre-fix scanner said 2
+    // (the index into the added-only stream, context line ignored).
+    expect(result.violations.some((v) => v.rule === "no-as-any" && v.line === 3)).toBe(true);
+  });
+
+  it("scans an added line that begins '++ ' instead of dropping it", () => {
+    const diff = [
+      "+++ b/src/a.ts",
+      "@@ -1,1 +1,2 @@",
+      " line one",
+      "+++ const y = data as " + "any;",
+    ].join("\n");
+    const result = interceptTurn([{ path: "src/a.ts", diff }], "anvil");
+    expect(result.allowed, "the slop line must not vanish from the pre-write checkpoint").toBe(false);
+  });
+
   it("auto-fixes raw error formatting when getErrorMessage is resolvable", () => {
     const result = interceptTurn(
       [{ path: "src/a.ts", diff: `${GET_ERROR_MESSAGE_IMPORT}+${FIX_RAW_ERROR}\n` }],

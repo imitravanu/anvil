@@ -215,7 +215,16 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
       // intentional: raced unlink/permission — same skip policy as read failures below.
       continue;
     }
-    const buf = await fs.readFile(abs);
+    let buf: Buffer;
+    try {
+      buf = await fs.readFile(abs);
+    } catch {
+      // intentional: raced unlink/permission between stat and read — skip the
+      // file and keep scanning. The stat-race comment above used to reference
+      // "read failures below" as if this policy existed; it did not — one
+      // flaky file aborted the whole search (2026-10-10).
+      continue;
+    }
     if (buf.includes(0)) continue; // skip binary files
     const rel = path.relative(ctx.projectRoot, abs).split(path.sep).join("/");
     const lines = buf.toString("utf8").split("\n");

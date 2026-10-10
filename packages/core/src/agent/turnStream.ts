@@ -147,6 +147,9 @@ export async function* streamAssistantTurn(
             ? { failureKind: event.code === "NETWORK_TIMEOUT" ? ("network" as const) : ("provider" as const) }
             : {}),
         };
+        // 2026-10-10: overload is availability weather — it trips the breaker
+        // exactly like a rate limit (the session's thrown-error path agrees).
+        if (event.code === "SERVER_OVERLOADED") recordFailure(provider.id, input.model);
         if (isRateLimitMessage(event.message)) {
           noteRateLimited(provider.id, input.model);
           recordFailure(provider.id, input.model);

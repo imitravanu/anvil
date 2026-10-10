@@ -102,8 +102,8 @@ export function Header({ model, isBusy, context, providerId, sessionTitle, turnC
   );
 
   // Compact header: brand left, model tag right (no situational context yet or
-  // a narrow terminal).
-  if (width < 80 || !context) {
+  // a narrow terminal — the theme's compact tier, not a hardcoded 80).
+  if (width < theme.responsive.compactWidth || !context) {
     return frame(
       <Box justifyContent="space-between" flexShrink={0} flexGrow={1}>
         <Text bold color={theme.colors.brand}>{brand}</Text>
@@ -124,9 +124,12 @@ export function Header({ model, isBusy, context, providerId, sessionTitle, turnC
 
   // Adaptive left column: lower-priority segments drop as width narrows so the
   // model tag (the row the user actually reads) keeps the room. Below 92 the
-  // tag would otherwise lose ~17 cells to "env:", so it goes first.
+  // tag would otherwise lose ~17 cells to "env:", so it goes first. The 92/105
+  // steps are fitTag BUDGETS (Header-internal degradation), not semantic
+  // breakpoints — the semantic tiers (compact, rules-normal) read
+  // theme.responsive like every other component (takeover 2026-10-10).
   const showTests = !!context.ecosystem.testScript && width >= 105;
-  const showRules = !!context.projectRules && width >= 120;
+  const showRules = !!context.projectRules && width >= theme.responsive.normalWidth;
   const showEnv = width >= 92;
 
   const nameV = curtail(context.projectName, HEADER_NAME_MAX);

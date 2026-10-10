@@ -67,9 +67,11 @@ export function StatusBar({
 
   // DW-4.2 context gauge (adaptive component) + DW-4.3 token-growth
   // sparkline on wide terminals. Both measured verbatim for the budget.
-  const gaugeText = gaugeDisplayText(usage.inputTokens, info?.contextWindow, width, theme.chrome.meterStyle);
+  const gaugeText = gaugeDisplayText(usage.inputTokens, info?.contextWindow, width, theme.chrome.meterStyle, theme.responsive);
   const gaugePlain = gaugeText ? ` │ ${gaugeText}` : "";
-  const spark = width >= 120 && tokenHistory.length >= 2 ? brailleSparkline(tokenHistory) : "";
+  // Theme-driven (2026-10-10): the sparkline rides the normalWidth tier, not a
+  // hardcoded 120 — custom themes move it with the rest of the chrome.
+  const spark = width >= theme.responsive.normalWidth && tokenHistory.length >= 2 ? brailleSparkline(tokenHistory) : "";
   // Rendered only beside the gauge (see `left`), so the width budget must
   // count it the same way — an unknown model hides the gauge, and charging
   // the bar for an invisible sparkline curtails the tokens/hints instead.

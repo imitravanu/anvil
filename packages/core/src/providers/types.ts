@@ -126,13 +126,22 @@ export function classifyProviderError(err: unknown): {
   const msg = typeof err === "string" ? err : typeof err === "object" && err !== null && "message" in err && typeof (err as { message: unknown }).message === "string" ? (err as { message: string }).message : String(err);
   if (!status) {
     const m = msg.match(/\b(?:HTTP\s+)?([45]\d{2})\b/);
-    if (m) status = Number(m[1]);
+    // An inferred status is trusted ONLY for the availability classes (429 and
+    // 5xx). Prose carries incidental three-digit numbers — "retry after 400
+    // tokens" — and trusting an inferred 400 turned a retryable rate limit into
+    // a terminal INVALID_REQUEST (takeover 2026-10-10). The error classes
+    // (400/401/403/404) keep their own message checks below, so every
+    // message-carried verdict survives by a different route.
+    if (m && (m[1] === "429" || /^5\d\d$/.test(m[1]))) status = Number(m[1]);
   }
 
   if (status === 429) {
     return { code: "RATE_LIMIT", isRetryable: true, httpStatus: 429 };
   }
-  if (status === 502 || status === 503 || status === 504) {
+  // 500 joins its 5xx siblings (takeover 2026-10-10): every major LLM API
+  // treats it as transient upstream weather, and it previously fell through to
+  // UNKNOWN — non-retryable — while 502/503/504 retried.
+  if (status === 500 || status === 502 || status === 503 || status === 504) {
     return { code: "SERVER_OVERLOADED", isRetryable: true, httpStatus: status };
   }
   if (status === 401 || status === 403) {

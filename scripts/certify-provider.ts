@@ -56,20 +56,35 @@ function parseArgs(args: string[]) {
   let timeoutMs = CERT_PROVIDER_TIMEOUT_MS;
   let out: string | undefined;
 
+  // G13 parity (2026-10-10): a dangling value flag or a bad --timeout used to
+  // be silently swallowed (--timeout banana ran at the default; a trailing
+  // --provider vanished), which is exactly the class the eval scripts already
+  // fixed. Fail loudly instead.
+  const KNOWN_FLAGS = "--all --mock --json --verbose --provider <id> --model <id> --timeout <ms> --out <file>";
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--all") all = true;
     else if (a === "--mock") mock = true;
     else if (a === "--json") json = true;
     else if (a === "--verbose") verbose = true;
-    else if (a === "--provider" && i + 1 < args.length) {
-      providerArg = args[++i];
-    } else if (a === "--model" && i + 1 < args.length) {
-      model = args[++i];
-    } else if (a === "--timeout" && i + 1 < args.length) {
-      timeoutMs = parseInt(args[++i], 10) || 35_000;
-    } else if (a === "--out" && i + 1 < args.length) {
-      out = args[++i];
+    else if (a === "--provider" || a === "--model" || a === "--out" || a === "--timeout") {
+      const value = args[i + 1];
+      if (value === undefined || value.startsWith("--")) {
+        throw new Error(`${a} requires a value. Known flags: ${KNOWN_FLAGS}`);
+      }
+      i += 1;
+      if (a === "--provider") providerArg = value;
+      else if (a === "--model") model = value;
+      else if (a === "--out") out = value;
+      else {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          throw new Error(`--timeout requires a positive number of milliseconds (got "${value}")`);
+        }
+        timeoutMs = parsed;
+      }
+    } else {
+      throw new Error(`unknown argument: ${a}. Known flags: ${KNOWN_FLAGS}`);
     }
   }
 

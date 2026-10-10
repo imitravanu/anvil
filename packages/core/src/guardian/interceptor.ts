@@ -1,6 +1,6 @@
 import { getErrorMessage } from "../errors.js";
 import { GUARDIAN_MAX_AUTO_FIXES } from "../config/constants.js";
-import { scanDiffForSlop, type GuardianViolation } from "./scanner.js";
+import { scanUnifiedDiffForSlop, type GuardianViolation } from "./scanner.js";
 import type { CustomGuardianRule } from "./rules.js";
 import type { GuardianScope } from "./scope.js";
 
@@ -62,7 +62,16 @@ export function interceptTurn(
   for (const [idx, change] of changes.entries()) {
     let diff = change.diff;
     try {
-      const initial = scanDiffForSlop(change.path, diff, scope, customRules);
+      // Takeover 2026-10-10: the pre-write checkpoint now resolves the diff per
+      // file through the Batch O scanner (scanUnifiedDiffForSlop) instead of
+      // scanning the added-only text under the change's path. Two honesty
+      // defects went with the old shape: violations were numbered as indexes
+      // into the added stream rather than real new-file lines, and an added
+      // line whose own text begins "++ " (rendered "+++ …") was dropped from
+      // the scan entirely — the exact line class the checkpoint exists for.
+      // `change.path` remains the fallback for header-less diffs, and the
+      // auto-fix loop's line comparison is unaffected (same scan both sides).
+      const initial = scanUnifiedDiffForSlop(diff, scope, customRules, change.path);
       // Repair every safely-fixable raw-error violation, then report what
       // survives. Re-scanning after each successful fix keeps the survivor
       // set honest: a fixed occurrence vanishes from the new text, while an
@@ -87,7 +96,7 @@ export function interceptTurn(
           if (repaired !== diff) {
             diff = repaired;
             fixesUsed += 1;
-            found = scanDiffForSlop(change.path, diff, scope, customRules);
+            found = scanUnifiedDiffForSlop(diff, scope, customRules, change.path);
             i = 0;
             continue;
           }
