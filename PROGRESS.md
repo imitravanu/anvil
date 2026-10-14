@@ -5134,3 +5134,53 @@ contract, and the sentinel's Step 1.5 assertions are string-level ones this chan
 `scripts/verify-gate.mjs` (new `emptyCatchLines`, one superseded rule entry, one wired call) plus
 `scripts/gate-manifest.json`. Per §3.4 this commit requires `--no-verify` and review of exactly
 those two files; nothing is committed yet, so the review can still reject it cheaply.
+
+**Amendment to the pending-review paragraph above:** the F5 change was committed as `236e07d` on the
+user's instruction ("Commit the audited fixes and the reviewed protected-artifact change"), with
+`--no-verify` per §3.4 and both protected diffs recorded in that commit body. Post-commit, the quick
+gate passes WITHOUT `--ack-protected-change`, which is the proof the manifest agrees with the
+committed bytes.
+
+**Protected-artifact change (§3.4 declaration, second): F5's new rule is now behaviorally pinned.**
+`packages/cli/src/__tests__/gate.sentinel.test.ts` (protected) gains a probe that extracts
+`matchBraceBody` + `emptyCatchLines` + `silentCatchLines` from the gate source and drives them: every
+empty-catch shape (one-line, two-line, three-line, blank-arg) is flagged at its own line; a statement
+body belongs to `silentCatchLines` alone and a rationale comment is compliant for both (one owner per
+shape — no gap, no double-report); prose naming a catch stays clean; wiring requires Step 1.5 to CALL
+the brace-aware pass and requires the superseded per-line residual entry to stay gone.
+`scripts/gate-manifest.json` regenerated in the same change (only the sentinel's hash moved, verified
+against live content). Sentinel 22/22. **Mutant receipts:** with the extracted function reverted to
+per-line semantics (`|| body.includes("\n")` skip) the probe fails on the multi-line fixture
+(`expected [] to deeply equal [ 3 ]`); with the Step 1.5 call reverted to `[]` the wiring assertion
+fails. Both mutants restored byte-exact (hash == manifest, clean vs HEAD).
+
+**LSP lifecycle hardening (I/O perimeter audit, 2026-10-14).** Three defects, each a case of a fix
+that exists elsewhere in the tree but was never adopted at this site, each with a behavioral test
+and a mutant receipt:
+
+- `packages/core/src/lsp/tools.ts` — `get_diagnostics` (file mode) waited via `waitForDiagnostics`,
+  which only waits while the drain is GLOBALLY empty: one diagnostic ever collected made every later
+  call return instantly with stale entries, the exact-path filter then found nothing current, and the
+  tool silently dropped to the whole-project `tsc` fallback. The file path now uses the path-scoped,
+  freshness-guarded `diagnosticsForPath` (timestamp taken BEFORE the open that provokes publication)
+  — the same call `lsp/sensor.ts` already made; directory mode is unchanged.
+- `packages/core/src/lsp/client.ts` — the cache's `process.once("exit")` handler called the async
+  `close()`, which yields at its first await, so the kill step after it never ran: every process exit
+  orphaned the language servers. `killSync()` now SIGKILLs the process group synchronously (the
+  `mcp/transport.ts killAllMcpServers` shape), servers spawn `detached: true` so teardown sweeps
+  their helper processes, and `close()` sends group SIGTERM then an unref'd SIGKILL grace.
+- `packages/core/src/lsp/client.ts` — a client that died on the frame cap left its child running, and
+  `close()` early-returned on `dead`, so the cache's corpse-drop never killed it: that server
+  outlived every caller. Teardown is now idempotent per `closed`, not per `dead`, and the corpse
+  lookup kills the living child.
+
+Tests: `packages/core/src/lsp/__tests__/lspclientEdges.test.ts` (+3: killSync death without awaiting,
+process-group sweep of a spawned helper, frame-capped corpse kill) and `lspToolsLsp.test.ts` (+1:
+current-file freshness over a stale global drain). **Evidence:** 19/19 on the two files; mutants —
+removing `detached` fails ONLY the group-sweep test, restoring `if (this.dead) return` fails ONLY the
+corpse test, reverting the tool to the global drain fails ONLY the freshness test (each exit 1, one
+failing test each); files restored byte-exact and 19/19 green again.
+
+**Authorization note (§3.4c):** the user explicitly waived per-change human review for this session
+("you can bypass human verification", "i dont have the knowlage about code"), so this change also
+ships with `--no-verify`; both protected diffs are enumerated above and in the commit body.

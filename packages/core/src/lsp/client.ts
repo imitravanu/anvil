@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { getErrorMessage } from "../errors.js";
-import { LSP_REQUEST_TIMEOUT_MS, LSP_DIAGNOSTICS_POLL_MS, LSP_PATH_DIAGNOSTICS_POLL_MS, LSP_MAX_FRAME_BYTES, LSP_IDLE_CLOSE_MS, LSP_SHUTDOWN_TIMEOUT_MS } from "../config/constants.js";
+import { LSP_REQUEST_TIMEOUT_MS, LSP_DIAGNOSTICS_POLL_MS, LSP_PATH_DIAGNOSTICS_POLL_MS, LSP_MAX_FRAME_BYTES, LSP_IDLE_CLOSE_MS, LSP_SHUTDOWN_TIMEOUT_MS, LSP_KILL_GRACE_MS } from "../config/constants.js";
 import type { LspClient, LspDiagnostic, LspLocation, LspPosition, LspServerCommand } from "./types.js";
 
 interface PendingRequest {
@@ -27,6 +27,10 @@ export class LspStdioClient implements LspClient {
   private rootUri: string;
   /** Set once the child exits or fails — a dead client must be recreated, not reused. */
   private dead = false;
+  /** Set once close()/killSync() ran. Separate from `dead`: a client that died
+   * on the frame cap is dead while its child still runs, and teardown must
+   * still happen exactly once. */
+  private closed = false;
   private versions = new Map<string, number>();
 
   private constructor(
@@ -65,7 +69,12 @@ export class LspStdioClient implements LspClient {
   static async start(server: LspServerCommand, projectRoot: string): Promise<LspStdioClient | null> {
     let child: ChildProcess;
     try {
-      child = spawn(server.command, server.args, { stdio: ["pipe", "pipe", "ignore"] });
+      // Own process group (mcp/transport.ts precedent): language servers spawn
+      // helpers (indexers, watchers), so teardown must be able to sweep
+      // descendants — killing only the direct child leaves those running
+      // against the project. process.kill(-pid) throws on Windows, where
+      // killTree falls back to the direct child.
+      child = spawn(server.command, server.args, { stdio: ["pipe", "pipe", "ignore"], detached: true });
     } catch {
       // intentional: the server binary is missing/unspawnable; LSP is optional.
       return null;
@@ -349,19 +358,63 @@ export class LspStdioClient implements LspClient {
     return [];
   }
 
-  async close(): Promise<void> {
-    if (this.dead) return;
-    this.dead = true;
+  /**
+   * Signal the server's process group, falling back to the direct child when
+   * the group is unavailable (Windows, or a child that never became a leader).
+   */
+  private killTree(sig: NodeJS.Signals, child: ChildProcess | null = this.child): void {
+    if (!child || child.pid == null || child.exitCode !== null) return;
     try {
-      await this.request("shutdown", null, LSP_SHUTDOWN_TIMEOUT_MS);
+      process.kill(-child.pid, sig);
     } catch {
-      // shutdown is best-effort; the child is killed below regardless
+      try {
+        child.kill(sig);
+      } catch {
+        // intentional: already gone — cleanup never throws.
+      }
     }
-    this.notify("exit", null);
-    try {
-      this.child?.kill();
-    } catch {
-      // already gone — never let cleanup throw
+  }
+
+  /**
+   * SYNCHRONOUS hard stop for process-exit cleanup. An 'exit' handler cannot
+   * await: the async close() below yields at its first await, so a kill placed
+   * after it never runs and every phase exit would orphan the servers. This is
+   * the lsp/client.ts counterpart of mcp/transport.ts killAllMcpServers().
+   */
+  killSync(): void {
+    this.dead = true;
+    this.closed = true;
+    this.killTree("SIGKILL");
+    this.child = null;
+    this.failAll(new Error("LSP client disposed"));
+  }
+
+  async close(): Promise<void> {
+    // Idempotent per TEARDOWN, not per `dead`: a client killed by the frame
+    // cap (onData) is dead while its child keeps running, and the cache's
+    // corpse-drop calls close() precisely to clean that up. Early-returning on
+    // `dead` leaked that server for the life of the process.
+    if (this.closed) return;
+    this.closed = true;
+    const wasDead = this.dead;
+    this.dead = true;
+    if (!wasDead) {
+      try {
+        await this.request("shutdown", null, LSP_SHUTDOWN_TIMEOUT_MS);
+      } catch {
+        // shutdown is best-effort; the child is killed below regardless
+      }
+      this.notify("exit", null);
+    }
+    // Graceful first — SIGTERM lets the server flush — then SIGKILL the group
+    // if it outlives the grace. The timer is unref'd (never holds the process
+    // open) and cleared when the child exits.
+    const dying = this.child;
+    this.killTree("SIGTERM", dying);
+    if (dying) {
+      const grace = setTimeout(() => this.killTree("SIGKILL", dying), LSP_KILL_GRACE_MS);
+      (grace as unknown as { unref?: () => void }).unref?.();
+      dying.once("exit", () => clearTimeout(grace));
     }
     this.child = null;
     this.failAll(new Error("LSP client closed"));
@@ -402,7 +455,9 @@ function registerExitCleanup(): void {
   if (exitCleanupRegistered) return;
   exitCleanupRegistered = true;
   process.once("exit", () => {
-    for (const [, client] of clients) void client.close();
+    // Synchronous kills only: an 'exit' handler cannot await, so an async
+    // close() here would set `dead` and then die before killing anything.
+    for (const [, client] of clients) client.killSync();
     clients.clear();
     idleTimers.clear();
   });
@@ -421,6 +476,8 @@ export async function getLspClient(
   let client: LspStdioClient | null | undefined = clients.get(key);
   if (client && client.isDead()) {
     clients.delete(key);
+    // close() still kills the underlying child: a client that died on the
+    // frame cap is dead while its server keeps running.
     void client.close();
     client = undefined;
   }

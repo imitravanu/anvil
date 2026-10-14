@@ -149,6 +149,37 @@ describe("get_diagnostics via LSP", () => {
     expect(out.diagnostics.map((d) => d.message)).toEqual(["in scope"]);
   });
 
+  it("waits on the CURRENT file, not a stale global drain (path-scoped freshness)", async () => {
+    const calls: string[] = [];
+    h.client = makeClient({
+      ensureOpen: () => {
+        calls.push("ensureOpen");
+      },
+      // A diagnostic from an earlier file already sits in the drain: the old
+      // code returned it instantly, the exact-path filter dropped it, and the
+      // tool silently fell back to the whole-project tsc run.
+      waitForDiagnostics: async () => {
+        calls.push("waitForDiagnostics");
+        return [
+          { path: path.join(root, "src", "a.ts"), line: 1, severity: "error", message: "stale other file" },
+        ];
+      },
+      diagnosticsForPath: async (p) => {
+        calls.push("diagnosticsForPath");
+        return [{ path: p, line: 2, severity: "error", message: "fresh for this file" }];
+      },
+    });
+    const r = await getDiagnosticsExec({ path: "src/b.ts" }, ctx());
+    const out = r.output as { source: string; diagnostics: { message: string }[] };
+    expect(out.source).toBe("lsp");
+    expect(out.diagnostics.map((d) => d.message)).toEqual(["fresh for this file"]);
+    // The open must precede the wait: a server only publishes for documents
+    // it has been told about.
+    expect(calls[0]).toBe("ensureOpen");
+    expect(calls).toContain("diagnosticsForPath");
+    expect(calls).not.toContain("waitForDiagnostics");
+  });
+
   it("reports 'none' when there is no server and no checker for the file type", async () => {
     h.server = null;
     const r = await getDiagnosticsExec({ path: "notes.txt" }, ctx());

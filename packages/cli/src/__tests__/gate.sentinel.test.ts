@@ -297,6 +297,72 @@ describe("gate integrity sentinel", () => {
     expect(gate.indexOf("STEP 1.5")).toBeLessThan(gate.indexOf("Full-tree residual scan clean"));
   });
 
+  // F5 (2026-10-14, protected change): the residual drain's EMPTY-catch pass
+  // replaced a per-line regex that could only see a `catch {}` whose braces sat
+  // on ONE line. A multi-line empty catch was therefore invisible to Step 1.5
+  // forever — the drain that exists so legacy debt can only shrink could never
+  // see it. Measured on the real artifact: the pre-fix gate passed the fixture
+  // (exit 0, "residual scan clean"), the fixed gate refuses it (exit 1). Pinned
+  // behaviorally here, the way every other rule family is: the functions are
+  // extracted from the gate source and driven, and ownership between the two
+  // §2.3 catch rules is asserted so a future edit cannot make them double-report
+  // or contradict each other about the same catch.
+  it("the residual drain sees multi-line empty catches, one owner per shape (F5)", () => {
+    const gate = read("scripts/verify-gate.mjs");
+    const surfacesSrc = gate.match(/const CATCH_SURFACES_RE = [^\n]+/)?.[0];
+    const braceSrc = gate.match(/function matchBraceBody\(text, openIdx\) \{[\s\S]*?\n\}/)?.[0];
+    const silentSrc = gate
+      .match(/export function silentCatchLines\(text\) \{[\s\S]*?\n\}/)?.[0]
+      ?.replace(/^export /, "");
+    const emptySrc = gate
+      .match(/export function emptyCatchLines\(text\) \{[\s\S]*?\n\}/)?.[0]
+      ?.replace(/^export /, "");
+    expect(surfacesSrc, "gate must define CATCH_SURFACES_RE").toBeTruthy();
+    expect(braceSrc, "gate must define matchBraceBody").toBeTruthy();
+    expect(silentSrc, "gate must define silentCatchLines").toBeTruthy();
+    expect(emptySrc, "gate must define emptyCatchLines").toBeTruthy();
+    const { emptyCatchLines, silentCatchLines } = new Function(
+      `${surfacesSrc}\n${braceSrc}\n${silentSrc}\n${emptySrc}\n` +
+        "return { emptyCatchLines, silentCatchLines };"
+    )() as {
+      emptyCatchLines: (text: string) => number[];
+      silentCatchLines: (text: string) => number[];
+    };
+
+    // Positive: every empty-catch shape, including the multi-line spans the
+    // replaced per-line rule could not see. Line numbers, not just counts — the
+    // drain's message must point at the catch it refuses.
+    const flagged: Array<[string, number[]]> = [
+      ["try { a(); } catch {}", [1]],
+      ["try {\n  a();\n} catch {\n}\n", [3]],
+      ["try { a(); } catch (err) {\n\n}\n", [1]],
+      ["catch { }", [1]],
+    ];
+    for (const [text, lines] of flagged) {
+      expect(emptyCatchLines(text), `emptyCatchLines must flag ${JSON.stringify(text)}`).toEqual(lines);
+    }
+
+    // Ownership: a body with a statement belongs to silentCatchLines; a body
+    // with only a rationale comment (§2.3) is compliant for BOTH. Whichever
+    // rule owns a shape, exactly one verdict must exist — no gap, no double.
+    const statementBody = "try { a(); } catch { b = 1; }\n";
+    expect(emptyCatchLines(statementBody)).toEqual([]);
+    expect(silentCatchLines(statementBody).length).toBeGreaterThan(0);
+    const rationaleBody = "try { a(); } catch {\n  // intentional: cleanup only, nothing to report\n}\n";
+    expect(emptyCatchLines(rationaleBody)).toEqual([]);
+    expect(silentCatchLines(rationaleBody)).toEqual([]);
+    // Prose that merely names a catch is not code (both rules share the guard).
+    expect(emptyCatchLines("// if this were emptied to catch { } it would be slop\n")).toEqual([]);
+
+    // Wiring: Step 1.5 must CALL the brace-aware pass, and the superseded
+    // per-line residual entry must stay gone — restoring it would silently
+    // re-narrow the drain to one line while this probe still passed on the
+    // extracted function alone.
+    expect(gate).toContain("for (const lineNo of emptyCatchLines(content))");
+    expect(gate).toContain("empty catch block (Rule 2.3)");
+    expect(gate).not.toMatch(/\{\s*name:\s*"empty catch block"/);
+  });
+
   it("commit-time enforcement (pre-commit hook) is self-contained and attacker-proof", () => {
     const hook = read(".githooks/pre-commit");
     // PROVEN ATTACK: a hook that executes scripts/verify-gate.mjs is

@@ -237,17 +237,44 @@ export const getDiagnosticsExec: ToolExecutor = async (input, ctx: ToolContext) 
       const client = await getLspClient(server, ctx.projectRoot);
       if (client) {
         // A1/A7: open the document so the server actually computes diagnostics,
-        // then wait a bounded drain for publishDiagnostics to arrive.
+        // then wait a bounded, freshness-scoped drain for publishDiagnostics.
         if (isFile) {
           const text = await readBoundedHead(abs);
+          // Timestamp taken BEFORE the open that provokes the publication:
+          // anything published earlier belongs to a previous revision (or a
+          // different file) and must never be reported as this file's result.
+          const since = Date.now();
           if (text) client.ensureOpen(abs, server.language, text);
-        }
-        const all = await client.waitForDiagnostics(LSP_DIAGNOSTICS_WAIT_MS);
-        const scoped = all
-          .filter((d) => d.path === abs || abs === ctx.projectRoot || d.path.startsWith(abs))
-          .slice(0, LSP_MAX_DIAGNOSTICS);
-        if (scoped.length > 0) {
-          return { output: { source: "lsp", diagnostics: scoped }, isError: false, summary: `${scoped.length} diagnostic(s) via LSP` };
+          // Path-scoped wait — the same call the post-mutation sensor makes.
+          // waitForDiagnostics only waits while the drain is GLOBALLY empty, so
+          // one diagnostic ever collected made it return instantly with stale
+          // entries; the exact-path filter then found nothing current and the
+          // tool silently dropped to the whole-project tsc fallback.
+          if (typeof client.diagnosticsForPath === "function") {
+            const fresh = (
+              await client.diagnosticsForPath(abs, since, LSP_DIAGNOSTICS_WAIT_MS)
+            ).slice(0, LSP_MAX_DIAGNOSTICS);
+            if (fresh.length > 0) {
+              return { output: { source: "lsp", diagnostics: fresh }, isError: false, summary: `${fresh.length} diagnostic(s) via LSP` };
+            }
+          } else {
+            // Client without the path-scoped method: keep the bounded drain,
+            // judged by exact path only (a prefix match would re-admit
+            // sibling files under a same-prefix path).
+            const all = await client.waitForDiagnostics(LSP_DIAGNOSTICS_WAIT_MS);
+            const scoped = all.filter((d) => d.path === abs).slice(0, LSP_MAX_DIAGNOSTICS);
+            if (scoped.length > 0) {
+              return { output: { source: "lsp", diagnostics: scoped }, isError: false, summary: `${scoped.length} diagnostic(s) via LSP` };
+            }
+          }
+        } else {
+          const all = await client.waitForDiagnostics(LSP_DIAGNOSTICS_WAIT_MS);
+          const scoped = all
+            .filter((d) => d.path === abs || abs === ctx.projectRoot || d.path.startsWith(abs))
+            .slice(0, LSP_MAX_DIAGNOSTICS);
+          if (scoped.length > 0) {
+            return { output: { source: "lsp", diagnostics: scoped }, isError: false, summary: `${scoped.length} diagnostic(s) via LSP` };
+          }
         }
       }
     }

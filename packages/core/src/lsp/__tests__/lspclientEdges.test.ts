@@ -72,6 +72,77 @@ process.stdin.on("data", (c) => {
 });
 `;
 
+/**
+ * Framed server that answers initialize and keeps a helper child running.
+ * Language servers spawn helpers (indexers, watchers); teardown must sweep the
+ * whole process group, not just the direct child. Both pids are logged so the
+ * test can prove who actually died.
+ */
+const FAKE_GROUP_SERVER = `
+const fs = require("node:fs");
+const { spawn } = require("node:child_process");
+const logPath = process.argv[3];
+const helper = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+fs.appendFileSync(logPath, "server:" + process.pid + "\\n");
+fs.appendFileSync(logPath, "helper:" + helper.pid + "\\n");
+let acc = Buffer.alloc(0);
+function send(o) {
+  const s = JSON.stringify(o);
+  process.stdout.write("Content-Length: " + Buffer.byteLength(s, "utf8") + "\\r\\n\\r\\n" + s);
+}
+function parse() {
+  for (;;) {
+    const h = acc.indexOf("\\r\\n\\r\\n");
+    if (h < 0) return;
+    const m = Buffer.from(acc.subarray(0, h)).toString("utf8").match(/Content-Length:\\s*(\\d+)/i);
+    if (!m) { acc = acc.subarray(h + 4); continue; }
+    const len = Number(m[1]);
+    if (acc.length < h + 4 + len) return;
+    const body = Buffer.from(acc.subarray(h + 4, h + 4 + len)).toString("utf8");
+    acc = acc.subarray(h + 4 + len);
+    let msg; try { msg = JSON.parse(body); } catch { continue; }
+    if (msg.method === "initialize") send({ jsonrpc: "2.0", id: msg.id, result: { capabilities: {} } });
+    else if (msg.method === "shutdown") send({ jsonrpc: "2.0", id: msg.id, result: null });
+  }
+}
+process.stdin.on("data", (c) => { acc = Buffer.concat([acc, c]); parse(); });
+`;
+
+/**
+ * Framed server that completes initialize and then claims an oversized frame.
+ * The claim alone trips the client's frame cap (no need to write 8 MiB): the
+ * client goes dead while this process keeps running — the corpse-drop cleanup
+ * must still kill it.
+ */
+const FAKE_OVERSIZE_SERVER = `
+const fs = require("node:fs");
+const logPath = process.argv[3];
+fs.appendFileSync(logPath, "server:" + process.pid + "\\n");
+let acc = Buffer.alloc(0);
+function send(o) {
+  const s = JSON.stringify(o);
+  process.stdout.write("Content-Length: " + Buffer.byteLength(s, "utf8") + "\\r\\n\\r\\n" + s);
+}
+function parse() {
+  for (;;) {
+    const h = acc.indexOf("\\r\\n\\r\\n");
+    if (h < 0) return;
+    const m = Buffer.from(acc.subarray(0, h)).toString("utf8").match(/Content-Length:\\s*(\\d+)/i);
+    if (!m) { acc = acc.subarray(h + 4); continue; }
+    const len = Number(m[1]);
+    if (acc.length < h + 4 + len) return;
+    const body = Buffer.from(acc.subarray(h + 4, h + 4 + len)).toString("utf8");
+    acc = acc.subarray(h + 4 + len);
+    let msg; try { msg = JSON.parse(body); } catch { continue; }
+    if (msg.method === "initialize") {
+      send({ jsonrpc: "2.0", id: msg.id, result: { capabilities: {} } });
+      setTimeout(() => process.stdout.write("Content-Length: 999999999\\r\\n\\r\\n"), 20);
+    } else if (msg.method === "shutdown") send({ jsonrpc: "2.0", id: msg.id, result: null });
+  }
+}
+process.stdin.on("data", (c) => { acc = Buffer.concat([acc, c]); parse(); });
+`;
+
 const created: string[] = [];
 afterAll(() => {
   for (const d of created) fs.rmSync(d, { recursive: true, force: true });
@@ -97,6 +168,22 @@ async function waitFor(predicate: () => boolean, ms: number): Promise<boolean> {
     await new Promise<void>((r) => setTimeout(r, 10));
   }
   return predicate();
+}
+
+/** First `label:<pid>` line a fixture wrote to its log; null while unwritten. */
+function readPid(logPath: string, label: string): number | null {
+  if (!fs.existsSync(logPath)) return null;
+  const m = fs.readFileSync(logPath, "utf8").match(new RegExp(`${label}:(\\d+)`));
+  return m ? Number(m[1]) : null;
+}
+
+function isProcessGone(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 describe("LspStdioClient edge behavior", () => {
@@ -206,5 +293,76 @@ describe("LspStdioClient edge behavior", () => {
     const stale = await client!.diagnosticsForPath("/tmp/x.ts", Date.now() + 60_000, 60);
     expect(stale).toEqual([]);
     await client!.close();
+  });
+
+  it("killSync() hard-stops the server without awaiting (the exit-handler path)", async () => {
+    const { root, server, logPath } = makeFixture(FAKE_GROUP_SERVER, "killsync-server");
+    const client = await LspStdioClient.start(server, root);
+    expect(client).not.toBeNull();
+    await waitFor(() => readPid(logPath, "server") !== null, 2000);
+    const pid = readPid(logPath, "server");
+    expect(pid).not.toBeNull();
+
+    client!.killSync();
+    expect(client!.isDead()).toBe(true);
+    // SIGKILL is delivered by the syscall inside killSync: the pid must stop
+    // existing with no further awaits, because an 'exit' handler has none.
+    expect(await waitFor(() => isProcessGone(pid!), 2000)).toBe(true);
+  });
+
+  it("close() sweeps server descendants, not just the direct child", async () => {
+    const { root, server, logPath } = makeFixture(FAKE_GROUP_SERVER, "group-server");
+    const client = await LspStdioClient.start(server, root);
+    expect(client).not.toBeNull();
+    await waitFor(() => readPid(logPath, "server") !== null, 2000);
+    const helper = readPid(logPath, "helper");
+    expect(helper).not.toBeNull();
+
+    let helperAlive = true;
+    try {
+      await client!.close();
+      // The helper is in the server's process group: a direct-child SIGTERM
+      // leaves it running against the project for the life of the machine.
+      helperAlive = !(await waitFor(() => isProcessGone(helper!), 3000));
+      expect(helperAlive).toBe(false);
+    } finally {
+      if (helperAlive) {
+        try {
+          process.kill(helper!, "SIGKILL"); // cleanup so a RED run never leaks the helper
+        } catch {
+          // intentional: already gone.
+        }
+      }
+    }
+  });
+
+  it("a frame-capped corpse still gets its living server killed when the cache drops it", async () => {
+    const { root, server, logPath } = makeFixture(FAKE_OVERSIZE_SERVER, "oversize-server");
+    const c1 = await getLspClient(server, root);
+    expect(c1).not.toBeNull();
+    expect(await waitFor(() => c1!.isDead(), 2000)).toBe(true);
+    await waitFor(() => readPid(logPath, "server") !== null, 2000);
+    const pid = readPid(logPath, "server");
+    expect(pid).not.toBeNull();
+
+    const c2 = await getLspClient(server, root);
+    let alive = true;
+    try {
+      expect(c2).not.toBe(c1);
+      // The cache saw the corpse, dropped it, and called close(). Early-
+      // returning on `dead` (the old close) skipped the kill, so the server
+      // behind a frame-capped client outlived every caller.
+      alive = !(await waitFor(() => isProcessGone(pid!), 3000));
+      expect(alive).toBe(false);
+    } finally {
+      if (alive) {
+        try {
+          process.kill(pid!, "SIGKILL"); // cleanup so a RED run never leaks the server
+        } catch {
+          // intentional: already gone.
+        }
+      }
+      if (c2) await c2.close();
+    }
   });
 });

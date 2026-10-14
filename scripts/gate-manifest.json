@@ -6,7 +6,7 @@
     "AGENTS.md": "0bf453c270365ef039ae982d697c3b1d64890e96894e7696b6ead2c10c61c5ab",
     ".fresh-allowlist.json": "48e9893b2be40588293ef4c045324f1a38c73ef7757ddb601e40dc8851318e4f",
     "docs/PHASE-21-25-AUDIT.md": "d733a5a50c892d6be2f77f1bba9b1ce3d2ed73698426c78f3ad3b2b17627c3ee",
-    "packages/cli/src/__tests__/gate.sentinel.test.ts": "9d119610025f1763ab2db26adc94ab23f88aa671e9900c09ebdb986e1171a43f",
+    "packages/cli/src/__tests__/gate.sentinel.test.ts": "b38007d9b5c0591f9699acba576882578beceed5fd7d1687e888091e309c50fd",
     ".github/workflows/ci.yml": "3fc64d84095f59e9accf5b4fedbfd42d70b9ea6ddbf930739c5a293d69c7b604",
     ".github/workflows/live-eval.yml": "1a5c7bd0ce94286a0fdfa1b552b8df33afe92837bf25234e3d659fef330df9d3",
     ".github/workflows/release.yml": "3599e1e32d44b152bbfc3af110fc0978e800aae1808fe4231deb88fc37bea0ad",
