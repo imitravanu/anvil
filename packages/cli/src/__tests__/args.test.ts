@@ -127,11 +127,24 @@ describe("resolveInvocation", () => {
       full: false,
       staged: false,
     });
-    expect(resolveInvocation(["gate", "--full", "--staged"], configured)).toEqual({
+    expect(resolveInvocation(["gate", "--full"], configured)).toEqual({
       kind: "gate",
       watch: false,
       full: true,
-      staged: true,
+      staged: false,
+    });
+    expect(resolveInvocation(["gate", "--full", "--staged"], configured).kind).toBe("subcommand-usage-error");
+  });
+
+  it("rejects unknown subcommand flags and extra positional arguments", () => {
+    expect(resolveInvocation(["gate", "--ful"], configured)).toEqual({
+      kind: "subcommand-usage-error", subcommand: "gate", argument: "--ful",
+    });
+    expect(resolveInvocation(["init", "--guarded", "--lnag", "python"], configured)).toEqual({
+      kind: "subcommand-usage-error", subcommand: "init", argument: "--lnag",
+    });
+    expect(resolveInvocation(["health", "extra"], configured)).toEqual({
+      kind: "subcommand-usage-error", subcommand: "health", argument: "extra",
     });
   });
 

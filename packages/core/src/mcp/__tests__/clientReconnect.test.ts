@@ -101,8 +101,9 @@ describe("reconnectServerConnection", () => {
 });
 
 describe("callTool auto-recovery", () => {
-  it("reconnects once on a dead transport and replays the call", async () => {
-    harness.nextTransport = readyTransport();
+  it("reconnects after a lost reply without replaying a possibly committed call", async () => {
+    const nextTransport = readyTransport();
+    harness.nextTransport = nextTransport;
     let attempts = 0;
     const conn = {
       id: "srv",
@@ -120,8 +121,10 @@ describe("callTool auto-recovery", () => {
     const res = await callTool(conn, "ping", {});
     expect(attempts).toBe(1);
     expect(harness.createCalls).toBe(1);
-    expect(res.isError).toBe(false);
-    expect(res.output).toEqual({ content: [{ type: "text", text: "ok" }] });
+    expect(res.isError).toBe(true);
+    expect((res.output as { error: string }).error).toContain("outcome is unknown");
+    expect(nextTransport.methodsSeen()).not.toContain("tools/call");
+    expect(conn.status).toBe("ready");
   });
 
   it("surfaces the original failure when the reconnect cannot be built", async () => {

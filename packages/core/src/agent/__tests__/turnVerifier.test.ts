@@ -184,6 +184,22 @@ describe("finishTurn (terminal seam extracted from AgentSession.send)", () => {
     expect(ctx.onSuccess).not.toHaveBeenCalled();
   });
 
+  it("never reports an output-limit stop as a completed turn", async () => {
+    const ctx = baseCtx({ stopReason: "max_tokens" });
+    const { events, completion } = await drain(ctx);
+    expect(completion).toEqual({ action: "done" });
+    expect(events.map((e) => e.type)).toEqual(["error"]);
+    expect((events[0] as { message: string }).message).toContain("output limit");
+    expect(ctx.onSuccess).not.toHaveBeenCalled();
+  });
+
+  it("treats an unknown stop reason as incomplete", async () => {
+    const ctx = baseCtx({ stopReason: "unknown" });
+    const { events } = await drain(ctx);
+    expect(events.map((e) => e.type)).toEqual(["error"]);
+    expect(ctx.onSuccess).not.toHaveBeenCalled();
+  });
+
   it("requests another round on a failed verification without closing the turn", async () => {
     const ctx = baseCtx({
       autoVerify: "echo 'test failure details' && exit 1",

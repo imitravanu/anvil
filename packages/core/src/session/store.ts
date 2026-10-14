@@ -17,19 +17,33 @@ function ensureDir(dir: string): void {
 // never let `..` or `/` reach path.join (path traversal into/over other files).
 const SAFE_ID_RE = /^[A-Za-z0-9-_]+$/;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function isStoredSession(v: unknown): v is StoredSession {
-  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
-  const s = v as { metadata?: unknown; history?: unknown };
-  if (typeof s.metadata !== "object" || s.metadata === null) return false;
-  const m = s.metadata as { id?: unknown };
-  if (typeof m.id !== "string" || !Array.isArray(s.history)) return false;
+  if (!isRecord(v) || !isRecord(v.metadata) || !Array.isArray(v.history)) return false;
+  if (typeof v.metadata.id !== "string") return false;
   // Deep guard: a corrupt entry (null, wrong role, missing content) must fail
   // lookup, not crash restore when HistoryStore dereferences role/content.
-  for (const entry of s.history as unknown[]) {
-    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return false;
-    const msg = entry as { role?: unknown; content?: unknown };
-    if (msg.role !== "user" && msg.role !== "assistant") return false;
-    if (!Array.isArray(msg.content)) return false;
+  for (const entry of v.history) {
+    if (!isRecord(entry) || (entry.role !== "user" && entry.role !== "assistant")) return false;
+    if (!Array.isArray(entry.content)) return false;
+    for (const part of entry.content) {
+      if (!isRecord(part)) return false;
+      if (part.type === "text") {
+        if (typeof part.text !== "string") return false;
+      } else if (part.type === "image") {
+        if (typeof part.mediaType !== "string" || typeof part.data !== "string") return false;
+      } else if (part.type === "tool_call") {
+        if (!isRecord(part.call) || typeof part.call.id !== "string" || typeof part.call.name !== "string") return false;
+      } else if (part.type === "tool_result") {
+        if (!isRecord(part.result) || typeof part.result.toolCallId !== "string" || typeof part.result.content !== "string") return false;
+        if (part.result.isError !== undefined && typeof part.result.isError !== "boolean") return false;
+      } else {
+        return false;
+      }
+    }
   }
   return true;
 }
@@ -43,7 +57,8 @@ export function saveSession(session: StoredSession, dir: string = SESSIONS_DIR()
   if (!SAFE_ID_RE.test(session.metadata.id)) {
     throw new Error(`Refusing to save session with unsafe id: ${session.metadata.id}`);
   }
-  atomicWriteJson(path.join(dir, `${session.metadata.id}.json`), session);
+  // Conversations can contain credentials in user text and tool output.
+  atomicWriteJson(path.join(dir, `${session.metadata.id}.json`), session, { mode: 0o600 });
 }
 
 export function loadSession(id: string, dir: string = SESSIONS_DIR()): StoredSession | null {

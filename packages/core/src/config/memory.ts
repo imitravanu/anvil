@@ -3,6 +3,7 @@ import path from "node:path";
 import { resolveWithinRoot } from "../tools/paths.js";
 import type { ProjectRules } from "./rules.js";
 import { MAX_MEMORY_BYTES } from "./constants.js";
+import { atomicWriteTextSync, withFileLockSync } from "../atomicWrite.js";
 
 export { MAX_MEMORY_BYTES };
 export const MEMORY_RELATIVE_PATH = ".anvil/memory.md";
@@ -75,22 +76,6 @@ export function loadProjectMemory(projectRoot: string): ProjectMemory | null {
  * Throws if the entry alone exceeds the cap — refusing beats silently corrupting.
  */
 export function appendToMemory(projectRoot: string, entry: string): void {
-  const anvilDir = path.join(projectRoot, ".anvil");
-  if (!fs.existsSync(anvilDir)) {
-    fs.mkdirSync(anvilDir, { recursive: true });
-  }
-
-  // Auto-create .anvil/.gitignore to exclude memory.md by default
-  const gitignorePath = path.join(anvilDir, ".gitignore");
-  if (!fs.existsSync(gitignorePath)) {
-    try {
-      fs.writeFileSync(gitignorePath, "memory.md\n", "utf8");
-    } catch {
-      // intentional: non-fatal if gitignore write fails — memory still saves.
-    }
-  }
-
-  const memoryFile = path.join(projectRoot, MEMORY_RELATIVE_PATH);
   const timestamp = new Date().toISOString();
   const header = `### [${timestamp}]\n`;
   const newSection = `${header}${entry.trim()}\n`;
@@ -101,32 +86,50 @@ export function appendToMemory(projectRoot: string, entry: string): void {
     );
   }
 
-  const fileExists = fs.existsSync(memoryFile);
-  const existing = fileExists ? fs.readFileSync(memoryFile, "utf8") : "";
-  const appended = `${fileExists ? "\n\n" : ""}${newSection}`;
-
-  if (Buffer.byteLength(existing, "utf8") + Buffer.byteLength(appended, "utf8") <= MAX_MEMORY_BYTES) {
-    fs.appendFileSync(memoryFile, appended, "utf8");
-    return;
+  // Validate before creating anything: a repository-controlled .anvil link
+  // must not redirect the memory write outside the project.
+  const memoryFile = resolveWithinRoot(projectRoot, MEMORY_RELATIVE_PATH);
+  const anvilDir = path.dirname(memoryFile);
+  fs.mkdirSync(anvilDir, { recursive: true, mode: 0o700 });
+  resolveWithinRoot(projectRoot, MEMORY_RELATIVE_PATH);
+  const gitignorePath = resolveWithinRoot(projectRoot, ".anvil/.gitignore");
+  if (!fs.existsSync(gitignorePath)) {
+    try {
+      atomicWriteTextSync(gitignorePath, "memory.md\n", { mode: 0o600 });
+    } catch {
+      // intentional: non-fatal if gitignore write fails — memory still saves.
+    }
   }
 
-  // Over cap: rebuild keeping only the newest sections that fit (oldest
-  // dropped). Section separators are "\n\n"; the final content is
-  //   kept[0] \n\n kept[1] \n\n … \n\n newSection
-  const sections = splitMemorySections(existing);
-  // total tracks (bytes of kept sections so far + one separator each) plus
-  // the trailing separator before newSection. Greedy, newest-first.
-  let total = Buffer.byteLength(newSection, "utf8");
-  const kept: string[] = []; // newest-first accumulation
-  for (let i = sections.length - 1; i >= 0; i--) {
-    const sectionBytes = Buffer.byteLength(sections[i], "utf8");
-    if (total + sectionBytes + 2 > MAX_MEMORY_BYTES) break;
-    total += sectionBytes + 2;
-    kept.push(sections[i]); // sections[i] is older than what's already kept
-  }
-  const rewritten =
-    kept.length > 0 ? `${kept.reverse().join("\n\n")}\n\n${newSection}` : newSection;
-  fs.writeFileSync(memoryFile, rewritten, "utf8");
+  withFileLockSync(memoryFile, () => {
+    resolveWithinRoot(projectRoot, MEMORY_RELATIVE_PATH);
+    const fileExists = fs.existsSync(memoryFile);
+    const existing = fileExists ? fs.readFileSync(memoryFile, "utf8") : "";
+    const appended = `${fileExists ? "\n\n" : ""}${newSection}`;
+
+    if (Buffer.byteLength(existing, "utf8") + Buffer.byteLength(appended, "utf8") <= MAX_MEMORY_BYTES) {
+      atomicWriteTextSync(memoryFile, existing + appended, { mode: 0o600 });
+      return;
+    }
+
+    // Over cap: rebuild keeping only the newest sections that fit (oldest
+    // dropped). Section separators are "\n\n"; the final content is
+    //   kept[0] \n\n kept[1] \n\n … \n\n newSection
+    const sections = splitMemorySections(existing);
+    // total tracks (bytes of kept sections so far + one separator each) plus
+    // the trailing separator before newSection. Greedy, newest-first.
+    let total = Buffer.byteLength(newSection, "utf8");
+    const kept: string[] = []; // newest-first accumulation
+    for (let i = sections.length - 1; i >= 0; i--) {
+      const sectionBytes = Buffer.byteLength(sections[i], "utf8");
+      if (total + sectionBytes + 2 > MAX_MEMORY_BYTES) break;
+      total += sectionBytes + 2;
+      kept.push(sections[i]); // sections[i] is older than what's already kept
+    }
+    const rewritten =
+      kept.length > 0 ? `${kept.reverse().join("\n\n")}\n\n${newSection}` : newSection;
+    atomicWriteTextSync(memoryFile, rewritten, { mode: 0o600 });
+  });
 }
 
 /** Section header line begins a new entry. Files written by us always start

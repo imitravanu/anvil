@@ -43,6 +43,7 @@ export class AgentSession {
   private currentController: AbortController | null = null;
   private pendingCancel = false;
   private isSending = false;
+  private isRewinding = false;
   private provider: ModelProvider;
   private options: AgentOptions;
   // The previous turn's input token count — compaction uses it reactively.
@@ -316,11 +317,19 @@ export class AgentSession {
     restored: string[];
     deleted: string[];
     errors: string[];
-    /** Targets edited on disk outside this session — restored anyway, reported. */
+    /** Targets edited on disk outside this session — preserved, not restored. */
     externallyModified: string[];
     message: string;
   }> {
-    return this.rewindRing.rewind(id);
+    if (this.isSending || this.isRewinding) {
+      throw new Error("Cannot rewind while another turn or rewind is in progress.");
+    }
+    this.isRewinding = true;
+    try {
+      return await this.rewindRing.rewind(id);
+    } finally {
+      this.isRewinding = false;
+    }
   }
 
   private recordLedger(
@@ -374,6 +383,10 @@ export class AgentSession {
   ): AsyncGenerator<AgentEvent> {
     if (this.isSending) {
       yield { type: "error", message: "A turn is already in progress for this session." };
+      return;
+    }
+    if (this.isRewinding) {
+      yield { type: "error", message: "A rewind is already in progress for this session." };
       return;
     }
     if (userText.trim().length === 0 && images.length === 0) {
@@ -472,7 +485,7 @@ export class AgentSession {
             stopReason,
             signal: controller.signal,
             recordLedger: (e) => this.recordLedger(e),
-            pushRepairPrompt: (msg) => this.history.pushUserText(msg),
+            pushRepairPrompt: (msg) => this.history.pushInternalRepairPrompt(msg),
             onSuccess: () => recordSuccess(this.provider.id, this.options.model),
           });
           if (completion.action === "continue") {
@@ -502,7 +515,9 @@ export class AgentSession {
           rules: this.guardianRules,
           recordLedger: (entry) => this.recordLedger(entry),
         });
-        if (guardian.repairPrompt) this.history.pushUserText(guardian.repairPrompt);
+        // Tool results must directly follow assistant tool calls in provider
+        // history. Keep the repair instruction with those results, after them.
+        if (guardian.repairPrompt) turnNotes.push(guardian.repairPrompt);
         const guardianBlocked = guardian.blocked;
         for (const [id, result] of guardian.handled) handled.set(id, result);
         if (guardian.event) yield guardian.event;

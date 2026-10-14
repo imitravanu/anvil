@@ -19,7 +19,7 @@ export interface RewindResult {
   restored: string[];
   deleted: string[];
   errors: string[];
-  /** Targets edited on disk outside this session — restored anyway, reported. */
+  /** Targets edited on disk outside this session — preserved, not restored. */
   externallyModified: string[];
   message: string;
 }

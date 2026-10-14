@@ -279,7 +279,7 @@ const READ_ONLY_BINARIES = new Set([
 // they would read arbitrary host files with no prompt (`cat ~/.ssh/id_rsa`)
 // — the exact hole the read_file tool's path containment exists to close —
 // so their path arguments must resolve inside the project root.
-const FILE_READER_BINARIES = new Set(["ls", "cat", "head", "tail", "wc", "file", "stat", "du", "tree"]);
+const FILE_READER_BINARIES = new Set(["ls", "cat", "head", "tail", "wc", "file", "stat", "du", "tree", "date"]);
 
 function stripShellQuotes(s: string): string {
   // Remove matching outer quotes (single or double)

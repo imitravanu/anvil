@@ -2,6 +2,31 @@
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
+> **DONE 2026-10-14 — chief-engineer corrective pass (Codex).** Read-only audit
+> against clean `master` found live trust and completion defects outside the completed
+> Phase 21–25 roadmap: Guardian tool-result ordering, incomplete model replies marked
+> successful, memory and diagnostics trust boundaries, MCP call replay, private session
+> storage, rewind overwriting external edits, and a shell safe-list gap.
+> **Files owned for this pass:** `packages/core/src/agent/{session,historyStore,turnVerifier,checkpoints,rewindRing}.ts`,
+> `packages/core/src/config/memory.ts`, `packages/core/src/lsp/tools.ts`,
+> `packages/core/src/mcp/client.ts`, `packages/core/src/session/store.ts`,
+> `packages/core/src/atomicWrite.ts`,
+> `packages/core/src/tools/bash.ts`, their paired tests, `packages/tui/src/util/rewind.ts`,
+> `packages/tui/src/commands/handlers/media.ts`, `packages/cli/src/{index.tsx,args.ts,gate.ts}`,
+> their paired tests, and this file. No protected artifact is in scope.
+> Repair: Guardian repair notes now follow tool results; incomplete model output
+> reports an error; diagnostics need approval; a lost MCP tool reply is never
+> replayed automatically; project memory stays inside the root; saved sessions
+> use private file mode and reject malformed history; rewind preserves external
+> edits and restores legitimate deletions; shell file readers include `date`.
+> First-run onboarding resumes the requested prompt or goal; image reads are
+> bounded and reject special files; the native gate fails closed on unscanned
+> untracked files, polls for missed watch events, and rejects subcommand typos.
+> Internal verification prompts no longer become `/retry` anchors.
+> Verification: full `npm run gate` passed Steps 0–5 (204 CLI, 1089 core,
+> 407 TUI unit tests; 25/25 offline mock evals). Protected release workflow
+> changes remain a separate human-review item under AGENTS.md §3.4.
+>
 > **DONE 2026-10-10 (9) (chief-engineer takeover — v1.3.0: the first real release):**
 > Understand: "what are you waiting for" → ship it. The release surfaced three layers of hidden state,
 > each fixed in order: (1) CORE_VERSION had drifted from package.json (docTruth now pins all three
@@ -4958,4 +4983,3 @@ typecheck, but the gate's real `tsc` caught `atomicWriteText(string)` being hand
 snapshot. The fix (`atomicWriteBuffer`, byte-exact for binary snapshots) was applied, the gate
 re-run fully green (1,211 tests), and the broken commit amended in place before anything shipped.
 Lesson recorded: gate exit codes gate the commit, never the other way around.
-

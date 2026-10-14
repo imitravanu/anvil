@@ -103,26 +103,38 @@ describe("rewind checkpoints", () => {
     expect(fs.existsSync(file)).toBe(false);
   });
 
-  it("restore replaces a symlink at the target instead of writing through it", async () => {
+  it("restores a file the session deleted when its recorded post-state is absent", async () => {
+    const file = path.join(tmp, "deleted.txt");
+    const original = Buffer.from("original");
+    const cp: Checkpoint = {
+      id: 1,
+      ts: "now",
+      skipped: 0,
+      files: [{ path: file, content: original, postHash: null }],
+    };
+    const result = await restoreCheckpoint(tmp, cp);
+    expect(result.errors).toEqual([]);
+    expect(result.restored).toEqual([file]);
+    expect(fs.readFileSync(file)).toEqual(original);
+  });
+
+  it("refuses a symlink swapped in after the agent wrote the target", async () => {
     const file = path.join(tmp, "a.txt");
     fs.writeFileSync(file, "original");
     const { session } = newSession([writeTurn(file, "NEW", "w0"), textTurn()]);
     await runOneTurn(session);
 
-    // After the turn, swap the target for a symlink pointing OUTSIDE the
-    // project. The restore must rename over the link (like write_file's atomic
-    // write does), never follow it — plain writeFile would have dropped the
-    // restored bytes outside the project through the link.
+    // A swapped link is an external change. Rewind preserves it and never
+    // follows it into the outside target.
     const outside = path.join(tmp, "..", `anvil-rewind-outside-${process.pid}.txt`);
     fs.rmSync(outside, { force: true });
     fs.rmSync(file);
     fs.symlinkSync(outside, file);
 
     const result = await session.rewind(1);
-    expect(result.ok).toBe(true);
-    expect(fs.lstatSync(file).isSymbolicLink()).toBe(false);
+    expect(result.ok).toBe(false);
+    expect(fs.lstatSync(file).isSymbolicLink()).toBe(true);
     expect(fs.existsSync(outside)).toBe(false);
-    expect(fs.readFileSync(file, "utf-8")).toBe("original");
     expect(fs.readdirSync(tmp).filter((f) => f.includes(".tmp."))).toEqual([]);
     fs.rmSync(outside, { force: true });
   });
@@ -422,7 +434,7 @@ describe("S1.3: checkpoints reflect reality", () => {
     expect(fs.readFileSync(bad, "utf-8")).toBe("bad-orig");
   });
 
-  it("S1.3/F5: says so when a rewound target changed on disk outside the session", async () => {
+  it("preserves a target changed outside the session", async () => {
     const file = path.join(tmp, "a.txt");
     fs.writeFileSync(file, "original");
     const { session } = makeSession([writeTurn(file, "NEW", "w0"), textTurn()]);
@@ -433,13 +445,13 @@ describe("S1.3: checkpoints reflect reality", () => {
 
     const result = await session.rewind(1);
 
-    expect(result.ok).toBe(true);
-    // Restore still happens — the warning is a report, not a refusal.
-    expect(fs.readFileSync(file, "utf-8")).toBe("original");
+    expect(result.ok).toBe(false);
+    expect(result.restored).toEqual([]);
+    expect(fs.readFileSync(file, "utf-8")).toBe("EXTERNAL");
     expect(result.externallyModified).toEqual([file]);
   });
 
-  it("S1.3/F6: reports an externally deleted target instead of silently recreating it", async () => {
+  it("preserves an externally deleted target", async () => {
     const file = path.join(tmp, "a.txt");
     fs.writeFileSync(file, "original");
     const { session } = makeSession([writeTurn(file, "NEW", "w0"), textTurn()]);
@@ -448,9 +460,9 @@ describe("S1.3: checkpoints reflect reality", () => {
 
     const result = await session.rewind(1);
 
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
     expect(result.externallyModified).toEqual([file]);
-    expect(fs.readFileSync(file, "utf-8")).toBe("original");
+    expect(fs.existsSync(file)).toBe(false);
   });
 
   it("S1.3: the session's own later edits are not reported as external", async () => {
@@ -485,18 +497,17 @@ describe("S1.3: checkpoints reflect reality", () => {
     expect(result.externallyModified).toEqual([]);
   });
 
-  it("S1.3: a snapshot with no recorded post-state reports nothing (never guesses)", async () => {
+  it("preserves a target when a legacy snapshot has no post-state", async () => {
     const file = path.join(tmp, "a.txt");
     fs.writeFileSync(file, "original");
-    // Snapshotted directly, so no commit ever recorded a post-state for it:
-    // with nothing to compare against, claiming an external edit would be a
-    // fabrication, so the honest answer is silence.
+    // No committed post-state means the current bytes cannot be verified.
     const cp = await takeSnapshot(tmp, 1, [file]);
     fs.writeFileSync(file, "CHANGED-BUT-UNKNOWABLE");
 
     const result = await restoreCheckpoint(tmp, cp);
 
     expect(result.externallyModified).toEqual([]);
-    expect(fs.readFileSync(file, "utf-8")).toBe("original");
+    expect(result.errors).toEqual([expect.stringContaining("cannot be verified")]);
+    expect(fs.readFileSync(file, "utf-8")).toBe("CHANGED-BUT-UNKNOWABLE");
   });
 });

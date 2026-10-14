@@ -10,6 +10,7 @@ import type { AccumulatedToolCall, PreparedCall } from "./loopGuard.js";
  */
 export const UNANSWERED_TURN_NOTICE =
   "[No assistant response was recorded for the previous turn.]";
+const INTERNAL_REPAIR_PREFIX = "[Automated Test Verification Failed]";
 
 /**
  * Sole writer of the conversation history array. Owns the append invariants:
@@ -39,8 +40,13 @@ export class HistoryStore {
         m.role === "user" &&
         !m.content.some((c) => c.type === "tool_result") &&
         m.content.some((c) => c.type === "text") &&
-        !(m.content.find((c) => c.type === "text") as { text: string }).text.startsWith(
-          "[Earlier conversation summary"
+        !(
+          (m.content.find((c) => c.type === "text") as { text: string }).text.startsWith(
+            "[Earlier conversation summary"
+          ) ||
+          (m.content.find((c) => c.type === "text") as { text: string }).text.startsWith(
+            INTERNAL_REPAIR_PREFIX
+          )
         )
       ) {
         this.userTurnIndices.push(i);
@@ -59,6 +65,7 @@ export class HistoryStore {
 
   replaceAll(messages: ConversationMessage[]): void {
     this.messages = [...messages];
+    this.rescanUserTurns();
   }
 
   clear(): void {
@@ -109,6 +116,12 @@ export class HistoryStore {
       role: "user",
       content: [...newImages, { type: "text", text }],
     });
+  }
+
+  /** Internal verification feedback is provider context, never a /retry anchor. */
+  pushInternalRepairPrompt(text: string): void {
+    this.closeOpenTurn();
+    this.messages.push({ role: "user", content: [{ type: "text", text }] });
   }
 
   /**

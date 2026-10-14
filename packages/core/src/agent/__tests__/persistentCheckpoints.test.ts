@@ -160,8 +160,8 @@ describe("persistent checkpoints", () => {
 
     const result = await sessionB.rewind(cpId);
 
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
     expect(result.externallyModified).toEqual(["novel.txt"]);
-    expect(await fs.readFile(path.join(root, "novel.txt"), "utf8")).toBe("original text");
+    expect(await fs.readFile(path.join(root, "novel.txt"), "utf8")).toBe("edited in another window");
   });
 });

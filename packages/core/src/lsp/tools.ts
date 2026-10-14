@@ -218,7 +218,9 @@ export const getDiagnosticsDef: ToolDefinition = {
       path: { type: "string", description: "File or directory relative to project root (default: project root)" },
     },
   },
-  mutating: false,
+  // The fallback runs the project's npx/tsc executable, which can execute
+  // arbitrary repository code. It needs the same approval as verify_tests.
+  mutating: true,
 };
 
 export const getDiagnosticsExec: ToolExecutor = async (input, ctx: ToolContext) => {

@@ -40,6 +40,22 @@ describe("HistoryStore.pushToolResults", () => {
 });
 
 describe("HistoryStore.pushUserText", () => {
+  it("keeps internal verification feedback out of /retry, including after restore", () => {
+    const h = new HistoryStore();
+    h.pushUserText("fix my code");
+    h.pushAssistant(["done"], []);
+    h.pushInternalRepairPrompt("[Automated Test Verification Failed]\nrepair it");
+    h.pushAssistant(["repaired"], []);
+    expect(h.popLastUserTurn()).toBe("fix my code");
+
+    const restored = new HistoryStore([
+      { role: "user", content: [{ type: "text", text: "fix my code" }] },
+      { role: "assistant", content: [{ type: "text", text: "done" }] },
+      { role: "user", content: [{ type: "text", text: "[Automated Test Verification Failed]\nrepair it" }] },
+      { role: "assistant", content: [{ type: "text", text: "repaired" }] },
+    ]);
+    expect(restored.popLastUserTurn()).toBe("fix my code");
+  });
   it("folds into a trailing user turn when the previous assistant turn was empty (N-1)", () => {
     const h = new HistoryStore();
     h.pushUserText("first");

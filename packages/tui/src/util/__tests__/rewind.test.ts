@@ -31,17 +31,17 @@ describe("formatRewindResult", () => {
     ).toBe("✗ Rewind failed. No checkpoint #9 in this session.");
   });
 
-  it("says so when a target changed on disk, without turning success into failure", () => {
+  it("says that conflicting edits were preserved", () => {
     const out = formatRewindResult({
-      ok: true,
-      restored: ["a"],
+      ok: false,
+      restored: [],
       deleted: [],
-      errors: [],
-      message: "restored 1: a",
+      errors: ["a: changed outside this session; preserved"],
+      message: "errors: a changed outside this session; preserved",
       externallyModified: ["a"],
     });
-    expect(out.startsWith("✓ Rewound.")).toBe(true);
-    expect(out).toContain("changed on disk");
+    expect(out.startsWith("✗ Rewind failed.")).toBe(true);
+    expect(out).toContain("Preserved 1 file");
     expect(out).toContain("a");
   });
 

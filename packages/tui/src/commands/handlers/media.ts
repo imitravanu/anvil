@@ -37,21 +37,37 @@ export function readImageForAttachment(rawPath: string): ImageReadResult {
   const tooLarge = (bytes: number): string =>
     `Image too large (${Math.ceil(bytes / 1024)} KB) — max ${IMAGE_MAX_BYTES / (1024 * 1024)} MB.`;
 
+  let fd: number | undefined;
   try {
-    // Check the SIZE BEFORE the read. Reading first and testing the buffer
-    // afterward meant a 2 GB file (or /dev/zero) allocated unbounded memory
-    // before the cap could fire, so the cap bounded nothing. Special files
-    // report size 0 and still rely on the post-read check below.
-    const size = fs.statSync(p).size;
-    if (size > IMAGE_MAX_BYTES) return { ok: false, error: tooLarge(size) };
-    const buf = fs.readFileSync(p);
-    if (buf.length > IMAGE_MAX_BYTES) return { ok: false, error: tooLarge(buf.length) };
+    // O_NONBLOCK prevents a FIFO from hanging the UI before fstat can reject it.
+    fd = fs.openSync(p, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK);
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile()) return { ok: false, error: "Image path must be a regular file." };
+    if (stat.size > IMAGE_MAX_BYTES) return { ok: false, error: tooLarge(stat.size) };
+    // A concurrent writer can grow a file after fstat; bound bytes actually read.
+    const data = Buffer.allocUnsafe(IMAGE_MAX_BYTES + 1);
+    let bytes = 0;
+    while (bytes < data.length) {
+      const count = fs.readSync(fd, data, bytes, data.length - bytes, null);
+      if (count === 0) break;
+      bytes += count;
+    }
+    if (bytes > IMAGE_MAX_BYTES) return { ok: false, error: tooLarge(bytes) };
+    const buf = data.subarray(0, bytes);
     return {
       ok: true,
       image: { mediaType, data: buf.toString("base64"), path: p, bytes: buf.length },
     };
   } catch (err: unknown) {
     return { ok: false, error: `Could not read image: ${getErrorMessage(err)}` };
+  } finally {
+    if (fd !== undefined) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        // intentional: read outcome is already decided; closing cannot improve it.
+      }
+    }
   }
 }
 

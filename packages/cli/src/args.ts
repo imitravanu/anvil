@@ -34,6 +34,7 @@ export type Invocation =
   | { kind: "health" }
   | { kind: "init"; lang: string | undefined }
   | { kind: "init-usage-error" }
+  | { kind: "subcommand-usage-error"; subcommand: string; argument: string }
   | { kind: "run" };
 
 /**
@@ -55,6 +56,7 @@ export function resolveInvocation(
   // that consume a value are skipped WITH their value, so `-p "gate"` is a
   // prompt, never a subcommand.
   let first: string | undefined;
+  let firstIndex = -1;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (VALUE_FLAGS.has(a)) {
@@ -63,11 +65,30 @@ export function resolveInvocation(
     }
     if (a.startsWith("-")) continue;
     first = a;
+    firstIndex = i;
     break;
   }
 
+  if (first === "config" || first === "gate" || first === "health" || first === "init") {
+    const allowed = new Set(
+      first === "gate" ? ["--verbose", "--no-mcp", "--watch", "--full", "--staged"]
+        : first === "init" ? ["--verbose", "--no-mcp", "--guarded", "--lang"]
+          : ["--verbose", "--no-mcp"]
+    );
+    for (let i = 0; i < argv.length; i++) {
+      if (i === firstIndex) continue;
+      const arg = argv[i]!;
+      if (!allowed.has(arg)) {
+        return { kind: "subcommand-usage-error", subcommand: first, argument: arg };
+      }
+      if (arg === "--lang") i++;
+    }
+  }
   if (first === "config") return { kind: "setup", thenChat: false };
   if (first === "gate") {
+    if (argv.includes("--full") && (argv.includes("--watch") || argv.includes("--staged"))) {
+      return { kind: "subcommand-usage-error", subcommand: "gate", argument: "--full with --watch/--staged" };
+    }
     return {
       kind: "gate",
       watch: argv.includes("--watch"),

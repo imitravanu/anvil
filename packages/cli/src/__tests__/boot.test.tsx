@@ -35,6 +35,8 @@ const headlessCalls: { prompt: string; opts: Record<string, unknown> }[] = [];
 const goalCalls: { goal: string; opts: Record<string, unknown> }[] = [];
 let headlessCode = 0;
 let goalCode = 0;
+let headlessPending = false;
+let goalPending = false;
 
 vi.mock("ink", () => ({
   render: vi.fn((element: { type: unknown; props: Record<string, unknown> }) => {
@@ -48,6 +50,7 @@ vi.mock("../headless.js", () => ({
   readStdin: vi.fn(async () => ""),
   runHeadless: vi.fn(async (opts: Record<string, unknown>) => {
     headlessCalls.push({ prompt: String(opts.prompt ?? ""), opts });
+    if (headlessPending) return new Promise<number>(() => {});
     return headlessCode;
   }),
 }));
@@ -55,6 +58,7 @@ vi.mock("../headless.js", () => ({
 vi.mock("../goalRunner.js", () => ({
   runGoalHeadless: vi.fn(async (opts: Record<string, unknown>) => {
     goalCalls.push({ goal: String(opts.goal ?? ""), opts });
+    if (goalPending) return new Promise<number>(() => {});
     return goalCode;
   }),
 }));
@@ -89,6 +93,8 @@ beforeEach(() => {
   goalCalls.length = 0;
   headlessCode = 0;
   goalCode = 0;
+  headlessPending = false;
+  goalPending = false;
   vi.resetModules();
   home = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-boot-"));
   originalHome = process.env.ANVIL_HOME;
@@ -265,6 +271,38 @@ describe("boot paths", () => {
       const chatProps = renderCalls[renderCalls.length - 1]!.element!.props;
       expect(chatProps.providerId).toBe("anthropic");
       expect(exit).toEqual([]);
+    } finally {
+      if (tty) Object.defineProperty(process.stdin, "isTTY", tty);
+      else delete (process.stdin as { isTTY?: boolean }).isTTY;
+      restoreEnv();
+    }
+  });
+
+  it.each([
+    { argv: ["-p", "fix onboarding", "--no-mcp"], mode: "prompt" },
+    { argv: ["-g", "ship onboarding", "--no-mcp"], mode: "goal" },
+  ])("first-run setup resumes the requested $mode", async ({ argv, mode }) => {
+    const restoreEnv = withoutProviderEnv();
+    const tty = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+    Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
+    headlessPending = true;
+    goalPending = true;
+    try {
+      await runEntry(argv);
+      expect(renderCalls).toHaveLength(1);
+      writeCreds({ anthropicApiKey: "sk-test" });
+      (renderCalls[0]!.element!.props.onDone as (providerId: string) => void)("anthropic");
+      for (let i = 0; i < 100 && headlessCalls.length + goalCalls.length === 0; i++) {
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      expect(renderCalls[0]!.unmount).toHaveBeenCalled();
+      if (mode === "prompt") {
+        expect(headlessCalls[0]?.prompt).toBe("fix onboarding");
+        expect(goalCalls).toHaveLength(0);
+      } else {
+        expect(goalCalls[0]?.goal).toBe("ship onboarding");
+        expect(headlessCalls).toHaveLength(0);
+      }
     } finally {
       if (tty) Object.defineProperty(process.stdin, "isTTY", tty);
       else delete (process.stdin as { isTTY?: boolean }).isTTY;

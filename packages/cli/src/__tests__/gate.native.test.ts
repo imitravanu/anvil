@@ -3,7 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { runNativeGate } from "../gate.js";
+import { runNativeGate, scanWorkingTree } from "../gate.js";
+import { GATE_DIFF_MAX_BUFFER_BYTES } from "@anvil/core";
 
 function git(cwd: string, ...args: string[]): void {
   execFileSync("git", ["-c", "user.email=t@t.t", "-c", "user.name=t", ...args], {
@@ -149,5 +150,28 @@ describe("runNativeGate (in-process scan)", () => {
     const out = io.stdout();
     expect(out).toContain("fresh.ts:1");
     expect(out).not.toContain("__tests__/fresh.test.ts:1");
+  });
+
+  it("fails closed when an untracked file is too large to scan", () => {
+    const dir = tmp();
+    git(dir, "init", "-q");
+    fs.writeFileSync(path.join(dir, "base.ts"), "export const base = 1;\n");
+    git(dir, "add", "base.ts");
+    git(dir, "commit", "-qm", "init");
+    fs.writeFileSync(path.join(dir, "large.ts"), "");
+    fs.truncateSync(path.join(dir, "large.ts"), GATE_DIFF_MAX_BUFFER_BYTES + 1);
+    const scan = scanWorkingTree(dir);
+    expect(scan.error).toContain("diff size limit");
+  });
+
+  it("fails closed on an untracked symlink instead of following it", () => {
+    const dir = tmp();
+    git(dir, "init", "-q");
+    fs.writeFileSync(path.join(dir, "base.ts"), "export const base = 1;\n");
+    git(dir, "add", "base.ts");
+    git(dir, "commit", "-qm", "init");
+    fs.symlinkSync(path.join(dir, "base.ts"), path.join(dir, "link.ts"));
+    const scan = scanWorkingTree(dir);
+    expect(scan.error).toContain("non-regular untracked file");
   });
 });

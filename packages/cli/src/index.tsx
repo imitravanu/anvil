@@ -446,7 +446,7 @@ function runSetup(thenChat: boolean): void {
         }
         instance?.unmount();
         appInstance = null;
-        if (thenChat) void bootChat(parseFlags(process.argv.slice(2)));
+        if (thenChat) void runFromFlags(parseFlags(process.argv.slice(2)));
         else exitAltScreen();
       }}
     />,
@@ -548,6 +548,9 @@ switch (invocation.kind) {
     process.exit(runHealth({}));
   case "init-usage-error":
     console.error("Usage: anvil init --guarded [--lang <typescript|python|rust|go>]");
+    process.exit(1);
+  case "subcommand-usage-error":
+    console.error(`Unexpected argument for anvil ${invocation.subcommand}: ${invocation.argument}`);
     process.exit(1);
   case "init":
     // Phase 25.6 — `anvil init --guarded [--lang <id>]` provisions repo gates.

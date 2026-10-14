@@ -1,6 +1,7 @@
 import { getErrorMessage } from "../errors.js";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
+import { constants as FS_CONSTANTS } from "node:fs";
 import path from "node:path";
 import { createTwoFilesPatch } from "diff";
 import { resolveWithinRoot } from "../tools/paths.js";
@@ -125,8 +126,7 @@ export interface RestoreResult {
   errors: string[];
   /**
    * Targets whose on-disk bytes differ from the last state this session left
-   * them in — i.e. edited outside the session. Advisory only: the restore
-   * still happens, the caller tells the user.
+   * them in. These are preserved, and the restore is refused.
    */
   externallyModified: string[];
 }
@@ -189,33 +189,49 @@ export async function restoreCheckpoint(
   const errors: string[] = [];
   const externallyModified: string[] = [];
 
-  // Detect out-of-band edits BEFORE restoring: once the originals are written
-  // back the evidence is gone. A target with no recorded post-state is skipped
-  // deliberately — with nothing to compare against, reporting an external edit
-  // would be a guess, and a wrong warning is worse than a silent one.
+  // A rewind must never erase later user edits. Preflight the whole checkpoint
+  // before changing any target; legacy snapshots without a post-state cannot
+  // prove the current file still belongs to this session.
   for (const f of cp.files) {
     const { known, hash } = latestPostState(sessionState, f.path);
-    if (!known) continue;
-    let checkPath: string;
-    try {
-      checkPath = resolveWithinRoot(projectRoot, f.path);
-    } catch {
-      continue; // the write loop below reports the escape
+    if (!known) {
+      errors.push(`${f.path}: current file state cannot be verified; preserved`);
+      continue;
     }
-    let current: string | null;
+    let resolved: string;
     try {
-      current = hashBytes(await fs.readFile(checkPath));
+      resolved = resolveWithinRoot(projectRoot, f.path);
     } catch {
-      current = null; // gone now: that IS a change from any recorded bytes
+      // intentional: report the unsafe path in the result without touching it.
+      errors.push(`${f.path}: path escapes project root`);
+      continue;
     }
-    if (current !== hash) externallyModified.push(f.path);
+    const current = await restoreTargetHash(resolved);
+    if (current === undefined) {
+      errors.push(`${f.path}: current file is unreadable or is not a regular file; preserved`);
+    } else if (current !== hash) {
+      externallyModified.push(f.path);
+      errors.push(`${f.path}: changed outside this session; preserved`);
+    }
   }
+  if (errors.length > 0) return { restored, deleted, errors, externallyModified };
+
   for (const f of cp.files) {
     let resolved: string;
     try {
       resolved = resolveWithinRoot(projectRoot, f.path);
     } catch {
+      // intentional: preserve the file and report the unsafe restore path.
       errors.push(`${f.path}: path escapes project root`);
+      continue;
+    }
+    // Check again immediately before writing: another editor may have saved
+    // after the batch preflight. A remaining check/use race is an OS limit.
+    const expected = latestPostState(sessionState, f.path).hash;
+    const current = await restoreTargetHash(resolved);
+    if (current === undefined || current !== expected) {
+      externallyModified.push(f.path);
+      errors.push(`${f.path}: changed while rewinding; preserved`);
       continue;
     }
     try {
@@ -246,6 +262,34 @@ export async function restoreCheckpoint(
     }
   }
   return { restored, deleted, errors, externallyModified };
+}
+
+/** `undefined` means unreadable, non-file, or too large to verify safely. */
+async function restoreTargetHash(resolved: string): Promise<string | null | undefined> {
+  let handle: fs.FileHandle | undefined;
+  try {
+    handle = await fs.open(
+      resolved,
+      FS_CONSTANTS.O_RDONLY | FS_CONSTANTS.O_NONBLOCK | (FS_CONSTANTS.O_NOFOLLOW ?? 0)
+    );
+    const stat = await handle.stat();
+    if (!stat.isFile() || stat.size > CHECKPOINT_FILE_MAX) return undefined;
+    const data = Buffer.allocUnsafe(CHECKPOINT_FILE_MAX + 1);
+    let bytes = 0;
+    while (bytes < data.length) {
+      const { bytesRead } = await handle.read(data, bytes, data.length - bytes, null);
+      if (bytesRead === 0) break;
+      bytes += bytesRead;
+    }
+    return bytes > CHECKPOINT_FILE_MAX ? undefined : hashBytes(data.subarray(0, bytes));
+  } catch (err: unknown) {
+    // intentional: a missing target has a null hash; other read failures are
+    // unverifiable and must prevent rewind.
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    return undefined;
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
 }
 
 // ---------------------------------------------------------------------------

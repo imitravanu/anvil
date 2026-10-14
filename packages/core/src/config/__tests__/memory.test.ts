@@ -113,6 +113,26 @@ describe("appendToMemory", () => {
     // Nothing was written (the throw happens before any file I/O).
     expect(fs.existsSync(path.join(tmpDir, ".anvil", "memory.md"))).toBe(false);
   });
+
+  it("refuses a project .anvil symlink that points outside the project", () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-memory-outside-"));
+    try {
+      fs.symlinkSync(outside, path.join(tmpDir, ".anvil"), "dir");
+      expect(() => appendToMemory(tmpDir, "do not escape")).toThrow(/escapes project root/);
+      expect(fs.readdirSync(outside)).toEqual([]);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("replaces a broken memory-file symlink without writing outside the project", () => {
+    const outside = path.join(os.tmpdir(), `anvil-memory-escape-${process.pid}-${Date.now()}`);
+    fs.mkdirSync(path.join(tmpDir, ".anvil"));
+    fs.symlinkSync(outside, path.join(tmpDir, ".anvil", "memory.md"));
+    appendToMemory(tmpDir, "safe note");
+    expect(fs.existsSync(outside)).toBe(false);
+    expect(fs.lstatSync(path.join(tmpDir, ".anvil", "memory.md")).isFile()).toBe(true);
+  });
 });
 
 describe("buildSystemPromptWithMemory", () => {

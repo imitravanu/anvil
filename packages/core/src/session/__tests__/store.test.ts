@@ -27,10 +27,13 @@ function makeStored(id: string, title: string, updatedAt: string): StoredSession
 }
 
 describe("session store", () => {
-  it("save → load round-trip preserves content exactly", () => {
+  it("save → load round-trip preserves content exactly and keeps it private", async () => {
     const stored = makeStored("s1", "Round trip", "2026-01-02T00:00:00.000Z");
     saveSession(stored, dir);
     expect(loadSession("s1", dir)).toEqual(stored);
+    if (process.platform !== "win32") {
+      expect((await fs.stat(path.join(dir, "s1.json"))).mode & 0o777).toBe(0o600);
+    }
   });
 
   it("listSessions sorts by most-recently-updated", () => {
@@ -101,5 +104,13 @@ describe("session store", () => {
     expect(loadSession("nometa", dir)).toBeNull();
     expect(() => listSessions(dir)).not.toThrow(); // missing updatedAt must not crash sort
     expect(listSessions(dir).map((m) => m.id)).toContain("nodate");
+  });
+
+  it("rejects malformed history parts before a resume can dereference them", async () => {
+    const broken = makeStored("badparts", "Broken", "2026-01-02T00:00:00.000Z");
+    const raw = { ...broken, history: [{ role: "user", content: [null] }] };
+    await fs.writeFile(path.join(dir, "badparts.json"), JSON.stringify(raw), "utf8");
+    expect(loadSession("badparts", dir)).toBeNull();
+    expect(listSessions(dir).map((m) => m.id)).not.toContain("badparts");
   });
 });

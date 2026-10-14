@@ -396,7 +396,8 @@ export async function reconnectServerConnection(
 /**
  * Call a server tool. Transport stays open on every outcome (timeouts and
  * errors resolve as results) — a failed call never poisons later calls.
- * If transport is closed or dead, automatically attempts reconnection once.
+ * If transport is closed before a call, reconnect before sending. A transport
+ * failure after sending has an unknown outcome and must not replay the call.
  */
 export async function callTool(
   conn: McpServerConnection,
@@ -441,20 +442,14 @@ export async function callTool(
       msg.includes("econnrefused") ||
       msg.includes("socket hang up") ||
       msg.includes("closed");
-    if (isTransportDead && conn.serverConfig) {
-      const reconnected = await reconnectServerConnection(conn, { timeoutMs: opts?.timeoutMs ?? conn.timeoutMs });
-      if (reconnected && conn.client) {
-        try {
-          const retryResult = await conn.client.request(
-            "tools/call",
-            { name: toolName, arguments: isRecord(args) ? args : {} },
-            { signal: opts?.signal, timeoutMs: opts?.timeoutMs ?? conn.timeoutMs }
-          );
-          return { output: retryResult, isError: (retryResult as { isError?: unknown }).isError === true };
-        } catch (retryErr: unknown) {
-          return { output: { error: getErrorMessage(retryErr) }, isError: true };
-        }
-      }
+    if (isTransportDead && conn.serverConfig && !opts?.signal?.aborted) {
+      // The server may have committed a mutating call before the reply was
+      // lost. Reconnect for future calls, but report this call as uncertain.
+      await reconnectServerConnection(conn, { timeoutMs: opts?.timeoutMs ?? conn.timeoutMs });
+      return {
+        output: { error: `MCP tool outcome is unknown after transport failure; check remote state before retrying: ${getErrorMessage(err)}` },
+        isError: true,
+      };
     }
     return { output: { error: getErrorMessage(err) }, isError: true };
   }

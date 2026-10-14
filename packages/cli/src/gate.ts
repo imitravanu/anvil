@@ -38,7 +38,7 @@ const STAGED_PATHSPEC =
   'diff --cached --unified=0 --no-color -- . ":(exclude)node_modules" ":(exclude)dist"';
 
 /** Untracked-file discovery for the working-tree surface — same exclusions. */
-const UNTRACKED_PATHSPEC = 'ls-files --others --exclude-standard -- . ":!node_modules" ":!dist"';
+const UNTRACKED_PATHSPEC = 'ls-files -z --others --exclude-standard -- . ":!node_modules" ":!dist"';
 
 export interface WorkingTreeScan {
   /** Violations carry the REAL repo-relative path and new-file line (Batch O). */
@@ -97,23 +97,65 @@ function scanGitDiff(
         maxBuffer: GATE_DIFF_MAX_BUFFER_BYTES,
         timeout: GATE_DIFF_SCAN_TIMEOUT_MS,
       });
-      if (untracked.trim()) {
+      if (untracked) {
         const parts = [diff.trimEnd()];
-        for (const file of untracked.trim().split(/\r?\n/)) {
-          const rel = file.trim();
+        let totalBytes = Buffer.byteLength(diff);
+        for (const rel of untracked.split("\0")) {
           if (!rel) continue;
+          if (rel.includes("\n") || rel.includes("\r")) {
+            return { violations: [], error: "cannot scan untracked filename containing a newline" };
+          }
           try {
-            const content = fs.readFileSync(path.join(cwd, rel), "utf8");
-            parts.push(`+++ b/${rel}`);
-            for (const ln of content.split(/\r?\n/)) parts.push(`+ ${ln}`);
-          } catch {
-            // intentional: an unreadable untracked file must not break the scan
+            const header = `+++ b/${rel}\n`;
+            totalBytes += Buffer.byteLength(header);
+            if (totalBytes >= GATE_DIFF_MAX_BUFFER_BYTES) {
+              return { violations: [], error: "untracked scan exceeds the diff size limit" };
+            }
+            const file = path.join(cwd, rel);
+            const stat = fs.lstatSync(file);
+            if (!stat.isFile()) {
+              return { violations: [], error: `cannot scan non-regular untracked file: ${rel}` };
+            }
+            const budget = GATE_DIFF_MAX_BUFFER_BYTES - totalBytes;
+            if (stat.size > budget) {
+              return { violations: [], error: `untracked file exceeds the diff size limit: ${rel}` };
+            }
+            // An untracked file can grow after stat. Read at most the remaining
+            // budget plus one byte so a racing writer cannot evade the cap.
+            const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK | (fs.constants.O_NOFOLLOW ?? 0));
+            let content: string;
+            try {
+              if (!fs.fstatSync(fd).isFile()) {
+                return { violations: [], error: `cannot scan non-regular untracked file: ${rel}` };
+              }
+              const data = Buffer.allocUnsafe(budget + 1);
+              let bytes = 0;
+              while (bytes < data.length) {
+                const count = fs.readSync(fd, data, bytes, data.length - bytes, null);
+                if (count === 0) break;
+                bytes += count;
+              }
+              if (bytes > budget) {
+                return { violations: [], error: `untracked file exceeds the diff size limit: ${rel}` };
+              }
+              content = data.subarray(0, bytes).toString("utf8");
+            } finally {
+              fs.closeSync(fd);
+            }
+            const additions = content.split(/\r?\n/).map((ln) => `+ ${ln}`).join("\n");
+            totalBytes += Buffer.byteLength(additions) + 1;
+            if (totalBytes > GATE_DIFF_MAX_BUFFER_BYTES) {
+              return { violations: [], error: "untracked scan exceeds the diff size limit" };
+            }
+            parts.push(header.trimEnd(), additions);
+          } catch (err: unknown) {
+            return { violations: [], error: `cannot read untracked file ${rel}: ${getErrorMessage(err)}` };
           }
         }
         diff = parts.join("\n");
       }
-    } catch {
-      // intentional: outside a repo the diff read above already reported the error
+    } catch (err: unknown) {
+      return { violations: [], error: `cannot list untracked files: ${getErrorMessage(err)}` };
     }
   }
   const scannedLines = diff.split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).length;
@@ -355,6 +397,8 @@ export function runNativeGateWatch(opts: NativeGateOptions): Promise<number> {
 
   const minGapMs = Math.ceil(60_000 / Math.max(1, GUARDIAN_WATCH_MAX_SCANS_PER_MIN));
   const debouncer = createDebouncer({ delayMs: GUARDIAN_WATCH_INTERVAL_MS, minGapMs, onScan: runScan });
+  // A periodic rescan covers directory-cap omissions and failed inotify watches.
+  const poller = setInterval(() => debouncer.schedule(), minGapMs);
 
   let watcher: fs.FSWatcher;
   try {
@@ -386,6 +430,7 @@ export function runNativeGateWatch(opts: NativeGateOptions): Promise<number> {
       });
     }
   } catch (err: unknown) {
+    clearInterval(poller);
     process.stderr.write(`anvil gate --watch: cannot watch ${cwd}: ${getErrorMessage(err)}\n`);
     return Promise.resolve(1);
   }
@@ -393,6 +438,7 @@ export function runNativeGateWatch(opts: NativeGateOptions): Promise<number> {
   return new Promise<number>((resolve) => {
     const stop = (): void => {
       debouncer.cancel();
+      clearInterval(poller);
       watcher.close();
       releaseSignal("SIGTERM");
       // Record the final observed state once, so watch sessions contribute
@@ -402,7 +448,7 @@ export function runNativeGateWatch(opts: NativeGateOptions): Promise<number> {
         violations: lastScan?.violations ?? [],
       });
       process.stdout.write("anvil gate --watch: stopped.\n");
-      resolve(0);
+      resolve(lastScan?.error ? 1 : 0);
     };
     // Claim SIGTERM so the entry-point global handler defers to this runner
     // (SIGINT still leans on the entry point's listener-count guard).

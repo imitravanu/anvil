@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { detectLspServers, serverForPath } from "../detector.js";
-import { gotoDefinitionExec, findReferencesExec, getHoverExec, getDiagnosticsExec } from "../tools.js";
+import { gotoDefinitionExec, findReferencesExec, getHoverExec, getDiagnosticsExec, getDiagnosticsDef } from "../tools.js";
 
 function makeRoot(files: Record<string, string>): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-lsp-"));
@@ -28,6 +28,10 @@ describe("LSP detector", () => {
 });
 
 describe("LSP tools fallback", () => {
+  it("requires permission for diagnostics because the fallback runs project code", () => {
+    expect(getDiagnosticsDef.mutating).toBe(true);
+  });
+
   let root = "";
   beforeEach(() => {
     root = makeRoot({

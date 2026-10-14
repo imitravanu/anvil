@@ -88,6 +88,10 @@ describe("Guardian dispatch", () => {
     expect(events.some((event) => event.type === "guardian_blocked")).toBe(true);
     expect(events.some((event) => event.type === "tool_started")).toBe(false);
     await expect(fs.access(path.join(root, "src/slop.ts"))).rejects.toThrow();
+    const history = session.getHistory();
+    expect(history[1].content.some((part) => part.type === "tool_call")).toBe(true);
+    expect(history[2].content[0]?.type).toBe("tool_result");
+    expect(history[2].content.some((part) => part.type === "text" && part.text.includes("[Guardian]"))).toBe(true);
   });
 
   it("refusing one call in a batch does not execute it but the rest of the batch still runs", async () => {

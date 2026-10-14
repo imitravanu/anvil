@@ -64,18 +64,56 @@ export function atomicWriteJson(file: string, data: unknown, opts?: { mode?: num
   // Sequence suffix: two same-process writers to one target would otherwise
   // share a tmp name and race each other's rename (pid alone is not enough).
   const tmp = `${file}.tmp.${process.pid}.${tmpSeq++}`;
+  let created = false;
   try {
-    fs.writeFileSync(tmp, JSON.stringify(data, null, 2), "utf-8");
+    const fd = fs.openSync(tmp, "wx", opts?.mode);
+    created = true;
+    try {
+      fs.writeFileSync(fd, JSON.stringify(data, null, 2), {
+        encoding: "utf-8",
+      });
+    } finally {
+      fs.closeSync(fd);
+    }
     if (opts?.mode !== undefined) {
       fs.chmodSync(tmp, opts.mode);
     }
     fs.renameSync(tmp, file);
   } catch (err) {
     // Never leave the orphan tmp behind on a failed write.
+    if (created) {
+      try {
+        fs.unlinkSync(tmp);
+      } catch {
+        // intentional: rename may already have moved the temporary file.
+      }
+    }
+    throw err;
+  }
+}
+
+/** Synchronous atomic text write for project memory's bounded read/modify/write. */
+export function atomicWriteTextSync(file: string, content: string, opts?: { mode?: number }): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.tmp.${process.pid}.${tmpSeq++}`;
+  let created = false;
+  try {
+    const fd = fs.openSync(tmp, "wx", opts?.mode);
+    created = true;
     try {
-      fs.unlinkSync(tmp);
-    } catch {
-      // already gone — nothing to clean
+      fs.writeFileSync(fd, content, { encoding: "utf8" });
+    } finally {
+      fs.closeSync(fd);
+    }
+    if (opts?.mode !== undefined) fs.chmodSync(tmp, opts.mode);
+    fs.renameSync(tmp, file);
+  } catch (err) {
+    if (created) {
+      try {
+        fs.unlinkSync(tmp);
+      } catch {
+        // intentional: rename may already have moved the temporary file.
+      }
     }
     throw err;
   }

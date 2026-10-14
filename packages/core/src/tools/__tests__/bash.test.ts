@@ -313,6 +313,7 @@ describe("run_command read-only safe-list", () => {
     for (const cmd of [
       "cat /etc/passwd", "cat ~/.ssh/id_rsa", "head -20 /etc/hosts",
       "tail -5 /var/log/syslog", "stat /etc/shadow", "du /usr", "file /bin/bash",
+      "date -f /etc/passwd", "date --file=/etc/passwd",
       "cat ../outside.txt", "wc -l ../../etc/passwd",
       "ls /etc", "ls ~/.ssh", "ls ../outside",
     ]) {
@@ -417,7 +418,6 @@ describe("run_command read-only safe-list", () => {
       // inert printers — arguments cannot reach the filesystem
       { cmd: "pwd", allowed: true, why: "inert" },
       { cmd: "whoami", allowed: true, why: "inert" },
-      { cmd: "date", allowed: true, why: "inert" },
       { cmd: "uname -a", allowed: true, why: "inert" },
       { cmd: "echo hello world", allowed: true, why: "inert" },
       { cmd: "node --version", allowed: true, why: "inert" },
@@ -428,6 +428,7 @@ describe("run_command read-only safe-list", () => {
       { cmd: "df /etc", allowed: true, why: "metadata" },
       { cmd: "which bash", allowed: true, why: "metadata" },
       // contained readers — arguments must stay inside the project root
+      { cmd: "date", allowed: true, why: "contained" },
       { cmd: "ls", allowed: true, why: "contained" },
       { cmd: "ls -la", allowed: true, why: "contained" },
       { cmd: "ls ./src", allowed: true, why: "contained" },
@@ -512,4 +513,3 @@ describe("run_command read-only safe-list", () => {
     expect(isBlockedCommand("echo hi\nrm -rf ./build")).toBeNull();
   });
 });
-

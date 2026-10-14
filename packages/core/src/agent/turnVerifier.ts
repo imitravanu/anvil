@@ -110,9 +110,7 @@ export interface TurnCompletionContext {
   mutationsOccurred: boolean;
   verifyRepairsUsed: number;
   maxVerifyRepairs: number;
-  /** `undefined` never reaches here: send() calls this only when a stop
-   *  reason exists; the field is optional upstream. `"error"` is the one
-   *  value that changes the close (a content/safety block, not a completion). */
+  /** Only an explicit end_turn is a completed model response. */
   stopReason: string | undefined;
   signal: AbortSignal;
   recordLedger: (entry: Omit<RunLedgerEntry, "seq" | "ts">) => void;
@@ -145,6 +143,16 @@ export async function* finishTurn(
       type: "error",
       message:
         "The model declined to complete this turn (content filter or safety block) — no usable response was produced.",
+    };
+    return { action: "done" };
+  }
+
+  if (ctx.stopReason !== "end_turn") {
+    yield {
+      type: "error",
+      message: ctx.stopReason === "max_tokens"
+        ? "The model reached its output limit before completing the response."
+        : "The model stopped without confirming that the response was complete.",
     };
     return { action: "done" };
   }
