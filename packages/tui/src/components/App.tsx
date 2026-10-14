@@ -29,6 +29,7 @@ import { formatRewindResult } from "../util/rewind.js";
 import { Header } from "./Header.js";
 import { InputBar } from "./InputBar.js";
 import { MessageList } from "./MessageList.js";
+import { TranscriptBoundary } from "./TranscriptBoundary.js";
 import { ModelPicker } from "./ModelPicker.js";
 import { PermissionPrompt } from "./PermissionPrompt.js";
 import { FirstRunSetup } from "./FirstRunSetup.js";
@@ -370,7 +371,9 @@ export function App({
           <Divider />
         </Box>
         <Box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0}>
-          <MessageList messages={messages} model={currentModel} providerId={activeProviderId} expandTools={expandTools} pinnedBack={transcriptPinned} />
+          <TranscriptBoundary>
+            <MessageList messages={messages} model={currentModel} providerId={activeProviderId} expandTools={expandTools} pinnedBack={transcriptPinned} />
+          </TranscriptBoundary>
         </Box>
         <Box flexShrink={0}>
           <Divider />

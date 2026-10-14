@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { loadPlugins, pluginSystemPrompts } from "../loader.js";
-import { renderCommand, buildArgv, registerPluginExecutors } from "../registry.js";
+import { renderCommand, buildArgv, registerPluginExecutors, inputHasShellMetachars } from "../registry.js";
 import { executeTool, describeToolInput, registerExternalExecutor } from "../../tools/index.js";
 import { log } from "../../logger.js";
 
@@ -148,6 +148,23 @@ describe("renderCommand", () => {
   });
 });
 
+describe("inputHasShellMetachars (2026-10-14: legacy shell splice refusal)", () => {
+  it("flags the metacharacters that could form a second command under bash -c", () => {
+    expect(inputHasShellMetachars({ x: "; rm -rf ~" })).toBe(true);
+    expect(inputHasShellMetachars({ x: "a && b" })).toBe(true);
+    expect(inputHasShellMetachars({ x: "rm x > y" })).toBe(true);
+    expect(inputHasShellMetachars({ x: "$(whoami)" })).toBe(true);
+    expect(inputHasShellMetachars({ x: "a `b` c" })).toBe(true);
+    expect(inputHasShellMetachars({ x: "a\\b" })).toBe(true);
+  });
+
+  it("accepts ordinary structured input", () => {
+    expect(inputHasShellMetachars({})).toBe(false);
+    expect(inputHasShellMetachars({ path: "src/a.ts", n: 3 })).toBe(false);
+    expect(inputHasShellMetachars(undefined)).toBe(false);
+  });
+});
+
 describe("buildArgv", () => {
   it("fills every {input} placeholder and keeps the payload in ONE argv element", () => {
     const tool = { name: "t", description: "d", command: "node", args: ["-e", "{input}", "--flag={input}"] };
@@ -220,5 +237,36 @@ describe("plugin argv execution", () => {
     expect((result.output as { stdout: string }).stdout).toBe(JSON.stringify(payload));
     // ...and nothing executed it.
     expect(fs.existsSync(marker)).toBe(false);
+  });
+
+  it("refuses metacharacter input in the LEGACY shell form instead of splicing it (2026-10-14)", async () => {
+    dir = makePluginsDir({
+      legacy: {
+        name: "legacy",
+        version: "1.0.0",
+        tools: [
+          {
+            name: "run",
+            description: "Legacy bash -c splice",
+            // No "args" → legacy form: template spliced into bash -c.
+            command: "echo {input}",
+          },
+        ],
+      },
+    });
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-plugin-legacy-"));
+    const marker = path.join(root, "pwned.txt");
+    const { plugins, problems } = loadPlugins(dir);
+    expect(problems).toEqual([]);
+    registerPluginExecutors(plugins);
+    const ctx = { projectRoot: root, signal: new AbortController().signal };
+    const result = await executeTool("plugin_legacy__run", { x: `; touch ${marker}` }, ctx);
+    expect(result.isError).toBe(true);
+    expect((result.output as { error: string }).error).toMatch(/metacharacters/i);
+    // Nothing ran — the refusal happened before any spawn.
+    expect(fs.existsSync(marker)).toBe(false);
+    // Clean input still runs through the legacy form.
+    const ok = await executeTool("plugin_legacy__run", { x: "hello" }, ctx);
+    expect(ok.isError).toBe(false);
   });
 });

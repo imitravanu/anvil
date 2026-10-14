@@ -1,3 +1,100 @@
+> **DONE 2026-10-14 — deep-dive remediation (chief engineer, Claude).** Full-tree audit
+> findings verified live, then fixed with fail-first regression tests (each test was run
+> against HEAD and confirmed to fail before its fix). **Classification (AGENTS.md §1.5):**
+> ReDoS guardian rules — *live, fixed*; `run_command` safe-list write bypass — *live,
+> fixed*; `edit_file` drops executable bit — *live, fixed*; `read_file` hangs on FIFO —
+> *live, fixed*; LSP root URI not percent-encoded — *live, fixed*.
+> **Pass 8 (same day) — completion pass, remaining files read.** Line-by-line reads of the
+> last logic-bearing files: git utilities (scoped staging, unsafe-ref refusal), the
+> in-product gate (untracked injection, watch loop, signal ownership), compaction
+> (selective keep, summarizer), turn verifier, checkpoint store, symbol index, cert
+> runner, eval support (mock/scripted providers, cost, delta pairing, failure diffs),
+> agent helpers (canonical hash, ledger, turn state), outline/plan tools, logger, all CLI
+> files (args, terminal renderer, goal runner, alt screen, health, init), and the TUI's
+> command registry, session/media/diff handlers, message list/view, format/sanitize/
+> transcript-window utilities, useSessionCommands, and the rest of App. **No new defects
+> found** — these files are sound. Not read line by line, by design: pure-display
+> components and theme/markdown/diff renderers, which the 408-test TUI suite plus the
+> visual baselines cover (Wordmark, ThemePicker, HelpOverlay, OverlayFrame, ContextGauge,
+> ExpandedLines, ThinkingTimer, StatusBar/Header/ModelPicker interiors, markdown, diff
+> renderers, theme files, and small util files), plus trivial re-export barrels and the
+> thin per-provider adapters (14–54 lines each, all the shared ChatCompletionsStyleProvider
+> shape already audited).
+>
+> **Pass 7 (same day) — delegation and plugin trust.** Verified clean by live probe: a
+> sub-agent's mutating write reaches the shared permission broker (denied stays denied;
+> allowed writes the file) — `delegate_task: mutating false` is safe because the sub-agent's
+> own writes prompt. *Fixed:* the legacy plugin `bash -c` splice (the file's own documented
+> limitation) now REFUSES model input containing shell metacharacters instead of relying on
+> the user to read the rendered command; the argv form is unchanged and remains the supported
+> path. Fail-first: the refusal test fails on HEAD (the splice ran), passes with the fix.
+> My own test mistakes en route: the first probe never scripted the sub-agent's write (the
+> result was ambiguous, so the probe was rebuilt); the legacy-form test's own template was
+> invalid shell, which I misread as a logic failure until the debug output showed the bash
+> syntax error. Gate: full run passed; plugins 17 tests.
+>
+> **Pass 6 (same day) — filesystem and rewind, verified clean.** Live probes: a file that
+> exists but cannot be read is skipped by the checkpoint snapshot, never recorded as absent
+> (so rewind cannot delete it); `grep`, `list_files`, and `read_file` all refuse to follow a
+> symlink that points outside the project. Read and judged sound: the rewind preflight that
+> refuses to overwrite external edits, the grep pattern-safety bounds, and the memory cap.
+> No defect found, so no code changed.
+>
+> **Pass 5 (same day) — TUI component fuzzing.** My first component fuzz reported 0
+> failures, but the probe was blind: it could not see render-time throws (a deliberately
+> throwing component also read as "no throw"). Corrected by observing renders through the
+> transcript boundary. Real findings, *fixed*: `ToolCallView` crashed on a tool call with no
+> input and no summary (`curtail` received `undefined`); `GuardianReportCard` crashed on a
+> violation with no file. Fail-first: the three malformed-card tests fail on HEAD. *Left
+> open on purpose:* null/missing top-level props (`call: null`, `report: null`) and
+> wrong-typed fields inside typed data — the types exclude them and the core cannot emit
+> them; guarding each would bury the real logic. Gate: full run passed; TUI 65 files.
+>
+> **Pass 4 (same day) — TUI event handling.** A fuzz run (20,000 malformed events) found
+> 4,402 throws in `applyEvent`. *Fixed*: each event is applied inside a guard, so one bad
+> event becomes a visible transcript note instead of ending the turn (fail-first: the
+> malformed-event test fails on HEAD). Also added `TranscriptBoundary`, so a render failure
+> in the transcript shows a message rather than unmounting the whole TUI. Its colors come
+> from the theme. Verified: TUI 64 files / 408 tests; full gate passed. Note: the first gate
+> run failed at Step 2 on a type error in my own new test; it was fixed and the gate re-run.
+>
+> **Gate check (same day).** The gate was probed with deliberately bad new files
+> (`as any`, raw error formatting, silent catch). It fails correctly (exit 1) when probed in
+> a single run. A probe written and scanned in separate shell calls appeared to pass; that
+> was a flaw in the test setup, not a gate defect, and it was re-run to confirm.
+> No gate script change was needed.
+>
+> **Pass 3 (same day).** Verdict gate `isSatisfiedVerdict` *fixed*: it accepted 8 of 14
+> clearly negative verdicts (`YES. The tests fail.`, `YES — not all criteria are met`),
+> and the mission marks milestones complete on it. Any negation or defect word now rejects
+> the verdict; clean approvals still pass (fail-first: 10 bad verdicts pinned as tests).
+> Accepted trade-off: some clean approvals that mention "no errors" are rejected, costing
+> one extra review pass. Deliberately *not* changed: an empty follow-up round after tool
+> work — a tested design (`turnStream.test.ts`: "leaves empty follow-up rounds ... alone").
+> `ast/parser.ts` fuzzed with 4,000 adversarial inputs across 5 languages: 0 crashes,
+> worst 19 ms.
+>
+> **Pass 2 (same day) — goal engine, free models, A/B harness, TUI prompts.** New live
+> finding, *fixed*: `pruneHealthForModels` cleared health by bare model id, so demoting a
+> model under one provider closed another provider's open breaker for the same id
+> (fail-first receipt: HEAD reproduced `open → closed`). The function is now scoped by
+> source. Classified, *not changed* (needs a product decision): (a) a milestone turn that
+> does tool work then ends in an empty round emits no error and can be judged clean by the
+> reviewer; (b) `isSatisfiedVerdict` accepts `YES. The tests fail.` because hedge detection
+> only matches listed words; (c) permission Enter on the compact bar approves shell/MCP
+> commands. Verified correct: the verdict gate's hedge handling, the diff-modal key
+> handling, the permission Esc-deny path.
+> **Files owned for this pass:** `packages/core/src/guardian/{rules,scanner}.ts` and their
+> `__tests__/rules.test.ts`; `packages/core/src/tools/{bash,editFile,readFile}.ts` and their
+> `__tests__`; `packages/core/src/lsp/client.ts` and `__tests__/lspclient.test.ts`;
+> `packages/core/src/config/constants.ts` (one new constant). No protected artifact is in
+> scope. **Verification:** core suite 115 files / 1,097 tests green; fail-first receipts
+> recorded per fix. **Not verified in this pass:** TUI components, `ast/parser.ts` (probed
+> only), `goalEngine.ts`, `freeModels.ts`, `eval/experiment.ts`. Known limit: the safe-list
+> flag allowlist is conservative, so an unlisted but harmless flag now prompts (a cost of
+> one permission prompt, never a silent write).
+>
+
 # PROGRESS — multi-agent coordination
 
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
@@ -4983,3 +5080,57 @@ typecheck, but the gate's real `tsc` caught `atomicWriteText(string)` being hand
 snapshot. The fix (`atomicWriteBuffer`, byte-exact for binary snapshots) was applied, the gate
 re-run fully green (1,211 tests), and the broken commit amended in place before anything shipped.
 Lesson recorded: gate exit codes gate the commit, never the other way around.
+
+**Chief-engineer audit sweep (2026-10-14, Glyph Cluster).** Four defects found by an adversarial
+read of this tree (not from any roadmap item) and fixed in the working tree, deliberately left
+UNCOMMITTED and listed here per §3.3 so the next session can see them:
+
+- `packages/core/src/guardian/rules.ts` — the ReDoS guard modelled nested quantifiers but not
+  ambiguous alternation, so a project rule block in `AGENTS.md` could hang the agent. Measured:
+  `^(a|aa)+$` needed 36s on a 47-char line and >45s on a 61-char one; `(\w|\w\w)+$` — which reads
+  as "lines must end in a word character" — hung on ONE ordinary 50-char source line. The
+  2026-10-14 mitigation (`MAX_CUSTOM_RULE_INPUT_CHARS = 4096`) bounds nothing, because the blowup
+  starts around 50 characters. Now `splitAlternatives` + `normalizeBranch` + `alternativesOverlap`
+  reject a quantified group whose branches overlap, including the non-capturing spelling
+  (`(?:a|aa)+`), which an over-trusting first cut of the fix missed and a red test caught.
+- `packages/core/src/agent/goal/goalEngine.ts` — the same sweep's verdict matcher rejected 9 of 13
+  clean positives (`No issues remain`, `Every test still passes`, `Zero errors`), which marks a
+  genuinely satisfied milestone FAILED and ends the mission `success: false` with no retry. Now
+  clause-aware: a defect term decides only in a clause with no negator, while a negation bound to
+  the work verb (`did not verify`, `nothing was verified`) still decides.
+- `packages/tui/src/components/GuardianReportCard.tsx` — the malformed-data fix validated only
+  object-ness and `file`; a missing/non-string `detail` still threw through the transcript
+  boundary and blanked the whole session view. Every rendered field is now coerced.
+- `packages/core/src/atomicWrite.ts` — `atomicWriteText`/`atomicWriteBuffer` passed `mode` to
+  `writeFile`, which umask trims, so `0666` landed as `0644` on every edit and rewind while the
+  sync writers preserved exactly. Both now `chmod` explicitly.
+
+Tests added: `core/src/guardian/__tests__/rules.test.ts`, `core/src/agent/goal/__tests__/goalEngine.test.ts`,
+`core/src/__tests__/atomicWrite.test.ts` (new), `tui/src/components/__tests__/malformedCards.test.tsx`.
+**Evidence:** core 44/44, tui 5/5, `npm run typecheck` 0, full `npm run gate` PASS (8/8 steps) — and
+the same probes re-run against fresh `dist`: killer line 1ms (was >45 000ms), 9/9 positives accepted
+(was 4/13), `0666`/`0777` preserved.
+
+**Protected-artifact change (§3.4 declaration): F5 gate residual blind spot.** The Step 1.5
+whole-tree drain reused Step 1's single-line empty-catch regex, so a catch whose braces sit on
+separate lines was invisible to the scan whose stated job is "debt that keeps regenerating can only
+shrink" — while Step 1's pair rule only sees it at the moment it is ADDED. `scripts/verify-gate.mjs`
+now exports `emptyCatchLines()` (brace-matched over the whole file, comment-only bodies still read
+as a §2.3 rationale, so it cannot contradict `silentCatchLines`) and Step 1.5 uses it; the per-line
+residual entry is superseded, not weakened. **RED→GREEN, on the real artifact:** with a 3-line
+`catch {`…`}` fixture in `packages/core/src/zz-gate-probe.ts`, the pre-fix gate printed "Full-tree
+residual scan clean" and exited 0 at both Step 1 and Step 1.5; the fixed gate still passes Step 1
+("Zero new slop patterns" — the diff scanner genuinely cannot see the shape) and now FAILS Step 1.5
+naming `zz-gate-probe.ts:4`. The fixture was removed. Superset proven by executing the extracted
+function source: single-line, two-line, three-line and blank-arg bodies all flagged; statement
+bodies, comment rationales, prose and clean code stay clean.
+
+`scripts/gate-manifest.json` regenerated in the same change (only `scripts/verify-gate.mjs`'s hash
+actually moved; `generated` set to 2026-10-14; all ten hashes verified against live content). No
+sentinel or hook edit was needed: the hook's Layer B is a pre-flight of **Step 1** by its own
+contract, and the sentinel's Step 1.5 assertions are string-level ones this change preserves.
+
+**Pending human review (§3.4c), on the record:** the protected-path diff is
+`scripts/verify-gate.mjs` (new `emptyCatchLines`, one superseded rule entry, one wired call) plus
+`scripts/gate-manifest.json`. Per §3.4 this commit requires `--no-verify` and review of exactly
+those two files; nothing is committed yet, so the review can still reject it cheaply.

@@ -1,10 +1,51 @@
 import { describe, it, expect, vi } from "vitest";
+import type React from "react";
 import { applyEvent, retainOutput, OUTPUT_RETAIN_MAX, appendSystemMessage, systemMessage } from "../eventReducer.js";
 import { REASONING_RETAIN_MAX } from "../../util/displayLimits.js";
 import type { DisplayMessage, UsageTotals } from "../eventReducer.js";
 import type { AgentEvent } from "@anvil/core";
 
 describe("eventReducer", () => {
+  it("never throws on a malformed event (2026-10-14 fuzz: 4,402 of 20,000 threw)", () => {
+    // Each of these threw before the fix. One bad event used to end the whole
+    // turn with an error instead of rendering what it could.
+    const malformed: Array<Record<string, unknown>> = [
+      { type: "plan_updated" },
+      { type: "plan_updated", plan: null },
+      { type: "tool_finished" },
+      { type: "tool_finished", result: null, id: "x" },
+      { type: "error", message: 0 },
+      { type: "error", message: null },
+      { type: "guardian_blocked", count: "many" },
+      { type: "guardian_blocked", count: 1, fixed: 0, violations: null },
+      { type: "subagent_finished", id: "m" },
+      { type: "usage" },
+    ];
+    for (const ev of malformed) {
+      let messages: DisplayMessage[] = [
+        { id: "a", role: "assistant", text: "", streaming: true, toolCalls: [], subAgents: [], verifications: [], ts: 0 },
+      ];
+      const update = (fn: (m: DisplayMessage) => DisplayMessage) => {
+        messages = messages.map(fn);
+      };
+      const setMessages: React.Dispatch<React.SetStateAction<DisplayMessage[]>> = (action) => {
+        messages = typeof action === "function" ? action(messages) : action;
+      };
+      expect(
+        () =>
+          applyEvent(
+            ev as unknown as AgentEvent,
+            update,
+            () => undefined,
+            setMessages,
+            () => undefined,
+            () => undefined
+          ),
+        JSON.stringify(ev)
+      ).not.toThrow();
+    }
+  });
+
   it("retained output keeps whole code points at the per-string cap", () => {
     // 1,999 ASCII + emoji + tail crosses the 2,000-UNIT cap exactly on the
     // emoji: the old slice(0, 2000) kept the high half only — invalid UTF-16.

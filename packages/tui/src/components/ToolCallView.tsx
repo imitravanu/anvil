@@ -18,7 +18,19 @@ function describeCall(call: DisplayToolCall): string {
   // The JSON fallback needs no sanitize: JSON.stringify escapes every control
   // character (ESC → \u001b, CR → \r), so no raw byte can reach the frame —
   // adding a sanitize call here would be a no-op (verified).
-  return curtail(JSON.stringify(call.input), TOOL_SUMMARY_MAX);
+  // JSON.stringify returns undefined for an absent input (and throws on a cycle);
+  // curtail needs a string, so an absent input renders as a plain placeholder.
+  const json = call.input === undefined ? undefined : safeJson(call.input);
+  return curtail(json ?? "(no input)", TOOL_SUMMARY_MAX);
+}
+
+function safeJson(value: unknown): string | undefined {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    // intentional: a circular or unserializable input renders as a placeholder.
+    return "(unserializable input)";
+  }
 }
 
 export function ToolCallView({ call, expanded }: { call: DisplayToolCall; expanded?: boolean }) {

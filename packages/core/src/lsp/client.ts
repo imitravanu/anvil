@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { getErrorMessage } from "../errors.js";
 import { LSP_REQUEST_TIMEOUT_MS, LSP_DIAGNOSTICS_POLL_MS, LSP_PATH_DIAGNOSTICS_POLL_MS, LSP_MAX_FRAME_BYTES, LSP_IDLE_CLOSE_MS, LSP_SHUTDOWN_TIMEOUT_MS } from "../config/constants.js";
 import type { LspClient, LspDiagnostic, LspLocation, LspPosition, LspServerCommand } from "./types.js";
@@ -35,7 +36,9 @@ export class LspStdioClient implements LspClient {
   ) {
     this.language = server.language;
     this.child = child;
-    this.rootUri = `file://${projectRoot}`;
+    // pathToFileURL percent-encodes `#`, `%`, spaces, etc. A raw concatenation
+    // turned a `#` into a URI fragment and broke the server's project root.
+    this.rootUri = pathToFileURL(projectRoot).href;
     child.stdout?.on("data", (chunk: Buffer) => this.onData(chunk));
     child.on("exit", () => {
       this.dead = true;
@@ -196,7 +199,7 @@ export class LspStdioClient implements LspClient {
   }
 
   private toUri(path: string): string {
-    return path.startsWith("file://") ? path : `file://${path}`;
+    return path.startsWith("file://") ? path : pathToFileURL(path).href;
   }
 
   private toLocations(result: unknown): LspLocation[] {

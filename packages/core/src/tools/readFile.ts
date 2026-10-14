@@ -39,6 +39,18 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
     };
   }
   const abs = resolveWithinRoot(ctx.projectRoot, relPath);
+  // Refuse non-regular files BEFORE opening: opening a named pipe blocks until a
+  // writer appears, so a FIFO used to hang the whole agent turn. stat (not lstat)
+  // follows symlinks, so a link to a regular file still reads, while a link to a
+  // FIFO is refused. Containment was already enforced above.
+  const pre = await fs.stat(abs);
+  if (!pre.isFile()) {
+    return {
+      output: { path: relPath, error: "Not a regular file — cannot read a pipe, device, or socket." },
+      isError: true,
+      summary: `read_file: ${relPath} is not a regular file`,
+    };
+  }
   // Open-then-fstat-then-bounded-read (the checkpoints.ts pattern): reading a
   // multi-GB file in full just to keep the first 512KB would spike the heap on
   // every accidental read of a log or artifact. The stat and the read observe

@@ -386,21 +386,24 @@ export function getConsecutiveRateLimitCount(sourceId: string, modelId: string):
  * model ids are unique, and the worst-case misfire (an id collision across a
  * real provider) merely clears backoff state, which is benign and self-healing.
  */
-export function pruneHealthForModels(modelIds: readonly string[]): void {
+export function pruneHealthForModels(sourceId: string, modelIds: readonly string[]): void {
   const gone = new Set(modelIds);
   if (gone.size === 0) return;
-  for (const [sourceId, set] of rateLimited) {
+  // Scoped to ONE source. A model id is not globally unique: the same id can be
+  // free on two providers, and demoting it on one used to clear the other's
+  // open breaker (probed live 2026-10-14: an OpenRouter breaker closed after an
+  // Orcarouter sync demoted the same id). Health is per (source, model).
+  const set = rateLimited.get(sourceId);
+  if (set) {
     for (const modelId of [...set]) {
       if (gone.has(modelId)) set.delete(modelId);
     }
     if (set.size === 0) rateLimited.delete(sourceId);
   }
-  const stripSource = (key: string): string => key.slice(key.indexOf(":") + 1);
-  for (const key of [...consecutiveRateLimits.keys()]) {
-    if (gone.has(stripSource(key))) consecutiveRateLimits.delete(key);
-  }
-  for (const key of [...circuitBreakers.keys()]) {
-    if (gone.has(stripSource(key))) circuitBreakers.delete(key);
+  for (const modelId of gone) {
+    const key = circuitKey(sourceId, modelId);
+    consecutiveRateLimits.delete(key);
+    circuitBreakers.delete(key);
   }
 }
 
@@ -541,7 +544,7 @@ function mergeFreeModels(
       // fix #3): clear its 429 backoff, breaker state, and rate-limit mark
       // so a re-added model starts clean instead of inheriting an old
       // "open" breaker or half-spent backoff from its previous life.
-      pruneHealthForModels([m.id]);
+      pruneHealthForModels(providerId, [m.id]);
     } else if (m.isFree === false && liveIds.has(m.id)) {
       m.isFree = true;
       m.displayName = m.displayName.replace(/\s*\(Paid\)\s*$/i, "").trim() + " (Free)";

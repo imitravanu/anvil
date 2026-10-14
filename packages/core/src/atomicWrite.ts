@@ -137,6 +137,11 @@ export async function atomicWriteBuffer(
   try {
     if (opts?.mode !== undefined) {
       await fs.promises.writeFile(tmp, content, { mode: opts.mode });
+      // open()'s mode is masked by the process umask (`0666 & ~022` = `0644`), so
+      // the requested bits are re-applied explicitly — the sync/JSON writers
+      // above do the same. Every caller that passes `mode` (write_file,
+      // edit_file, rewind restore) promises the target's bits survive the rename.
+      await fs.promises.chmod(tmp, opts.mode);
     } else {
       await fs.promises.writeFile(tmp, content);
     }
@@ -167,6 +172,9 @@ export async function atomicWriteText(
   try {
     if (opts?.mode !== undefined) {
       await fs.promises.writeFile(tmp, content, { encoding: "utf8", mode: opts.mode });
+      // See atomicWriteBuffer: umask trims the mode open() was handed, and the
+      // callers of this primitive promise the file's permission bits survive.
+      await fs.promises.chmod(tmp, opts.mode);
     } else {
       await fs.promises.writeFile(tmp, content, "utf8");
     }

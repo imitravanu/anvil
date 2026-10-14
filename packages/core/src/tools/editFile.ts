@@ -126,7 +126,11 @@ export const execute: ToolExecutor = async (rawInput, ctx: ToolContext) => {
       summary: `edit_file failed on ${input?.path ?? "file"}: ${getErrorMessage(err)}`,
     };
   }
-  await atomicWriteText(result.abs, result.updated, { signal: ctx.signal });
+  // Preserve the file's permission bits across the atomic rename. The temp file
+  // is created with the default mode, so without this an edit silently strips
+  // the executable bit from a script (writeFile.ts does the same carry-over).
+  const prevMode = (await fs.stat(result.abs)).mode & 0o777;
+  await atomicWriteText(result.abs, result.updated, { mode: prevMode, signal: ctx.signal });
   const { added, removed } = diffChurn(result.diff);
 
   // Invalidate / update symbol index for workspace topology

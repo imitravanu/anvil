@@ -330,6 +330,9 @@ export const MAX_MEMORY_BYTES = 32 * 1024; // 32 KB cap
 // Custom guardian rules bound (guardian/rules.ts): a runaway rules block must
 // not make every scan quadratic.
 export const MAX_CUSTOM_RULES = 32;
+// Longest line a project-declared rule is evaluated against. Caps the work a
+// safe-looking rule can do per scan line; model-written lines are unbounded.
+export const MAX_CUSTOM_RULE_INPUT_CHARS = 4_096;
 
 // Per-server default tool-call timeout for MCP config entries (config/mcp.ts).
 // Distinct from DEFAULT_MCP_REQUEST_TIMEOUT_MS above, which is the transport

@@ -325,6 +325,29 @@ describe("run_command read-only safe-list", () => {
     expect(isReadOnlyCommand("ls /etc")).toBe(false); // no root: fail closed
   });
 
+  it("never auto-allows a read-only binary flag that writes or sets state (2026-10-14 audit)", async () => {
+    const { isReadOnlyCommand } = await import("../bash.js");
+    // Each of these was verified to write a file or change system state with
+    // NO permission prompt: `tree -o` overwrote a project package.json.
+    for (const cmd of [
+      "tree -o package.json",
+      "tree -oout.txt",
+      "tree --output=out.txt",
+      "file -C -m ./local",
+      "file --compile -m ./local",
+      "date -s 2020-01-01",
+      "date --set=2020-01-01",
+      "date -s '2020-01-01 00:00'",
+    ]) {
+      expect(isReadOnlyCommand(cmd, root), cmd).toBe(false);
+    }
+    // The read-only forms of the same binaries stay auto-allowed.
+    expect(isReadOnlyCommand("tree ./src", root)).toBe(true);
+    expect(isReadOnlyCommand("tree -L 2", root)).toBe(true);
+    expect(isReadOnlyCommand("file ./src/index.ts", root)).toBe(true);
+    expect(isReadOnlyCommand("date +%Y-%m-%d", root)).toBe(true);
+  });
+
   it("blocks quote-bypass in pathsInsideRoot (Phase 21.1)", async () => {
     const { isReadOnlyCommand } = await import("../bash.js");
     expect(isReadOnlyCommand('cat "/etc/passwd"', root)).toBe(false);

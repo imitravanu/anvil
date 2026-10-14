@@ -17,7 +17,10 @@ import {
   isQuotaExhaustedMessage,
   isRateLimited,
   isRateLimitMessage,
+  isCircuitOpen,
   noteRateLimited,
+  pruneHealthForModels,
+  recordFailure,
   syncFreeModels,
   type FreeModelSource,
 } from "../freeModels.js";
@@ -283,5 +286,24 @@ describe("Phase 8 (B) — free-model coordinator", () => {
     const row = MODEL_REGISTRY.find((m) => m.id === "p8b-b8/model");
     expect(row, "row registered").toBeDefined();
     expect(row!.certified).toBe("untested");
+  });
+});
+
+describe("pruneHealthForModels scope (2026-10-14 audit)", () => {
+  it("does not clear another provider's open breaker for the same model id", () => {
+    const id = "shared/probe-model:free";
+    for (let i = 0; i < 5; i++) recordFailure("openrouter", id);
+    expect(isCircuitOpen("openrouter", id)).toBe(true);
+    // Orcarouter demotes its own copy of this id.
+    pruneHealthForModels("orcarouter", [id]);
+    expect(isCircuitOpen("openrouter", id)).toBe(true);
+  });
+
+  it("still clears the demoting provider's own health record", () => {
+    const id = "own/probe-model:free";
+    for (let i = 0; i < 5; i++) recordFailure("orcarouter", id);
+    expect(isCircuitOpen("orcarouter", id)).toBe(true);
+    pruneHealthForModels("orcarouter", [id]);
+    expect(isCircuitOpen("orcarouter", id)).toBe(false);
   });
 });

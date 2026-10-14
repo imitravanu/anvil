@@ -138,4 +138,18 @@ describe("edit_file", () => {
     expect(JSON.stringify(result.output)).toContain("exceed the");
     await expect(fs.readFile(path.join(root, "tenk.txt"), "utf8")).resolves.toBe(body);
   });
+
+  it("preserves the executable bit across an edit (2026-10-14 audit: 755 became 644)", async () => {
+    const script = path.join(root, "run.sh");
+    await fs.writeFile(script, "echo a\n");
+    await fs.chmod(script, 0o755);
+    const result = await executeTool(
+      "edit_file",
+      { path: "run.sh", old_str: "echo a", new_str: "echo b" },
+      ctx
+    );
+    expect(result.isError).toBe(false);
+    expect((await fs.stat(script)).mode & 0o777).toBe(0o755);
+    await expect(fs.readFile(script, "utf8")).resolves.toBe("echo b\n");
+  });
 });

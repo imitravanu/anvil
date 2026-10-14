@@ -241,12 +241,49 @@ export function parseMilestones(rawText: string, goal: string): GoalMilestone[] 
  * the verdict rule is testable without driving a whole mission through the
  * engine.
  */
+/**
+ * A negation bound to the WORK verb it negates — `did not verify`, `not done`,
+ * `criteria not met`, `nothing was verified`. Decisive wherever it appears:
+ * negating the work is itself the defect, unlike a negation of a defect term
+ * (`no failing tests`). The window is short (<=3 words) so a negated defect can
+ * still be described in a longer clause without tripping it.
+ */
+const VERDICT_WORK_NEGATION_RE =
+  /\b(?:not|never|nothing|none|didn['\u2019]?t|did\s+not|doesn['\u2019]?t|does\s+not|isn['\u2019]?t|aren['\u2019]?t|wasn['\u2019]?t|weren['\u2019]?t|cannot|can['\u2019]?t|unable)\b(?:\s+\w+){0,3}\s+(?:verif\w*|test\w*|confirm\w*|check\w*|complet\w*|done|met|pass\w*|finish\w*|satisf\w*|prove\w*|validat\w*|run)\b/i;
+
+/**
+ * Defect nouns/verbs — decisive only inside a clause with no negator, so a
+ * negated mention (`no failing tests`, `zero errors`, `nothing missing`) reads
+ * as the pass it is.
+ */
+const VERDICT_DEFECT_RE = /\b(?:fail\w*|broken|missing|error\w*|blocked|partial\w*|unmet|incomplete|unfinished)\b/i;
+
+/** Words that make a defect term describe its own ABSENCE. */
+const VERDICT_NEGATOR_RE = /\b(?:no|not|never|without|zero|nothing|none|free\s+of|clear\s+of)\b|\bn['\u2019]?t\b/i;
+
 export function isSatisfiedVerdict(verdict: string): boolean {
   const trimmed = verdict.trim();
   const startsYes = /^YES\b/i.test(trimmed);
   const isHedge =
     /^YES\b[\s,;:.!—–-]*(?:but|however|although|except|unfortunately)\b/i.test(trimmed);
-  return startsYes && !isHedge;
+  // A YES that later states a defect is still a NO: `YES. The tests fail.` used
+  // to be accepted, and the mission marks a milestone complete on this verdict.
+  //
+  // 2026-10-14: the first attempt at this matched a blunt defect word list
+  // ANYWHERE in the response, which rejected 9 of 13 clean positives — `no`,
+  // `still`, `yet` and `error` all appear in ordinary satisfied verdicts
+  // (`No issues remain`, `Every test still passes`, `Zero errors`). Rejection is
+  // not free: the milestone is recorded FAILED and the mission reports
+  // `success: false`, with no retry. So the defect must be ASSERTED, not merely
+  // mentioned:
+  //  - a negation bound to the work verb it negates is decisive on its own
+  //    (`did not verify`, `not done`, `criteria not met`);
+  //  - a bare defect noun/verb is decisive only in a clause carrying no negator,
+  //    so `no failing tests` passes while `the tests fail` does not.
+  const statesDefect =
+    VERDICT_WORK_NEGATION_RE.test(trimmed) ||
+    trimmed.split(/[.;,\n]+/).some((clause) => VERDICT_DEFECT_RE.test(clause) && !VERDICT_NEGATOR_RE.test(clause));
+  return startsYes && !isHedge && !statesDefect;
 }
 
 export interface GoalEngineOptions {

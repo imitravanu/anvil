@@ -38,6 +38,23 @@ export function renderCommand(template: string, input: unknown): string {
 }
 
 /**
+ * Shell metacharacters that a spliced `{input}` could turn into a second
+ * command (`; rm -rf ~`), a redirection, or a substitution — the documented
+ * limitation of the legacy `bash -c` splice. The argv form never needed this
+ * check; the legacy form now REFUSES such input instead of relying on the
+ * user to read the rendered command in the prompt. JSON-escaped quotes and
+ * structural punctuation are always safe: JSON.stringify emits none of these
+ * bytes unescaped except in string content, which is exactly what we test.
+ */
+const SHELL_METACHARS = /[;&|<>`$\\]/;
+
+/** True when the model-controlled JSON contains a shell metacharacter. */
+export function inputHasShellMetachars(input: unknown): boolean {
+  const json = JSON.stringify(input ?? {});
+  return SHELL_METACHARS.test(json);
+}
+
+/**
  * Build the argv for an argv-mode plugin tool: the input JSON fills every
  * `{input}` element and stays ONE argv element, so no shell can re-parse it.
  * Pure — unit-tested without spawning anything.
@@ -93,6 +110,24 @@ export function registerPluginExecutors(plugins: LoadedPlugin[]): ToolDefinition
       async (name, input, ctx) => {
         const tool = byName.get(name);
         if (!tool) return { claimed: false };
+        // Legacy `bash -c` splice: model-controlled metacharacters would reach
+        // the shell (documented limitation). Refuse instead of prompting — the
+        // argv form is the supported way to pass such input.
+        if (!usesArgv(tool) && inputHasShellMetachars(input)) {
+          return {
+            claimed: true,
+            result: {
+              output: {
+                error:
+                  `Plugin tool "${name}" uses the legacy shell form, and this input contains shell metacharacters ` +
+                  `(; & | < > $ backslash backtick). Refused. Move the plugin tool to the argv form ` +
+                  `("args": [...]) so the input is passed as data, or remove the metacharacters.`,
+              },
+              isError: true,
+              summary: `${name} refused: shell metacharacters in input`,
+            },
+          };
+        }
         const rendered = renderCommand(tool.command, input);
         // argv form: no shell, so model-controlled metacharacters stay inert
         // data in their own argv element. legacy form: the documented splice.

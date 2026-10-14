@@ -39,6 +39,36 @@ describe("isSatisfiedVerdict (Phase 22.5)", () => {
     }
   });
 
+  it("rejects a YES that goes on to state a defect (2026-10-14 audit: 8 of 14 accepted)", () => {
+    // Each was accepted by the old word-list rule. The mission uses this verdict
+    // to mark a milestone COMPLETE, so a negative statement must never pass.
+    for (const verdict of [
+      "YES. The tests fail.",
+      "YES. Criteria not met.",
+      "YES — not all criteria are met",
+      "YES. I did not verify the tests.",
+      "YES. Not done.",
+      "YES. Missing the export.",
+      "YES. Yet tests fail.",
+      "YES - still broken",
+      "YES. Fails.",
+      "YES. Incomplete.",
+    ]) {
+      expect(isSatisfiedVerdict(verdict), verdict).toBe(false);
+    }
+  });
+
+  it("still accepts a clean YES that merely mentions passing tests or the criteria", () => {
+    for (const verdict of [
+      "YES",
+      "YES — all criteria met and tests pass",
+      "YES. Tests pass and the export is present.",
+      "YES, the criteria are satisfied.",
+    ]) {
+      expect(isSatisfiedVerdict(verdict), verdict).toBe(true);
+    }
+  });
+
   it("rejects a plain no, and tolerates surrounding whitespace", () => {
     expect(isSatisfiedVerdict("NO — criteria not met")).toBe(false);
     expect(isSatisfiedVerdict("  YES — done  ")).toBe(true);
@@ -878,5 +908,42 @@ Let's begin.`;
       expect(result.success).toBe(false);
       expect(result.milestones[0].status).toBe("failed");
     });
+  });
+});
+
+describe("isSatisfiedVerdict tolerates a negated defect (2026-10-14)", () => {
+  it("accepts a clean YES that states the ABSENCE of a defect", () => {
+    for (const verdict of [
+      "YES. No issues remain, all tests pass.",
+      "YES - no errors remain after the change.",
+      "YES. I found no failing tests.",
+      "YES. All criteria met, no regressions.",
+      "YES. Every test still passes.",
+      "YES. The build is green yet again.",
+      "YES. Zero errors, zero warnings.",
+      "YES. There is nothing missing.",
+      "YES, implemented correctly and no further work is needed.",
+    ]) {
+      expect(isSatisfiedVerdict(verdict), verdict).toBe(true);
+    }
+  });
+
+  it("still rejects a YES that asserts a defect or negates the work", () => {
+    // A failed/absent test run is caught deterministically before this rule is
+    // even consulted (runGoalMission fails the milestone on
+    // outcome.errored || outcome.verificationFailed), so this list is only the
+    // verdict-level wording.
+    for (const verdict of [
+      "YES. The tests fail.",
+      "YES. Criteria not met.",
+      "YES. I did not verify the tests.",
+      "YES. Not done.",
+      "YES. Missing the export.",
+      "YES - still broken",
+      "YES. The criteria were not all met.",
+      "YES. Nothing was verified.",
+    ]) {
+      expect(isSatisfiedVerdict(verdict), verdict).toBe(false);
+    }
   });
 });

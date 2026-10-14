@@ -281,6 +281,53 @@ const READ_ONLY_BINARIES = new Set([
 // so their path arguments must resolve inside the project root.
 const FILE_READER_BINARIES = new Set(["ls", "cat", "head", "tail", "wc", "file", "stat", "du", "tree", "date"]);
 
+/**
+ * Flags that are read-only for each binary, by ALLOWLIST. Anything not listed
+ * — including every flag that writes a file or sets system state (`tree -o`,
+ * `file -C`, `date -s/--set`) — makes the command gate on a permission prompt.
+ * An allowlist fails closed: a new dangerous flag is never auto-allowed just
+ * because nobody thought to name it. Matching is exact, or `--name=` for
+ * long flags, so abbreviations do not slip through.
+ */
+const READ_ONLY_FLAGS: Record<string, ReadonlySet<string>> = {
+  ls: new Set(["-a", "-A", "-l", "-h", "-R", "-1", "-S", "-t", "-r", "-d", "-F", "--all", "--almost-all", "--human-readable", "--recursive", "--reverse", "--sort", "--time", "--color", "--color=auto", "--color=never"]),
+  cat: new Set(["-n", "-b", "-s", "-A", "-E", "-T", "--number", "--squeeze-blank"]),
+  head: new Set(["-n", "-c", "-q", "-v"]),
+  tail: new Set(["-n", "-c", "-q", "-v"]),
+  wc: new Set(["-l", "-w", "-c", "-m", "-L"]),
+  file: new Set(["-b", "-i", "-L", "-z", "--brief", "--mime", "--mime-type"]),
+  stat: new Set(["-c", "-f", "-L", "--format", "--printf"]),
+  du: new Set(["-h", "-s", "-a", "-c", "-d", "--human-readable", "--summarize"]),
+  tree: new Set(["-a", "-d", "-f", "-L", "-I", "-P", "--noreport", "-C", "-h"]),
+  date: new Set(["-u", "-R", "-I", "--utc", "--rfc-email", "--rfc-3339", "-d", "--date"]),
+};
+
+/** True iff every flag token in `args` is on the binary's read-only allowlist. */
+function flagsAreReadOnly(bin: string, args: readonly string[]): boolean {
+  const allowed = READ_ONLY_FLAGS[bin];
+  if (!allowed) return true;
+  for (const raw of args) {
+    const arg = stripShellQuotes(raw);
+    // A bare value or path is not a flag; containment is checked separately.
+    if (!arg.startsWith("-") || arg === "-") continue;
+    // `-20` is the legacy line/byte count shorthand for head/tail, not letters.
+    if (/^-\d+$/.test(arg)) continue;
+    // `--name=value`: the name must be allowlisted, and its value is checked
+    // as a path/operand by pathsInsideRoot, so it is not compared here.
+    if (arg.startsWith("--")) {
+      const name = arg.includes("=") ? arg.slice(0, arg.indexOf("=")) : arg;
+      if (!allowed.has(arg) && !allowed.has(name)) return false;
+      continue;
+    }
+    // A combined short-flag cluster (`-la`, `-lh`) is read-only only if EVERY
+    // letter is. Each letter is checked on its own, so `-ao` is refused on `o`.
+    for (const letter of arg.slice(1)) {
+      if (!allowed.has(`-${letter}`)) return false;
+    }
+  }
+  return true;
+}
+
 function stripShellQuotes(s: string): string {
   // Remove matching outer quotes (single or double)
   if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
@@ -394,6 +441,9 @@ export function isReadOnlyCommand(command: string, projectRoot?: string): boolea
     return pathsInsideRoot(rest, projectRoot);
   }
   if (!READ_ONLY_BINARIES.has(bin)) return false;
+  // Flags are checked before paths: a write flag (`tree -o out`, `date -s x`)
+  // is refused even when its operand happens to be a contained path.
+  if (!flagsAreReadOnly(bin, parts.slice(1))) return false;
   if (FILE_READER_BINARIES.has(bin)) {
     if (!projectRoot) return false;
     return pathsInsideRoot(parts.slice(1), projectRoot);

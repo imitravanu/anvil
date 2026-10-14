@@ -6,6 +6,7 @@
 
 import type { CustomGuardianRule } from "./rules.js";
 import type { GuardianScope } from "./scope.js";
+import { MAX_CUSTOM_RULE_INPUT_CHARS } from "../config/constants.js";
 
 /**
  * Whether a rule is true of any project ("universal"), or only of Anvil's own
@@ -339,8 +340,13 @@ export function scanTextForSlop(
         }
       }
     }
+    // Project rules see at most MAX_CUSTOM_RULE_INPUT_CHARS of a line: a
+    // model-written line is unbounded, and a rule's cost must not be.
+    const boundedLine = lineText.length > MAX_CUSTOM_RULE_INPUT_CHARS
+      ? lineText.slice(0, MAX_CUSTOM_RULE_INPUT_CHARS)
+      : lineText;
     for (const custom of customRules) {
-      if (custom.pattern.test(lineText)) {
+      if (custom.pattern.test(boundedLine)) {
         violations.push({ file, line: i + 1, rule: custom.rule, family: "rule", detail: custom.detail });
       }
     }

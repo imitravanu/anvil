@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type React from "react";
-import type { AgentEvent } from "@anvil/core";
+import { getErrorMessage, type AgentEvent } from "@anvil/core";
 import { retainReport, type SubAgentRecord } from "../util/subagent.js";
 import { friendlyError } from "../util/errors.js";
 import { headChars, tailChars } from "../util/format.js";
@@ -197,7 +197,32 @@ export function appendSystemMessage(
   });
 }
 
+/**
+ * Apply one agent event to the transcript. A malformed event (a field missing
+ * or the wrong type) must cost only that one event, never the whole turn: the
+ * fuzz run (2026-10-14) found 4,402 of 20,000 malformed events threw, and a
+ * throw here used to abort the turn's event loop. The failure is recorded as
+ * a visible note so it is not silent.
+ */
 export function applyEvent(
+  event: AgentEvent,
+  update: (fn: (m: DisplayMessage) => DisplayMessage) => void,
+  setUsage: React.Dispatch<React.SetStateAction<UsageTotals>>,
+  setMessages: React.Dispatch<React.SetStateAction<DisplayMessage[]>>,
+  setPlan: React.Dispatch<React.SetStateAction<string | null>>,
+  setTestStatus?: React.Dispatch<React.SetStateAction<"green" | "failed" | "running" | null>>
+): void {
+  try {
+    applyEventUnsafe(event, update, setUsage, setMessages, setPlan, setTestStatus);
+  } catch (err: unknown) {
+    appendSystemMessage(
+      setMessages,
+      `⚠ Dropped a malformed "${String(event?.type)}" event: ${getErrorMessage(err)}`
+    );
+  }
+}
+
+function applyEventUnsafe(
   event: AgentEvent,
   update: (fn: (m: DisplayMessage) => DisplayMessage) => void,
   setUsage: React.Dispatch<React.SetStateAction<UsageTotals>>,

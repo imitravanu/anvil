@@ -1,8 +1,8 @@
 {
   "$comment": "SHA-256 integrity manifest for Anvil's protected artifacts. Regenerate ONLY as part of the same human-reviewed commit that changes any listed file (run: for f in <files>; do echo \"$f $(sha256sum $f)\"; done). The manifest cannot hash itself; its own integrity is enforced by the gate sentinel test + protected-path tamper detection + review.",
-  "generated": "2026-10-10",
+  "generated": "2026-10-14",
   "hashes": {
-    "scripts/verify-gate.mjs": "a826850da847ea9b13295b9090308539656f9b00809767132f179aaaf8f7bada",
+    "scripts/verify-gate.mjs": "12ea3a3766f0e334360b7ba884812370bdd4b69d351379cac7e71cbbdc2173da",
     "AGENTS.md": "0bf453c270365ef039ae982d697c3b1d64890e96894e7696b6ead2c10c61c5ab",
     ".fresh-allowlist.json": "48e9893b2be40588293ef4c045324f1a38c73ef7757ddb601e40dc8851318e4f",
     "docs/PHASE-21-25-AUDIT.md": "d733a5a50c892d6be2f77f1bba9b1ce3d2ed73698426c78f3ad3b2b17627c3ee",

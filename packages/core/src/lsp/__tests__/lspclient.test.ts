@@ -2,6 +2,7 @@ import { describe, expect, it, afterAll } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { getLspClient } from "../client.js";
 import type { LspServerCommand } from "../types.js";
 
@@ -44,6 +45,46 @@ const created: string[] = [];
 
 afterAll(() => {
   for (const d of created) fs.rmSync(d, { recursive: true, force: true });
+});
+
+describe("LspStdioClient rootUri encoding (2026-10-14 audit)", () => {
+  it("sends a percent-encoded file URI for a project path with #, %, and spaces", async () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), "anvil lsp #uri %25 "));
+    created.push(base);
+    const script = path.join(base, "capture-lsp.cjs");
+    // Capture the initialize.rootUri the client actually sends.
+    const capture = `
+const fs = require("node:fs");
+const out = process.argv[3];
+let acc = "";
+process.stdin.on("data", (c) => {
+  acc += c.toString("utf8");
+  const h = acc.indexOf("\\r\\n\\r\\n");
+  if (h < 0) return;
+  const body = acc.slice(h + 4);
+  try {
+    const msg = JSON.parse(body);
+    if (msg.method === "initialize") {
+      fs.writeFileSync(out, msg.params.rootUri);
+      const s = JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { capabilities: {} } });
+      process.stdout.write("Content-Length: " + Buffer.byteLength(s) + "\\r\\n\\r\\n" + s);
+    }
+  } catch { /* partial frame */ }
+});
+`;
+    fs.writeFileSync(script, capture, "utf8");
+    const uriFile = path.join(base, "root-uri.txt");
+    const projectRoot = path.join(base, "my #proj %x");
+    fs.mkdirSync(projectRoot, { recursive: true });
+    const server: LspServerCommand = { language: "typescript", command: process.execPath, args: [script, "unused", uriFile] };
+    await getLspClient(server, projectRoot);
+    const rootUri = fs.readFileSync(uriFile, "utf8");
+    // A raw `file://${path}` would be mangled by the `#` (fragment) and `%` (escape).
+    // The contract is round-trip: the URI must decode back to the exact project path.
+    expect(rootUri.startsWith("file://")).toBe(true);
+    expect(new URL(rootUri).hash).toBe("");
+    expect(fileURLToPath(rootUri)).toBe(projectRoot);
+  });
 });
 
 describe("LspStdioClient live against a fake framed server", () => {

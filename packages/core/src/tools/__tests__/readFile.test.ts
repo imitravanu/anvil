@@ -32,6 +32,17 @@ describe("read_file", () => {
     expect((result.output as { error: string }).error).toMatch(/ENOENT/);
   });
 
+  it("refuses a named pipe without blocking on open (2026-10-14 audit: FIFO hung the agent)", async () => {
+    const { execFileSync } = await import("node:child_process");
+    const fifo = path.join(root, "pipe.fifo");
+    execFileSync("mkfifo", [fifo]);
+    const started = Date.now();
+    const result = await executeTool("read_file", { path: "pipe.fifo" }, ctx);
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(result.isError).toBe(true);
+    expect((result.output as { error: string }).error).toMatch(/not a regular file/i);
+  });
+
   it("refuses paths outside the project root", async () => {
     const result = await executeTool("read_file", { path: "../../../etc/passwd" }, ctx);
     expect(result.isError).toBe(true);

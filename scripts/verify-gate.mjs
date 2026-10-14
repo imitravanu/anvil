@@ -123,6 +123,37 @@ export function silentCatchLines(text) {
 }
 
 /**
+ * Line numbers of catch blocks with an EMPTY body. The diff rule
+ * (`catch { }` on one line) and the pair rule (two consecutive added lines)
+ * between them cannot see a body whose braces are three or more lines apart, so
+ * the whole-tree drain is the only checkpoint that CAN see it — and before
+ * 2026-10-14 it did not, because the residual scan reused the same single-line
+ * regex. Brace-matched over the whole file, so any span is seen.
+ *
+ * A body carrying a comment is NOT empty: §2.3 accepts a rationale comment in
+ * place of a statement (CATCH_SURFACES_RE), and this scan must not contradict
+ * silentCatchLines about the same catch. Pure.
+ */
+export function emptyCatchLines(text) {
+  const out = [];
+  const re = /catch\s*(?:\([^)]*\))?\s*\{/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    // A comment that merely NAMES a catch is not code (same guard as above).
+    const lineStart = text.lastIndexOf("\n", m.index) + 1;
+    const lineEnd = text.indexOf("\n", m.index);
+    const line = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd);
+    const before = text.slice(lineStart, m.index);
+    if (/^\s*(?:\/\/|\*|\/\*)/.test(line) || before.includes("//")) continue;
+    const openIdx = text.indexOf("{", m.index);
+    const body = matchBraceBody(text, openIdx);
+    if (body.trim() !== "") continue; // a body with statements is not empty
+    out.push(text.slice(0, m.index).split("\n").length);
+  }
+  return out;
+}
+
+/**
  * AUDIT-05 (2026-09-26): an allowlist entry must name a repo-relative SOURCE
  * FILE — never a directory, glob, absolute path, `..` traversal, or non-source
  * file. The old `packages/<pkg>/src/` prefix rule accepted directories and any
@@ -652,7 +683,11 @@ const RESIDUAL_RULES = [
   { name: "type escape (as any/never)", re: /\bas\s+(any|never)\b/ },
   { name: "type escape (bare any annotation)", re: /((?<!\?):\s*any\b|<\s*any\b|,\s*any\b|\bany\s*\[\])/ },
   { name: "placeholder marker (TODO/FIXME/XXX)", re: /\b(TODO|FIXME|XXX)\b/ },
-  { name: "empty catch block", re: /catch\s*(?:\([^)]*\))?\s*\{\s*\}/ },
+  // "empty catch block" is deliberately NOT a per-line rule here: a per-line
+  // regex can only match a one-line `catch {}`, so routing the whole-tree drain
+  // through it left a multi-line empty catch invisible forever (2026-10-14).
+  // Step 1.5 uses the brace-aware emptyCatchLines() pass below instead, which
+  // matches every shape the per-line rule matched AND every shape it could not.
   { name: "hardcoded color in TUI components", re: /\b(?:color|borderColor|backgroundColor)\s*=\s*(?:\{[ \t]*[`](?:cyan|green|red|yellow|blue|magenta|white|black|gray)[`][ \t]*\}|["'](?:cyan|green|red|yellow|blue|magenta|white|black|gray)["']|[`](?:cyan|green|red|yellow|blue|magenta|white|black|gray)[`])/, onlyTuiComponents: true },
   { name: "TypeScript suppression (@ts-ignore/@ts-nocheck)", re: /@ts-(ignore|nocheck)\b/ },
   { name: "skipped test (it.skip/test.skip/xit)", re: /\b(it|test|describe)\.skip\b|\b(xit|xtest|xdescribe)\s*\(/, onlyTests: true },
@@ -687,7 +722,8 @@ function walkSourceFiles(dir, out) {
     const isCore = rel.startsWith("packages/core/");
     const isTuiComponent = rel.startsWith("packages/tui/src/components/");
     const isTestFile = rel.includes("__tests__") || rel.includes(".test.");
-    const lines = fs.readFileSync(file, "utf-8").split("\n");
+    const content = fs.readFileSync(file, "utf-8");
+    const lines = content.split("\n");
     for (let i = 0; i < lines.length; i++) {
       const lineIsComment = isCommentLine(lines[i]);
       for (const rule of RESIDUAL_RULES) {
@@ -707,6 +743,12 @@ function walkSourceFiles(dir, out) {
     if (!isTestFile) {
       for (const lineNo of silentCatchLines(lines.join("\n"))) {
         hits.push(`${rel}:${lineNo} silent catch block with no log or rationale (Rule 2.3)`);
+      }
+      // F5 (2026-10-14): EMPTY catches, brace-aware. The per-line rule this
+      // replaces could not see `catch {` and its closing brace on separate
+      // lines, so such a catch passed the "debt can only shrink" drain forever.
+      for (const lineNo of emptyCatchLines(content)) {
+        hits.push(`${rel}:${lineNo} empty catch block (Rule 2.3)`);
       }
     }
   }
