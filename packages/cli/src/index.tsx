@@ -40,6 +40,9 @@ import {
   type ProviderId,
   type ToolDefinition,
   getModelsForProvider,
+  createCustomProvider,
+  loadCustomProviders,
+  type CustomProviderConfig,
 } from "@anvil/core";
 
 import { App, FirstRunSetup, TuiPermissionBroker, detectTerminalTheme, isThemeName, loadCustomThemes } from "@anvil/tui";
@@ -51,6 +54,7 @@ import { runHealth } from "./health.js";
 import { enterAltScreen, exitAltScreen } from "./altScreen.js";
 import { parseFlags, resolveInvocation } from "./args.js";
 import { buildHelpText } from "./help.js";
+import { runProviderCommand } from "./providerCommand.js";
 
 // Detached MCP server children would outlive Anvil — SIGKILL them on exit.
 // `exit` alone misses real signals (kill, terminal close), so hook those too.
@@ -178,7 +182,8 @@ function restoreCachedModels(): void {
 function resolveSelectionOrExit(
   flags: Record<string, string>,
   creds: ReturnType<typeof loadCredentials>,
-  settings: ReturnType<typeof loadSettings>
+  settings: ReturnType<typeof loadSettings>,
+  customProviders?: CustomProviderConfig[]
 ): { providerId: ProviderId; model: string } {
   let selection;
   try {
@@ -189,6 +194,7 @@ function resolveSelectionOrExit(
       envModel: process.env.ANVIL_MODEL,
       settings,
       creds,
+      customProviders,
     });
   } catch (err) {
     if (err instanceof ProviderSelectionError) {
@@ -242,9 +248,49 @@ async function resolveBootContext(
   restoreCachedModels();
   const creds = resolveProviderCredentials();
   const settings = loadSettings();
-  const selection = resolveSelectionOrExit(flags, creds, settings);
 
-  const providers = createProviders(creds);
+  // Ad-hoc --api-key override for built-in providers
+  if (flags["api-key"] && flags.provider) {
+    const keyProp = `${flags.provider}ApiKey` as keyof typeof creds;
+    if (keyProp in creds) {
+      creds[keyProp] = flags["api-key"];
+    }
+  }
+
+  // Ad-hoc --base-url provider injection
+  let customConfigs = loadCustomProviders();
+  let adHocProviderId: `custom:${string}` | undefined;
+  if (flags["base-url"]) {
+    const rawId = flags.provider ? flags.provider.replace(/^custom:/, "") : "adhoc";
+    adHocProviderId = `custom:${rawId}`;
+    const inheritedKey = flags.provider ? (creds[`${flags.provider}ApiKey` as keyof typeof creds] as string | undefined) : undefined;
+    const resolvedKey = flags["api-key"] || inheritedKey;
+    const adHocConfig: CustomProviderConfig = {
+      id: adHocProviderId,
+      name: flags.provider || "Ad-hoc Provider",
+      baseUrl: flags["base-url"],
+      auth: resolvedKey ? "bearer" : "none",
+    };
+    customConfigs = [...customConfigs.filter((c) => c.id !== adHocProviderId), adHocConfig];
+    if (!flags.provider) {
+      flags.provider = adHocProviderId;
+    }
+  }
+
+  const selection = resolveSelectionOrExit(flags, creds, settings, customConfigs);
+
+  const providers = createProviders(creds, customConfigs);
+  if (flags["base-url"] && adHocProviderId) {
+    const inheritedKey = flags.provider ? (creds[`${flags.provider}ApiKey` as keyof typeof creds] as string | undefined) : undefined;
+    const resolvedKey = flags["api-key"] || inheritedKey;
+    if (resolvedKey) {
+      const adHocConfig = customConfigs.find((c) => c.id === adHocProviderId);
+      if (adHocConfig) {
+        providers[adHocProviderId] = createCustomProvider(adHocConfig, resolvedKey);
+      }
+    }
+  }
+
   const provider = providers[selection.providerId];
   if (!provider.isConfigured()) {
     console.error(
@@ -565,6 +611,9 @@ switch (invocation.kind) {
   case "init":
     // Phase 25.6 — `anvil init --guarded [--lang <id>]` provisions repo gates.
     process.exit(runGuardedInit({ lang: invocation.lang }));
+  case "provider":
+    void runProviderCommand(invocation.args).then((code) => process.exit(code));
+    break;
   case "run":
     void runFromFlags(parseFlags(argv));
     break;

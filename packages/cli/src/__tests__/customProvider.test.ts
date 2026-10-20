@@ -77,4 +77,77 @@ describe("custom provider CLI integration", () => {
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("Custom providers:");
   }, 10000);
+
+  it("manages custom providers via CLI (list, add, test, remove)", async () => {
+    let listRes = await run(["provider", "list"]);
+    expect(listRes.code).toBe(0);
+    expect(listRes.stdout).toContain("No custom providers configured");
+
+    server = createServer((req, res) => {
+      if (req.url === "/v1/models") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ data: [{ id: "mock-model-1" }, { id: "mock-model-2" }] }));
+      } else {
+        res.writeHead(404);
+        res.end();
+      }
+    });
+    await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("fixture server unavailable");
+    const baseUrl = `http://127.0.0.1:${address.port}/v1`;
+
+    const addRes = await run([
+      "provider",
+      "add",
+      "mygateway",
+      "--url",
+      baseUrl,
+      "--name",
+      "My Custom Gateway",
+      "--protocol",
+      "openai-responses",
+      "--key",
+      "test-secret",
+    ]);
+    expect(addRes.code).toBe(0);
+    expect(addRes.stdout).toContain('Configured custom provider "custom:mygateway"');
+
+    listRes = await run(["provider", "list"]);
+    expect(listRes.code).toBe(0);
+    expect(listRes.stdout).toContain("custom:mygateway");
+    expect(listRes.stdout).toContain("openai-responses");
+    expect(listRes.stdout).toContain("My Custom Gateway");
+
+    const testRes = await run(["provider", "test", "mygateway"]);
+    expect(testRes.code).toBe(0);
+    expect(testRes.stdout).toContain("Connectivity probe succeeded");
+    expect(testRes.stdout).toContain("mock-model-1");
+
+    const removeRes = await run(["provider", "remove", "mygateway"]);
+    expect(removeRes.code).toBe(0);
+    expect(removeRes.stdout).toContain('Removed custom provider "custom:mygateway"');
+
+    listRes = await run(["provider", "list"]);
+    expect(listRes.code).toBe(0);
+    expect(listRes.stdout).toContain("No custom providers configured");
+  }, 15000);
+
+  it("supports ad-hoc --base-url without prior configuration", async () => {
+    server = createServer(async (req, res) => {
+      let data = "";
+      for await (const chunk of req) data += chunk;
+      res.writeHead(200, { "Content-Type": "text/event-stream" });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: "adhoc response" }, finish_reason: "stop" }] })}\n\ndata: [DONE]\n\n`);
+    });
+    await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("fixture server unavailable");
+    const baseUrl = `http://127.0.0.1:${address.port}/v1`;
+
+    const res = await run(["--base-url", baseUrl, "--model", "custom-model", "-p", "hello", "--raw", "--no-mcp"]);
+    expect(res.code).toBe(0);
+    expect(res.stdout).toContain("adhoc response");
+  }, 10000);
 });
+

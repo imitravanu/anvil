@@ -5,7 +5,8 @@ import path from "node:path";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import {
   loadCustomProviders, saveCustomProvider, removeCustomProvider, validateCustomProvider,
-  isCustomProviderConfigured, type CustomProviderConfig,
+  isCustomProviderConfigured, customProviderModels, fetchCustomProviderModels, testCustomProvider,
+  type CustomProviderConfig,
 } from "../custom.js";
 import { createProviders } from "../index.js";
 import { getModel, visibleModels } from "../registry.js";
@@ -249,4 +250,74 @@ describe("custom provider HTTP integration", () => {
     expect(events.filter(event => event.type === "cancelled")).toHaveLength(1);
     expect(events.some(event => event.type === "error")).toBe(false);
   });
+
+  it("supports multi-wire protocols (openai-responses, anthropic) and optional models", () => {
+    const responsesConfig = validateCustomProvider({
+      id: "custom:responses-gw",
+      name: "Responses Gateway",
+      baseUrl: "https://fixture.invalid/v1",
+      auth: "none",
+      protocol: "openai-responses",
+    });
+    expect(responsesConfig.protocol).toBe("openai-responses");
+    expect(responsesConfig.models).toBeUndefined();
+
+    const models = customProviderModels([responsesConfig]);
+    expect(models).toHaveLength(1);
+    expect(models[0].id).toBe("default");
+    expect(models[0].contextWindow).toBe(128_000);
+
+    const anthropicConfig = validateCustomProvider({
+      id: "custom:anthropic-gw",
+      name: "Anthropic Gateway",
+      baseUrl: "https://fixture.invalid",
+      auth: "bearer",
+      protocol: "anthropic",
+      models: [{ id: "claude-3-5-sonnet", contextWindow: 200_000 }],
+    });
+    expect(anthropicConfig.protocol).toBe("anthropic");
+
+    expect(() =>
+      validateCustomProvider({
+        id: "custom:bad",
+        name: "Bad",
+        baseUrl: "https://fixture.invalid",
+        auth: "none",
+        protocol: "invalid-proto" as any,
+      })
+    ).toThrow("Invalid custom provider protocol");
+  });
+
+  it("fetches and tests dynamic models via /models", async () => {
+    const baseUrl = await server((req, res) => {
+      expect(req.url).toBe("/v1/models");
+      expect(req.headers.authorization).toBe("Bearer test-token");
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        data: [
+          { id: "llama-3.3-70b", context_length: 131072 },
+          { id: "deepseek-r1", context_length: 65536 },
+        ],
+      }));
+    });
+
+    const cfg: CustomProviderConfig = {
+      id: "custom:dynamic",
+      name: "Dynamic",
+      baseUrl,
+      auth: "bearer",
+    };
+
+    const models = await fetchCustomProviderModels(cfg, "test-token");
+    expect(models).toHaveLength(2);
+    expect(models[0].id).toBe("llama-3.3-70b");
+    expect(models[0].contextWindow).toBe(131072);
+    expect(models[1].id).toBe("deepseek-r1");
+
+    const testRes = await testCustomProvider(cfg, "test-token");
+    expect(testRes.ok).toBe(true);
+    expect(testRes.modelsCount).toBe(2);
+    expect(testRes.models).toContain("llama-3.3-70b");
+  });
 });
+

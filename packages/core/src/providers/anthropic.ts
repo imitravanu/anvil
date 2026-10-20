@@ -210,15 +210,37 @@ export function toAnthropicRequest(
   };
 }
 
+export interface AnthropicProviderOptions {
+  id?: ProviderId;
+  displayName?: string;
+  apiKey?: string;
+  baseURL?: string;
+  defaultHeaders?: Record<string, string>;
+}
+
 export class AnthropicProvider extends BaseProvider {
-  readonly id: ProviderId = "anthropic";
-  readonly displayName = "Anthropic";
+  readonly id: ProviderId;
+  readonly displayName: string;
 
   private readonly client: Anthropic | null;
 
-  constructor(apiKey: string | undefined) {
+  constructor(optionsOrApiKey: string | AnthropicProviderOptions | undefined) {
     super();
-    this.client = apiKey ? new Anthropic({ apiKey }) : null;
+    if (typeof optionsOrApiKey === "string" || optionsOrApiKey === undefined) {
+      this.id = "anthropic";
+      this.displayName = "Anthropic";
+      this.client = optionsOrApiKey ? new Anthropic({ apiKey: optionsOrApiKey }) : null;
+    } else {
+      this.id = optionsOrApiKey.id ?? "anthropic";
+      this.displayName = optionsOrApiKey.displayName ?? "Anthropic";
+      this.client = optionsOrApiKey.apiKey
+        ? new Anthropic({
+            apiKey: optionsOrApiKey.apiKey,
+            ...(optionsOrApiKey.baseURL ? { baseURL: optionsOrApiKey.baseURL } : {}),
+            ...(optionsOrApiKey.defaultHeaders ? { defaultHeaders: optionsOrApiKey.defaultHeaders } : {}),
+          })
+        : null;
+    }
   }
 
   isConfigured(): boolean {
@@ -229,7 +251,7 @@ export class AnthropicProvider extends BaseProvider {
     if (!this.client) {
       // This shouldn't happen because isConfigured is checked in base class,
       // but TypeScript doesn't know that.
-      throw new Error("Anthropic client not initialized");
+      throw new Error(`${this.displayName} client not initialized`);
     }
 
     const stream = this.client.messages.stream(toAnthropicRequest(request), {
@@ -240,6 +262,9 @@ export class AnthropicProvider extends BaseProvider {
   }
 }
 
-export function createAnthropicProvider(apiKey: string | undefined): ModelProvider {
-  return new AnthropicProvider(apiKey);
+export function createAnthropicProvider(
+  optionsOrApiKey: string | AnthropicProviderOptions | undefined
+): ModelProvider {
+  return new AnthropicProvider(optionsOrApiKey);
 }
+

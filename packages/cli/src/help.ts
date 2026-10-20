@@ -14,6 +14,7 @@ Usage:
   anvil -p, --prompt <text> Run headless non-interactive turn (streams to stdout)
   anvil -g, --goal <text>   Run autonomous multi-step engineering mission
   anvil config              Add/edit a built-in or custom provider
+  anvil provider <action>   Manage custom providers (list, add, remove, test)
   anvil gate [--full|--watch|--staged]  Guardian scan of the working-tree diff (--watch: continuous, --staged: staged additions only)
   anvil health              Show codebase health: freshness, cleanliness, allowlist drain
   anvil init --guarded      Provision AGENTS.md + .fresh-allowlist.json here
@@ -27,6 +28,8 @@ Options:
   --raw                     Suppress tool diagnostic messages on stderr
   --provider <id>           Override the provider for this run
   --model <id>              Override the model for this run
+  --base-url <url>          Ad-hoc custom provider endpoint URL
+  --api-key <key>           Ad-hoc API key override
   --no-mcp                  Skip MCP server startup (fast boot)
   --verbose                 Info-level diagnostics on stderr (ANVIL_LOG=info)
   --watch                   (gate) continuously re-scan the working-tree diff

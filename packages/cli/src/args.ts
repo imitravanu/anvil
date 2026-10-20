@@ -25,6 +25,8 @@ const VALUE_FLAGS: ReadonlySet<string> = new Set([
   "--goal",
   "-g",
   "--lang",
+  "--base-url",
+  "--api-key",
 ]);
 export type Invocation =
   | { kind: "version" }
@@ -35,6 +37,7 @@ export type Invocation =
   | { kind: "init"; lang: string | undefined }
   | { kind: "init-usage-error" }
   | { kind: "subcommand-usage-error"; subcommand: string; argument: string }
+  | { kind: "provider"; args: string[] }
   | { kind: "run" };
 
 /**
@@ -107,8 +110,12 @@ export function resolveInvocation(
     if (value === undefined || value.startsWith("-")) return { kind: "init-usage-error" };
     return { kind: "init", lang: value };
   }
+  if (first === "provider") {
+    const providerArgs = argv.filter((_, idx) => idx !== firstIndex);
+    return { kind: "provider", args: providerArgs };
+  }
   // First run: no API keys at all — onboard instead of hard-failing.
-  if (!opts.hasConfiguredProvider && !argv.includes("--provider")) return { kind: "setup", thenChat: true };
+  if (!opts.hasConfiguredProvider && !argv.includes("--provider") && !argv.includes("--base-url")) return { kind: "setup", thenChat: true };
   return { kind: "run" };
 }
 
@@ -131,6 +138,12 @@ export function parseFlags(argv: string[]): Record<string, string> {
     const arg = argv[i];
     if (arg === "--provider" || arg === "--model") {
       flags[arg.slice(2)] = nextValue(i, arg);
+      i++;
+    } else if (arg === "--base-url") {
+      flags["base-url"] = nextValue(i, arg);
+      i++;
+    } else if (arg === "--api-key") {
+      flags["api-key"] = nextValue(i, arg);
       i++;
     } else if (arg === "--prompt" || arg === "-p") {
       flags.prompt = nextValue(i, arg);

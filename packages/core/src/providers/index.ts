@@ -16,11 +16,25 @@ import { createCustomProvider, customProviderModels, loadCustomProviders, type C
 import { syncCustomProviderModels } from "./registry.js";
 
 export * from "./types.js";
-export { loadCustomProviders, saveCustomProvider, removeCustomProvider, validateCustomProvider, isCustomProviderConfigured, customProviderModels, type CustomProviderConfig } from "./custom.js";
+export {
+  createCustomProvider,
+  loadCustomProviders,
+  saveCustomProvider,
+  removeCustomProvider,
+  validateCustomProvider,
+  isCustomProviderConfigured,
+  customProviderModels,
+  fetchCustomProviderModels,
+  testCustomProvider,
+  type CustomProviderConfig,
+  type CustomProviderProtocol,
+  type CustomProviderTestResult,
+} from "./custom.js";
 export * from "./registry.js";
 export { BaseProvider } from "./base.js";
-export { AnthropicProvider } from "./anthropic.js";
+export { AnthropicProvider, type AnthropicProviderOptions } from "./anthropic.js";
 export { ChatCompletionsStyleProvider } from "./openai.js";
+export { ResponsesStyleProvider, type ResponsesStyleProviderOptions } from "./responses.js";
 export { GeminiProvider } from "./gemini.js";
 export { OPENROUTER_BASE_URL, createOpenRouterProvider, fetchOpenRouterFreeModels, syncOpenRouterModels } from "./openrouter.js";
 export {

@@ -34,8 +34,8 @@ export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemov
   const [values, setValues] = useState<SetupValues>(() => ({
     id: initial?.id.slice("custom:".length) ?? "",
     name: initial?.name ?? "", baseUrl: initial?.baseUrl ?? "", credential: "",
-    models: initial?.models.map(model => model.id).join(", ") ?? "",
-    contextWindow: String(initial?.models[0].contextWindow ?? FALLBACK_CONTEXT_WINDOW),
+    models: initial?.models?.map(model => model.id).join(", ") ?? "",
+    contextWindow: String(initial?.models?.[0]?.contextWindow ?? FALLBACK_CONTEXT_WINDOW),
     options: JSON.stringify({
       headers: initial?.headers ?? {}, maxTokensParam: initial?.maxTokensParam ?? "max_tokens",
       streamUsage: initial?.streamUsage ?? true,
@@ -62,9 +62,9 @@ export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemov
       id: initial?.id ?? `custom:${next.id.trim()}`, name: next.name, baseUrl: next.baseUrl,
       auth, ...(apiKeyEnv ? { apiKeyEnv } : {}), ...providerOptions,
       models: next.models.split(",").map(id => {
-        const old = initial?.models.find(model => model.id === id.trim());
+        const old = initial?.models?.find(model => model.id === id.trim());
         return {
-          ...old, id: id.trim(), contextWindow: old && next.contextWindow === String(initial?.models[0].contextWindow)
+          ...old, id: id.trim(), contextWindow: old && next.contextWindow === String(initial?.models?.[0]?.contextWindow)
             ? old.contextWindow : Number(next.contextWindow),
           ...(supportsTools !== undefined ? { supportsTools } : {}),
           ...(supportsVision !== undefined ? { supportsVision } : {}),
@@ -110,7 +110,7 @@ export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemov
       </> : review ? <>
         <Text color={theme.colors.primary}>{review.config.name} · {review.config.id}</Text>
         <Text color={theme.colors.textSecondary}>{review.config.baseUrl}</Text>
-        <Text color={theme.colors.textSecondary}>Models: {review.config.models.map(model => model.id).join(", ")}</Text>
+        <Text color={theme.colors.textSecondary}>Models: {review.config.models ? review.config.models.map(model => model.id).join(", ") : "dynamic / auto-discover"}</Text>
         <Text color={theme.colors.textSecondary}>Authentication: {review.config.auth === "none" ? "none" : review.config.apiKeyEnv ? `environment (${review.config.apiKeyEnv})` : "stored key (hidden)"}</Text>
         <Text color={theme.colors.textSecondary}>Settings and keys are saved separately with owner-only permissions.</Text>
         {initial && initial.id !== activeProviderId && <Text color={theme.colors.warning}>d — remove this provider</Text>}

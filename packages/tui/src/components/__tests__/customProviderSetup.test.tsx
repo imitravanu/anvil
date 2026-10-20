@@ -56,7 +56,7 @@ describe("custom provider setup", () => {
     expect(fs.existsSync(path.join(root, "providers.json"))).toBe(false);
     await press(app); // review/save
     expect(done).toHaveBeenCalledWith("custom:fixture");
-    expect(loadCustomProviders()[0].models.map(model => model.id)).toEqual(["fixture-model", "second-model"]);
+    expect(loadCustomProviders()[0].models!.map(model => model.id)).toEqual(["fixture-model", "second-model"]);
     expect(createProviders({})["custom:fixture"].isConfigured()).toBe(true);
     expect(fs.readFileSync(path.join(root, "providers.json"), "utf8")).not.toContain("ui-secret-key");
   });

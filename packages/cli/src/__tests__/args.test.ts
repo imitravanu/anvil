@@ -73,12 +73,20 @@ describe("parseFlags", () => {
     expect(stderr.join("\n")).toContain("Missing value for --prompt");
   });
 
+  it("consumes values for --base-url and --api-key", () => {
+    expect(parseFlags(["--base-url", "http://localhost:8000/v1", "--api-key", "my-key"])).toEqual({
+      "base-url": "http://localhost:8000/v1",
+      "api-key": "my-key",
+    });
+  });
+
   it("rejects an unknown flag instead of silently falling through to chat", () => {
     expect(() => parseFlags(["--promt", "x"])).toThrow("__exit__");
     expect(exitCodes).toEqual([1]);
     expect(stderr.join("\n")).toContain("Unknown flag: --promt");
   });
 });
+
 
 describe("resolveInvocation", () => {
   const configured = { hasConfiguredProvider: true };
@@ -110,6 +118,16 @@ describe("resolveInvocation", () => {
     expect(resolveInvocation(["--verbose", "init", "--guarded"], configured)).toEqual({
       kind: "init",
       lang: undefined,
+    });
+    expect(resolveInvocation(["provider", "list"], configured)).toEqual({
+      kind: "provider",
+      args: ["list"],
+    });
+    expect(
+      resolveInvocation(["--verbose", "provider", "add", "mygw", "--url", "http://localhost"], configured)
+    ).toEqual({
+      kind: "provider",
+      args: ["--verbose", "add", "mygw", "--url", "http://localhost"],
     });
   });
 
