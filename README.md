@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/imitravanu/anvil/releases"><img src="https://img.shields.io/badge/Release-v1.3.0-ff6a00?style=flat-square" alt="Version"></a>
+  <a href="https://github.com/imitravanu/anvil/releases"><img src="https://img.shields.io/badge/Release-v1.4.0-ff6a00?style=flat-square" alt="Version"></a>
   <a href="https://github.com/imitravanu/anvil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/imitravanu/anvil/ci.yml?branch=master&style=flat-square&label=CI%20Build" alt="CI"></a>
   <a href="https://github.com/imitravanu/anvil/actions/workflows/visual-regression.yml"><img src="https://img.shields.io/github/actions/workflow/status/imitravanu/anvil/visual-regression.yml?branch=master&style=flat-square&label=Visual%20Gate" alt="Visual Gate"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node-%3E%3D22-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node"></a>
@@ -93,9 +93,13 @@
 
 ## 🚀 Installation
 
-### Global Install via npm
+### Global Install from the GitHub Release
+
+The npm registry packages are awaiting owner publishing credentials. Install the
+self-contained CLI tarball from the latest GitHub release:
+
 ```bash
-npm install -g @anvil/cli
+npm install -g https://github.com/imitravanu/anvil/releases/download/v1.4.0/anvil-cli-1.4.0.tgz
 
 # Run inside any repository
 cd ~/my-project
@@ -103,8 +107,9 @@ anvil
 ```
 
 ### Try Without Installing (npx)
+
 ```bash
-npx @anvil/cli
+npx --package=https://github.com/imitravanu/anvil/releases/download/v1.4.0/anvil-cli-1.4.0.tgz anvil
 ```
 
 ### Build from Source

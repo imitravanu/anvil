@@ -15,4 +15,4 @@
                            /diff — review file changes & unified diffs
                            /session — resume a past conversation
 
-                                               v1.3.0
+                                               v1.4.0

@@ -5,6 +5,34 @@ All notable changes to Anvil are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-10-20
+
+### Added
+
+- AgentRouter provider support and model selection, alongside refreshed provider
+  model catalogs and the certified Inception Mercury-3 adapter.
+
+### Fixed
+
+- Atomic writes refuse planted temporary symlinks; grep regex execution runs in
+  an abortable worker with a deadline; file preparation rejects blocking FIFOs.
+- File edits read through short reads to EOF within their size limit, preserving
+  trailing content and UTF-8 text and checking all occurrences before replacement.
+- Provider cancellation remains cancellation throughout the agent loop. Cancelled
+  missions hold queued messages until an explicit send resumes delivery.
+- Mission review and critique respect error, verification, and permission outcomes;
+  every dispatched mission turn counts toward the configured budget.
+- Anthropic input usage includes cache reads and creation, with separate pricing
+  categories and no invented cache-creation price.
+- Provider overrides avoid foreign saved models; SSE responses retain final frame
+  delimiters; corrupt saved session metadata is rejected before listing or resume.
+- Plugin execution is asynchronous, cancellable, and bounded by time and output size.
+
+### Changed
+
+- TUI packages exclude compiled tests and clear stale build output. Package checks
+  reject test artifacts; all public manifests declare Node >=22 and repository metadata.
+
 ## [1.3.0] — 2026-10-10
 
 ### Chief-engineer takeover (2026-10-10)

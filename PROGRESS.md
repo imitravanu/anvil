@@ -5280,3 +5280,23 @@ the CLI installs and runs in isolation. `git diff --check` PASS.
 
 The prior hold is superseded by the completed review and local commit of the full
 audit remediation, including these five follow-up files. Nothing was published.
+
+# 2026-10-20 — release 1.4.0
+
+Ownership: this session owns `packages/{core,tui,cli}/package.json`,
+`packages/core/src/version.ts`, `package-lock.json`, `README.md`, `CHANGELOG.md`,
+`packages/tui/__visual-baselines__/empty-state.txt`, and `PROGRESS.md` for the release.
+The clean checkout includes the audit repairs and the subsequently committed AgentRouter
+feature, making this a minor release. Preserve all existing commits and protected artifacts.
+Validate, commit/tag, publish GitHub tarballs and checksums, and update the existing global
+Anvil installation. npm publication is currently unauthenticated locally and the prior
+release receipt records a missing repository NPM_TOKEN; check current credentials before
+claiming npm publication. Release verification pending.
+
+Local release verification PASS: full Guardian Gate (1,148 core + 418 TUI + 205 CLI =
+1,771 tests across 204 files, 25/25 mock evals, build and full typecheck); mock provider
+certification 13/13; visual text frames 12/12 and pixel matrix 144/144; isolated package
+installation reports 1.4.0. Three tarballs and SHA256SUMS prepared and verified.
+README now gives the installable GitHub tarball URL while npm publishing is unavailable.
+Only the text baseline's version label changed; protected artifacts remain unchanged.
+Committing the validated version bump before tagging/publication and installation.
