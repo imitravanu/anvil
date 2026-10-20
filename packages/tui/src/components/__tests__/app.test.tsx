@@ -29,6 +29,7 @@ function allProviders(provider: ModelProvider) {
     inception: provider,
     ollama: provider,
     qwencloud: provider,
+    agentrouter: provider,
   };
 }
 

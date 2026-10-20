@@ -35,6 +35,7 @@ export interface RawOpenAIChunk {
        * or that omit the field, leave it absent — never coerced to "".
        */
       reasoning?: string | null;
+      reasoning_content?: string | null;
       tool_calls?: Array<{
         index: number;
         id?: string;
@@ -78,14 +79,16 @@ export async function* translateChatCompletionsChunkStream(
 
   try {
     for await (const chunk of raw) {
+      if (!chunk) continue;
       const choice = chunk.choices?.[0];
       const delta = choice?.delta;
 
-      if (delta?.reasoning) {
+      const reasoning = delta?.reasoning ?? delta?.reasoning_content;
+      if (reasoning) {
         // Reasoning arrives before/alongside the answer and is rendered apart
         // from it; emitting it here is what stops the adapter from discarding
         // the model's deliberation (Probe L, Phase 38.6).
-        yield { type: "reasoning_delta", text: delta.reasoning };
+        yield { type: "reasoning_delta", text: reasoning };
       }
 
       if (delta?.content) {

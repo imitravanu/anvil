@@ -76,6 +76,7 @@ export function resolveProviderCredentials(): ProviderCredentials {
     inceptionApiKey: process.env.INCEPTION_API_KEY || file.inceptionApiKey,
     ollamaApiKey: process.env.OLLAMA_API_KEY || file.ollamaApiKey,
     qwencloudApiKey: process.env.QWENCLOUD_API_KEY || process.env.DASHSCOPE_API_KEY || file.qwencloudApiKey,
+    agentrouterApiKey: process.env.AGENTROUTER_API_KEY || file.agentrouterApiKey,
   };
 }
 
@@ -138,6 +139,7 @@ const PROVIDER_ORDER: ProviderId[] = [
   "inception",
   "ollama",
   "qwencloud",
+  "agentrouter",
 ];
 
 export interface SelectionInput {

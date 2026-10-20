@@ -13,4 +13,5 @@ export const PROVIDER_LABELS: Record<string, string> = {
   inception: "Inception",
   ollama: "Ollama",
   qwencloud: "QwenCloud",
+  agentrouter: "AgentRouter",
 };

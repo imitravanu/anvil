@@ -98,11 +98,12 @@ describe("Phase 18: Provider Certification Harness", () => {
       inception: createMockCertificationProvider("inception"),
       ollama: createMockCertificationProvider("ollama"),
       qwencloud: createMockCertificationProvider("qwencloud"),
+      agentrouter: createMockCertificationProvider("agentrouter"),
     };
 
     const results = await certifyAllProviders(providers, { timeoutMs: 5000, mock: true });
 
-    expect(Object.keys(results)).toHaveLength(12);
+    expect(Object.keys(results)).toHaveLength(13);
     for (const [id, res] of Object.entries(results)) {
       expect(res.passed).toBe(true);
       expect(res.status).toBe("live");

@@ -193,7 +193,8 @@ export type ProviderId =
   | "mistral"
   | "inception"
   | "ollama"
-  | "qwencloud";
+  | "qwencloud"
+  | "agentrouter";
 
 export interface CompletionRequest {
   model: string; // provider-specific model id, e.g. "claude-sonnet-5"
