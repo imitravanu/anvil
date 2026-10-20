@@ -13,7 +13,7 @@ Usage:
   anvil                     Start an interactive chat session
   anvil -p, --prompt <text> Run headless non-interactive turn (streams to stdout)
   anvil -g, --goal <text>   Run autonomous multi-step engineering mission
-  anvil config              (Re)configure a provider API key
+  anvil config              Add/edit a built-in or custom provider
   anvil gate [--full|--watch|--staged]  Guardian scan of the working-tree diff (--watch: continuous, --staged: staged additions only)
   anvil health              Show codebase health: freshness, cleanliness, allowlist drain
   anvil init --guarded      Provision AGENTS.md + .fresh-allowlist.json here
@@ -35,7 +35,8 @@ Environment:
   ANVIL_PROVIDER, ANVIL_MODEL — same as the flags, lower precedence
   ANVIL_NO_ALT_SCREEN=1 — stay in the main screen buffer (no alt-screen)
 
-Config lives in ~/.anvil (credentials.json, settings.json, sessions/).
+Config lives in ~/.anvil (credentials.json, settings.json, providers.json, provider-keys.json, sessions/).
+Custom providers: configure with anvil config or /connect, then use --provider custom:<id>.
 Set ANVIL_HOME to relocate the data dir (credentials, settings, sessions, cache).
 Slash commands inside the app: ${slashCommands}.
 `;

@@ -39,6 +39,7 @@ import {
   type ModelProvider,
   type ProviderId,
   type ToolDefinition,
+  getModelsForProvider,
 } from "@anvil/core";
 
 import { App, FirstRunSetup, TuiPermissionBroker, detectTerminalTheme, isThemeName, loadCustomThemes } from "@anvil/tui";
@@ -435,10 +436,13 @@ function runSetup(thenChat: boolean): void {
   instance = render(
     <FirstRunSetup
       onDone={(chosenProviderId) => {
+        const configuredProviders = createProviders(resolveProviderCredentials());
+        const selectedModel = getModelsForProvider(chosenProviderId)[0]?.id;
         try {
           saveSettings({
             ...loadSettings(),
             defaultProviderId: chosenProviderId,
+            ...(selectedModel ? { defaultModel: selectedModel } : {}),
           });
         } catch {
           // intentional: first-run persistence is best-effort; the chosen
@@ -446,6 +450,11 @@ function runSetup(thenChat: boolean): void {
         }
         instance?.unmount();
         appInstance = null;
+        if (!configuredProviders[chosenProviderId].isConfigured()) {
+          exitAltScreen();
+          process.stderr.write("Provider saved. Set its configured environment variables before starting Anvil.\n");
+          return;
+        }
         if (thenChat) void runFromFlags(parseFlags(process.argv.slice(2)));
         else exitAltScreen();
       }}
@@ -513,9 +522,10 @@ const argv = process.argv.slice(2);
 if (argv.includes("--verbose")) {
   process.env.ANVIL_LOG = process.env.ANVIL_LOG ?? "info";
 }
-const invocation = resolveInvocation(argv, {
-  hasConfiguredProvider: hasAnyConfiguredProvider(resolveProviderCredentials()),
-});
+const preliminaryInvocation = resolveInvocation(argv, { hasConfiguredProvider: true });
+const invocation = preliminaryInvocation.kind === "run"
+  ? resolveInvocation(argv, { hasConfiguredProvider: hasAnyConfiguredProvider(resolveProviderCredentials()) })
+  : preliminaryInvocation;
 
 switch (invocation.kind) {
   case "version": {

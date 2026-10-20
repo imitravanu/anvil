@@ -182,6 +182,7 @@ export function classifyProviderError(err: unknown): {
 }
 
 export type ProviderId =
+  | `custom:${string}`
   | "anthropic"
   | "openai"
   | "gemini"

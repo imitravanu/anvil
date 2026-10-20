@@ -8,6 +8,7 @@ import {
   loadSession,
   loadSettings,
   saveSettings,
+  getModelsForProvider,
   analyzeWorkspace,
   type AgentOptions,
   type McpServerConnection,
@@ -23,7 +24,7 @@ import { usePermissionBroker } from "../hooks/usePermissionBroker.js";
 import { useThemeManager } from "../hooks/useThemeManager.js";
 import { useSessionCommands } from "../hooks/useSessionCommands.js";
 import { ThemeContext, useTheme } from "../theme/theme.js";
-import { PROVIDER_LABELS } from "../util/labels.js";
+import { PROVIDER_LABELS, refreshCustomProviderLabels } from "../util/labels.js";
 import { formatPricingTag } from "../util/format.js";
 import { formatRewindResult } from "../util/rewind.js";
 import { Header } from "./Header.js";
@@ -81,7 +82,10 @@ export function App({
   mcp,
 }: AppProps) {
   const [session, setSession] = useState(initialSession);
-  const [providers, setProviders] = useState(initialProviders);
+  const [providers, setProviders] = useState(() => {
+    refreshCustomProviderLabels(initialProviders);
+    return initialProviders;
+  });
   const [activeProviderId, setActiveProviderId] = useState<ProviderId>(initialProviderId);
   const [currentModel, setCurrentModel] = useState(model);
 
@@ -319,11 +323,20 @@ export function App({
   // so switchModel keeps history while swapping the underlying API key).
   const handleConnectDone = (providerId: ProviderId) => {
     const refreshed = createProviders(resolveProviderCredentials());
+    refreshCustomProviderLabels(refreshed);
     setProviders(refreshed);
     setIsConnectOpen(false);
     const label = PROVIDER_LABELS[providerId] ?? providerId;
+    if (!refreshed[providerId]?.isConfigured()) {
+      printSystemMessage(`${label} saved. Set its configured environment variables and reconnect before using it.`);
+      return;
+    }
     if (providerId === activeProviderId) {
-      session.switchModel(refreshed[providerId], currentModel);
+      const models = getModelsForProvider(providerId);
+      const nextModel = providerId.startsWith("custom:") && !models.some(model => model.id === currentModel)
+        ? models[0].id : currentModel;
+      session.switchModel(refreshed[providerId], nextModel);
+      setCurrentModel(nextModel);
       printSystemMessage(`✓ ${label} reconnected with the new key.`);
     } else {
       printSystemMessage(`✓ ${label} connected. Use /model to switch to it.`);
@@ -427,6 +440,7 @@ export function App({
           <ModelPicker
             providers={providers}
             currentModelId={currentModel}
+            currentProviderId={activeProviderId}
             onSelect={handleModelSelect}
             onClose={() => setIsModelPickerOpen(false)}
           />
@@ -449,7 +463,14 @@ export function App({
           />
         ) : isConnectOpen ? (
           <FirstRunSetup
-            title="Connect a provider — pick one, paste its API key, done."
+            title="Connect a provider or add your own endpoint."
+            activeProviderId={activeProviderId}
+            onRemoved={() => {
+              const refreshed = createProviders(resolveProviderCredentials());
+              refreshCustomProviderLabels(refreshed);
+              setProviders(refreshed);
+              printSystemMessage("Custom provider removed. Saved conversations are retained.");
+            }}
             onDone={handleConnectDone}
             onCancel={() => setIsConnectOpen(false)}
           />

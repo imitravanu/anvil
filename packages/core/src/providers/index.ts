@@ -12,8 +12,11 @@ import { createInceptionProvider } from "./inception.js";
 import { createOllamaProvider } from "./ollama.js";
 import { createQwenCloudProvider } from "./qwencloud.js";
 import { createAgentRouterProvider } from "./agentrouter.js";
+import { createCustomProvider, customProviderModels, loadCustomProviders, type CustomProviderConfig } from "./custom.js";
+import { syncCustomProviderModels } from "./registry.js";
 
 export * from "./types.js";
+export { loadCustomProviders, saveCustomProvider, removeCustomProvider, validateCustomProvider, isCustomProviderConfigured, customProviderModels, type CustomProviderConfig } from "./custom.js";
 export * from "./registry.js";
 export { BaseProvider } from "./base.js";
 export { AnthropicProvider } from "./anthropic.js";
@@ -75,8 +78,8 @@ export interface ProviderCredentials {
   agentrouterApiKey?: string;
 }
 
-export function createProviders(creds: ProviderCredentials): Record<ProviderId, ModelProvider> {
-  return {
+export function createProviders(creds: ProviderCredentials, customConfigs: CustomProviderConfig[] = loadCustomProviders()): Record<ProviderId, ModelProvider> {
+  const providers: Record<ProviderId, ModelProvider> = {
     anthropic: createAnthropicProvider(creds.anthropicApiKey),
     openai: createOpenAIProvider(creds.openaiApiKey),
     gemini: createGeminiProvider(creds.geminiApiKey),
@@ -91,4 +94,7 @@ export function createProviders(creds: ProviderCredentials): Record<ProviderId, 
     qwencloud: createQwenCloudProvider(creds.qwencloudApiKey),
     agentrouter: createAgentRouterProvider(creds.agentrouterApiKey),
   };
+  syncCustomProviderModels(customProviderModels(customConfigs));
+  for (const config of customConfigs) providers[config.id] = createCustomProvider(config);
+  return providers;
 }

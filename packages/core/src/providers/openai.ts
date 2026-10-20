@@ -4,6 +4,7 @@ import {
   CompletionRequest,
   ConversationMessage,
   ModelProvider,
+  ModelInfo,
   ProviderId,
   StreamEvent,
   ToolDefinition,
@@ -257,8 +258,11 @@ export interface ChatCompletionsStyleProviderOptions {
    * usage is unchanged when the model needs less.
    */
   maxTokensFloor?: number;
-  defaultHeaders?: Record<string, string>;
+  defaultHeaders?: Record<string, string | null>;
   supportsVision?: boolean;
+  streamUsage?: boolean;
+  modelCapabilities?: ModelInfo[];
+  isolateEndpoint?: boolean;
 }
 
 export class ChatCompletionsStyleProvider extends BaseProvider {
@@ -269,6 +273,8 @@ export class ChatCompletionsStyleProvider extends BaseProvider {
   private readonly maxTokensParam: "max_tokens" | "max_completion_tokens";
   private readonly maxTokensFloor: number;
   protected readonly supportsVision: boolean;
+  private readonly streamUsage: boolean;
+  private readonly modelCapabilities: ModelInfo[];
 
   constructor(opts: ChatCompletionsStyleProviderOptions) {
     super();
@@ -277,12 +283,22 @@ export class ChatCompletionsStyleProvider extends BaseProvider {
     this.maxTokensParam = opts.maxTokensParam ?? "max_tokens";
     this.maxTokensFloor = opts.maxTokensFloor ?? 0;
     this.supportsVision = opts.supportsVision ?? true;
+    this.streamUsage = opts.streamUsage ?? true;
+    this.modelCapabilities = opts.modelCapabilities ?? [];
 
     this.client = opts.apiKey
       ? new OpenAI({
           apiKey: opts.apiKey,
           ...(opts.baseURL ? { baseURL: opts.baseURL } : {}),
           ...(opts.defaultHeaders ? { defaultHeaders: opts.defaultHeaders } : {}),
+          ...(opts.isolateEndpoint ? {
+            // Custom endpoints must not inherit unrelated OpenAI account data
+            // or forward custom authentication headers through redirects.
+            organization: null, project: null, adminAPIKey: null,
+            maxRetries: 0,
+            fetch: (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
+              fetch(input, { ...init, redirect: "error" }),
+          } : {}),
         })
       : null;
   }
@@ -296,18 +312,19 @@ export class ChatCompletionsStyleProvider extends BaseProvider {
       throw new Error(`${this.displayName} client not initialized`);
     }
 
+    const capabilities = this.modelCapabilities.find(model => model.id === request.model);
     const stream = await this.client.chat.completions.create(
       {
         model: request.model,
         messages: toOpenAIMessages(request.messages, request.systemPrompt, {
-          supportsVision: this.supportsVision,
+          supportsVision: capabilities?.supportsVision ?? this.supportsVision,
         }) as unknown as OpenAI.ChatCompletionMessageParam[],
-        ...(request.tools.length
+        ...(request.tools.length && capabilities?.supportsTools !== false
           ? { tools: toOpenAITools(request.tools) as unknown as OpenAI.ChatCompletionTool[] }
           : {}),
         [this.maxTokensParam]: Math.max(request.maxTokens, this.maxTokensFloor),
         stream: true,
-        stream_options: { include_usage: true },
+        ...(this.streamUsage ? { stream_options: { include_usage: true } } : {}),
       },
       { signal: request.signal }
     );

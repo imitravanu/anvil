@@ -5,6 +5,13 @@ All notable changes to Anvil are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Dynamic OpenAI-compatible custom providers with interactive add/edit/remove setup,
+  separate protected API-key storage or environment references, custom headers and
+  model capabilities, configurable token parameters and streaming usage. Custom
+  providers participate in headless selection, model switching and saved sessions.
+
 ## [1.4.0] — 2026-10-20
 
 ### Added

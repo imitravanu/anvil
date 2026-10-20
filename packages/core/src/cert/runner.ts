@@ -14,7 +14,7 @@ import {
   isRateLimited,
   clearRateLimitRecord,
 } from "../providers/freeModels.js";
-import { setModelCertification } from "../providers/registry.js";
+import { setModelCertification, getModelsForProvider } from "../providers/registry.js";
 import { resolveProviderCredentials } from "../config/index.js";
 import { CERT_MAX_TOKENS_STREAMING, CERT_MAX_TOKENS_MULTI_TURN } from "../config/constants.js";
 import type { ProviderCredentials } from "../providers/index.js";
@@ -485,7 +485,7 @@ export async function certifyProvider(
   provider: ModelProvider,
   options: CertifyOptions = {}
 ): Promise<ProviderCertificationResult> {
-  const model = options.model ?? PROVIDER_CERT_MODELS[provider.id] ?? "default-model";
+  const model = options.model ?? PROVIDER_CERT_MODELS[provider.id] ?? getModelsForProvider(provider.id)[0]?.id ?? "default-model";
   const timeoutMs = options.timeoutMs ?? 30_000;
   const startTime = Date.now();
 

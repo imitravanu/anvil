@@ -108,7 +108,7 @@ export function resolveInvocation(
     return { kind: "init", lang: value };
   }
   // First run: no API keys at all — onboard instead of hard-failing.
-  if (!opts.hasConfiguredProvider) return { kind: "setup", thenChat: true };
+  if (!opts.hasConfiguredProvider && !argv.includes("--provider")) return { kind: "setup", thenChat: true };
   return { kind: "run" };
 }
 

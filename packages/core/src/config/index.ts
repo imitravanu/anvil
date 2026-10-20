@@ -3,6 +3,7 @@ import path from "node:path";
 import { ProviderCredentials, ProviderId, MODEL_REGISTRY } from "../providers/index.js";
 import { atomicWriteJson, withFileLockSync, anvilHome } from "../atomicWrite.js";
 import { AnvilSettings } from "./types.js";
+import { loadCustomProviders, isCustomProviderConfigured, customProviderModels, type CustomProviderConfig } from "../providers/custom.js";
 import { log } from "../logger.js";
 
 export type { AnvilSettings } from "./types.js";
@@ -120,7 +121,7 @@ export function hasAnyConfiguredProvider(creds: ProviderCredentials): boolean {
   // a future non-secret field (region, endpoint) would falsely report a
   // configured install and skip first-run onboarding. Derived from
   // PROVIDER_ORDER so adding a provider cannot silently go unconfigured.
-  return PROVIDER_ORDER.some((id) => {
+  return loadCustomProviders().some(isCustomProviderConfigured) || PROVIDER_ORDER.some((id) => {
     const value = creds[`${id}ApiKey` as keyof ProviderCredentials];
     return typeof value === "string" && value.length > 0;
   });
@@ -143,6 +144,7 @@ const PROVIDER_ORDER: ProviderId[] = [
 ];
 
 export interface SelectionInput {
+  customProviders?: CustomProviderConfig[];
   // 1. CLI flags (highest)
   flagProvider?: string;
   flagModel?: string;
@@ -172,7 +174,8 @@ export class UnknownProviderError extends ProviderSelectionError {
     super(providerId);
     this.name = "UnknownProviderError";
     this.message =
-      `Unknown provider "${providerId}". Known providers: ${PROVIDER_ORDER.join(", ")}. ` +
+      `Unknown provider "${providerId}". Known built-in providers: ${PROVIDER_ORDER.join(", ")}. ` +
+      `Configure a custom provider with anvil config. ` +
       `Check for typos (this used to misreport as "not configured").`;
   }
 }
@@ -186,19 +189,23 @@ export class UnknownProviderError extends ProviderSelectionError {
 const KEYLESS_PROVIDERS = new Set<ProviderId>(["ollama"]);
 
 export function resolveProviderSelection(input: SelectionInput): ProviderSelection | null {
+  const customConfigs = input.customProviders ?? loadCustomProviders();
+  const customConfigured = customConfigs.filter(isCustomProviderConfigured).map(config => config.id);
+  const providerOrder = [...PROVIDER_ORDER, ...customConfigs.map(config => config.id)];
+  const models = [...MODEL_REGISTRY.filter(model => !model.providerId.startsWith("custom:")), ...customProviderModels(customConfigs)];
   const configured = PROVIDER_ORDER.filter(
     (id) =>
       KEYLESS_PROVIDERS.has(id) ||
       (typeof input.creds[`${id}ApiKey` as keyof ProviderCredentials] === "string" &&
         (input.creds[`${id}ApiKey` as keyof ProviderCredentials] as string).length > 0)
-  );
+  ).concat(customConfigured);
 
   // Unknown ids (typos) are a different mistake from "no API key yet" — report
   // them distinctly instead of the old misleading "not configured". The model
   // id stays free-form on purpose: OpenRouter-style providers accept arbitrary
   // model ids the registry can never enumerate.
   const checked = (candidate: string): ProviderId => {
-    if (!(PROVIDER_ORDER as readonly string[]).includes(candidate)) {
+    if (!(providerOrder as readonly string[]).includes(candidate)) {
       throw new UnknownProviderError(candidate);
     }
     if (!configured.includes(candidate as ProviderId)) {
@@ -216,7 +223,7 @@ export function resolveProviderSelection(input: SelectionInput): ProviderSelecti
   // still falls through to the provider source below it.
   const inferProvider = (model: string | undefined): ProviderId | undefined =>
     model
-      ? (MODEL_REGISTRY.find(
+      ? (models.find(
           (m) => m.id === model && configured.includes(m.providerId as ProviderId)
         )?.providerId as ProviderId | undefined)
       : undefined;
@@ -241,23 +248,24 @@ export function resolveProviderSelection(input: SelectionInput): ProviderSelecti
         typeof input.creds[`${id}ApiKey` as keyof ProviderCredentials] === "string" &&
         (input.creds[`${id}ApiKey` as keyof ProviderCredentials] as string).length > 0
     );
-    providerId = inferProvider(input.settings?.defaultModel) ?? keyConfigured[0];
+    providerId = inferProvider(input.settings?.defaultModel) ?? keyConfigured[0] ?? customConfigured[0];
   }
   if (!providerId) return null;
 
   // A provider-only override must not carry a lower-precedence foreign model.
   const inheritedModels = [
-    { model: input.envModel, provider: input.envProvider },
-    { model: input.settings?.defaultModel, provider: input.settings?.defaultProviderId },
+    { model: input.envModel, provider: input.envProvider, saved: false },
+    { model: input.settings?.defaultModel, provider: input.settings?.defaultProviderId, saved: true },
   ];
   const selectedModel = input.flagModel ?? inheritedModels.find(candidate => {
     if (!candidate.model || (candidate.provider && candidate.provider !== providerId)) return false;
-    const registered = MODEL_REGISTRY.filter(m => m.id === candidate.model);
+    if (candidate.saved && providerId.startsWith("custom:") && !models.some(model => model.providerId === providerId && model.id === candidate.model)) return false;
+    const registered = models.filter(m => m.id === candidate.model);
     return registered.length === 0 || registered.some(m => m.providerId === providerId);
   })?.model;
   const model =
     selectedModel ??
-    MODEL_REGISTRY.find((m) => m.providerId === providerId)?.id ??
+    models.find((m) => m.providerId === providerId)?.id ??
     "unknown-model";
 
   return { providerId, model };

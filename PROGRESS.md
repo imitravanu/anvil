@@ -5300,3 +5300,39 @@ installation reports 1.4.0. Three tarballs and SHA256SUMS prepared and verified.
 README now gives the installable GitHub tarball URL while npm publishing is unavailable.
 Only the text baseline's version label changed; protected artifacts remain unchanged.
 Committing the validated version bump before tagging/publication and installation.
+
+# 2026-10-21 — dynamic custom providers
+
+Ownership: this session owns new custom-provider configuration/adapter and setup
+components/tests; core `providers/{types,index,registry,openai}.ts`, `config/index.ts`;
+TUI `components/{FirstRunSetup,App}.tsx`, provider-label integration; CLI help;
+README and this progress entry. Extend the existing OpenAI-compatible streaming path,
+preserve all built-in providers and protected artifacts, and test credentials, selection,
+streaming, session identity and the interactive setup path. No release/publication is
+part of this feature task. Validation pending.
+
+Integration ownership also includes `core/src/cert/runner.ts`, TUI `ModelPicker.tsx`,
+CLI `args.ts`, `index.tsx` and their custom-provider/dispatch tests, plus CHANGELOG.
+These keep provider-qualified identities, certification defaults and headless errors
+consistent with the new configuration path.
+
+Completed: validated providers.json definitions and separate owner-only key storage;
+environment-based bearer/header authentication, keyless endpoints, secret redaction,
+redirect refusal, and isolation from unrelated OpenAI account headers. Reused the
+streaming adapter with per-model tool/vision capabilities, selectable token parameter
+and optional usage requests. Provider-qualified catalogs retain built-in collisions,
+remove stale entries and include explicitly configured paid models. Setup supports
+masked add/edit, preserved keys, back/cancel, review-before-save and confirmed removal;
+active providers cannot be removed from the overlay. CLI/headless defaults, model
+selection, session restoration and custom provider labels are integrated. Native
+non-Chat-Completions protocols and automatic model discovery are outside this adapter.
+
+Verification: full `npm run gate` PASS (1,177 core + 424 TUI + 209 CLI = 1,810 tests,
+207 files; 25/25 mock evals; build/typechecks and unchanged protected hashes).
+The new tests cover real local HTTP streams, tool calls and usage, a CLI tool-result
+round-trip, cancellation and socket closure, credential permissions/rollback/redaction,
+validation, settings/session identity, and keyboard setup/edit/remove/picker behavior.
+The initial compatibility run caught a first-run prompt/goal regression; dispatch was
+corrected and the existing tests pass. Package verification PASS: all three clean
+tarballs and isolated CLI installation. `git diff --check` PASS. No live-provider calls.
+Committed locally as an unreleased feature; the installed 1.4.0 release is unchanged.

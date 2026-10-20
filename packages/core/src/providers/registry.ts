@@ -1626,6 +1626,15 @@ export function registerModels(models: ModelInfo[]): void {
   _reindex();
 }
 
+/** Replace the configured custom catalog without deleting built-in id collisions. */
+export function syncCustomProviderModels(models: ModelInfo[]): void {
+  for (let i = MODEL_REGISTRY.length - 1; i >= 0; i--) {
+    if (MODEL_REGISTRY[i].providerId.startsWith("custom:")) MODEL_REGISTRY.splice(i, 1);
+  }
+  for (const model of models) upsertModel(model);
+  _reindex();
+}
+
 /**
  * Remove models by id. Used by tests to keep the registry pristine after
  * registering synthetic phase-8 free models; not part of the hot path.
@@ -1641,14 +1650,13 @@ export function unregisterModels(ids: string[]): void {
 }
 
 /**
- * Registry view for pickers: free models only. Paid entries (isFree === false)
- * are auto-hidden everywhere a user chooses a model — zero clutter, no
- * [PAID] rows, no navigation cost. Lookups elsewhere (StatusBar, format,
+ * Registry view for pickers: hide built-in paid entries, but retain explicit
+ * user-configured custom models regardless of price. Lookups elsewhere (StatusBar, format,
  * Header) keep using the full MODEL_REGISTRY so a paid default chosen via
  * --model still renders its metadata correctly.
  */
 export function visibleModels(): ModelInfo[] {
-  return MODEL_REGISTRY.filter((m) => m.isFree !== false);
+  return MODEL_REGISTRY.filter((m) => m.isFree !== false || m.providerId.startsWith("custom:"));
 }
 
 export function setModelCertification(

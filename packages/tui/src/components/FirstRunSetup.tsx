@@ -2,10 +2,13 @@ import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import TextInput from "ink-text-input";
 import type { ProviderId } from "@anvil/core";
-import { getErrorMessage, saveCredential } from "@anvil/core";
+import { getErrorMessage, saveCredential, loadCustomProviders, type CustomProviderConfig } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 import { PROVIDER_META } from "../util/providers.js";
 import { OverlayFrame } from "./OverlayFrame.js";
+import { CustomProviderSetup } from "./CustomProviderSetup.js";
+import { useWindowedList } from "../hooks/useWindowedList.js";
+import { MAX_VISIBLE_ROWS } from "../util/displayLimits.js";
 
 const PROVIDERS = PROVIDER_META;
 
@@ -17,12 +20,16 @@ const PROVIDERS = PROVIDER_META;
 export function FirstRunSetup({
   onDone,
   onCancel,
+  onRemoved,
+  activeProviderId,
   title = "Welcome to Anvil. Configure at least one provider's API key to start.",
 }: {
   onDone: (providerId: ProviderId) => void;
   /** Esc-to-cancel for the /connect overlay. First-run boot omits it: Anvil
    *  needs one provider before it can start, so Esc would be a dead end. */
   onCancel?: () => void;
+  onRemoved?: () => void;
+  activeProviderId?: ProviderId;
   title?: string;
 }) {
   const theme = useTheme();
@@ -30,9 +37,16 @@ export function FirstRunSetup({
   const [apiKey, setApiKey] = useState("");
   const [step, setStep] = useState<"provider" | "key" | "done">("provider");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [customs, setCustoms] = useState(loadCustomProviders);
+  const [customSetup, setCustomSetup] = useState<{ initial?: CustomProviderConfig } | null>(null);
+  const rows = [...PROVIDERS.map(provider => ({ id: provider.id, label: provider.marketLabel })),
+    ...customs.map(provider => ({ id: provider.id, label: `${provider.name} (custom)` })),
+    { id: "add-custom", label: "+ Add custom OpenAI-compatible provider" }];
+  const window = useWindowedList(rows.length, selected);
   const provider = PROVIDERS[selected];
 
   useInput((_input, key) => {
+    if (customSetup) return;
     if (key.escape) {
       // F11 (AUDIT-2026-09-30): every overlay honors Esc at EVERY step. /connect
       // passes onCancel; first-run omits it (a provider is required to start),
@@ -42,8 +56,11 @@ export function FirstRunSetup({
     }
     if (step === "provider") {
       if (key.upArrow) setSelected((s) => Math.max(0, s - 1));
-      else if (key.downArrow) setSelected((s) => Math.min(PROVIDERS.length - 1, s + 1));
-      else if (key.return) setStep("key");
+      else if (key.downArrow) setSelected((s) => Math.min(rows.length - 1, s + 1));
+      else if (key.return) {
+        if (selected >= PROVIDERS.length) setCustomSetup({ initial: customs[selected - PROVIDERS.length] });
+        else setStep("key");
+      }
     } else if (step === "done" && key.return) {
       onDone(provider.id);
     }
@@ -52,6 +69,11 @@ export function FirstRunSetup({
   // Phase 41 — onboarding is framed like every other overlay instead of bare
   // text: theme modal border, brand title, step in the meta slot.
   const brandTitle = `${theme.typography.brandIcon} ${theme.typography.brandName}`;
+
+  if (customSetup) return <CustomProviderSetup initial={customSetup.initial} activeProviderId={activeProviderId}
+    onDone={onDone} onCancel={() => setCustomSetup(null)} onRemoved={() => {
+      setCustoms(loadCustomProviders()); setSelected(0); setCustomSetup(null); onRemoved?.();
+    }} />;
 
   if (step === "provider") {
     return (
@@ -62,12 +84,15 @@ export function FirstRunSetup({
       >
         <Text color={theme.colors.primary}>{title}</Text>
         <Text color={theme.colors.textSecondary}>Step 1 of 2 — choose a provider, Enter to continue{onCancel ? ", Esc to cancel" : ""}:</Text>
-        {PROVIDERS.map((p, i) => (
-          <Text key={p.id} color={i === selected ? theme.colors.primary : theme.colors.textSecondary}>
-            {i === selected ? "❯ " : "  "}
-            {p.marketLabel}
+        {window.hasAbove && <Text color={theme.colors.textSecondary}>↑ more providers</Text>}
+        {rows.slice(window.offset, window.offset + MAX_VISIBLE_ROWS).map((p, index) => (
+          // The absolute index keeps selection aligned while the list scrolls.
+          <Text key={p.id} color={index + window.offset === selected ? theme.colors.primary : theme.colors.textSecondary}>
+            {index + window.offset === selected ? "❯ " : "  "}
+            {p.label}
           </Text>
         ))}
+        {window.hasBelow && <Text color={theme.colors.textSecondary}>↓ more providers</Text>}
       </OverlayFrame>
     );
   }

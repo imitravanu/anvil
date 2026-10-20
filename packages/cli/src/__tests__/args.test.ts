@@ -181,4 +181,8 @@ describe("resolveInvocation", () => {
   it("a configured install with flags still runs (not onboarding)", () => {
     expect(resolveInvocation(["-p", "hi"], configured)).toEqual({ kind: "run" });
   });
+
+  it("reports explicit provider configuration errors instead of opening first-run setup", () => {
+    expect(resolveInvocation(["--provider", "custom:missing", "-p", "hi"], { hasConfiguredProvider: false })).toEqual({ kind: "run" });
+  });
 });

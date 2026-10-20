@@ -135,6 +135,60 @@ The first time you launch `anvil` (or anytime via `anvil config`):
 
 Hot-swap providers or keys anytime without leaving the chat using `/connect`.
 
+### Custom providers
+
+Run `anvil config` or `/connect` and choose **Add custom OpenAI-compatible provider**.
+Enter a unique ID, display name, API base URL, API key, model IDs and context window.
+Use `$MY_GATEWAY_KEY` instead of a key to reference an environment variable, or `-`
+for an endpoint that requires no bearer authentication. Review before saving.
+Select an existing custom provider in `/connect` to edit it or explicitly confirm removal.
+Switch away from the active provider before removing it; saved conversations are retained.
+
+Custom models appear in `/model`, including paid models you explicitly configured.
+They also work in headless runs:
+
+```bash
+anvil --provider custom:my-gateway --model my-model --no-mcp -p "Hello"
+```
+
+Configuration lives in `~/.anvil/providers.json` (an array); stored keys live separately
+in `provider-keys.json`. Both are written with owner-only permissions. `ANVIL_HOME`
+relocates both files. For example, an environment-authenticated provider:
+
+```json
+[
+  {
+    "id": "custom:my-gateway",
+    "name": "My Gateway",
+    "baseUrl": "https://gateway.example.com/v1",
+    "auth": "bearer",
+    "apiKeyEnv": "MY_GATEWAY_KEY",
+    "headers": { "X-Client": "anvil" },
+    "maxTokensParam": "max_tokens",
+    "streamUsage": true,
+    "models": [
+      {
+        "id": "my-model",
+        "contextWindow": 32768,
+        "supportsTools": true,
+        "supportsVision": false
+      }
+    ]
+  }
+]
+```
+
+Use your server's actual base URL and context limit. The first model is the default.
+The setup flow's optional JSON field accepts `headers`, `maxTokensParam`, `streamUsage`,
+`supportsTools` and `supportsVision`. Set `streamUsage: false` if the server rejects
+`stream_options`, or choose `max_completion_tokens` when required. Model capabilities
+can be configured individually in the file; omitted pricing remains unknown.
+Secret headers such as `X-Api-Key` must reference `$ENV_NAME`; use `auth: "none"`
+for header-only authentication. Missing referenced variables disable that provider.
+Changes made through `/connect` are applied immediately; external file edits take effect
+on the next launch or reconnect. This adapter uses streaming Chat Completions; it does
+not translate arbitrary native Anthropic or Responses API endpoints.
+
 ---
 
 ## 📡 Supported Providers & Certified Models

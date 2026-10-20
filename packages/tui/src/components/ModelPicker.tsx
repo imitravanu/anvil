@@ -38,11 +38,13 @@ const MAX_VISIBLE = MAX_VISIBLE_ROWS;
 export function ModelPicker({
   providers,
   currentModelId,
+  currentProviderId,
   onSelect,
   onClose,
 }: {
   providers: Record<ProviderId, ModelProvider>;
   currentModelId: string;
+  currentProviderId?: ProviderId;
   onSelect: (provider: ModelProvider, model: ModelInfo) => void;
   onClose: () => void;
 }) {
@@ -124,14 +126,15 @@ export function ModelPicker({
   // Focus the current model if enabled, otherwise the first enabled row.
   // Re-runs when the filter changes so the highlight lands on a visible row.
   useEffect(() => {
-    const currentIdx = ordered.findIndex((o) => o.row.model.id === currentModelId && o.row.enabled);
+    const currentIdx = ordered.findIndex((o) => o.row.model.id === currentModelId &&
+      (!currentProviderId || o.row.model.providerId === currentProviderId) && o.row.enabled);
     if (currentIdx !== -1) {
       setSelected(currentIdx);
       return;
     }
     const first = ordered.findIndex((o) => o.row.enabled);
     setSelected(first === -1 ? 0 : first);
-  }, [ordered, currentModelId]);
+  }, [ordered, currentModelId, currentProviderId]);
 
   useInput((input, key) => {
     if (key.escape) {
@@ -189,7 +192,7 @@ export function ModelPicker({
   const renderRow = (entry: (typeof visible)[number]) => {
     const { row, pos } = entry;
     const isSelected = pos === selected;
-    const isCurrent = row.model.id === currentModelId;
+    const isCurrent = row.model.id === currentModelId && (!currentProviderId || row.model.providerId === currentProviderId);
     const marker = isSelected ? "❯ " : "  ";
     const windowTag = formatWindow(row.model.contextWindow);
     const windowSuffix = windowTag ? ` ${windowTag}` : "";
