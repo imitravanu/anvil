@@ -134,24 +134,27 @@ export async function atomicWriteBuffer(
   if (opts?.signal?.aborted) throw new Error("Aborted before writing");
   await fs.promises.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.tmp.${process.pid}.${tmpSeq++}`;
+  let created = false;
   try {
-    if (opts?.mode !== undefined) {
-      await fs.promises.writeFile(tmp, content, { mode: opts.mode });
-      // open()'s mode is masked by the process umask (`0666 & ~022` = `0644`), so
-      // the requested bits are re-applied explicitly — the sync/JSON writers
-      // above do the same. Every caller that passes `mode` (write_file,
-      // edit_file, rewind restore) promises the target's bits survive the rename.
-      await fs.promises.chmod(tmp, opts.mode);
-    } else {
-      await fs.promises.writeFile(tmp, content);
+    const handle = await fs.promises.open(tmp, "wx", opts?.mode);
+    created = true;
+    try {
+      await handle.writeFile(content);
+      // Apply the requested bits through the owned handle, defeating umask
+      // without following a substituted temporary-path symlink.
+      if (opts?.mode !== undefined) await handle.chmod(opts.mode);
+    } finally {
+      await handle.close();
     }
     if (opts?.signal?.aborted) throw new Error("Aborted before renaming");
     await fs.promises.rename(tmp, file);
   } catch (err) {
-    try {
-      await fs.promises.unlink(tmp);
-    } catch {
-      // already gone
+    if (created) {
+      try {
+        await fs.promises.unlink(tmp);
+      } catch {
+        // intentional: rename may already have moved the owned temporary file.
+      }
     }
     throw err;
   }
@@ -166,26 +169,5 @@ export async function atomicWriteText(
   content: string,
   opts?: { mode?: number; signal?: AbortSignal }
 ): Promise<void> {
-  if (opts?.signal?.aborted) throw new Error("Aborted before writing");
-  await fs.promises.mkdir(path.dirname(file), { recursive: true });
-  const tmp = `${file}.tmp.${process.pid}.${tmpSeq++}`;
-  try {
-    if (opts?.mode !== undefined) {
-      await fs.promises.writeFile(tmp, content, { encoding: "utf8", mode: opts.mode });
-      // See atomicWriteBuffer: umask trims the mode open() was handed, and the
-      // callers of this primitive promise the file's permission bits survive.
-      await fs.promises.chmod(tmp, opts.mode);
-    } else {
-      await fs.promises.writeFile(tmp, content, "utf8");
-    }
-    if (opts?.signal?.aborted) throw new Error("Aborted before renaming");
-    await fs.promises.rename(tmp, file);
-  } catch (err) {
-    try {
-      await fs.promises.unlink(tmp);
-    } catch {
-      // already gone
-    }
-    throw err;
-  }
+  await atomicWriteBuffer(file, Buffer.from(content, "utf8"), opts);
 }

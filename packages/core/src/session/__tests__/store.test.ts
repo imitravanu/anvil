@@ -102,8 +102,10 @@ describe("session store", () => {
     );
     expect(loadSession("shapeless", dir)).toBeNull();
     expect(loadSession("nometa", dir)).toBeNull();
-    expect(() => listSessions(dir)).not.toThrow(); // missing updatedAt must not crash sort
-    expect(listSessions(dir).map((m) => m.id)).toContain("nodate");
+    expect(() => listSessions(dir)).not.toThrow();
+    // Incomplete metadata is not resumable and must be skipped, like invalid JSON.
+    expect(loadSession("nodate", dir)).toBeNull();
+    expect(listSessions(dir).map((m) => m.id)).not.toContain("nodate");
   });
 
   it("rejects malformed history parts before a resume can dereference them", async () => {

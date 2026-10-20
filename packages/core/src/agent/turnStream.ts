@@ -92,6 +92,10 @@ export async function* streamAssistantTurn(
   let sawUsage = false;
 
   for await (const event of stream) {
+    if (controller.signal.aborted && event.type !== "usage") {
+      yield { type: "cancelled" };
+      return null;
+    }
     switch (event.type) {
       case "text_delta":
         textParts.push(event.text);
@@ -175,6 +179,11 @@ export async function* streamAssistantTurn(
         stopReason = event.stopReason;
         break;
     }
+  }
+
+  if (controller.signal.aborted) {
+    yield { type: "cancelled" };
+    return null;
   }
 
   // A FIRST-round empty (no text, no tool calls, no retry) would otherwise

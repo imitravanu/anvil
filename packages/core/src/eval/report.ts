@@ -35,6 +35,7 @@ export function createEvalReport(
   // bound. The key stays absent when no task reported cache hits, so the shape
   // of an uncached run is unchanged.
   const cachedInputTotal = results.reduce((sum, r) => sum + (r.tokensUsed.cachedInput ?? 0), 0);
+  const cacheCreationTotal = results.reduce((sum, r) => sum + (r.tokensUsed.cacheCreationInput ?? 0), 0);
 
   // 27.5: price the run from the model's registry row. Unknown pricing leaves
   // its tasks unpriced and the run total undefined — a partial sum is never
@@ -67,6 +68,7 @@ export function createEvalReport(
       input: totalTokens.input,
       output: totalTokens.output,
       ...(cachedInputTotal > 0 ? { cachedInput: cachedInputTotal } : {}),
+      ...(cacheCreationTotal > 0 ? { cacheCreationInput: cacheCreationTotal } : {}),
     },
     ...(estimatedCostUsd !== undefined ? { estimatedCostUsd } : {}),
     // Cache reads are present and the model declares no cache price: they were

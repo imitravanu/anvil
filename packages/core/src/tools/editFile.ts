@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { constants as FS_CONSTANTS } from "node:fs";
 import { createTwoFilesPatch } from "diff";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 import { MAX_WRITE_BYTES } from "./writeFile.js";
@@ -50,11 +51,29 @@ async function computeEdit(
   const abs = resolveWithinRoot(ctx.projectRoot, input.path);
   // Same cap as read/write: editing a multi-megabyte file would blow the
   // model's context (and this read happens in describe(), pre-permission).
-  const stat = await fs.stat(abs);
-  if (stat.size > MAX_WRITE_BYTES) {
-    throw new Error(`File exceeds the ${MAX_WRITE_BYTES}-byte edit limit (${stat.size} bytes).`);
+  if (ctx.signal.aborted) throw new Error("Aborted before reading");
+  const handle = await fs.open(abs, FS_CONSTANTS.O_RDONLY | FS_CONSTANTS.O_NONBLOCK);
+  let current: string;
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile()) throw new Error("Not a regular file — cannot edit a pipe, device, or socket.");
+    if (stat.size > MAX_WRITE_BYTES) {
+      throw new Error(`File exceeds the ${MAX_WRITE_BYTES}-byte edit limit (${stat.size} bytes).`);
+    }
+    const buffer = Buffer.alloc(MAX_WRITE_BYTES + 1);
+    let totalBytes = 0;
+    // A regular-file read may return fewer bytes than requested before EOF.
+    while (totalBytes < buffer.length) {
+      if (ctx.signal.aborted) throw new Error("Aborted while reading");
+      const { bytesRead } = await handle.read(buffer, totalBytes, buffer.length - totalBytes, totalBytes);
+      if (bytesRead === 0) break;
+      totalBytes += bytesRead;
+      if (totalBytes > MAX_WRITE_BYTES) throw new Error("File grew beyond the edit limit while reading.");
+    }
+    current = buffer.subarray(0, totalBytes).toString("utf8");
+  } finally {
+    await handle.close();
   }
-  const current = await fs.readFile(abs, "utf8");
   // Validate uniqueness BEFORE diffing: the preview used to render a
   // first-match diff for calls that execute() would then refuse as multi-match.
   const matches = countOccurrences(current, input.old_str);

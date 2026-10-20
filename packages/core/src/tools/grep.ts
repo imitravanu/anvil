@@ -1,12 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { Worker } from "node:worker_threads";
 import { ToolContext, ToolDefinition, ToolExecutor } from "./types.js";
 import { EXCLUDED_DIRS, resolveWithinRoot } from "./paths.js";
 import { getErrorMessage } from "../errors.js";
 
-// Model-supplied patterns run in a synchronous regex engine that Esc/cancel
-// cannot interrupt: a pathological shape would freeze the whole app mid-turn.
-// Two independent bounds keep worst-case work sane:
+// Shape checks cheaply refuse known hazards. Matching runs in a worker with
+// an abortable deadline; input caps alone cannot bound regex backtracking.
 // 1. GREP_LINE_TEST_MAX — each line is only tested on its first 4 KB. Lines in
 //    real source are far shorter; minified bundles live under dist/.git etc.
 //    (EXCLUDED_DIRS), and a long-line note is surfaced honestly in the output.
@@ -17,8 +17,53 @@ import { getErrorMessage } from "../errors.js";
 //    and plain alternation (a|b) without an outer repeat stay allowed.
 // Both caps are centralized in config/constants (§2.4); re-exported so the
 // public API is unchanged.
-import { GREP_PATTERN_MAX_LENGTH, GREP_LINE_TEST_MAX, GREP_MAX_FILE_BYTES, GREP_DEFAULT_MAX_RESULTS, GREP_LINE_DISPLAY_MAX, GREP_MAX_RESULTS, GREP_MIN_RESULTS } from "../config/constants.js";
+import { GREP_PATTERN_MAX_LENGTH, GREP_LINE_TEST_MAX, GREP_MAX_FILE_BYTES, GREP_DEFAULT_MAX_RESULTS, GREP_LINE_DISPLAY_MAX, GREP_MAX_RESULTS, GREP_MIN_RESULTS, GREP_REGEX_TIMEOUT_MS } from "../config/constants.js";
 export { GREP_PATTERN_MAX_LENGTH, GREP_LINE_TEST_MAX };
+
+// Regex evaluation never owns the main thread: even a shape the preflight
+// misses is interruptible. One worker is reused across this search's files.
+class RegexMatcher {
+  private worker: Worker;
+  constructor(pattern: string, private readonly signal: AbortSignal) {
+    this.worker = new Worker(`
+      const {parentPort, workerData} = require('node:worker_threads');
+      const regex = new RegExp(workerData);
+      parentPort.on('message', ({lines, limit}) => {
+        const hits = [];
+        for (let i = 0; i < lines.length; i++) {
+          if (regex.test(lines[i])) hits.push(i);
+          if (hits.length >= limit) break;
+        }
+        parentPort.postMessage(hits);
+      });
+    `, { eval: true, workerData: pattern, execArgv: [] });
+  }
+
+  match(lines: string[], limit: number): Promise<Set<number>> {
+    return new Promise((resolve, reject) => {
+      const cleanup = () => {
+        clearTimeout(timer);
+        this.worker.off("message", onMessage);
+        this.worker.off("error", onError);
+        this.worker.off("exit", onExit);
+        this.signal.removeEventListener("abort", onAbort);
+      };
+      const onError = (error: Error) => { cleanup(); reject(error); };
+      const onMessage = (hits: number[]) => { cleanup(); resolve(new Set(hits)); };
+      const onExit = () => onError(new Error("grep worker stopped before returning results"));
+      const onAbort = () => onError(new Error("grep cancelled"));
+      const timer = setTimeout(() => onError(new Error("grep regex execution timed out; simplify the pattern")), GREP_REGEX_TIMEOUT_MS);
+      this.worker.once("message", onMessage);
+      this.worker.once("error", onError);
+      this.worker.once("exit", onExit);
+      if (this.signal.aborted) { onAbort(); return; }
+      this.signal.addEventListener("abort", onAbort, { once: true });
+      this.worker.postMessage({ lines, limit });
+    });
+  }
+
+  async close(): Promise<void> { await this.worker.terminate(); }
+}
 
 /**
  * Structural view of a pattern for the shape check. Escaped atoms and
@@ -178,9 +223,8 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
       summary: `grep failed: ${unsafe}`,
     };
   }
-  let regex: RegExp;
   try {
-    regex = new RegExp(pattern);
+    new RegExp(pattern); // Validate syntax before starting the worker.
   } catch (err) {
     return {
       output: { error: `Invalid regular expression: ${getErrorMessage(err)}` },
@@ -192,67 +236,73 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   const matches: Array<{ path: string; line: number; text: string }> = [];
   let truncated = false;
   let longLines = 0;
-  // The cap is enforced per MATCH, not per file: checking only at file
-  // boundaries reported truncated=false when the cap was hit inside the LAST
-  // scanned file. The cost of honesty — when exactly maxResults matches exist
-  // in total, the scan runs to the end to prove nothing was omitted — is
-  // bounded by the size gates above.
-  scan: for await (const abs of textFiles(absDir, ctx.signal)) {
-    if (ctx.signal.aborted) {
-      return {
-        output: { matches, truncated: true, aborted: true },
-        isError: true,
-        summary: `grep cancelled`,
-      };
-    }
-    // Size-gate BEFORE reading: readFile would pull the whole file (any size)
-    // into memory just to skip it — a multi-gigabyte log or artifact would
-    // spike the heap on every scan.
-    try {
-      const stat = await fs.stat(abs);
-      if (!stat.isFile() || stat.size > GREP_MAX_FILE_BYTES) continue;
-    } catch {
-      // intentional: raced unlink/permission — same skip policy as read failures below.
-      continue;
-    }
-    let buf: Buffer;
-    try {
-      buf = await fs.readFile(abs);
-    } catch {
-      // intentional: raced unlink/permission between stat and read — skip the
-      // file and keep scanning. The stat-race comment above used to reference
-      // "read failures below" as if this policy existed; it did not — one
-      // flaky file aborted the whole search (2026-10-10).
-      continue;
-    }
-    if (buf.includes(0)) continue; // skip binary files
-    const rel = path.relative(ctx.projectRoot, abs).split(path.sep).join("/");
-    const lines = buf.toString("utf8").split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      // Regex testing is synchronous and uninterruptible; bound each test to
-      // the line's first GREP_LINE_TEST_MAX chars so even a pattern that slips
-      // past the shape check operates on small input. Lines longer than the
-      // bound still report honestly via longLines below.
-      const line = lines[i];
-      const tested = line.length > GREP_LINE_TEST_MAX ? line.slice(0, GREP_LINE_TEST_MAX) : line;
-      if (tested !== line) longLines += 1;
-      if (!regex.test(tested)) continue;
-      if (matches.length >= maxResults) {
-        truncated = true;
-        break scan; // one proven-omitted match is enough to know
+  const matcher = new RegexMatcher(pattern, ctx.signal);
+  try {
+    // The cap is enforced per MATCH, not per file: checking only at file
+    // boundaries reported truncated=false when the cap was hit inside the LAST
+    // scanned file. The cost of honesty — when exactly maxResults matches exist
+    // in total, the scan runs to the end to prove nothing was omitted — is
+    // bounded by the size gates above.
+    scan: for await (const abs of textFiles(absDir, ctx.signal)) {
+      if (ctx.signal.aborted) {
+        return {
+          output: { matches, truncated: true, aborted: true },
+          isError: true,
+          summary: `grep cancelled`,
+        };
       }
-      matches.push({ path: rel, line: i + 1, text: line.slice(0, GREP_LINE_DISPLAY_MAX) });
+      // Size-gate BEFORE reading: readFile would pull the whole file (any size)
+      // into memory just to skip it — a multi-gigabyte log or artifact would
+      // spike the heap on every scan.
+      try {
+        const stat = await fs.stat(abs);
+        if (!stat.isFile() || stat.size > GREP_MAX_FILE_BYTES) continue;
+      } catch {
+        // intentional: raced unlink/permission — same skip policy as read failures below.
+        continue;
+      }
+      let buf: Buffer;
+      try {
+        buf = await fs.readFile(abs);
+      } catch {
+        // intentional: raced unlink/permission between stat and read — skip the
+        // file and keep scanning. The stat-race comment above used to reference
+        // "read failures below" as if this policy existed; it did not — one
+        // flaky file aborted the whole search (2026-10-10).
+        continue;
+      }
+      if (buf.includes(0)) continue; // skip binary files
+      const rel = path.relative(ctx.projectRoot, abs).split(path.sep).join("/");
+      const lines = buf.toString("utf8").split("\n");
+      const hits = await matcher.match(lines.map(line => line.slice(0, GREP_LINE_TEST_MAX)), maxResults - matches.length + 1);
+      for (let i = 0; i < lines.length; i++) {
+        // Report the same input truncation the worker applied to this line.
+        const line = lines[i];
+        const tested = line.length > GREP_LINE_TEST_MAX ? line.slice(0, GREP_LINE_TEST_MAX) : line;
+        if (tested !== line) longLines += 1;
+        if (!hits.has(i)) continue;
+        if (matches.length >= maxResults) {
+          truncated = true;
+          break scan; // one proven-omitted match is enough to know
+        }
+        matches.push({ path: rel, line: i + 1, text: line.slice(0, GREP_LINE_DISPLAY_MAX) });
+      }
     }
+    return {
+      output: {
+        matches,
+        truncated,
+        ...(longLines > 0
+          ? { note: `${longLines} very long line${longLines === 1 ? "" : "s"} searched only in their first ${GREP_LINE_TEST_MAX} characters` }
+          : {}),
+      },
+      isError: false,
+      summary: `grep "${pattern}": ${matches.length} match${matches.length === 1 ? "" : "es"}`,
+    };
+  } catch (err) {
+    const message = getErrorMessage(err);
+    return { output: { error: message, matches, truncated: true }, isError: true, summary: message };
+  } finally {
+    await matcher.close();
   }
-  return {
-    output: {
-      matches,
-      truncated,
-      ...(longLines > 0
-        ? { note: `${longLines} very long line${longLines === 1 ? "" : "s"} searched only in their first ${GREP_LINE_TEST_MAX} characters` }
-        : {}),
-    },
-    isError: false,
-    summary: `grep "${pattern}": ${matches.length} match${matches.length === 1 ? "" : "es"}`,
-  };
 };

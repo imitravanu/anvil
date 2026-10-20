@@ -86,6 +86,8 @@ export type StreamEvent =
        * the prompt total. Undefined when the provider does not report it.
        */
       cachedInputTokens?: number;
+      /** Cache creation is part of total input, with its own billing category. */
+      cacheCreationInputTokens?: number;
     }
   | {
       type: "turn_end";
@@ -263,5 +265,6 @@ export interface ModelInfo {
    * never an invented discount (the report labels it as one).
    */
   costPer1kCachedInputTokens?: number;
+  costPer1kCacheCreationInputTokens?: number;
 }
 

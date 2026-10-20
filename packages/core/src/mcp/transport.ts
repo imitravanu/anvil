@@ -730,7 +730,8 @@ function bindSseTransport(
           if (trimmed === "") return;
           if (contentType.includes("text/event-stream")) {
             const parser = new SseFrameParser();
-            for (const m of parser.push(trimmed)) {
+            // The trailing blank line dispatches the final SSE frame.
+            for (const m of parser.push(text)) {
               if (m.data !== "") pump.deliver(m.data);
             }
           } else {

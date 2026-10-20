@@ -4,6 +4,8 @@
   "description": "Ink terminal UI for the Anvil coding agent.",
   "author": "mitravanu",
   "license": "MIT",
+  "engines": { "node": ">=22" },
+  "repository": { "type": "git", "url": "git+https://github.com/imitravanu/anvil.git", "directory": "packages/tui" },
   "keywords": [
     "ai",
     "coding-agent",
@@ -25,7 +27,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p .",
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.build.json",
     "prepublishOnly": "npm run build",
     "typecheck": "tsc -p . --noEmit",
     "test": "vitest run",

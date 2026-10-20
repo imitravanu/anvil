@@ -20,6 +20,8 @@ export interface ModelPricing {
    * then billed at `inputPer1k`, which overstates (never understates) the bill.
    */
   cachedInputPer1k?: number;
+  /** Unknown cache-write pricing makes a paid creation-bearing usage unpriced. */
+  cacheCreationInputPer1k?: number;
 }
 
 /**
@@ -32,6 +34,7 @@ export function pricingForModel(model: ModelInfo | undefined): ModelPricing | nu
     costPer1kInputTokens: inputPer1k,
     costPer1kOutputTokens: outputPer1k,
     costPer1kCachedInputTokens: cachedInputPer1k,
+    costPer1kCacheCreationInputTokens: cacheCreationInputPer1k,
   } = model;
   if (typeof inputPer1k === "number" && typeof outputPer1k === "number") {
     return {
@@ -39,6 +42,7 @@ export function pricingForModel(model: ModelInfo | undefined): ModelPricing | nu
       outputPer1k,
       // Only declared when known — pricingForModel must not invent the key.
       ...(typeof cachedInputPer1k === "number" ? { cachedInputPer1k } : {}),
+      ...(typeof cacheCreationInputPer1k === "number" ? { cacheCreationInputPer1k } : {}),
     };
   }
   if (model.isFree) return { inputPer1k: 0, outputPer1k: 0 };
@@ -55,14 +59,16 @@ export function pricingForModel(model: ModelInfo | undefined): ModelPricing | nu
  * driving the fresh-input term negative.
  */
 export function estimateCostUsd(
-  usage: { input: number; output: number; cachedInput?: number },
+  usage: { input: number; output: number; cachedInput?: number; cacheCreationInput?: number },
   pricing: ModelPricing | null
 ): number | undefined {
   if (!pricing) return undefined;
   const cached = Math.min(Math.max(0, usage.cachedInput ?? 0), usage.input);
-  const fresh = usage.input - cached;
+  const created = Math.min(Math.max(0, usage.cacheCreationInput ?? 0), usage.input - cached);
+  if (created > 0 && pricing.cacheCreationInputPer1k === undefined && pricing.inputPer1k !== 0) return undefined;
+  const fresh = usage.input - cached - created;
   const cachedPer1k = pricing.cachedInputPer1k ?? pricing.inputPer1k;
-  return (fresh * pricing.inputPer1k + cached * cachedPer1k + usage.output * pricing.outputPer1k) / 1000;
+  return (fresh * pricing.inputPer1k + cached * cachedPer1k + created * (pricing.cacheCreationInputPer1k ?? 0) + usage.output * pricing.outputPer1k) / 1000;
 }
 
 /**

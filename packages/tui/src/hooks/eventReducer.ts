@@ -46,7 +46,7 @@ function lastIndexOfMember(subAgents: readonly DisplaySubAgent[], id: string): n
  */
 function accumulateUsage(
   prev: UsageTotals,
-  event: { inputTokens: number; outputTokens: number; reasoningTokens?: number; cachedInputTokens?: number }
+  event: { inputTokens: number; outputTokens: number; reasoningTokens?: number; cachedInputTokens?: number; cacheCreationInputTokens?: number }
 ): UsageTotals {
   const next: UsageTotals = {
     inputTokens: prev.inputTokens + event.inputTokens,
@@ -62,6 +62,10 @@ function accumulateUsage(
       ? prev.cachedInputTokens
       : (prev.cachedInputTokens ?? 0) + event.cachedInputTokens;
   if (cached !== undefined) next.cachedInputTokens = cached;
+  const created = event.cacheCreationInputTokens === undefined
+    ? prev.cacheCreationInputTokens
+    : (prev.cacheCreationInputTokens ?? 0) + event.cacheCreationInputTokens;
+  if (created !== undefined) next.cacheCreationInputTokens = created;
   return next;
 }
 
@@ -181,6 +185,7 @@ export interface UsageTotals {
    * as fresh.
    */
   cachedInputTokens?: number;
+  cacheCreationInputTokens?: number;
 }
 
 export function systemMessage(text: string): DisplayMessage {

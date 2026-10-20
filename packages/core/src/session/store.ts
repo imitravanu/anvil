@@ -23,7 +23,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isStoredSession(v: unknown): v is StoredSession {
   if (!isRecord(v) || !isRecord(v.metadata) || !Array.isArray(v.history)) return false;
-  if (typeof v.metadata.id !== "string") return false;
+  const metadata = v.metadata;
+  if (["id", "title", "providerId", "model", "createdAt", "updatedAt"].some(key => typeof metadata[key] !== "string")) return false;
+  if (typeof metadata.id !== "string" || !SAFE_ID_RE.test(metadata.id)) return false;
+  if (metadata.plan !== undefined && typeof metadata.plan !== "string") return false;
+  if (metadata.runLedger !== undefined) {
+    if (!Array.isArray(metadata.runLedger)) return false;
+    for (const row of metadata.runLedger) {
+      if (!isRecord(row) || typeof row.seq !== "number" || !Number.isFinite(row.seq) ||
+          typeof row.ts !== "string" || typeof row.eventType !== "string" ||
+          !["ok", "error", "denied", "aborted"].includes(String(row.outcome)) ||
+          typeof row.elapsedMs !== "number" || !Number.isFinite(row.elapsedMs)) return false;
+      if (row.tool !== undefined && typeof row.tool !== "string") return false;
+      if (row.inputHash !== undefined && typeof row.inputHash !== "string") return false;
+      if (row.tokens !== undefined && (!isRecord(row.tokens) ||
+          typeof row.tokens.in !== "number" || !Number.isFinite(row.tokens.in) ||
+          typeof row.tokens.out !== "number" || !Number.isFinite(row.tokens.out))) return false;
+    }
+  }
   // Deep guard: a corrupt entry (null, wrong role, missing content) must fail
   // lookup, not crash restore when HistoryStore dereferences role/content.
   for (const entry of v.history) {

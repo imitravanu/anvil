@@ -13,10 +13,17 @@ export function mapStopReason(reason: string): StopReason {
   return "unknown";
 }
 
+interface AnthropicUsage {
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  cache_read_input_tokens?: number | null;
+  cache_creation_input_tokens?: number | null;
+}
+
 export interface RawAnthropicStreamEvent {
   type: string;
   index?: number;
-  message?: { usage?: { input_tokens?: number } };
+  message?: { usage?: AnthropicUsage };
   content_block?: { type: string; id?: string; name?: string };
   delta?: {
     type?: string;
@@ -29,7 +36,7 @@ export interface RawAnthropicStreamEvent {
   // with cumulative input_tokens/output_tokens) — delta only carries
   // stop_reason/container/stop_details. Optional so the fixture shape with
   // delta.usage stays decodable too.
-  usage?: { input_tokens?: number | null; output_tokens?: number | null };
+  usage?: AnthropicUsage;
 }
 
 export async function* translateAnthropicStream(
@@ -39,10 +46,26 @@ export async function* translateAnthropicStream(
   const toolInputBuffers = new Map<string, string>();
   const toolNames = new Map<string, string>();
   let usageIn = 0;
+  let cacheRead = 0;
+  let cacheCreated = 0;
+  let usageOut = 0;
+  let sawUsage = false;
+  let stopReason: StopReason | undefined;
+  const usageEvent = (): StreamEvent => ({
+    type: "usage",
+    inputTokens: usageIn + cacheRead + cacheCreated,
+    outputTokens: usageOut,
+    ...(cacheRead > 0 ? { cachedInputTokens: cacheRead } : {}),
+    ...(cacheCreated > 0 ? { cacheCreationInputTokens: cacheCreated } : {}),
+  });
   try {
     for await (const event of raw) {
       if (event.type === "message_start") {
         usageIn = event.message?.usage?.input_tokens ?? 0;
+        cacheRead = event.message?.usage?.cache_read_input_tokens ?? 0;
+        cacheCreated = event.message?.usage?.cache_creation_input_tokens ?? 0;
+        usageOut = event.message?.usage?.output_tokens ?? 0;
+        sawUsage = event.message?.usage !== undefined;
       } else if (event.type === "content_block_start" && event.content_block?.type === "tool_use") {
         const id = event.content_block.id;
         if (!id) continue;
@@ -81,20 +104,24 @@ export async function* translateAnthropicStream(
         const flatUsage = event.usage;
         const nestedUsage = event.delta?.usage;
         if (flatUsage || nestedUsage) {
-          yield {
-            type: "usage",
-            inputTokens: flatUsage?.input_tokens ?? usageIn,
-            outputTokens: flatUsage?.output_tokens ?? nestedUsage?.output_tokens ?? 0,
-          };
+          usageIn = flatUsage?.input_tokens ?? usageIn;
+          cacheRead = flatUsage?.cache_read_input_tokens ?? cacheRead;
+          cacheCreated = flatUsage?.cache_creation_input_tokens ?? cacheCreated;
+          usageOut = flatUsage?.output_tokens ?? nestedUsage?.output_tokens ?? usageOut;
+          sawUsage = true;
         }
         if (event.delta?.stop_reason) {
-          yield { type: "turn_end", stopReason: mapStopReason(event.delta.stop_reason) };
+          stopReason = mapStopReason(event.delta.stop_reason);
         }
       }
     }
   } catch (err) {
+    if (sawUsage) yield usageEvent();
     yield { type: "error", message: getErrorMessage(err) };
+    return;
   }
+  if (sawUsage) yield usageEvent();
+  if (stopReason) yield { type: "turn_end", stopReason };
 }
 
 export function toAnthropicMessages(messages: ConversationMessage[]): Anthropic.MessageParam[] {

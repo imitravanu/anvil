@@ -352,8 +352,7 @@ Let's begin.`;
         { type: "turn_end", stopReason: "end_turn" },
       ];
 
-      // With maxTurns = 2: turn 1 = planning, turn 2 = M1 execution,
-      // turn 3 = M1 review (allowed to finish), then the budget stops M2/M3.
+      // Four turns cover planning, M1, its review, and the final critique.
       const script: ScriptEntry[] = [
         planResponse,
         textTurn("Finished M1"),
@@ -367,7 +366,7 @@ Let's begin.`;
         model: "fake-model",
         projectRoot: tmpDir,
         permissionBroker: { async requestPermission() { return true; } },
-        maxTurns: 2,
+        maxTurns: 4,
         autoVerify: false,
       });
 

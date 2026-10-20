@@ -1,4 +1,5 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { planTreeKill } from "../tools/bash.js";
 import { getErrorMessage } from "../errors.js";
 import { log } from "../logger.js";
 import { registerExternalExecutor } from "../tools/index.js";
@@ -69,6 +70,61 @@ function usesArgv(tool: PluginToolDef): boolean {
   return Array.isArray(tool.args) && tool.args.length > 0;
 }
 
+interface PluginProcessResult {
+  stdout: string;
+  stderr: string;
+  status: number | null;
+  error?: Error;
+}
+
+async function runPluginProcess(command: string, args: string[], cwd: string, signal: AbortSignal): Promise<PluginProcessResult> {
+  if (signal.aborted) return { stdout: "", stderr: "", status: null, error: new Error("Plugin tool cancelled") };
+  return new Promise(resolve => {
+    const child = spawn(command, args, { cwd, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    let bytes = 0;
+    let error: Error | undefined;
+    let settled = false;
+    const killTree = () => {
+      if (child.pid === undefined) return;
+      const plan = planTreeKill(child.pid, process.platform);
+      if (plan.strategy === "taskkill") {
+        spawnSync(plan.command, plan.args, { stdio: "ignore" });
+        child.kill("SIGKILL");
+      } else {
+        try { process.kill(-plan.pid, "SIGKILL"); }
+        catch {
+          // intentional: the group may have exited already; signal its direct child.
+          child.kill("SIGKILL");
+        }
+      }
+    };
+    const fail = (message: string) => { error ??= new Error(message); killTree(); };
+    const onAbort = () => fail("Plugin tool cancelled");
+    const timer = setTimeout(() => fail("Plugin tool timed out"), PLUGIN_TOOL_TIMEOUT_MS);
+    const capture = (chunks: Buffer[]) => (chunk: Buffer) => {
+      const room = Math.max(0, PLUGIN_TOOL_MAX_BUFFER_BYTES - bytes);
+      chunks.push(chunk.subarray(0, room));
+      bytes += chunk.length;
+      if (bytes > PLUGIN_TOOL_MAX_BUFFER_BYTES) fail("Plugin tool output exceeds its byte limit");
+    };
+    child.stdout.on("data", capture(stdout));
+    child.stderr.on("data", capture(stderr));
+    const finish = (status: number | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      resolve({ status, stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8"), ...(error ? { error } : {}) });
+    };
+    child.once("error", err => { error = err; finish(null); });
+    child.once("close", finish);
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
+}
+
 /**
  * Register one plugin's tools as external executors. Each tool runs in the
  * project root: argv-mode tools spawn `command` directly with NO shell, and
@@ -132,18 +188,8 @@ export function registerPluginExecutors(plugins: LoadedPlugin[]): ToolDefinition
         // argv form: no shell, so model-controlled metacharacters stay inert
         // data in their own argv element. legacy form: the documented splice.
         const child = usesArgv(tool)
-          ? spawnSync(tool.command, buildArgv(tool, input), {
-              cwd: ctx.projectRoot,
-              timeout: PLUGIN_TOOL_TIMEOUT_MS,
-              encoding: "utf8",
-              maxBuffer: PLUGIN_TOOL_MAX_BUFFER_BYTES,
-            })
-          : spawnSync("bash", ["-c", rendered], {
-              cwd: ctx.projectRoot,
-              timeout: PLUGIN_TOOL_TIMEOUT_MS,
-              encoding: "utf8",
-              maxBuffer: PLUGIN_TOOL_MAX_BUFFER_BYTES,
-            });
+          ? await runPluginProcess(tool.command, buildArgv(tool, input), ctx.projectRoot, ctx.signal)
+          : await runPluginProcess("bash", ["-c", rendered], ctx.projectRoot, ctx.signal);
         if (child.error) {
           return {
             claimed: true,

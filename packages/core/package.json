@@ -4,6 +4,8 @@
   "description": "Core agent loop, provider adapters, sessions, and tools for Anvil.",
   "author": "mitravanu",
   "license": "MIT",
+  "engines": { "node": ">=22" },
+  "repository": { "type": "git", "url": "git+https://github.com/imitravanu/anvil.git", "directory": "packages/core" },
   "keywords": ["ai", "coding-agent", "agent", "providers"],
   "files": ["dist"],
   "type": "module",

@@ -44,6 +44,7 @@ export type AgentEvent =
       outputTokens: number;
       reasoningTokens?: number;
       cachedInputTokens?: number;
+      cacheCreationInputTokens?: number;
     }
   | { type: "compacted"; summary: string }
   | { type: "turn_complete" }

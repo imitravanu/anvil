@@ -52,7 +52,12 @@ try {
     const { name, version } = readJson(path.join(ws, "package.json"));
     // The `./` prefix is load-bearing: bare `packages/core` is parsed by npm as
     // a GitHub spec (`github.com/packages/core`) and fails with a git error.
-    execFileSync(NPM, ["pack", "--pack-destination", packDir, `./${ws}`], { cwd: ROOT, stdio: "inherit" });
+    const packed = JSON.parse(execFileSync(NPM, ["pack", "--json", "--pack-destination", packDir, `./${ws}`], { cwd: ROOT, encoding: "utf8" }));
+    const packageInfos = Array.isArray(packed) ? packed : Object.values(packed);
+    const shipped = packageInfos.find(info => info.name === name);
+    if (!shipped) fail(`npm pack returned no file manifest for ${name}`);
+    const forbidden = shipped.files.filter(entry => /(?:__tests__|__visual__|test-utils|\.test\.)/.test(entry.path));
+    if (forbidden.length > 0) fail(`${name} publishes test artifacts: ${forbidden.map(entry => entry.path).join(", ")}`);
     const expected = `${tarballPrefix(name)}-${version}.tgz`;
     const file = path.join(packDir, expected);
     if (!fs.existsSync(file)) fail(`npm pack produced no ${expected} for ${name}`);

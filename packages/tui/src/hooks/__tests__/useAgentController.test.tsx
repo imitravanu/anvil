@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type React from "react";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { Text } from "ink";
 import { render } from "ink-testing-library";
 import { AgentSession, type AgentEvent, type StreamEvent } from "@anvil/core";
@@ -365,6 +368,62 @@ describe("useAgentController - Phase 23.8 stream backpressure buffer", () => {
 });
 
 describe("useAgentController - goal mission outcomes", () => {
+  it.each([
+    { stage: 1, cancelled: true }, { stage: 2, cancelled: true },
+    { stage: 3, cancelled: true }, { stage: 4, cancelled: true },
+    { stage: 4, cancelled: false },
+  ])("handles queued messages at mission turn $stage (cancelled=$cancelled)", async ({ stage, cancelled }) => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "anvil-mission-queue-"));
+    let release!: () => void;
+    let ready!: () => void;
+    const started = new Promise<void>(resolve => { ready = resolve; });
+    const held = new Promise<void>(resolve => { release = resolve; });
+    const calls: string[] = [];
+    const replies = [JSON.stringify([{ id: "1", title: "Only", criteria: "Do it" }]), "Implemented.", "YES — done.", "Review complete."];
+    const session = {
+      plan: null, projectRoot: root, cancel: release, summarizeChanges: async () => [],
+      async *send(prompt: string): AsyncGenerator<AgentEvent> {
+        calls.push(prompt);
+        const call = calls.length;
+        if (call === stage) {
+          ready();
+          await held;
+          if (cancelled) { yield { type: "cancelled" }; return; }
+        }
+        yield { type: "text_delta", text: replies[call - 1] ?? "Chat response." };
+      },
+    } as unknown as AgentSession;
+    const api: { current: ReturnType<typeof useAgentController> | null } = { current: null };
+    const app = render(<Harness session={session} api={api} />);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 30));
+      const running = api.current!.launchGoal("Do the thing");
+      await started;
+      await api.current!.send("queued first");
+      await api.current!.send("queued second");
+      if (cancelled) api.current!.cancel();
+      else release();
+      await running;
+      await new Promise(resolve => setTimeout(resolve, 30));
+      if (cancelled) {
+        expect(calls).toHaveLength(stage);
+        expect(api.current!.queued).toEqual(["queued first", "queued second"]);
+        expect(api.current!.messages.some(m => m.text.includes("2 queued messages held, not sent"))).toBe(true);
+      } else {
+        expect(calls.slice(-2)).toEqual(["queued first", "queued second"]);
+      }
+      expect(api.current!.isBusy).toBe(false);
+      await api.current!.send("explicit next");
+      await new Promise(resolve => setTimeout(resolve, 30));
+      expect(calls.slice(-3)).toEqual(["queued first", "queued second", "explicit next"]);
+      expect(api.current!.queued).toEqual([]);
+    } finally {
+      release();
+      app.unmount();
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   /**
    * A duck-typed session whose turns are scripted by call number. The mission's
    * turn runner consumes `session.send` directly, so this is the real

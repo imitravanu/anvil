@@ -4,6 +4,8 @@
   "description": "A terminal-based AI coding agent with interactive permission prompts.",
   "author": "mitravanu",
   "license": "MIT",
+  "engines": { "node": ">=22" },
+  "repository": { "type": "git", "url": "git+https://github.com/imitravanu/anvil.git", "directory": "packages/cli" },
   "keywords": ["ai", "coding-agent", "terminal", "cli", "ink"],
   "type": "module",
   "main": "dist/index.js",

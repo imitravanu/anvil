@@ -5184,3 +5184,99 @@ failing test each); files restored byte-exact and 19/19 green again.
 **Authorization note (§3.4c):** the user explicitly waived per-change human review for this session
 ("you can bypass human verification", "i dont have the knowlage about code"), so this change also
 ships with `--no-verify`; both protected diffs are enumerated above and in the commit body.
+
+# 2026-10-20 — audit remediation (complete; held for review)
+
+Scope: the twelve findings in the 2026-10-20 full audit, rechecked against
+`c304d1a`. All twelve are live; this is maintenance, not a reopening of the
+historical Phase 21–25 feature roadmap. No protected artifacts are in scope.
+
+Ownership: this session owns `packages/core/src/atomicWrite.ts`,
+`config/{constants,index}.ts`, `tools/{grep,editFile}.ts`,
+`agent/{checkpoints,turnStream}.ts`, `agent/goal/goalEngine.ts`,
+`providers/anthropic.ts`, `session/store.ts`, `mcp/transport.ts`,
+`plugins/registry.ts`, `tools/writeFile.ts`, usage/pricing propagation in
+`providers/types.ts`, `eval/{cost,types,runner,report}.ts`, TUI `hooks/eventReducer.ts`,
+their regression tests, `packages/tui/{package.json,tsconfig.build.json}`,
+`scripts/verify-package.mjs`, package metadata/lockfile, and this progress entry.
+Completed all twelve audited repairs. Async writes exclusively create their owned temporary
+file; grep executes in a reusable, abortable worker with a configured deadline;
+snapshot/edit/write preparation refuses FIFOs; provider aborts normalize to cancellation;
+mission completion requires clean review/critique outcomes and all dispatched turns count
+toward the budget. Anthropic cache-read and cache-creation input is included in usage, with
+cache creation left unpriced when its paid rate is unknown. Provider-only overrides discard
+foreign inherited models; inline SSE framing is preserved; persisted metadata is validated;
+plugin processes execute asynchronously with cancellation, output bounds, and tree cleanup;
+TUI builds exclude tests and remove stale generated output. Public package manifests now
+carry the known repository URL and Node >=22 requirement.
+
+Fail-first receipts: all 20 initial audit regressions failed on the original code; both
+cache-creation pricing tests failed before pricing support; the strengthened package check
+refused the old TUI tarball because it contained compiled tests. Coverage was then extended
+to write previews, cumulative usage and cache-creation report totals.
+
+Final verification: full `npm run gate` PASS (Steps 0–5; protected hashes unchanged).
+Core 1,139 + TUI 413 + CLI 205 = 1,757 tests across 203 files; 25/25 fast mock evals.
+`scripts/verify-package.mjs` PASS: all three packages packed, zero test artifacts, isolated
+CLI installation and --version succeeded. Built ESM grep-worker smoke PASS. Dry-run TUI
+tarball: 164 files / 423,505 bytes (was 302 files / 698,125 bytes, including 134 test artifacts).
+All code verification ran on Linux/Node 24. No paid/live-provider calls or publication.
+
+**Deliberately held uncommitted for user review:** this cross-package remediation remains
+available as a reviewable working-tree diff. No protected artifacts were edited. Exact files:
+
+- `PROGRESS.md`
+- `package-lock.json`
+- `packages/cli/package.json`
+- `packages/core/package.json`
+- `packages/core/src/agent/checkpoints.ts`
+- `packages/core/src/agent/goal/__tests__/goalEngine.test.ts`
+- `packages/core/src/agent/goal/goalEngine.ts`
+- `packages/core/src/agent/turnStream.ts`
+- `packages/core/src/agent/types.ts`
+- `packages/core/src/atomicWrite.ts`
+- `packages/core/src/config/constants.ts`
+- `packages/core/src/config/index.ts`
+- `packages/core/src/eval/__tests__/cost.test.ts`
+- `packages/core/src/eval/__tests__/runner.test.ts`
+- `packages/core/src/eval/cost.ts`
+- `packages/core/src/eval/report.ts`
+- `packages/core/src/eval/runner.ts`
+- `packages/core/src/eval/types.ts`
+- `packages/core/src/mcp/transport.ts`
+- `packages/core/src/plugins/registry.ts`
+- `packages/core/src/providers/anthropic.ts`
+- `packages/core/src/providers/types.ts`
+- `packages/core/src/session/__tests__/store.test.ts`
+- `packages/core/src/session/store.ts`
+- `packages/core/src/tools/editFile.ts`
+- `packages/core/src/tools/grep.ts`
+- `packages/core/src/tools/writeFile.ts`
+- `packages/tui/package.json`
+- `packages/tui/src/hooks/eventReducer.ts`
+- `packages/tui/src/hooks/useAgentController.ts`
+- `scripts/verify-package.mjs`
+- `packages/core/src/__tests__/audit20261020.test.ts`
+- `packages/tui/tsconfig.build.json`
+
+# 2026-10-20 — follow-up: short reads and mission cancellation
+
+Ownership: this session owns `packages/core/src/tools/editFile.ts`,
+`packages/core/src/__tests__/audit20261020.test.ts`,
+`packages/tui/src/hooks/useAgentController.ts`,
+`packages/tui/src/hooks/__tests__/useAgentController.test.tsx`, and `PROGRESS.md`
+for these two confirmed live defects. Existing audit changes remain held for review.
+The bounded, FIFO-safe edit read now loops to EOF, checks cancellation between reads,
+and decodes UTF-8 only after all bytes are collected. Mission cancellation at planning,
+implementation, review, or critique holds queued messages; the next explicit send
+delivers them in FIFO order. Completed missions still drain normally.
+
+Fail-first receipts: all three short-read cases and all four mission-cancellation
+cases failed before repair; all now pass, along with the normal mission-drain case.
+Full `npm run gate` PASS: 1,142 core + 418 TUI + 205 CLI = 1,765 tests across 203 files,
+25/25 mock evals, sequential build and full typecheck. Protected hashes unchanged.
+`node scripts/verify-package.mjs` PASS: all packages pack without test artifacts and
+the CLI installs and runs in isolation. `git diff --check` PASS.
+
+The prior hold is superseded by the completed review and local commit of the full
+audit remediation, including these five follow-up files. Nothing was published.

@@ -82,7 +82,8 @@ export async function takeSnapshot(projectRoot: string, id: number, paths: strin
     // bust the caps (the old statSync+readFileSync pair had that TOCTOU).
     let fh: fs.FileHandle | null = null;
     try {
-      fh = await fs.open(resolved, "r");
+      // A FIFO can block open() itself, before fstat has a chance to refuse it.
+      fh = await fs.open(resolved, FS_CONSTANTS.O_RDONLY | FS_CONSTANTS.O_NONBLOCK);
       const stat = await fh.stat();
       if (!stat.isFile() || stat.size > CHECKPOINT_FILE_MAX || total + stat.size > CHECKPOINT_TOTAL_MAX) {
         skipped += 1;

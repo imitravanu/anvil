@@ -309,6 +309,7 @@ export async function* runGoalMission(
   deps: GoalMissionDeps,
   maxTurns: number = MAX_GOAL_TURNS
 ): AsyncGenerator<GoalEvent, GoalRunResult> {
+  if (!Number.isInteger(maxTurns) || maxTurns < 1) throw new Error("maxTurns must be a positive integer");
   // 1. Situational Awareness & Environment Introspection
   const context: SituationalContext = await analyzeWorkspace(deps.projectRoot);
   yield { type: "awareness_ready", context };
@@ -336,7 +337,7 @@ export async function* runGoalMission(
       summary: "Mission cancelled during planning.",
     };
   }
-  if (planning.errored) {
+  if (planning.errored || planning.verificationFailed || planning.permissionDenied) {
     yield { type: "goal_failed", error: "Planning turn failed; mission aborted." };
     return {
       goal,
@@ -360,7 +361,8 @@ export async function* runGoalMission(
   let budgetExhausted = false;
   let activeMilestone: GoalMilestone | null = null;
   for (const milestone of milestones) {
-    if (totalTurns >= maxTurns) {
+    // Reserve implementation, its review, and the final critique together.
+    if (totalTurns + 3 > maxTurns) {
       // Never attempted → stays "pending" (not failed); the debrief says why.
       budgetExhausted = true;
       continue;
@@ -450,10 +452,16 @@ export async function* runGoalMission(
       };
     }
 
-    if (!satisfied) {
+    if (review.errored || review.verificationFailed || review.permissionDenied || !satisfied) {
       milestone.status = "failed";
-      milestone.summary = reviewVerdict.slice(0, GOAL_MILESTONE_SUMMARY_MAX_CHARS) || "Self-review could not confirm the criteria.";
+      milestone.summary = review.errored || review.verificationFailed || review.permissionDenied
+        ? "Self-review failed or was permission-denied; completion is unverified."
+        : reviewVerdict.slice(0, GOAL_MILESTONE_SUMMARY_MAX_CHARS) || "Self-review could not confirm the criteria.";
       yield { type: "milestone_failed", milestone, error: "Self-review rejected completion" };
+      if (review.permissionDenied) {
+        yield { type: "goal_failed", error: "A required review tool was permission-denied." };
+        return { goal, success: false, milestones, totalTurns, filesChanged: [], summary: "Mission aborted: review permissions refused." };
+      }
       continue;
     }
 
@@ -501,32 +509,39 @@ export async function* runGoalMission(
   }
 
   // 4. Final Adversarial Self-Critique (overall mission)
-  yield { type: "critique_started" };
-  const critiquePrompt =
-    `Perform an adversarial self-review of all changes made during this goal run. ` +
-    `Check for edge cases, security regressions, missing error handling, and verify if goal "${goal}" is completely fulfilled. Be critical and honest. Be concise (max 5 sentences).`;
-  const critique = yield* deps.sendTurn(critiquePrompt, null);
+  let critique = emptyOutcome();
+  if (totalTurns < maxTurns) {
+    yield { type: "critique_started" };
+    const critiquePrompt =
+      `Perform an adversarial self-review of all changes made during this goal run. ` +
+      `Check for edge cases, security regressions, missing error handling, and verify if goal "${goal}" is completely fulfilled. Be critical and honest. Be concise (max 5 sentences).`;
+    totalTurns += 1;
+    critique = yield* deps.sendTurn(critiquePrompt, null);
+  }
   let criticVerdict = critique.text.trim();
   // C3/AUDIT-2026-09-30: the cancellation must survive into the result. It
   // used to be read only to pick fallback TEXT, so a mission whose milestones
   // had completed reported success even though the operator stopped it.
   let cancelledAtCritique = critique.cancelled;
-  if (!criticVerdict && !cancelledAtCritique) {
+  let critiqueFailed = critique.errored || critique.verificationFailed || critique.permissionDenied;
+  if (!criticVerdict && !cancelledAtCritique && !critique.permissionDenied && !critique.verificationFailed && totalTurns < maxTurns) {
     // The critique turn sometimes ends in tool calls with no prose (seen
     // live). Re-ask once; if still empty, state that honestly.
+    totalTurns += 1;
     const retry = yield* deps.sendTurn(
       `State your adversarial review verdict for goal "${goal}" in plain sentences now. Do not use tools.`,
       null
     );
     criticVerdict = retry.text.trim();
     cancelledAtCritique = retry.cancelled;
+    critiqueFailed = retry.errored || retry.verificationFailed || retry.permissionDenied;
   }
   if (!criticVerdict) {
+    critiqueFailed = true;
     criticVerdict = cancelledAtCritique
       ? "Mission cancelled before the critic could finish."
       : "The critic produced no verdict text; treat the run with suspicion and inspect the diffs manually.";
   }
-  totalTurns += 1;
   yield { type: "critique_result", verdict: criticVerdict };
 
   // 5. Final Mission Debriefing
@@ -555,7 +570,7 @@ export async function* runGoalMission(
 
   const result: GoalRunResult = {
     goal,
-    success: allCompleted,
+    success: allCompleted && !critiqueFailed,
     milestones,
     totalTurns,
     filesChanged,

@@ -381,6 +381,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     ): Promise<GoalTurnOutcome> => {
       // busy/isBusy are owned by launchGoal for the whole mission — toggling
       // per turn let user input slip into the gaps between mission turns.
+      setGoal(prev => prev ? { ...prev, currentTurn: prev.currentTurn + 1 } : prev);
       const turnStartMs = Date.now();
       const assistantId = randomUUID();
       setMessages((prev) => {
@@ -491,6 +492,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
             : prev
         );
       };
+      let missionCancelled = false;
       const mission = runGoalMission(objective, {
         projectRoot: session.projectRoot,
         summarizeChanges: () => session.summarizeChanges(),
@@ -498,6 +500,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
           missionMilestone.current = milestone?.id ?? null;
           try {
             const outcome = await runGoalTurn(prompt, onMissionEvent);
+            missionCancelled ||= outcome.cancelled;
             return outcome;
           } finally {
             missionMilestone.current = null;
@@ -525,7 +528,6 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
                 prev
                   ? {
                       ...prev,
-                      currentTurn: prev.currentTurn + 1,
                       milestones: prev.milestones.map((m) =>
                         m.id === ge.milestone.id ? { ...m, status: "in_progress" as const } : m
                       ),
@@ -590,12 +592,20 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
       } catch (err: unknown) {
         printSystemMessage(`Mission error: ${getErrorMessage(err)}`);
       } finally {
-        // Messages typed between mission turns queued — deliver them now,
-        // while we still hold the busy claim AND the spinner. Clearing isBusy
-        // first flashed idle during the drain.
-        await drainQueue();
-        setIsBusy(false);
-        busyRef.current = false;
+        try {
+          // Cancellation holds queued intent, matching ordinary chat turns.
+          if (missionCancelled) {
+            const n = queueRef.current.length;
+            if (n > 0) printSystemMessage(
+              `Mission cancelled — ${n} queued message${n === 1 ? "" : "s"} held, not sent. Send again to deliver ${n === 1 ? "it" : "them"}.`
+            );
+          } else {
+            await drainQueue();
+          }
+        } finally {
+          setIsBusy(false);
+          busyRef.current = false;
+        }
       }
     },
     [session, runGoalTurn, printSystemMessage, drainQueue]

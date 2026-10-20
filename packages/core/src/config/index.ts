@@ -191,8 +191,6 @@ export function resolveProviderSelection(input: SelectionInput): ProviderSelecti
         (input.creds[`${id}ApiKey` as keyof ProviderCredentials] as string).length > 0)
   );
 
-  const modelRaw = input.flagModel ?? input.envModel ?? input.settings?.defaultModel;
-
   // Unknown ids (typos) are a different mistake from "no API key yet" — report
   // them distinctly instead of the old misleading "not configured". The model
   // id stays free-form on purpose: OpenRouter-style providers accept arbitrary
@@ -245,8 +243,18 @@ export function resolveProviderSelection(input: SelectionInput): ProviderSelecti
   }
   if (!providerId) return null;
 
+  // A provider-only override must not carry a lower-precedence foreign model.
+  const inheritedModels = [
+    { model: input.envModel, provider: input.envProvider },
+    { model: input.settings?.defaultModel, provider: input.settings?.defaultProviderId },
+  ];
+  const selectedModel = input.flagModel ?? inheritedModels.find(candidate => {
+    if (!candidate.model || (candidate.provider && candidate.provider !== providerId)) return false;
+    const registered = MODEL_REGISTRY.filter(m => m.id === candidate.model);
+    return registered.length === 0 || registered.some(m => m.providerId === providerId);
+  })?.model;
   const model =
-    modelRaw ??
+    selectedModel ??
     MODEL_REGISTRY.find((m) => m.providerId === providerId)?.id ??
     "unknown-model";
 

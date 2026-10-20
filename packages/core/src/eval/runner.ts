@@ -147,7 +147,7 @@ export async function runEvalTask(
   let toolCalls = 0;
   /** User turns actually dispatched (A4 multi-turn) — 1 for a single-shot task. */
   let turnsSent = 0;
-  let tokensUsed = { input: 0, output: 0, cachedInput: 0 };
+  let tokensUsed: EvalResult["tokensUsed"] = { input: 0, output: 0, cachedInput: 0 };
   let passed = false;
   let errorMsg: string | undefined;
   let failureDiff: string | undefined;
@@ -252,7 +252,10 @@ export async function runEvalTask(
             // Phase 38.2 contract: cached is a breakdown of `input`, absent when
             // the provider does not report it — never a second input bucket.
             if (typeof event.cachedInputTokens === "number") {
-              tokensUsed.cachedInput += event.cachedInputTokens;
+              tokensUsed.cachedInput = (tokensUsed.cachedInput ?? 0) + event.cachedInputTokens;
+            }
+            if (typeof event.cacheCreationInputTokens === "number") {
+              tokensUsed.cacheCreationInput = (tokensUsed.cacheCreationInput ?? 0) + event.cacheCreationInputTokens;
             }
           } else if (event.type === "error") {
             errorMsg = event.message;

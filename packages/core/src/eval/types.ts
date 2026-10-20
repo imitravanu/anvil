@@ -46,7 +46,7 @@ export interface EvalResult {
    * (prompt-cache reads are counted in `input`, never added on top of it —
    * the provider-event contract from Phase 38.2), absent when unreported.
    */
-  tokensUsed: { input: number; output: number; cachedInput?: number };
+  tokensUsed: { input: number; output: number; cachedInput?: number; cacheCreationInput?: number };
   toolCalls: number;
   error?: string;
   /**
@@ -82,7 +82,7 @@ export interface EvalReport {
   passedCount: number;
   totalTasks: number;
   totalWallClockMs: number;
-  totalTokens: { input: number; output: number; cachedInput?: number };
+  totalTokens: { input: number; output: number; cachedInput?: number; cacheCreationInput?: number };
   /**
    * True when the cost total is an UPPER BOUND: prompt-cache reads were
    * present and the model declares no cache-read price, so they were billed at

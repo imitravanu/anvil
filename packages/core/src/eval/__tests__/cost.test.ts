@@ -121,6 +121,21 @@ describe("createEvalReport cost estimation (27.5)", () => {
 });
 
 describe("cached-input accounting (audit follow-up, 2026-10-05)", () => {
+  it("leaves cache-creation usage unpriced when the cache-write price is unknown", () => {
+    expect(estimateCostUsd({ input: 1000, output: 0, cacheCreationInput: 900 }, { inputPer1k: 3, outputPer1k: 15 })).toBeUndefined();
+  });
+
+  it("retains cache creation as a breakdown in persisted report totals", () => {
+    const task = result("creation", 1000, 50);
+    task.tokensUsed.cacheCreationInput = 600;
+    const report = createEvalReport([task], "llama-3.3-70b-versatile", "groq");
+    expect(report.totalTokens).toEqual({ input: 1000, output: 50, cacheCreationInput: 600 });
+    expect(report.estimatedCostUsd).toBe(0);
+  });
+
+  it("prices cache creation separately from fresh input and cache reads", () => {
+    expect(estimateCostUsd({ input: 3000, output: 0, cachedInput: 1000, cacheCreationInput: 1000 }, { inputPer1k: 3, outputPer1k: 15, cachedInputPer1k: 0.3, cacheCreationInputPer1k: 3.75 })).toBeCloseTo(7.05);
+  });
   it("bills cached input at the DECLARED cache-read price", () => {
     const anthropicish = { inputPer1k: 3, outputPer1k: 15, cachedInputPer1k: 0.3 };
     // fresh 1,000×3 + cached 9,000×0.3 + out 1,000×15 = 3 + 2.7 + 15 = 20.7

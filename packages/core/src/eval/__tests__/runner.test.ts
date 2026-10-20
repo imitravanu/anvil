@@ -118,7 +118,7 @@ exit 1
       displayName: "cache scripted",
       isConfigured: () => true,
       async *streamCompletion() {
-        yield { type: "usage" as const, inputTokens: 1_000, outputTokens: 50, cachedInputTokens: 800 };
+        yield { type: "usage" as const, inputTokens: 1_000, outputTokens: 50, cachedInputTokens: 800, cacheCreationInputTokens: 100 };
         yield { type: "turn_end" as const, stopReason: "end_turn" as const };
       },
     };
@@ -131,6 +131,7 @@ exit 1
     expect(result.tokensUsed.input).toBe(1_000);
     expect(result.tokensUsed.output).toBe(50);
     expect(result.tokensUsed.cachedInput).toBe(800);
+    expect(result.tokensUsed.cacheCreationInput).toBe(100);
   });
 
   // Takeover 2026-10-10 (A8 done at the source): the provider classifies its

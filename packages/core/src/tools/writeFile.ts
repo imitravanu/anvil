@@ -49,6 +49,9 @@ export const execute: ToolExecutor = async (input, ctx: ToolContext) => {
   let prevMode: number | undefined;
   try {
     const stat = await fs.stat(abs);
+    if (!stat.isFile()) {
+      return { output: { error: "Not a regular file — cannot overwrite a pipe, device, or socket." }, isError: true, summary: "write_file refused a non-regular target" };
+    }
     prevBytes = stat.size;
     // Preserve the executable bit (and friends) across overwrites — a plain
     // writeFile would reset scripts to 0644&~umask.
@@ -111,6 +114,7 @@ export const describe = async (input: unknown, ctx: ToolContext): Promise<string
   try {
     const abs = resolveWithinRoot(ctx.projectRoot, relPath);
     const stat = await fs.stat(abs);
+    if (!stat.isFile()) return `Cannot overwrite ${relPath}: not a regular file`;
     if (stat.size > MAX_WRITE_BYTES) {
       return `Overwrite ${relPath} (${bytes} bytes; current file exceeds the ${MAX_WRITE_BYTES}-byte edit limit and cannot be previewed fully)`;
     }
