@@ -1532,6 +1532,28 @@ export const MODEL_REGISTRY: ModelInfo[] = [
   },
   // AgentRouter models (https://agentrouter.org)
   {
+    id: "gpt-6.1-sol",
+    providerId: "agentrouter",
+    displayName: "GPT-6.1 Sol",
+    contextWindow: 128_000,
+    supportsTools: true,
+    supportsVision: false,
+    isFree: true,
+    certified: "live",
+    certifiedAt: "2026-10-20T14:20:00.000Z",
+    certifiedMode: "live",
+  },
+  {
+    id: "gpt-6-astra",
+    providerId: "agentrouter",
+    displayName: "GPT-6 Astra",
+    contextWindow: 128_000,
+    supportsTools: true,
+    supportsVision: false,
+    isFree: true,
+    certified: "untested",
+  },
+  {
     id: "deepseek-v4-flash",
     providerId: "agentrouter",
     displayName: "DeepSeek V4 Flash",

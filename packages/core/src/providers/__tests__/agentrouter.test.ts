@@ -33,18 +33,78 @@ describe("agentrouter provider", () => {
 
   it("registers AgentRouter models in MODEL_REGISTRY", () => {
     const models = getModelsForProvider("agentrouter");
-    expect(models.length).toBeGreaterThan(0);
+    expect(models.length).toBeGreaterThanOrEqual(3);
     const ids = models.map((m) => m.id);
+    expect(ids).toContain("gpt-6.1-sol");
+    expect(ids).toContain("gpt-6-astra");
     expect(ids).toContain("deepseek-v4-flash");
   });
 
-  it("resolves default model for agentrouter when agentrouter is configured", () => {
+  it("resolves default model for agentrouter as gpt-6.1-sol when agentrouter is configured", () => {
     const sel = resolveProviderSelection({
       creds: { agentrouterApiKey: "sk-test" },
     });
     expect(sel).toEqual({
       providerId: "agentrouter",
-      model: "deepseek-v4-flash",
+      model: "gpt-6.1-sol",
     });
+  });
+
+  it("translates conversation messages and tools to responses format", async () => {
+    const { toResponsesInput, toResponsesTools } = await import("../agentrouter.js");
+    const input = toResponsesInput([
+      { role: "user", content: [{ type: "text", text: "What is the weather?" }] },
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Checking..." },
+          {
+            type: "tool_call",
+            call: { id: "call_123", name: "get_weather", input: { location: "Tokyo" } },
+          },
+        ],
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            result: { toolCallId: "call_123", content: '{"temp": 18}' },
+          },
+        ],
+      },
+    ]);
+
+    expect(input).toHaveLength(4);
+    expect(input[0]).toEqual({ role: "user", content: "What is the weather?" });
+    expect(input[1]).toEqual({ role: "assistant", content: [{ type: "output_text", text: "Checking..." }] });
+    expect(input[2]).toEqual({
+      type: "function_call",
+      call_id: "call_123",
+      name: "get_weather",
+      arguments: '{"location":"Tokyo"}',
+    });
+    expect(input[3]).toEqual({
+      type: "function_call_output",
+      call_id: "call_123",
+      output: '{"temp": 18}',
+    });
+
+    const tools = toResponsesTools([
+      {
+        name: "get_weather",
+        description: "Get weather",
+        inputSchema: { type: "object", properties: { location: { type: "string" } } },
+        mutating: false,
+      },
+    ]);
+    expect(tools).toEqual([
+      {
+        type: "function",
+        name: "get_weather",
+        description: "Get weather",
+        parameters: { type: "object", properties: { location: { type: "string" } } },
+      },
+    ]);
   });
 });
