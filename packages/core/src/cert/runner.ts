@@ -29,8 +29,8 @@ export const PROVIDER_CERT_MODELS: Record<ProviderId, string> = {
   anthropic: "claude-3-5-haiku-20241022",
   openai: "gpt-4o-mini",
   gemini: "gemini-3.6-flash",
-  openrouter: "stealth/space-bunny-alpha",
-  orcarouter: "orcarouter/free",
+  openrouter: "openrouter/free",
+  orcarouter: "z-ai/glm-5.3-flash-free",
   groq: "llama-3.3-70b-versatile",
   cerebras: "llama3.1-8b",
   // AUDIT-03: was "Phi-3.5-mini-instruct", which is NOT a registry row — so
@@ -39,7 +39,7 @@ export const PROVIDER_CERT_MODELS: Record<ProviderId, string> = {
   // it distinct from openai's paid row of the same id).
   github: "gpt-4o-mini",
   mistral: "mistral-small-latest",
-  inception: "mercury-2.5",
+  inception: "mercury-3",
   ollama: "qwen2.5-coder:latest",
   qwencloud: "qwen3.8-flash",
 };

@@ -28,7 +28,7 @@
   - **Code Intelligence (LSP)**: `get_outline`, `goto_definition`, `find_references`, `get_hover`, `get_diagnostics`.
   - **Execution & Memory**: `run_command`, `verify_tests`, `update_plan`, `delegate_task` (sub-agent), `update_memory`.
 - **Interactive Unified Diff Permissions**: Every mutating tool shows the exact diff or command before execution (`Allow once` / `Always allow this session` / `Deny` / `Esc`). Safe read-only commands (`ls`, `cat`, `git status`) run automatically.
-- **Model Picker with Live Search**: Filter through 63 free-visible models (75 registered) plus live-synced OpenRouter/Orcarouter free models mid-session via `/model`.
+- **Model Picker with Live Search**: Filter through 99 free-visible models (126 registered) plus live-synced OpenRouter/Orcarouter free models mid-session via `/model`.
 - **Session Checkpoints & Rewind**: Automatic pre-mutation snapshots allow full file rollbacks via `/rewind <n>`.
 - **Context Compaction**: Summarizes older conversation regions when nearing model context windows without breaking tool-call continuity.
 - **Extensible Architecture**: Native MCP (Model Context Protocol) support over `stdio` and `SSE`, sub-agent delegation, and custom themes.
@@ -137,16 +137,16 @@ Hot-swap providers or keys anytime without leaving the chat using `/connect`.
 | Provider | Environment Variable | Tier | Primary Certified Models | Tools | Vision |
 | :--- | :--- | :---: | :--- | :---: | :---: |
 | **Anthropic** | `ANTHROPIC_API_KEY` | Paid | `claude-sonnet-5`, `claude-3-7-sonnet`, `claude-3-5-sonnet` | Yes | Yes |
-| **OpenAI** | `OPENAI_API_KEY` | Paid | `gpt-4o`, `gpt-4o-mini`, `o3-mini` | Yes | Yes |
-| **Google Gemini** | `GEMINI_API_KEY` | Free & Paid | `gemini-3.6-flash`, `gemini-1.5-pro` | Yes | Yes |
+| **OpenAI** | `OPENAI_API_KEY` | Paid | `gpt-4o`, `gpt-4o-mini`, `o3-mini`, `o1` | Yes | Yes |
+| **Google Gemini** | `GEMINI_API_KEY` | Free & Paid | `gemini-3.6-flash`, `gemini-3.8-flash`, `gemini-2.5-flash` | Yes | Yes |
 | **OpenRouter** | `OPENROUTER_API_KEY` | Free & Paid | `openrouter/free`, `google/gemma-4-31b-it:free` | Yes | Yes |
-| **Orcarouter** | `ORCAROUTER_API_KEY` | Free & Paid | `orcarouter/free`, `deepseek/deepseek-v4-flash-free` | Yes | Yes |
+| **Orcarouter** | `ORCAROUTER_API_KEY` | Free & Paid | `z-ai/glm-5.3-flash-free`, `deepseek/deepseek-v4-flash-free` | Yes | Yes |
 | **Groq** | `GROQ_API_KEY` | Free Tier | `llama-3.3-70b-versatile`, `qwen-2.5-coder-32b` | Yes | No |
 | **GitHub Models** | `GITHUB_TOKEN` | Free Preview | `gpt-4o-mini`, `meta-llama-3.3-70b-instruct` | Yes | Yes |
 | **Cerebras** | `CEREBRAS_API_KEY` | Free Tier (1M/day) | `llama3.3-70b`, `llama3.1-8b` | Yes | No |
 | **Mistral AI** | `MISTRAL_API_KEY` | Free Experimentation | `codestral-latest`, `mistral-small-latest` | Yes | No |
-| **Inception** | `INCEPTION_API_KEY` | Free Trial (100M tokens) | `mercury-2.5`, `mercury-2` | Yes | No |
-| **Ollama** | None / `OLLAMA_HOST` | 100% Free / Local | `qwen2.5-coder:latest`, `llama3.2:latest` | Yes | Yes |
+| **Inception** | `INCEPTION_API_KEY` | Free Trial (100M tokens) | `mercury-3`, `mercury-2.5`, `mercury-2` | Yes | No |
+| **Ollama** | None / `OLLAMA_HOST` | 100% Free / Local | `qwen2.5-coder:latest`, `llama3.2:latest`, `llama3.3:latest` | Yes | Yes |
 | **QwenCloud** | `QWENCLOUD_API_KEY` | Free Tier (1M tokens) | `qwen3.8-max`, `qwen3.8-flash`, `qwq-plus` | Yes | Yes |
 
 ---

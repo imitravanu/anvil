@@ -19,8 +19,8 @@ afterAll(() => fs.rm(root, { recursive: true, force: true }));
 
 function sleep30Running(): boolean {
   try {
-    // [s]leep avoids matching this grep itself
-    execSync('ps -ax -o command= | grep "[s]leep 30"', { stdio: "pipe" });
+    // [s]leep avoids matching this grep itself; -w prevents false positives like "sleep 300"
+    execSync('ps -ax -o command= | grep -w "[s]leep 30"', { stdio: "pipe" });
     return true;
   } catch {
     return false; // grep exits 1 when nothing matches
