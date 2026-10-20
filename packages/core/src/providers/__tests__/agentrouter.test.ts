@@ -36,8 +36,6 @@ describe("agentrouter provider", () => {
     expect(models.length).toBeGreaterThan(0);
     const ids = models.map((m) => m.id);
     expect(ids).toContain("deepseek-v4-flash");
-    expect(ids).toContain("gpt-6-astra");
-    expect(ids).toContain("gpt-6.1-sol");
   });
 
   it("resolves default model for agentrouter when agentrouter is configured", () => {

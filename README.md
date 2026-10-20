@@ -28,7 +28,7 @@
   - **Code Intelligence (LSP)**: `get_outline`, `goto_definition`, `find_references`, `get_hover`, `get_diagnostics`.
   - **Execution & Memory**: `run_command`, `verify_tests`, `update_plan`, `delegate_task` (sub-agent), `update_memory`.
 - **Interactive Unified Diff Permissions**: Every mutating tool shows the exact diff or command before execution (`Allow once` / `Always allow this session` / `Deny` / `Esc`). Safe read-only commands (`ls`, `cat`, `git status`) run automatically.
-- **Model Picker with Live Search**: Filter through 102 free-visible models (129 registered) plus live-synced OpenRouter/Orcarouter free models mid-session via `/model`.
+- **Model Picker with Live Search**: Filter through 100 free-visible models (127 registered) plus live-synced OpenRouter/Orcarouter free models mid-session via `/model`.
 - **Session Checkpoints & Rewind**: Automatic pre-mutation snapshots allow full file rollbacks via `/rewind <n>`.
 - **Context Compaction**: Summarizes older conversation regions when nearing model context windows without breaking tool-call continuity.
 - **Extensible Architecture**: Native MCP (Model Context Protocol) support over `stdio` and `SSE`, sub-agent delegation, and custom themes.
@@ -153,7 +153,7 @@ Hot-swap providers or keys anytime without leaving the chat using `/connect`.
 | **Inception** | `INCEPTION_API_KEY` | Free Trial (100M tokens) | `mercury-3`, `mercury-2.5`, `mercury-2` | Yes | No |
 | **Ollama** | None / `OLLAMA_HOST` | 100% Free / Local | `qwen2.5-coder:latest`, `llama3.2:latest`, `llama3.3:latest` | Yes | Yes |
 | **QwenCloud** | `QWENCLOUD_API_KEY` | Free Tier (1M tokens) | `qwen3.8-max`, `qwen3.8-flash`, `qwq-plus` | Yes | Yes |
-| **AgentRouter** | `AGENTROUTER_API_KEY` | Unified Gateway | `deepseek-v4-flash`, `gpt-6-astra`, `gpt-6.1-sol` | Yes | No |
+| **AgentRouter** | `AGENTROUTER_API_KEY` | Unified Gateway | `deepseek-v4-flash` | Yes | No |
 
 ---
 
