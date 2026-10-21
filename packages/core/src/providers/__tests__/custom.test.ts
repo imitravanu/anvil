@@ -119,7 +119,7 @@ describe("custom provider configuration", () => {
     { baseUrl: "https://name:secret@fixture.invalid/v1" }, { baseUrl: "https://fixture.invalid/v1?key=secret" },
     { headers: { Authorization: "Bearer secret" } }, { headers: { "X-Test": "bad\r\nheader" } },
     { headers: { "X-Api-Key": "secret" } }, { headers: { Foo: "one", foo: "two" } },
-    { apiKeyEnv: "INVALID ENV" }, { models: [] }, { models: [{ id: "m", contextWindow: 0 }] },
+    { apiKeyEnv: "INVALID ENV" }, { models: [{ id: "m", contextWindow: 0 }] },
     { models: [{ id: "m", contextWindow: 10 }, { id: "m", contextWindow: 20 }] },
     { apiKey: "must-not-be-here" }, { streamUsage: "yes" },
   ])("rejects invalid configuration without echoing its values: %j", extra => {
@@ -263,9 +263,7 @@ describe("custom provider HTTP integration", () => {
     expect(responsesConfig.models).toBeUndefined();
 
     const models = customProviderModels([responsesConfig]);
-    expect(models).toHaveLength(1);
-    expect(models[0].id).toBe("default");
-    expect(models[0].contextWindow).toBe(128_000);
+    expect(models).toHaveLength(0);
 
     const anthropicConfig = validateCustomProvider({
       id: "custom:anthropic-gw",

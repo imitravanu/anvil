@@ -65,7 +65,13 @@ export function toResponsesInput(
         .filter((c) => c.type === "text")
         .map((c) => (c as { text: string }).text)
         .join("");
-      if (text) {
+      const images = m.content.filter(c => c.type === "image");
+      if (images.length) {
+        items.push({ role: "user", content: [
+          ...(text ? [{ type: "input_text", text }] : []),
+          ...images.map(c => ({ type: "input_image", image_url: `data:${c.mediaType};base64,${c.data}` })),
+        ] });
+      } else if (text) {
         items.push({
           role: "user",
           content: text,
@@ -154,6 +160,7 @@ export class ResponsesStyleProvider extends BaseProvider {
       headers,
       body: JSON.stringify(body),
       signal: request.signal,
+      redirect: "error",
     });
 
     if (!response.ok) {

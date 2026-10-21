@@ -138,13 +138,20 @@ Hot-swap providers or keys anytime without leaving the chat using `/connect`.
 ### Custom providers
 
 Run `anvil config` or `/connect` and choose **Add custom OpenAI-compatible provider**.
-Enter a unique ID, display name, API base URL, API key, model IDs and context window.
+Enter a unique ID, display name, API base URL and API key. Model IDs are optional:
+leave them blank to discover the catalog, or enter IDs and their actual context limit.
 Use `$MY_GATEWAY_KEY` instead of a key to reference an environment variable, or `-`
 for an endpoint that requires no bearer authentication. Review before saving.
 Select an existing custom provider in `/connect` to edit it or explicitly confirm removal.
 Switch away from the active provider before removing it; saved conversations are retained.
 
 Custom models appear in `/model`, including paid models you explicitly configured.
+With `models` omitted or `[]`, startup and the picker discover `GET <baseUrl>/models`;
+`/sync` forces a refresh. A failed/empty refresh retains the last good in-memory
+catalog. If the server has no catalog, specify `--model` or configure explicit IDs.
+No placeholder model ID is sent. Unknown context limits use the conservative
+`ANVIL_FALLBACK_CONTEXT_WINDOW` (32,000 by default), not a claimed server limit;
+tools are attempted by default, vision is off, and pricing is unknown unless configured.
 They also work in headless runs:
 
 ```bash
@@ -171,7 +178,10 @@ relocates both files. For example, an environment-authenticated provider:
         "id": "my-model",
         "contextWindow": 32768,
         "supportsTools": true,
-        "supportsVision": false
+        "supportsVision": false,
+        "protocol": "openai-responses",
+        "baseUrl": "https://gateway.example.com/responses/v1",
+        "headers": { "X-Client": "model-route" }
       }
     ]
   }
@@ -179,15 +189,37 @@ relocates both files. For example, an environment-authenticated provider:
 ```
 
 Use your server's actual base URL and context limit. The first model is the default.
-The setup flow's optional JSON field accepts `headers`, `maxTokensParam`, `streamUsage`,
+The setup flow's optional JSON field accepts `protocol`, `headers`, `maxTokensParam`, `streamUsage`,
 `supportsTools` and `supportsVision`. Set `streamUsage: false` if the server rejects
 `stream_options`, or choose `max_completion_tokens` when required. Model capabilities
 can be configured individually in the file; omitted pricing remains unknown.
 Secret headers such as `X-Api-Key` must reference `$ENV_NAME`; use `auth: "none"`
 for header-only authentication. Missing referenced variables disable that provider.
 Changes made through `/connect` are applied immediately; external file edits take effect
-on the next launch or reconnect. This adapter uses streaming Chat Completions; it does
-not translate arbitrary native Anthropic or Responses API endpoints.
+on the next launch or reconnect. `protocol` selects `openai-chat` (default),
+`openai-responses`, or `anthropic`. Per-model `baseUrl`, `protocol` and `headers`
+override provider settings; header names merge case-insensitively. The same provider
+key is used for these routes, so only configure endpoints you trust with it.
+Anthropic accepts an origin or a base ending in `/v1` and uses native `x-api-key`
+authentication; `auth: "none"` sends no automatic credentials for any protocol.
+Responses HTTP streaming is not Realtime, and Anthropic-compatible proxies are not
+native AWS Bedrock/SigV4 support.
+
+Scriptable management and one-off runs:
+
+```bash
+anvil provider add my-gateway --url https://gateway.example.com/v1 --api-key-env MY_GATEWAY_KEY --protocol openai-responses
+anvil provider list
+anvil provider test my-gateway
+anvil provider remove my-gateway
+anvil --base-url http://localhost:8000/v1 --model local-model --no-mcp -p "Hello"
+anvil --base-url https://gateway.example.com/v1 --protocol anthropic --api-key-env MY_GATEWAY_KEY --model model-id --no-mcp -p "Hello"
+```
+
+`provider test` probes catalog access only, not generation/tool compatibility. Discovery
+requests have a bounded timeout/response size and refuse redirects. Prefer environment
+references over `--key`/`--api-key`, which can appear in shell history/process arguments.
+One-off endpoint/key overrides do not write provider, key or default-settings files.
 
 ---
 

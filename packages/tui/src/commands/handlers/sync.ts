@@ -2,11 +2,14 @@ import {
   createOpenRouterFreeSource,
   createOrcarouterFreeSource,
   syncFreeModels,
+  refreshCustomProviderModels,
+  getErrorMessage,
 } from "@anvil/core";
 import { SYNC_FREE_SHOWN } from "../../util/displayLimits.js";
 
 export async function handleSyncFreeModels(printSystemMessage: (text: string) => void): Promise<void> {
   printSystemMessage("Checking free-model sources for live updates...");
+  const customSync = refreshCustomProviderModels(undefined, { force: true }).catch(err => [{ providerId: "custom", count: 0, error: getErrorMessage(err) }]);
   const report = await syncFreeModels({
     sources: [createOpenRouterFreeSource(), createOrcarouterFreeSource()],
     ttlMs: 0,
@@ -28,6 +31,9 @@ export async function handleSyncFreeModels(printSystemMessage: (text: string) =>
   }
   if (report.errors.length > 0) {
     msg += `\n  ⚠ ${report.errors.length} source(s) failed: ${report.errors.join("; ")}`;
+  }
+  for (const result of await customSync) {
+    msg += result.error ? `\n  ✗ ${result.providerId}: ${result.error}` : `\n  ✓ ${result.providerId}: ${result.count} models refreshed.`;
   }
   printSystemMessage(msg);
 }

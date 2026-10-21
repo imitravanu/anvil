@@ -121,7 +121,7 @@ export function hasAnyConfiguredProvider(creds: ProviderCredentials): boolean {
   // a future non-secret field (region, endpoint) would falsely report a
   // configured install and skip first-run onboarding. Derived from
   // PROVIDER_ORDER so adding a provider cannot silently go unconfigured.
-  return loadCustomProviders().some(isCustomProviderConfigured) || PROVIDER_ORDER.some((id) => {
+  return loadCustomProviders().some(config => isCustomProviderConfigured(config)) || PROVIDER_ORDER.some((id) => {
     const value = creds[`${id}ApiKey` as keyof ProviderCredentials];
     return typeof value === "string" && value.length > 0;
   });
@@ -145,6 +145,7 @@ const PROVIDER_ORDER: ProviderId[] = [
 
 export interface SelectionInput {
   customProviders?: CustomProviderConfig[];
+  customApiKeys?: Partial<Record<`custom:${string}`, string>>;
   // 1. CLI flags (highest)
   flagProvider?: string;
   flagModel?: string;
@@ -190,7 +191,7 @@ const KEYLESS_PROVIDERS = new Set<ProviderId>(["ollama"]);
 
 export function resolveProviderSelection(input: SelectionInput): ProviderSelection | null {
   const customConfigs = input.customProviders ?? loadCustomProviders();
-  const customConfigured = customConfigs.filter(isCustomProviderConfigured).map(config => config.id);
+  const customConfigured = customConfigs.filter(config => isCustomProviderConfigured(config, input.customApiKeys?.[config.id])).map(config => config.id);
   const providerOrder = [...PROVIDER_ORDER, ...customConfigs.map(config => config.id)];
   const models = [...MODEL_REGISTRY.filter(model => !model.providerId.startsWith("custom:")), ...customProviderModels(customConfigs)];
   const configured = PROVIDER_ORDER.filter(
@@ -267,6 +268,12 @@ export function resolveProviderSelection(input: SelectionInput): ProviderSelecti
     selectedModel ??
     models.find((m) => m.providerId === providerId)?.id ??
     "unknown-model";
+
+  if (model === "unknown-model" && providerId.startsWith("custom:")) {
+    const error = new ProviderSelectionError(providerId);
+    error.message = `No models available for ${providerId}. Check model discovery, pass --model <id>, or configure model IDs explicitly.`;
+    throw error;
+  }
 
   return { providerId, model };
 }

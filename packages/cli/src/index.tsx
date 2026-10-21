@@ -33,6 +33,7 @@ import {
   toToolDefinitions,
   MCP_TOOL_PREFIX,
   ProviderSelectionError,
+  UnknownProviderError,
   resolveProviderSelection,
   buildAnvilAgentProfile,
   getLatestCertificationDate,
@@ -40,8 +41,10 @@ import {
   type ProviderId,
   type ToolDefinition,
   getModelsForProvider,
-  createCustomProvider,
   loadCustomProviders,
+  refreshCustomProviderModels,
+  validateCustomProvider,
+  FALLBACK_CONTEXT_WINDOW,
   type CustomProviderConfig,
 } from "@anvil/core";
 
@@ -183,7 +186,8 @@ function resolveSelectionOrExit(
   flags: Record<string, string>,
   creds: ReturnType<typeof loadCredentials>,
   settings: ReturnType<typeof loadSettings>,
-  customProviders?: CustomProviderConfig[]
+  customProviders?: CustomProviderConfig[],
+  customApiKeys?: Partial<Record<`custom:${string}`, string>>,
 ): { providerId: ProviderId; model: string } {
   let selection;
   try {
@@ -195,6 +199,7 @@ function resolveSelectionOrExit(
       settings,
       creds,
       customProviders,
+      customApiKeys,
     });
   } catch (err) {
     if (err instanceof ProviderSelectionError) {
@@ -249,47 +254,49 @@ async function resolveBootContext(
   const creds = resolveProviderCredentials();
   const settings = loadSettings();
 
-  // Ad-hoc --api-key override for built-in providers
-  if (flags["api-key"] && flags.provider) {
+  const envKeyName = flags["api-key-env"];
+  if (envKeyName && (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(envKeyName) || !process.env[envKeyName]?.trim())) {
+    throw new Error("--api-key-env requires a set, non-empty environment variable.");
+  }
+  const explicitKey = flags["api-key"] ?? (envKeyName ? process.env[envKeyName] : undefined);
+  if (explicitKey && !flags.provider && !flags["base-url"]) throw new Error("An API key override requires --provider or --base-url.");
+  if (!flags["base-url"] && flags.protocol) throw new Error("--protocol requires --base-url.");
+  if (!flags["base-url"] && explicitKey && flags.provider && !flags.provider.startsWith("custom:")) {
     const keyProp = `${flags.provider}ApiKey` as keyof typeof creds;
-    if (keyProp in creds) {
-      creds[keyProp] = flags["api-key"];
-    }
+    creds[keyProp] = explicitKey;
   }
 
   // Ad-hoc --base-url provider injection
   let customConfigs = loadCustomProviders();
-  let adHocProviderId: `custom:${string}` | undefined;
+  const customApiKeys: Partial<Record<`custom:${string}`, string>> = {};
+  if (explicitKey && flags.provider?.startsWith("custom:")) customApiKeys[flags.provider as `custom:${string}`] = explicitKey;
   if (flags["base-url"]) {
-    const rawId = flags.provider ? flags.provider.replace(/^custom:/, "") : "adhoc";
-    adHocProviderId = `custom:${rawId}`;
+    const existing = customConfigs.find(config => config.id === flags.provider);
+    if (flags.provider && !existing && !Object.hasOwn(creds, `${flags.provider}ApiKey`)) throw new UnknownProviderError(flags.provider);
+    const adHocProviderId = existing?.id ?? "custom:adhoc";
     const inheritedKey = flags.provider ? (creds[`${flags.provider}ApiKey` as keyof typeof creds] as string | undefined) : undefined;
-    const resolvedKey = flags["api-key"] || inheritedKey;
-    const adHocConfig: CustomProviderConfig = {
+    const resolvedKey = explicitKey ?? inheritedKey;
+    const adHocConfig = validateCustomProvider({
+      ...existing,
       id: adHocProviderId,
       name: flags.provider || "Ad-hoc Provider",
       baseUrl: flags["base-url"],
-      auth: resolvedKey ? "bearer" : "none",
-    };
+      auth: resolvedKey ? "bearer" : existing?.auth ?? "none",
+      ...(resolvedKey ? { apiKeyEnv: undefined } : {}),
+      protocol: flags.protocol ?? existing?.protocol ?? (flags.provider === "anthropic" ? "anthropic" : "openai-chat"),
+      ...(flags.model ? { models: [{ id: flags.model, contextWindow: FALLBACK_CONTEXT_WINDOW }] } : {}),
+    });
     customConfigs = [...customConfigs.filter((c) => c.id !== adHocProviderId), adHocConfig];
-    if (!flags.provider) {
-      flags.provider = adHocProviderId;
-    }
+    flags.provider = adHocProviderId;
+    if (resolvedKey) customApiKeys[adHocProviderId] = resolvedKey;
   }
 
-  const selection = resolveSelectionOrExit(flags, creds, settings, customConfigs);
-
-  const providers = createProviders(creds, customConfigs);
-  if (flags["base-url"] && adHocProviderId) {
-    const inheritedKey = flags.provider ? (creds[`${flags.provider}ApiKey` as keyof typeof creds] as string | undefined) : undefined;
-    const resolvedKey = flags["api-key"] || inheritedKey;
-    if (resolvedKey) {
-      const adHocConfig = customConfigs.find((c) => c.id === adHocProviderId);
-      if (adHocConfig) {
-        providers[adHocProviderId] = createCustomProvider(adHocConfig, resolvedKey);
-      }
-    }
+  const discovery = await refreshCustomProviderModels(customConfigs, { apiKeys: customApiKeys });
+  for (const result of discovery) {
+    if (result.error) console.error(`Custom model discovery: ${result.error}`);
   }
+  const selection = resolveSelectionOrExit(flags, creds, settings, customConfigs, customApiKeys);
+  const providers = createProviders(creds, customConfigs, customApiKeys);
 
   const provider = providers[selection.providerId];
   if (!provider.isConfigured()) {

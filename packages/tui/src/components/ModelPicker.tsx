@@ -9,6 +9,9 @@ import {
   isRateLimited,
   syncFreeModels,
   visibleModels,
+  refreshCustomProviderModels,
+  loadCustomProviders,
+  getErrorMessage,
 } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 import { sectionRule } from "../util/chrome.js";
@@ -54,6 +57,7 @@ export function ModelPicker({
   // alone. Printable keys extend the filter, Backspace retracts, Esc clears
   // it first and closes only when empty.
   const [filter, setFilter] = useState("");
+  const [customNote, setCustomNote] = useState<string | null>(null);
   // surface staleness instead of hiding it.
   const [cacheNote, setCacheNote] = useState<string | null>(() =>
     isModelsCacheFresh(DEFAULT_SYNC_TTL_MS) ? null : "Free-model list is stale — prices may be out of date."
@@ -66,6 +70,15 @@ export function ModelPicker({
   // lands in the registry automatically.
   useEffect(() => {
     let active = true;
+    if (Object.keys(providers).some(id => id.startsWith("custom:"))) {
+      void Promise.resolve().then(() => refreshCustomProviderModels(loadCustomProviders().filter(config => providers[config.id]?.isConfigured())))
+        .then(results => {
+          if (!active) return;
+          setModels(visibleModels());
+          const errors = results.filter(result => result.error).map(result => `${result.providerId}: ${result.error}`);
+          setCustomNote(errors.length ? errors.join("; ") : null);
+        }).catch(err => { if (active) setCustomNote(getErrorMessage(err)); });
+    }
     if (providers.openrouter?.isConfigured() || providers.orcarouter?.isConfigured()) {
       syncFreeModels({
         sources: [createOpenRouterFreeSource(), createOrcarouterFreeSource()],
@@ -284,6 +297,7 @@ export function ModelPicker({
         </Text>
       )}
       {cacheNote && <Text color={theme.colors.textSecondary}>⚠ {cacheNote}</Text>}
+      {customNote && <Text color={theme.colors.warning}>⚠ {customNote}</Text>}
       {hasAbove && (
         <Text color={theme.colors.textSecondary}>  ▲ {scrollOffset} more above...</Text>
       )}

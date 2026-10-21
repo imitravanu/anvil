@@ -6,6 +6,8 @@ import { ChatCompletionsStyleProvider } from "./openai.js";
 import { ResponsesStyleProvider } from "./responses.js";
 import { AnthropicProvider } from "./anthropic.js";
 import type { ModelInfo, ModelProvider } from "./types.js";
+import { CUSTOM_DISCOVERY_TIMEOUT_MS, CUSTOM_DISCOVERY_MAX_BYTES, DEFAULT_SYNC_TTL_MS, FALLBACK_CONTEXT_WINDOW } from "../config/constants.js";
+import { syncCustomProviderModels } from "./registry.js";
 
 export type CustomProviderProtocol = "openai-chat" | "openai-responses" | "anthropic";
 
@@ -26,6 +28,9 @@ export interface CustomProviderConfig {
     supportsTools?: boolean;
     supportsVision?: boolean;
     isFree?: boolean;
+    baseUrl?: string;
+    protocol?: CustomProviderProtocol;
+    headers?: Record<string, string>;
   }>;
 }
 
@@ -36,6 +41,9 @@ const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const text = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0 && !/[\x00-\x1f\x7f-\x9f]/.test(value);
+
+const discoveredCatalogs = new Map<string, { models: ModelInfo[]; at: number }>();
+const catalogKey = (config: CustomProviderConfig): string => JSON.stringify([anvilHome(), config]);
 
 function invalid(field: string): never {
   throw new Error(`Invalid custom provider ${field}. Check ~/.anvil/providers.json or run anvil config.`);
@@ -118,7 +126,7 @@ export function validateCustomProvider(value: unknown): CustomProviderConfig {
 
   let models: CustomProviderConfig["models"] | undefined = undefined;
   if (value.models !== undefined) {
-    if (!Array.isArray(value.models) || value.models.length === 0) return invalid("models (at least one is required)");
+    if (!Array.isArray(value.models)) return invalid("models (expected an array)");
     const seen = new Set<string>();
     models = value.models.map(model => {
       if (!record(model) || !text(model.id) || seen.has(model.id)) return invalid("model id (missing or duplicate)");
@@ -129,9 +137,15 @@ export function validateCustomProvider(value: unknown): CustomProviderConfig {
       for (const key of ["supportsTools", "supportsVision", "isFree"]) {
         if (model[key] !== undefined && typeof model[key] !== "boolean") return invalid(`model ${key}`);
       }
-      if (Object.keys(model).some(key => !["id", "name", "contextWindow", "supportsTools", "supportsVision", "isFree"].includes(key))) {
+      if (Object.keys(model).some(key => !["id", "name", "contextWindow", "supportsTools", "supportsVision", "isFree", "baseUrl", "protocol", "headers"].includes(key))) {
         return invalid("model field");
       }
+      // Reuse exactly the provider URL/header/protocol validation for overrides.
+      const overrides = validateCustomProvider({
+        id: value.id, name: value.name, baseUrl: model.baseUrl ?? value.baseUrl, auth: value.auth,
+        ...(model.protocol !== undefined ? { protocol: model.protocol } : {}),
+        ...(model.headers !== undefined ? { headers: model.headers } : {}),
+      });
       seen.add(model.id);
       return {
         id: model.id,
@@ -140,6 +154,9 @@ export function validateCustomProvider(value: unknown): CustomProviderConfig {
         ...(typeof model.supportsTools === "boolean" ? { supportsTools: model.supportsTools } : {}),
         ...(typeof model.supportsVision === "boolean" ? { supportsVision: model.supportsVision } : {}),
         ...(typeof model.isFree === "boolean" ? { isFree: model.isFree } : {}),
+        ...(model.baseUrl !== undefined ? { baseUrl: overrides.baseUrl } : {}),
+        ...(model.protocol !== undefined ? { protocol: overrides.protocol } : {}),
+        ...(model.headers !== undefined ? { headers: overrides.headers } : {}),
       };
     });
   }
@@ -245,13 +262,13 @@ function resolvedHeaders(config: CustomProviderConfig): Record<string, string> |
   for (const [key, value] of Object.entries(config.headers ?? {})) {
     const resolved = value.startsWith("$") ? process.env[value.slice(1)] : value;
     if (!resolved || !text(resolved)) return undefined;
-    headers[key] = resolved;
+    headers[key.toLowerCase()] = resolved;
   }
   return headers;
 }
 
-export function isCustomProviderConfigured(config: CustomProviderConfig): boolean {
-  return (config.auth === "none" || text(apiKeyFor(config)?.trim())) && resolvedHeaders(config) !== undefined;
+export function isCustomProviderConfigured(config: CustomProviderConfig, apiKeyOverride?: string): boolean {
+  return (config.auth === "none" || text((apiKeyOverride ?? apiKeyFor(config))?.trim())) && resolvedHeaders(config) !== undefined;
 }
 
 export function customProviderModels(configs: CustomProviderConfig[]): ModelInfo[] {
@@ -268,17 +285,7 @@ export function customProviderModels(configs: CustomProviderConfig[]): ModelInfo
         certified: "untested" as const,
       }));
     }
-    return [
-      {
-        id: "default",
-        providerId: config.id,
-        displayName: `${config.name} (Default)`,
-        contextWindow: 128_000,
-        supportsTools: true,
-        supportsVision: false,
-        certified: "untested" as const,
-      },
-    ];
+    return discoveredCatalogs.get(catalogKey(config))?.models ?? [];
   });
 }
 
@@ -287,35 +294,50 @@ export async function fetchCustomProviderModels(
   apiKeyOverride?: string,
   signal?: AbortSignal
 ): Promise<ModelInfo[]> {
+  config = validateCustomProvider(config);
   const base = config.baseUrl.replace(/\/+$/, "");
-  const url = `${base}/models`;
+  const url = `${base}${config.protocol === "anthropic" && !/\/v1$/i.test(base) ? "/v1" : ""}/models`;
   const key = apiKeyOverride ?? (config.auth === "none" ? undefined : apiKeyFor(config)?.trim());
-  const headers: Record<string, string> = {
-    ...resolvedHeaders(config),
-  };
+  const resolved = resolvedHeaders(config);
+  if (!resolved || (config.auth !== "none" && !key)) throw new Error(`Authentication is not configured for ${config.id}.`);
+  const headers: Record<string, string> = { ...resolved };
   if (config.auth === "bearer" && key) {
-    headers["Authorization"] = `Bearer ${key}`;
+    if (config.protocol === "anthropic") {
+      headers["x-api-key"] = key;
+      headers["anthropic-version"] = "2023-06-01";
+    } else headers["Authorization"] = `Bearer ${key}`;
   }
 
   const res = await fetch(url, {
     method: "GET",
     headers,
-    signal,
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(CUSTOM_DISCOVERY_TIMEOUT_MS)]) : AbortSignal.timeout(CUSTOM_DISCOVERY_TIMEOUT_MS),
+    redirect: "error",
   });
-
+  // Do not echo an endpoint's error body: it may contain credentials.
   if (!res.ok) {
-    let msg = `HTTP ${res.status} ${res.statusText}`;
-    try {
-      const errBody = await res.text();
-      const parsed = JSON.parse(errBody);
-      if (parsed.error?.message) msg = parsed.error.message;
-    } catch {
-      // intentional: fallback to status code on unparseable error body
-    }
-    throw new Error(`Failed to fetch models from ${url}: ${msg}`);
+    await res.body?.cancel();
+    throw new Error(`Model discovery for ${config.id} failed (HTTP ${res.status}).`);
   }
-
-  const json = (await res.json()) as unknown;
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error(`No model catalog returned for ${config.id}.`);
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  try {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      bytes += chunk.value.byteLength;
+      if (bytes > CUSTOM_DISCOVERY_MAX_BYTES) throw new Error("Custom model catalog exceeds the size limit.");
+      chunks.push(chunk.value);
+    }
+  } finally { await reader.cancel(); }
+  let json: unknown;
+  try { json = JSON.parse(Buffer.concat(chunks).toString("utf8")); }
+  catch {
+    // intentional: never expose a malformed endpoint response in diagnostics.
+    throw new Error(`Invalid JSON model catalog for ${config.id}.`);
+  }
   let rawList: Array<Record<string, unknown>> = [];
 
   if (record(json) && Array.isArray(json.data)) {
@@ -324,23 +346,47 @@ export async function fetchCustomProviderModels(
     rawList = json.models.filter(record);
   } else if (Array.isArray(json)) {
     rawList = json.map(item => (typeof item === "string" ? { id: item } : item)).filter(record);
-  }
+  } else throw new Error(`Invalid model catalog for ${config.id}: expected a model array.`);
 
   const result: ModelInfo[] = [];
   for (const item of rawList) {
-    const id = String(item.id || item.name || "");
-    if (!id) continue;
+    const id = typeof item.id === "string" ? item.id : item.name;
+    if (!text(id) || result.some(model => model.id === id)) continue;
+    const context = item.context_length ?? item.contextWindow;
     result.push({
       id,
       providerId: config.id,
       displayName: typeof item.name === "string" && item.name ? item.name : id,
-      contextWindow: typeof item.context_length === "number" ? item.context_length : 128_000,
-      supportsTools: true,
-      supportsVision: false,
+      contextWindow: typeof context === "number" && Number.isSafeInteger(context) && context > 0 ? context : FALLBACK_CONTEXT_WINDOW,
+      supportsTools: typeof item.supportsTools === "boolean" ? item.supportsTools : true,
+      supportsVision: item.supportsVision === true,
       certified: "untested" as const,
     });
   }
   return result;
+}
+
+/** Refresh only dynamic catalogs; failures retain the last successful catalog. */
+export async function refreshCustomProviderModels(
+  configs: CustomProviderConfig[] = loadCustomProviders(),
+  options: { force?: boolean; signal?: AbortSignal; apiKeys?: Partial<Record<`custom:${string}`, string>> } = {},
+): Promise<Array<{ providerId: CustomProviderConfig["id"]; count: number; error?: string }>> {
+  const results = await Promise.all(configs.filter(config => !config.models?.length && isCustomProviderConfigured(config, options.apiKeys?.[config.id])).map(async config => {
+    const key = catalogKey(config);
+    const cached = discoveredCatalogs.get(key);
+    try {
+      if (options.force || !cached || Date.now() - cached.at >= DEFAULT_SYNC_TTL_MS) {
+        const models = await fetchCustomProviderModels(config, options.apiKeys?.[config.id], options.signal);
+        if (!models.length) throw new Error(`No models returned for ${config.id}; specify model IDs explicitly.`);
+        discoveredCatalogs.set(key, { models, at: Date.now() });
+      }
+      return { providerId: config.id, count: discoveredCatalogs.get(key)?.models.length ?? 0 };
+    } catch (err) {
+      return { providerId: config.id, count: cached?.models.length ?? 0, error: getErrorMessage(err) };
+    }
+  }));
+  syncCustomProviderModels(customProviderModels(configs), configs.map(config => config.id));
+  return results;
 }
 
 export interface CustomProviderTestResult {
@@ -400,10 +446,39 @@ export async function testCustomProvider(
 }
 
 export function createCustomProvider(config: CustomProviderConfig, apiKeyOverride?: string): ModelProvider {
+  config = validateCustomProvider(config);
+  const adapters = new Map<string, ModelProvider>();
+  const adapterFor = (modelId: string): ModelProvider => {
+    const existing = adapters.get(modelId);
+    if (existing) return existing;
+    const model = config.models?.find(item => item.id === modelId);
+    const mergedHeaders: Record<string, string> = { ...config.headers };
+    for (const [name, value] of Object.entries(model?.headers ?? {})) {
+      for (const inherited of Object.keys(mergedHeaders)) {
+        if (inherited.toLowerCase() === name.toLowerCase()) delete mergedHeaders[inherited];
+      }
+      mergedHeaders[name] = value;
+    }
+    const effective = { ...config, baseUrl: model?.baseUrl ?? config.baseUrl, protocol: model?.protocol ?? config.protocol, headers: mergedHeaders };
+    const adapter = createCustomAdapter(effective, apiKeyOverride);
+    adapters.set(modelId, adapter);
+    return adapter;
+  };
+  return {
+    id: config.id, displayName: config.name,
+    isConfigured: () => isCustomProviderConfigured(config) || Boolean(apiKeyOverride && resolvedHeaders(config)),
+    async *streamCompletion(request) {
+      const model = customProviderModels([config]).find(item => item.id === request.model);
+      yield* adapterFor(request.model).streamCompletion({ ...request, ...(model?.supportsTools === false ? { tools: [] } : {}) });
+    },
+  };
+}
+
+function createCustomAdapter(config: CustomProviderConfig, apiKeyOverride?: string): ModelProvider {
   const key = apiKeyOverride ?? (config.auth === "none" ? undefined : apiKeyFor(config)?.trim());
   const headers = resolvedHeaders(config);
   const protocol = config.protocol ?? "openai-chat";
-  const configured = apiKeyOverride ? true : isCustomProviderConfigured(config);
+  const configured = headers !== undefined && (config.auth === "none" || Boolean(key));
 
   let adapter: ModelProvider;
   if (protocol === "openai-responses") {
@@ -418,9 +493,11 @@ export function createCustomProvider(config: CustomProviderConfig, apiKeyOverrid
     adapter = new AnthropicProvider({
       id: config.id,
       displayName: config.name,
-      baseURL: config.baseUrl,
+      // The SDK adds /v1/messages itself; accept either origin or /v1 bases.
+      baseURL: config.baseUrl.replace(/\/v1$/i, ""),
       apiKey: configured ? (config.auth === "none" ? "anvil-no-auth" : key) : undefined,
-      defaultHeaders: headers,
+      defaultHeaders: { ...(config.auth === "none" ? { "x-api-key": null } : {}), ...headers },
+      isolateEndpoint: true,
     });
   } else {
     adapter = new ChatCompletionsStyleProvider({

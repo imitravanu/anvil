@@ -16,11 +16,11 @@ interface SetupValues {
 const FIELDS: Array<{ key: keyof SetupValues; label: string }> = [
   { key: "id", label: "Provider ID (lowercase letters, numbers and hyphens)" },
   { key: "name", label: "Display name" },
-  { key: "baseUrl", label: "OpenAI-compatible API base URL (include /v1 if required)" },
+  { key: "baseUrl", label: "API base URL (include /v1 if required)" },
   { key: "credential", label: "API key or $ENV_NAME; '-' for no authentication; blank keeps an existing key" },
-  { key: "models", label: "Model IDs (comma-separated; first is the default)" },
+  { key: "models", label: "Model IDs (comma-separated; blank discovers automatically)" },
   { key: "contextWindow", label: "Context window in tokens (conservative default; set your model's limit)" },
-  { key: "options", label: "Optional JSON: headers, maxTokensParam, streamUsage, supportsTools, supportsVision" },
+  { key: "options", label: "Optional JSON: protocol, headers, maxTokensParam, streamUsage, supportsTools, supportsVision" },
 ];
 
 export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemoved, onCancel }: {
@@ -39,6 +39,7 @@ export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemov
     options: JSON.stringify({
       headers: initial?.headers ?? {}, maxTokensParam: initial?.maxTokensParam ?? "max_tokens",
       streamUsage: initial?.streamUsage ?? true,
+      protocol: initial?.protocol ?? "openai-chat",
     }),
   }));
   const [step, setStep] = useState(initial ? 1 : 0);
@@ -52,7 +53,7 @@ export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemov
     const options: unknown = JSON.parse(next.options || "{}");
     if (typeof options !== "object" || options === null || Array.isArray(options)) throw new Error("Options must be a JSON object.");
     const extras = options as Record<string, unknown>;
-    if (Object.keys(extras).some(key => !["headers", "maxTokensParam", "streamUsage", "supportsTools", "supportsVision"].includes(key))) throw new Error("Unknown option. Use the fields listed above.");
+    if (Object.keys(extras).some(key => !["protocol", "headers", "maxTokensParam", "streamUsage", "supportsTools", "supportsVision"].includes(key))) throw new Error("Unknown option. Use the fields listed above.");
     const { supportsTools, supportsVision, ...providerOptions } = extras;
     const credential = next.credential.trim();
     const auth = credential === "-" ? "none" : credential ? "bearer" : initial?.auth;
@@ -61,7 +62,7 @@ export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemov
     const config = validateCustomProvider({
       id: initial?.id ?? `custom:${next.id.trim()}`, name: next.name, baseUrl: next.baseUrl,
       auth, ...(apiKeyEnv ? { apiKeyEnv } : {}), ...providerOptions,
-      models: next.models.split(",").map(id => {
+      models: next.models ? next.models.split(",").map(id => {
         const old = initial?.models?.find(model => model.id === id.trim());
         return {
           ...old, id: id.trim(), contextWindow: old && next.contextWindow === String(initial?.models?.[0]?.contextWindow)
@@ -69,7 +70,7 @@ export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemov
           ...(supportsTools !== undefined ? { supportsTools } : {}),
           ...(supportsVision !== undefined ? { supportsVision } : {}),
         };
-      }),
+      }) : [],
     });
     if (!initial && loadCustomProviders().some(old => old.id === config.id)) throw new Error("This provider ID already exists. Select it from /connect to edit it.");
     return { config, ...(credential && credential !== "-" && !credential.startsWith("$") ? { apiKey: credential } : {}) };
@@ -110,7 +111,8 @@ export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemov
       </> : review ? <>
         <Text color={theme.colors.primary}>{review.config.name} · {review.config.id}</Text>
         <Text color={theme.colors.textSecondary}>{review.config.baseUrl}</Text>
-        <Text color={theme.colors.textSecondary}>Models: {review.config.models ? review.config.models.map(model => model.id).join(", ") : "dynamic / auto-discover"}</Text>
+        <Text color={theme.colors.textSecondary}>Protocol: {review.config.protocol ?? "openai-chat"}</Text>
+        <Text color={theme.colors.textSecondary}>Models: {review.config.models?.length ? review.config.models.map(model => model.id).join(", ") : "dynamic / auto-discover"}</Text>
         <Text color={theme.colors.textSecondary}>Authentication: {review.config.auth === "none" ? "none" : review.config.apiKeyEnv ? `environment (${review.config.apiKeyEnv})` : "stored key (hidden)"}</Text>
         <Text color={theme.colors.textSecondary}>Settings and keys are saved separately with owner-only permissions.</Text>
         {initial && initial.id !== activeProviderId && <Text color={theme.colors.warning}>d — remove this provider</Text>}
@@ -124,7 +126,7 @@ export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemov
             const next = { ...values, [field.key]: value.trim() };
             setValues(next);
             setError(null);
-            if (!value.trim() && field.key !== "credential" && field.key !== "options") {
+            if (!value.trim() && !["credential", "options", "models"].includes(field.key)) {
               setError("This field is required."); return;
             }
             if (step === FIELDS.length - 1) {

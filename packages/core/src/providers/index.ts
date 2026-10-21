@@ -25,6 +25,7 @@ export {
   isCustomProviderConfigured,
   customProviderModels,
   fetchCustomProviderModels,
+  refreshCustomProviderModels,
   testCustomProvider,
   type CustomProviderConfig,
   type CustomProviderProtocol,
@@ -92,7 +93,7 @@ export interface ProviderCredentials {
   agentrouterApiKey?: string;
 }
 
-export function createProviders(creds: ProviderCredentials, customConfigs: CustomProviderConfig[] = loadCustomProviders()): Record<ProviderId, ModelProvider> {
+export function createProviders(creds: ProviderCredentials, customConfigs: CustomProviderConfig[] = loadCustomProviders(), customApiKeys: Partial<Record<`custom:${string}`, string>> = {}): Record<ProviderId, ModelProvider> {
   const providers: Record<ProviderId, ModelProvider> = {
     anthropic: createAnthropicProvider(creds.anthropicApiKey),
     openai: createOpenAIProvider(creds.openaiApiKey),
@@ -109,6 +110,6 @@ export function createProviders(creds: ProviderCredentials, customConfigs: Custo
     agentrouter: createAgentRouterProvider(creds.agentrouterApiKey),
   };
   syncCustomProviderModels(customProviderModels(customConfigs));
-  for (const config of customConfigs) providers[config.id] = createCustomProvider(config);
+  for (const config of customConfigs) providers[config.id] = createCustomProvider(config, customApiKeys[config.id]);
   return providers;
 }

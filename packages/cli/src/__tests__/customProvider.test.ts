@@ -149,5 +149,79 @@ describe("custom provider CLI integration", () => {
     expect(res.code).toBe(0);
     expect(res.stdout).toContain("adhoc response");
   }, 10000);
+
+  it("discovers models on startup and uses a real ID without persisting the catalog", async () => {
+    const urls: string[] = [];
+    server = createServer(async (req, res) => {
+      urls.push(req.url!);
+      if (req.url === "/v1/models") {
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ data: [{ id: "discovered-cli-model" }] }));
+        return;
+      }
+      let body = ""; for await (const chunk of req) body += chunk;
+      expect(JSON.parse(body).model).toBe("discovered-cli-model");
+      res.setHeader("Content-Type", "text/event-stream");
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: "discovery boot works" }, finish_reason: "stop" }] })}\n\ndata: [DONE]\n\n`);
+    });
+    await new Promise<void>(resolve => server!.listen(0, "127.0.0.1", resolve));
+    const address = server.address(); if (!address || typeof address === "string") throw new Error("fixture unavailable");
+    const config = [{ id: "custom:dynamic", name: "Dynamic", baseUrl: `http://127.0.0.1:${address.port}/v1`, auth: "none", models: [] }];
+    const before = JSON.stringify(config);
+    fs.writeFileSync(path.join(root, "providers.json"), before);
+    const result = await run(["--provider", "custom:dynamic", "-p", "hello", "--raw", "--no-mcp"]);
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toContain("discovery boot works");
+    expect(urls).toEqual(["/v1/models", "/v1/chat/completions"]);
+    expect(fs.readFileSync(path.join(root, "providers.json"), "utf8")).toBe(before);
+  }, 10000);
+
+  it.each([undefined, "openai"])("honors --base-url and an environment key with provider %s", async provider => {
+    server = createServer(async (req, res) => {
+      expect(req.url).toBe("/v1/chat/completions");
+      expect(req.headers.authorization).toBe("Bearer ephemeral-key");
+      res.setHeader("Content-Type", "text/event-stream");
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: "override reached" }, finish_reason: "stop" }] })}\n\ndata: [DONE]\n\n`);
+    });
+    await new Promise<void>(resolve => server!.listen(0, "127.0.0.1", resolve));
+    const address = server.address(); if (!address || typeof address === "string") throw new Error("fixture unavailable");
+    const result = await run([...(provider ? ["--provider", provider] : []), "--base-url", `http://127.0.0.1:${address.port}/v1`, "--api-key-env", "FIXTURE_EPHEMERAL_KEY", "--model", "fixture", "-p", "hello", "--raw", "--no-mcp"], { FIXTURE_EPHEMERAL_KEY: "ephemeral-key" });
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toContain("override reached");
+    expect(result.stderr).not.toContain("ephemeral-key");
+    expect(fs.existsSync(path.join(root, "providers.json"))).toBe(false);
+    expect(fs.existsSync(path.join(root, "provider-keys.json"))).toBe(false);
+    expect(fs.existsSync(path.join(root, "settings.json"))).toBe(false);
+  }, 10000);
+
+  it("fails clearly when discovery has no models, instead of sending a fabricated default", async () => {
+    server = createServer((req, res) => {
+      expect(req.url).toBe("/v1/models");
+      res.setHeader("Content-Type", "application/json"); res.end('{"data":[]}');
+    });
+    await new Promise<void>(resolve => server!.listen(0, "127.0.0.1", resolve));
+    const address = server.address(); if (!address || typeof address === "string") throw new Error("fixture unavailable");
+    const result = await run(["--base-url", `http://127.0.0.1:${address.port}/v1`, "-p", "hello", "--no-mcp"]);
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("No models available");
+    expect(result.stderr).toContain("--model");
+  }, 10000);
+
+  it("rejects malformed management flags without saving a provider", async () => {
+    const result = await run(["provider", "add", "bad", "--url"]);
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("Missing value for --url");
+    expect(fs.existsSync(path.join(root, "providers.json"))).toBe(false);
+    const typo = await run(["provider", "add", "bad", "--url", "https://fixture.invalid/v1", "--keey", "sensitive-value"]);
+    expect(typo.code).toBe(1);
+    expect(typo.stderr).not.toContain("sensitive-value");
+    expect(fs.existsSync(path.join(root, "providers.json"))).toBe(false);
+  }, 10000);
+
+  it("rejects an explicit provider typo even when an ad-hoc URL is supplied", async () => {
+    const result = await run(["--provider", "anthrpic", "--base-url", "http://127.0.0.1:1/v1", "--model", "fixture", "-p", "hello", "--no-mcp"]);
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('Unknown provider "anthrpic"');
+  }, 10000);
 });
 

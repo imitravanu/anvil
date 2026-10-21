@@ -6,6 +6,7 @@ import {
   type CustomProviderConfig,
   type CustomProviderProtocol,
   getErrorMessage,
+  FALLBACK_CONTEXT_WINDOW,
 } from "@anvil/core";
 
 export function parseSubcommandFlags(args: string[]): {
@@ -19,12 +20,16 @@ export function parseSubcommandFlags(args: string[]): {
     const arg = args[i];
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
+      if (key === "help") { flags.help = "1"; continue; }
+      if (!["url", "base-url", "name", "auth", "key", "api-key", "api-key-env", "protocol", "models", "context-window"].includes(key)) {
+        throw new Error("Unknown provider option. See `anvil provider help`.");
+      }
       const next = args[i + 1];
       if (next !== undefined && !next.startsWith("--")) {
         flags[key] = next;
         i++;
       } else {
-        flags[key] = "1";
+        throw new Error(`Missing value for --${key}.`);
       }
     } else {
       positionals.push(arg);
@@ -48,12 +53,21 @@ Options for 'add':
   --name <name>         Display name for the provider
   --auth <bearer|none>  Authentication method (default: bearer if key provided, else none)
   --key <key>           API key (stored securely in ~/.anvil/provider-keys.json with mode 0600)
+  --api-key-env <name>  Reference an environment variable (avoids secrets in shell history)
   --protocol <proto>    Wire protocol: openai-chat (default), openai-responses, anthropic
   --models <ids>        Comma-separated model IDs (optional; auto-discovered if omitted)
+  --context-window <n>  Context limit for explicit model IDs (default: conservative fallback)
+
+'test' probes GET /models only; it does not certify streaming or tool use.
 `);
 }
 
 export async function runProviderCommand(args: string[]): Promise<number> {
+  try { return await executeProviderCommand(args); }
+  catch (err) { console.error(getErrorMessage(err)); return 1; }
+}
+
+async function executeProviderCommand(args: string[]): Promise<number> {
   const { positionals, flags } = parseSubcommandFlags(args);
   const action = positionals[0] || "list";
 
@@ -117,26 +131,30 @@ export async function runProviderCommand(args: string[]): Promise<number> {
       return 1;
     }
 
-    const name = flags.name || rawId.replace(/^custom:/, "");
+    const existing = loadCustomProviders().find(config => config.id === id);
+    const name = flags.name || existing?.name || rawId.replace(/^custom:/, "");
     const key = flags.key ?? flags["api-key"];
-    const auth = (flags.auth as "bearer" | "none") ?? (key ? "bearer" : "none");
-    const protocol = (flags.protocol as CustomProviderProtocol) || "openai-chat";
+    const apiKeyEnv = flags["api-key-env"] ?? (key ? undefined : existing?.apiKeyEnv);
+    const auth = (flags.auth as "bearer" | "none") ?? (key || apiKeyEnv ? "bearer" : existing?.auth ?? "none");
+    const protocol = (flags.protocol as CustomProviderProtocol) || existing?.protocol || "openai-chat";
 
     let models: CustomProviderConfig["models"] | undefined = undefined;
-    if (flags.models) {
+    if (flags.models !== undefined && flags.models.trim()) {
       models = flags.models.split(",").map((m) => ({
         id: m.trim(),
-        contextWindow: 128_000,
+        contextWindow: flags["context-window"] ? Number(flags["context-window"]) : FALLBACK_CONTEXT_WINDOW,
       }));
     }
 
     const config: CustomProviderConfig = {
+      ...existing,
       id,
       name,
       baseUrl: url,
       auth,
       protocol,
-      ...(models ? { models } : {}),
+      apiKeyEnv: auth === "none" ? undefined : apiKeyEnv,
+      ...(models ? { models } : flags.models !== undefined ? { models: [] } : {}),
     };
 
     try {
@@ -148,14 +166,14 @@ export async function runProviderCommand(args: string[]): Promise<number> {
     }
 
     // Attempt model auto-discovery if models were not explicitly provided
-    if (!models && (auth === "none" || key)) {
+    if (!config.models?.length) {
       try {
         const testRes = await testCustomProvider(config, key);
         if (testRes.ok && testRes.models.length > 0) {
           console.log(
             `  Auto-discovered ${testRes.models.length} model(s): ${testRes.models.slice(0, 5).join(", ")}${testRes.models.length > 5 ? ` (+${testRes.models.length - 5} more)` : ""}`
           );
-        }
+        } else console.warn(`  Discovery unavailable: ${testRes.error ?? "no models returned"}. Configure --models explicitly if this endpoint has no catalog.`);
       } catch {
         // intentional: auto-discovery failure during provider add is advisory, not fatal
       }
@@ -201,7 +219,11 @@ export async function runProviderCommand(args: string[]): Promise<number> {
       return 1;
     }
 
-    const keyOverride = flags.key ?? flags["api-key"];
+    const envKeyName = flags["api-key-env"];
+    if (envKeyName && (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(envKeyName) || !process.env[envKeyName]?.trim())) {
+      throw new Error("--api-key-env requires a set, non-empty environment variable.");
+    }
+    const keyOverride = flags.key ?? flags["api-key"] ?? (envKeyName ? process.env[envKeyName] : undefined);
     console.log(`Testing custom provider "${config.id}" (${config.baseUrl})...`);
 
     const result = await testCustomProvider(config, keyOverride);
@@ -217,7 +239,7 @@ export async function runProviderCommand(args: string[]): Promise<number> {
           console.log(`    ... and ${result.modelsCount - 10} more`);
         }
       } else {
-        console.log("  No models returned from discovery endpoint (using fallback default).");
+        console.log("  No models returned. Configure explicit model IDs; no default ID is invented.");
       }
       return 0;
     } else {

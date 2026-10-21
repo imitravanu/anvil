@@ -17,6 +17,9 @@ export const MAX_STREAM_BYTES = getEnvNumber("ANVIL_MAX_STREAM_BYTES", 20 * 1024
 
 // Context Window & Compaction Thresholds
 export const FALLBACK_CONTEXT_WINDOW = getEnvNumber("ANVIL_FALLBACK_CONTEXT_WINDOW", 32_000);
+// Custom model catalogs are untrusted remote data, not unbounded startup work.
+export const CUSTOM_DISCOVERY_TIMEOUT_MS = getEnvNumber("ANVIL_CUSTOM_DISCOVERY_TIMEOUT_MS", 8_000);
+export const CUSTOM_DISCOVERY_MAX_BYTES = 2 * 1024 * 1024;
 export const COMPACTION_TOKEN_THRESHOLD = 80_000;
 export const COMPACTION_THRESHOLD = Number(process.env.ANVIL_COMPACTION_THRESHOLD) || 0.75;
 export const KEEP_RECENT_MESSAGES = getEnvNumber("ANVIL_KEEP_RECENT_MESSAGES", 6);

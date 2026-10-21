@@ -27,6 +27,8 @@ const VALUE_FLAGS: ReadonlySet<string> = new Set([
   "--lang",
   "--base-url",
   "--api-key",
+  "--api-key-env",
+  "--protocol",
 ]);
 export type Invocation =
   | { kind: "version" }
@@ -52,7 +54,8 @@ export function resolveInvocation(
   opts: { hasConfiguredProvider: boolean }
 ): Invocation {
   if (argv.includes("--version") || argv.includes("-v")) return { kind: "version" };
-  if (argv.includes("--help") || argv.includes("-h")) return { kind: "help" };
+  if (argv.includes("--help") || argv.includes("-h")) return argv[0] === "provider"
+    ? { kind: "provider", args: ["help"] } : { kind: "help" };
 
   // G10 (AUDIT-2026-09-30): the subcommand is the first POSITIONAL token, not
   // necessarily argv[0] — `anvil --verbose gate` must reach the gate. Flags
@@ -139,11 +142,8 @@ export function parseFlags(argv: string[]): Record<string, string> {
     if (arg === "--provider" || arg === "--model") {
       flags[arg.slice(2)] = nextValue(i, arg);
       i++;
-    } else if (arg === "--base-url") {
-      flags["base-url"] = nextValue(i, arg);
-      i++;
-    } else if (arg === "--api-key") {
-      flags["api-key"] = nextValue(i, arg);
+    } else if (["--base-url", "--api-key", "--api-key-env", "--protocol"].includes(arg)) {
+      flags[arg.slice(2)] = nextValue(i, arg);
       i++;
     } else if (arg === "--prompt" || arg === "-p") {
       flags.prompt = nextValue(i, arg);

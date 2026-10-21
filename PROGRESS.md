@@ -5336,3 +5336,43 @@ The initial compatibility run caught a first-run prompt/goal regression; dispatc
 corrected and the existing tests pass. Package verification PASS: all three clean
 tarballs and isolated CLI installation. `git diff --check` PASS. No live-provider calls.
 Committed locally as an unreleased feature; the installed 1.4.0 release is unchanged.
+
+# 2026-10-21 — custom-provider completion and regression repairs
+
+Ownership: this session owns core custom-provider configuration, discovery, protocol
+adapters, provider registry/bootstrap/config selection and their tests; CLI ad-hoc
+selection, provider management/help and tests; TUI custom setup, model picker and sync
+integration/tests; constants, README, CHANGELOG and this progress entry. Repair the
+confirmed live gaps in afadb10 without altering protected artifacts or publishing.
+No other working-tree changes were present at entry. Validation pending.
+
+Completed: omitted/empty model lists discover real IDs into startup selection and
+the picker; `/sync` forces refresh, with TTL caching and last-good retention on
+failure/empty results. No fabricated default ID or claimed 128K context limit.
+Discovery is timeout/size bounded, cancellation-aware, redirect-refusing and does
+not echo remote error bodies. Explicit models still work on catalog-less endpoints.
+Per-model URLs, wires and case-insensitive header overrides are validated and used
+for real requests. Anthropic origin and /v1 bases produce exactly one /v1/messages;
+keyless/header-only authentication excludes unrelated environment credentials.
+Responses keeps images and refuses redirects. CLI endpoint overrides take precedence
+even with a built-in provider, reject provider typos, and support environment-key and
+protocol flags without persisting provider/key/default-settings overrides. Management
+rejects missing/unknown flags, supports env references and preserves existing settings
+on update. Wizard edits preserve routing/protocol settings and accept blank model IDs.
+
+Verification: final `npm run gate` PASS — 1,188 core + 427 TUI + 218 CLI = 1,833
+tests across 209 files, 25/25 mock evals, sequential build/full typechecks and unchanged
+protected hashes. `node scripts/verify-package.mjs` PASS: all three test-free tarballs
+and an isolated CLI install. `git diff --check` PASS. Initial sandbox-only HTTP/fork
+restrictions were resolved by running the validation with approved local-fixture access.
+Final logs: `/tmp/anvil-provider-completion-gate-final.log` and
+`/tmp/anvil-provider-completion-package-final.log`. No paid/live-provider calls.
+
+The user approved updating the installed app. Its existing global package is a symlink
+to this checkout's CLI, so the validated rebuild updates it without replacing that
+arrangement. The actual `/home/mitravanu/.npm-global/bin/anvil` passed all three real
+local HTTP fixture runs: /v1/chat/completions, /v1/responses and /v1/messages, including
+an explicit built-in provider plus endpoint override and a fake environment key.
+Temporary test state contained no provider/key/default-settings writes; real user
+credentials, configuration and saved sessions were not touched. Version remains
+1.4.0 with local unreleased fixes. Ready for a local commit; nothing published.

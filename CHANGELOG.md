@@ -11,6 +11,11 @@ All notable changes to Anvil are documented here. The format follows
   separate protected API-key storage or environment references, custom headers and
   model capabilities, configurable token parameters and streaming usage. Custom
   providers participate in headless selection, model switching and saved sessions.
+- Custom providers support Chat Completions, Responses and Anthropic Messages wires,
+  optional model discovery at startup/in the picker and via `/sync`, scriptable provider
+  management, ephemeral endpoint/key/protocol flags, and per-model endpoint/header/wire
+  overrides. Discovery is bounded, keeps last-good catalogs on failure, and never
+  invents a default model ID. Anthropic URLs and keyless authentication are normalized.
 
 ## [1.4.0] — 2026-10-20
 

@@ -215,7 +215,8 @@ export interface AnthropicProviderOptions {
   displayName?: string;
   apiKey?: string;
   baseURL?: string;
-  defaultHeaders?: Record<string, string>;
+  defaultHeaders?: Record<string, string | null>;
+  isolateEndpoint?: boolean;
 }
 
 export class AnthropicProvider extends BaseProvider {
@@ -238,6 +239,12 @@ export class AnthropicProvider extends BaseProvider {
             apiKey: optionsOrApiKey.apiKey,
             ...(optionsOrApiKey.baseURL ? { baseURL: optionsOrApiKey.baseURL } : {}),
             ...(optionsOrApiKey.defaultHeaders ? { defaultHeaders: optionsOrApiKey.defaultHeaders } : {}),
+            ...(optionsOrApiKey.isolateEndpoint ? {
+              authToken: null,
+              maxRetries: 0,
+              fetch: (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
+                fetch(input, { ...init, redirect: "error" }),
+            } : {}),
           })
         : null;
     }

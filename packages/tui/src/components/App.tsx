@@ -4,6 +4,7 @@ import { Box, Text, useInput, useStdout } from "ink";
 import {
   AgentSession,
   createProviders,
+  refreshCustomProviderModels,
   resolveProviderCredentials,
   loadSession,
   loadSettings,
@@ -321,25 +322,32 @@ export function App({
   // /connect finished: refresh provider instances from the freshly-written key
   // and hot-apply it if it belongs to the active provider (same provider id,
   // so switchModel keeps history while swapping the underlying API key).
-  const handleConnectDone = (providerId: ProviderId) => {
-    const refreshed = createProviders(resolveProviderCredentials());
-    refreshCustomProviderLabels(refreshed);
-    setProviders(refreshed);
-    setIsConnectOpen(false);
-    const label = PROVIDER_LABELS[providerId] ?? providerId;
-    if (!refreshed[providerId]?.isConfigured()) {
-      printSystemMessage(`${label} saved. Set its configured environment variables and reconnect before using it.`);
-      return;
-    }
-    if (providerId === activeProviderId) {
-      const models = getModelsForProvider(providerId);
-      const nextModel = providerId.startsWith("custom:") && !models.some(model => model.id === currentModel)
-        ? models[0].id : currentModel;
-      session.switchModel(refreshed[providerId], nextModel);
-      setCurrentModel(nextModel);
-      printSystemMessage(`✓ ${label} reconnected with the new key.`);
-    } else {
-      printSystemMessage(`✓ ${label} connected. Use /model to switch to it.`);
+  const handleConnectDone = async (providerId: ProviderId) => {
+    try {
+      const discovery = await refreshCustomProviderModels();
+      for (const result of discovery) if (result.error) printSystemMessage(result.error);
+      const refreshed = createProviders(resolveProviderCredentials());
+      refreshCustomProviderLabels(refreshed);
+      setProviders(refreshed);
+      setIsConnectOpen(false);
+      const label = PROVIDER_LABELS[providerId] ?? providerId;
+      if (!refreshed[providerId]?.isConfigured()) {
+        printSystemMessage(`${label} saved. Set its configured environment variables and reconnect before using it.`);
+        return;
+      }
+      if (providerId === activeProviderId) {
+        const models = getModelsForProvider(providerId);
+        const nextModel = providerId.startsWith("custom:") && !models.some(model => model.id === currentModel)
+          ? models[0]?.id ?? currentModel : currentModel;
+        session.switchModel(refreshed[providerId], nextModel);
+        setCurrentModel(nextModel);
+        printSystemMessage(`✓ ${label} reconnected with the new key.`);
+      } else {
+        printSystemMessage(`✓ ${label} connected. Use /model to switch to it.`);
+      }
+    } catch (err) {
+      // A turn may have started if setup was dismissed during discovery.
+      printSystemMessage(`Provider saved, but reconnect could not be applied: ${getErrorMessage(err)}`);
     }
   };
 

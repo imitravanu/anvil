@@ -1627,9 +1627,9 @@ export function registerModels(models: ModelInfo[]): void {
 }
 
 /** Replace the configured custom catalog without deleting built-in id collisions. */
-export function syncCustomProviderModels(models: ModelInfo[]): void {
+export function syncCustomProviderModels(models: ModelInfo[], providerIds?: string[]): void {
   for (let i = MODEL_REGISTRY.length - 1; i >= 0; i--) {
-    if (MODEL_REGISTRY[i].providerId.startsWith("custom:")) MODEL_REGISTRY.splice(i, 1);
+    if (MODEL_REGISTRY[i].providerId.startsWith("custom:") && (!providerIds || providerIds.includes(MODEL_REGISTRY[i].providerId))) MODEL_REGISTRY.splice(i, 1);
   }
   for (const model of models) upsertModel(model);
   _reindex();

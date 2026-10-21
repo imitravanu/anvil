@@ -30,6 +30,8 @@ Options:
   --model <id>              Override the model for this run
   --base-url <url>          Ad-hoc custom provider endpoint URL
   --api-key <key>           Ad-hoc API key override
+  --api-key-env <name>      Read the override key from an environment variable
+  --protocol <wire>         With --base-url: openai-chat, openai-responses, anthropic
   --no-mcp                  Skip MCP server startup (fast boot)
   --verbose                 Info-level diagnostics on stderr (ANVIL_LOG=info)
   --watch                   (gate) continuously re-scan the working-tree diff
