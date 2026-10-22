@@ -5800,3 +5800,27 @@ have (no `gh` CLI, no `GITHUB_TOKEN`/`GH_TOKEN`).
 **Remaining (human-gated):** upload the three tarballs + `SHA256SUMS` to the
 v1.5.0 GitHub release, then flip the README install commands from 1.4.0 to
 1.5.0. Everything up to that point is verified and committed.
+
+## 2026-10-23 — GitHub 1.5.0 release published
+
+Ownership: this follow-up owns only `README.md` and this progress entry. Entry
+tree clean at `4503b79`; no protected artifact or release tarball was modified.
+
+The user authorized completing the GitHub release, leaving npm untouched.
+GitHub Actions run `39834246931` passed build, typecheck, tests, mock evals,
+mock certification, Guardian Gate and packed-CLI checks, then failed at npm
+publication; the subsequent GitHub release step was therefore skipped.
+
+After the user completed GitHub's two-factor check, published release
+`421085347` for the existing `v1.5.0` tag through GitHub's release UI. Uploaded
+the three existing `dist-release/anvil-*-1.5.0.tgz` files and `SHA256SUMS`.
+The public API confirms `draft: false`, all four assets uploaded, and package
+SHA-256 digests identical to the local checksums. Release:
+https://github.com/imitravanu/anvil/releases/tag/v1.5.0
+
+Updated README install/npx links to the published 1.5.0 asset. Registry 404s
+establish non-availability, not ownership of the npm scope; removed the
+unsupported "unclaimed" wording from the current installation guidance.
+Full local `npm run gate` passed before publication. No npm publish attempted.
+The post-documentation gate also passed: CLI 235, core 1,202 and TUI 498 tests,
+plus 25/25 offline mock evaluations, sequential builds and typechecks.

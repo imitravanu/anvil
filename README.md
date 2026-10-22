@@ -74,13 +74,12 @@ inspectable before approval. The preview above uses an offline fixture.
 
 ### Global Install from the GitHub Release
 
-The 1.5.0 source is tagged in this repository. It is not published to npm: the
-`@anvil/*` package names are unclaimed on the public registry, so the GitHub
-release tarball is the supported install path. Until the v1.5.0 release assets
-are uploaded, the commands below install the previous 1.4.0 release:
+Anvil 1.5.0 is available from the [GitHub release](https://github.com/imitravanu/anvil/releases/tag/v1.5.0).
+The packages are not published to npm; the GitHub release tarball is the
+supported install path. Node.js 22 or newer is required.
 
 ```bash
-npm install -g https://github.com/imitravanu/anvil/releases/download/v1.4.0/anvil-cli-1.4.0.tgz
+npm install -g https://github.com/imitravanu/anvil/releases/download/v1.5.0/anvil-cli-1.5.0.tgz
 
 # Run inside any repository
 cd ~/my-project
@@ -90,7 +89,7 @@ anvil
 ### Try Without Installing (npx)
 
 ```bash
-npx --package=https://github.com/imitravanu/anvil/releases/download/v1.4.0/anvil-cli-1.4.0.tgz anvil
+npx --package=https://github.com/imitravanu/anvil/releases/download/v1.5.0/anvil-cli-1.5.0.tgz anvil
 ```
 
 ### Build from Source
