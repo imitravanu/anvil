@@ -5750,3 +5750,53 @@ so the new fixtures are held to the same anti-slop rules as production source.
 Working tree at receipt: 3 modified (`PROGRESS.md`, `evals/run.ts`,
 `fixtureIntegrity.test.ts`), 4 untracked fixture directories. Not committed —
 left for review, per the review-teeth rule.
+
+# 2026-10-23 — release 1.5.0
+
+Ownership: this session owns `CHANGELOG.md`, `README.md`, `.gitignore`,
+`dist-release/` (untracked release assets), and this entry. No protected
+artifact touched. Entry state: tree clean at `4c01a46`, 12 commits ahead of
+origin, all three workspaces and `CORE_VERSION` already at 1.5.0, last tag
+`v1.4.0`.
+
+**What was actually blocking.** 1.5.0 had been fully prepared and never shipped:
+version bumped, changelog written, release notes drafted, twelve commits
+unpushed. The changelog still carried an `[Unreleased]` block above a
+`[1.5.0] — Unreleased` header, so the release was not even internally dated.
+
+**Distribution finding (recorded because it changes the release plan).** The
+`@anvil/*` names are unclaimed on the public npm registry — `@anvil/cli`,
+`@anvil/core` and `@anvil/tui` all return 404, and the bare `anvil` name on npm
+is an unrelated package at 0.0.6. So npm was never a channel this project had,
+and the GitHub release tarball is the only install path that has ever existed.
+The README previously implied npm publication was merely pending; it now states
+the real situation. This also means a release is not complete until the tarballs
+are uploaded as GitHub release assets, which needs a token this session does not
+have (no `gh` CLI, no `GITHUB_TOKEN`/`GH_TOKEN`).
+
+**Done:**
+
+- `CHANGELOG.md`: `[Unreleased]` folded into `[1.5.0] — 2026-10-23`; the eval
+  batch (08–11) and `--tasks-dir` added to Added.
+- `README.md`: distribution state corrected (npm unclaimed, GitHub tarball is the
+  channel, 1.4.0 commands retained until v1.5.0 assets exist).
+- `.gitignore`: `dist-release/` (tarballs are release assets, not source; `*.tgz`
+  was already ignored).
+- Release assets built and verified: `anvil-core-1.5.0.tgz` (313,684 B),
+  `anvil-tui-1.5.0.tgz` (148,847 B), `anvil-cli-1.5.0.tgz` (1,475,521 B), plus
+  `SHA256SUMS`. No test artifacts in any tarball (checked with `tar -tzf`).
+
+**Receipts:**
+
+- `validateRelease(root, workspaces, "v1.5.0")` PASS — workspace versions,
+  lockfile, `CORE_VERSION` and tag all agree on 1.5.0.
+- `npm run verify:package` PASS — all three workspaces pack, and the packed CLI
+  installs into a clean consumer directory with no monorepo present and reports
+  `anvil 1.5.0 (certified: 2026-10-20)`.
+- The exact release tarball (`dist-release/anvil-cli-1.5.0.tgz`) was installed
+  into a fresh temp consumer and run: `anvil 1.5.0 (certified: 2026-10-20)`.
+- `sha256sum` recorded for all three assets.
+
+**Remaining (human-gated):** upload the three tarballs + `SHA256SUMS` to the
+v1.5.0 GitHub release, then flip the README install commands from 1.4.0 to
+1.5.0. Everything up to that point is verified and committed.
