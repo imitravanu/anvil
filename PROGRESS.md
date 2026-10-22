@@ -5866,3 +5866,14 @@ placeholders rather than 1.5.1. The account's Staged Packages page and scoped
 `npm stage list` calls showed no versions awaiting manual approval. Treat this
 as accepted but not yet confirmed installable; do not re-publish or change tags
 to disguise the processing delay. Final public integrity/install checks remain.
+
+Final verification: processing completed for all three packages. Each public
+registry entry contains 1.5.1, marks it `latest`, and has SHA-512 integrity
+identical to the tested local tarball. A fresh-cache install of all three from
+the public registry (no local tarball inputs) passed: CLI reports
+`anvil 1.5.1 (certified: 2026-10-20)`; core and TUI imports succeed. The final
+committed-tree Guardian Gate passed again with 1,944 tests and 25/25 mock evals.
+The npm CLI page is public. Non-blocking follow-up: workspace tarballs do not
+include package README files; GitHub's README contains installation guidance.
+No global installation, npm security configuration or existing GitHub 1.5.0
+release assets were changed by this npm publication.
