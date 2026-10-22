@@ -1,4 +1,4 @@
-import type { CheckpointMeta } from "@anvil/core";
+import type { CheckpointMeta } from "@imitravanu/anvil-core";
 import { relativeTime } from "./format.js";
 
 /** Rewind UI copy: list + restore results. Pure — App just prints them. */

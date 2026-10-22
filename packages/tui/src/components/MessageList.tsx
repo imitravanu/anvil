@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Box, Text, useStdout } from "ink";
-import { CORE_VERSION, TOOL_DEFINITIONS } from "@anvil/core";
+import { CORE_VERSION, TOOL_DEFINITIONS } from "@imitravanu/anvil-core";
 import type { DisplayMessage } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { MessageView } from "./MessageView.js";

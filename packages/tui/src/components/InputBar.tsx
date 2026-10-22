@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getErrorMessage } from "@anvil/core";
+import { getErrorMessage } from "@imitravanu/anvil-core";
 import { Box, Text, useApp, useStdout } from "ink";
 import { useInput, usePaste } from "../hooks/useUIInput.js";
 import { useTheme } from "../theme/theme.js";

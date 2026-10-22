@@ -4,7 +4,7 @@ import { useTheme } from "../theme/theme.js";
 import { inkBorderStyle } from "../util/chrome.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
 import { curtail } from "../util/format.js";
-import { MAX_VERIFY_REPAIRS } from "@anvil/core";
+import { MAX_VERIFY_REPAIRS } from "@imitravanu/anvil-core";
 import { VERIFY_SUMMARY_MAX } from "../util/displayLimits.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
 

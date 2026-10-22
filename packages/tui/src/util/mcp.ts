@@ -1,4 +1,4 @@
-import type { McpServerConnection } from "@anvil/core";
+import type { McpServerConnection } from "@imitravanu/anvil-core";
 
 /** server health: /mcp status output. Pure — App just prints it. */
 export function formatMcpStatus(

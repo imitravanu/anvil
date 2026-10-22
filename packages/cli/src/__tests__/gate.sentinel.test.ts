@@ -3,14 +3,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
-import { isValidSourceFilePath, scanTextForSlop, scanUnifiedDiffForSlop } from "@anvil/core";
+import { isValidSourceFilePath, scanTextForSlop, scanUnifiedDiffForSlop } from "@imitravanu/anvil-core";
 
 it("release validates versions and packed installation before publishing those same tarballs", () => {
   const workflow = read(".github/workflows/release.yml");
   const verify = workflow.indexOf('node scripts/verify-package.mjs --tag "$GITHUB_REF_NAME" --pack-destination dist-tarballs');
   expect(verify).toBeGreaterThan(0);
   for (const name of ["core", "tui", "cli"]) {
-    expect(workflow.indexOf(`npm publish dist-tarballs/anvil-${name}-*.tgz --access public`)).toBeGreaterThan(verify);
+    expect(workflow.indexOf(`npm publish dist-tarballs/imitravanu-anvil-${name}-*.tgz --access public`)).toBeGreaterThan(verify);
   }
   expect(workflow).not.toContain("npm publish -w");
   expect(workflow).not.toContain("npm pack -w");
@@ -91,7 +91,8 @@ describe("gate integrity sentinel", () => {
       { label: "?.message ?? String", lines: [CORE, "+ const m = e.message ?? String(e);"] },
       { label: "bare any annotation", lines: [CORE, "+ const z: any = 1;"] },
       { label: "comma-position any (G3a)", lines: [CORE, "+ const m: Record<string, any> = {};"] },
-      { label: "core imports tui", lines: [CORE, "+ import { App } from '@anvil/tui';"] },
+      { label: "core imports tui", lines: [CORE, "+ import { App } from '@imitravanu/anvil-tui';"] },
+      { label: "legacy core imports tui", lines: [CORE, "+ import { App } from '@anvil/tui';"] },
       { label: "placeholder marker", lines: [CORE, "+ // TODO: finish later"] },
       { label: "hardcoded TUI color", lines: [TUI, '+ <Box color="cyan" />'] },
       { label: "ts-ignore suppression", lines: [CORE, "+ // @ts-ignore"] },
@@ -386,7 +387,7 @@ describe("gate integrity sentinel", () => {
     expect(hook).toContain("exit 1");
     expect(hook).toContain("any|never"); // slop scan layer present
     expect(hook).toContain("TODO|FIXME|XXX"); // placeholder layer present
-    expect(hook).toContain("@anvil/(tui|cli)"); // arch heuristic present
+    expect(hook).toContain("@(anvil/|imitravanu/anvil-)(tui|cli)"); // arch heuristic present
     // The skipped-test rule is path-scoped, mirroring gate Step 1, the residual
     // scan, and the in-process guardian: outside a test file a skipped block
     // has nothing to skip, so judging prose there is a pure false positive —
@@ -478,7 +479,8 @@ describe("gate integrity sentinel", () => {
       { label: "TypeScript suppression", srcRel: CORE_SRC, testRel: CORE_TEST, text: "// @ts-ignore" },
       { label: "placeholder marker", srcRel: CORE_SRC, testRel: CORE_TEST, text: "// TODO: later" },
       { label: "magic timeout literal", srcRel: CORE_SRC, testRel: CORE_TEST, text: "const r = fetch(url, { timeout: 5000 });" },
-      { label: "core boundary import", srcRel: CORE_SRC, testRel: CORE_TEST, text: "import { App } from '@anvil/tui';" },
+      { label: "core boundary import", srcRel: CORE_SRC, testRel: CORE_TEST, text: "import { App } from '@imitravanu/anvil-tui';" },
+      { label: "legacy core boundary import", srcRel: CORE_SRC, testRel: CORE_TEST, text: "import { App } from '@anvil/tui';" },
       { label: "hardcoded TUI color", srcRel: TUI_SRC, testRel: TUI_TEST, text: '<Box color="cyan" />' },
       { label: "silent non-empty catch", srcRel: CORE_SRC, testRel: CORE_TEST, text: "try { a(); } catch { b = 1; }" },
       { label: "skipped test", srcRel: CORE_SRC, testRel: CORE_TEST, text: 'it.skip("test", () => {});', testOnly: true },

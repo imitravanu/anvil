@@ -37,8 +37,8 @@ vi.mock("../headless.js", () => ({
   }),
 }));
 
-vi.mock("@anvil/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@anvil/core")>();
+vi.mock("@imitravanu/anvil-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@imitravanu/anvil-core")>();
   // Fire-and-forget at boot: must never hit the network from a test.
   return { ...actual, syncFreeModels: vi.fn(async () => undefined) };
 });

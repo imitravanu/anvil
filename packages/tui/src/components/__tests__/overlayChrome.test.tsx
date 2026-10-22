@@ -5,7 +5,7 @@ import { OverlayFrame } from "../OverlayFrame.js";
 import { THEMES, type Theme } from "../../theme/theme.js";
 import { sectionRule } from "../../util/chrome.js";
 import { frameText, renderWithTheme, tick } from "../../test-utils/testRender.js";
-import type { ModelProvider, ProviderId } from "@anvil/core";
+import type { ModelProvider, ProviderId } from "@imitravanu/anvil-core";
 
 /**
  * Phase 41 — the design tokens a theme DECLARES must reach the frame.

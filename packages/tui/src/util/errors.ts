@@ -1,4 +1,4 @@
-import { isRateLimitMessage } from "@anvil/core";
+import { isRateLimitMessage } from "@imitravanu/anvil-core";
 
 /**
  * Compact, actionable transcript rendering for provider errors. Raw provider

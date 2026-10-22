@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { Text } from "ink";
 import { render } from "ink-testing-library";
-import { AgentSession, type AgentEvent, type StreamEvent } from "@anvil/core";
+import { AgentSession, type AgentEvent, type StreamEvent } from "@imitravanu/anvil-core";
 import { TRANSCRIPT_STATE_CAP } from "../../util/displayLimits.js";
 import {
   useAgentController,

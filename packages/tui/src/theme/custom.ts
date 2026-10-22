@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { anvilHome } from "@anvil/core";
+import { anvilHome } from "@imitravanu/anvil-core";
 import {
   DEFAULT_BORDERS,
   DEFAULT_CHROME,

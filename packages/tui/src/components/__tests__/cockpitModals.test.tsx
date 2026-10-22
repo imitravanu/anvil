@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DiffModal } from "../DiffModal.js";
 import { RewindModal } from "../RewindModal.js";
 import { frameText, renderThemed } from "../../test-utils/testRender.js";
-import type { AgentSession, CheckpointMeta, SessionFileChange } from "@anvil/core";
+import type { AgentSession, CheckpointMeta, SessionFileChange } from "@imitravanu/anvil-core";
 
 function mockSession(over: {
   changes?: SessionFileChange[];

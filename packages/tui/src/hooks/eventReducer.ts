@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type React from "react";
-import { getErrorMessage, type AgentEvent } from "@anvil/core";
+import { getErrorMessage, type AgentEvent } from "@imitravanu/anvil-core";
 import { retainReport, type SubAgentRecord } from "../util/subagent.js";
 import { friendlyError } from "../util/errors.js";
 import { headChars, tailChars } from "../util/format.js";

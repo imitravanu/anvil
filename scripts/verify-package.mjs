@@ -37,7 +37,7 @@ function fail(msg) {
   process.exit(1);
 }
 
-/** Sanitize a package name into npm's tarball prefix: @anvil/cli -> anvil-cli. */
+/** Sanitize a package name into npm's tarball prefix: @imitravanu/anvil-cli -> imitravanu-anvil-cli. */
 function tarballPrefix(name) {
   return name.replace(/^@/, "").replace(/\//g, "-");
 }

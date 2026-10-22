@@ -1,4 +1,4 @@
-import { getErrorMessage } from "@anvil/core";
+import { getErrorMessage } from "@imitravanu/anvil-core";
 import type { CommandHandlerDeps } from "../types.js";
 import { formatRewindList, formatRewindResult } from "../../util/rewind.js";
 

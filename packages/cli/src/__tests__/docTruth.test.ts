@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CORE_VERSION, TOOL_DEFINITIONS, createProviders, MODEL_REGISTRY, visibleModels, MAX_READ_FILE_BYTES, MAX_STREAM_BYTES, RUN_COMMAND_TIMEOUT_MS } from "@anvil/core";
+import { CORE_VERSION, TOOL_DEFINITIONS, createProviders, MODEL_REGISTRY, visibleModels, MAX_READ_FILE_BYTES, MAX_STREAM_BYTES, RUN_COMMAND_TIMEOUT_MS } from "@imitravanu/anvil-core";
 
 /**
  * DOC TRUTH GUARD

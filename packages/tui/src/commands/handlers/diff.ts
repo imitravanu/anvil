@@ -1,4 +1,4 @@
-import { getBranchDiff, createPullRequest, getErrorMessage } from "@anvil/core";
+import { getBranchDiff, createPullRequest, getErrorMessage } from "@imitravanu/anvil-core";
 import type { CommandHandlerDeps } from "../types.js";
 import { capLines, DIFF_CHANGES_SHOWN } from "../../util/displayLimits.js";
 

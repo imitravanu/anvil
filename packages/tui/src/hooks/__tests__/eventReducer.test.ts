@@ -3,7 +3,7 @@ import type React from "react";
 import { applyEvent, retainOutput, OUTPUT_RETAIN_MAX, appendSystemMessage, systemMessage } from "../eventReducer.js";
 import { REASONING_RETAIN_MAX } from "../../util/displayLimits.js";
 import type { DisplayMessage, UsageTotals } from "../eventReducer.js";
-import type { AgentEvent } from "@anvil/core";
+import type { AgentEvent } from "@imitravanu/anvil-core";
 
 describe("eventReducer", () => {
   it("never throws on a malformed event (2026-10-14 fuzz: 4,402 of 20,000 threw)", () => {

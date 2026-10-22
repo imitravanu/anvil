@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Box, Text, useStdout } from "ink";
 import { useInput, usePaste } from "../hooks/useUIInput.js";
-import { listSessions } from "@anvil/core";
+import { listSessions } from "@imitravanu/anvil-core";
 import { useTheme } from "../theme/theme.js";
 import { curtail, displayModelLabel, relativeTime } from "../util/format.js";
 import { OverlayFrame } from "./OverlayFrame.js";

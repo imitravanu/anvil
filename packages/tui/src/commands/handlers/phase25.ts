@@ -5,7 +5,7 @@ import {
   loadPlugins,
   CONTEXT_WARN_THRESHOLD,
   FALLBACK_CONTEXT_WINDOW,
-} from "@anvil/core";
+} from "@imitravanu/anvil-core";
 import type { CommandHandlerDeps } from "../types.js";
 
 /** /context — token budget breakdown + predictive compaction warning. */

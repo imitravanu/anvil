@@ -14,14 +14,14 @@ let root: string;
 beforeEach(async () => {
   root = await fs.mkdtemp(path.join(os.tmpdir(), "anvil-guardian-dispatch-"));
   // These dispatch tests exercise the Anvil-scoped families (raw-error
-  // auto-fix rewrites to getErrorMessage, an @anvil/core helper), so the
+  // auto-fix rewrites to getErrorMessage, an @imitravanu/anvil-core helper), so the
   // fixture root must BE the Anvil repo as far as the scope detector is
-  // concerned: packages/core declaring @anvil/core. A bare temp dir now
+  // concerned: packages/core declaring @imitravanu/anvil-core. A bare temp dir now
   // classifies as "foreign", where that family correctly never fires.
   await fs.mkdir(path.join(root, "packages", "core"), { recursive: true });
   await fs.writeFile(
     path.join(root, "packages", "core", "package.json"),
-    JSON.stringify({ name: "@anvil/core" })
+    JSON.stringify({ name: "@imitravanu/anvil-core" })
   );
   // Assert the classification BEFORE any session runs: if the detector's
   // sentinel contract ever changes, these tests fail here with the real
@@ -166,7 +166,7 @@ describe("Guardian dispatch", () => {
           name: "write_file",
           input: {
             path: "src/fixed.ts",
-            content: `import { getErrorMessage } from "@anvil/core";\nconst message = ${RAW_TERNARY};\n`,
+            content: `import { getErrorMessage } from "@imitravanu/anvil-core";\nconst message = ${RAW_TERNARY};\n`,
           },
         },
         { type: "turn_end", stopReason: "tool_use" },
@@ -245,7 +245,7 @@ describe("Guardian dispatch", () => {
           input: {
             path: "src/fixed.ts",
             old_str: "const a = 1;",
-            new_str: `import { getErrorMessage } from "@anvil/core";\nconst one = ${RAW_ERR_A};`,
+            new_str: `import { getErrorMessage } from "@imitravanu/anvil-core";\nconst one = ${RAW_ERR_A};`,
           },
         },
         { type: "tool_call_start", id: "e1", name: "edit_file" },
@@ -256,7 +256,7 @@ describe("Guardian dispatch", () => {
           input: {
             path: "src/fixed.ts",
             old_str: "const c = 3;",
-            new_str: `import { getErrorMessage } from "@anvil/core";\nconst two = ${RAW_ERR_E2};`,
+            new_str: `import { getErrorMessage } from "@imitravanu/anvil-core";\nconst two = ${RAW_ERR_E2};`,
           },
         },
         { type: "turn_end", stopReason: "tool_use" },

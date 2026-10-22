@@ -1,4 +1,4 @@
-import type { RunLedgerEntry } from "@anvil/core";
+import type { RunLedgerEntry } from "@imitravanu/anvil-core";
 import { LEDGER_MAX_ROWS } from "./displayLimits.js";
 
 /**

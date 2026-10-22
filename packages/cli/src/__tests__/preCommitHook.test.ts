@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
  * The hook is a protected artifact (`.githooks/pre-commit`); these tests run the
  * REAL script against a throwaway git repo, so they pin behavior rather than
  * source text. The bug: Layer B grepped the whole multi-package diff for
- * `@anvil/(tui|cli)`, so a legal CLI→TUI build (cli/index.tsx already has one)
+ * `@imitravanu/anvil-(tui|cli)`, so a legal CLI→TUI build (cli/index.tsx already has one)
  * failed the hook. Only `packages/core/` files may never import tui/cli.
  *
  * BATCH M adds the parity half. The hook is a PRE-FLIGHT of the gate's Step 1,
@@ -50,7 +50,7 @@ const EXPLAINED_CATCH = "cat" + "ch { /* intentional: best effort */ }";
 const RAW_TERNARY = "e instanceof Err" + "or ? e.message : String(e)";
 const DOT_MESSAGE = "e.mess" + "age ?? String(e)";
 const HARDCODED_COLOR = 'color="' + "cyan" + '"';
-const TUI_IMPORT = "@anvil/" + "tui";
+const TUI_IMPORT = "@imitravanu/anvil-" + "tui";
 
 const git = (cwd: string, args: string[]): void => {
   const res = spawnSync("git", args, { cwd, encoding: "utf-8" });

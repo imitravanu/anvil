@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { getErrorMessage } from "@anvil/core";
+import { getErrorMessage } from "@imitravanu/anvil-core";
 import React from "react";
 import { render } from "ink";
 import {
@@ -46,9 +46,9 @@ import {
   validateCustomProvider,
   FALLBACK_CONTEXT_WINDOW,
   type CustomProviderConfig,
-} from "@anvil/core";
+} from "@imitravanu/anvil-core";
 
-import { App, FirstRunSetup, TuiPermissionBroker, detectTerminalTheme, isThemeName, loadCustomThemes } from "@anvil/tui";
+import { App, FirstRunSetup, TuiPermissionBroker, detectTerminalTheme, isThemeName, loadCustomThemes } from "@imitravanu/anvil-tui";
 import { runHeadless, readStdin } from "./headless.js";
 import { runGoalHeadless } from "./goalRunner.js";
 import { runNativeGate, runNativeGateWatch, isSignalClaimed } from "./gate.js";

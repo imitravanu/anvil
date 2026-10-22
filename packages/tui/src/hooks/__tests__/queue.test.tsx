@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type React from "react";
 import { Text } from "ink";
 import { render } from "ink-testing-library";
-import { AgentSession } from "@anvil/core";
-import type { StreamEvent } from "@anvil/core";
+import { AgentSession } from "@imitravanu/anvil-core";
+import type { StreamEvent } from "@imitravanu/anvil-core";
 import { useAgentController } from "../useAgentController.js";
 
 // Minimal fake provider inline (importing core test sources would break the

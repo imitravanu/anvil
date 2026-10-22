@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createProviders, loadCustomProviders, saveCustomProvider, type CustomProviderConfig } from "@anvil/core";
+import { createProviders, loadCustomProviders, saveCustomProvider, type CustomProviderConfig } from "@imitravanu/anvil-core";
 import { FirstRunSetup } from "../FirstRunSetup.js";
 import { CustomProviderSetup } from "../CustomProviderSetup.js";
 import { ModelPicker } from "../ModelPicker.js";

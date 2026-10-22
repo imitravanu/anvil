@@ -242,7 +242,7 @@ while IFS= read -r f; do
 
       case "$f" in
         packages/core/*)
-          h=$(printf '%s\n' "$code" | grep -nE '@anvil/(tui|cli)' || true)
+          h=$(printf '%s\n' "$code" | grep -nE '@(anvil/|imitravanu/anvil-)(tui|cli)' || true)
           [ -n "$h" ] && add_hit "core boundary" "$h" ;;
       esac
 

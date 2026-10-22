@@ -1,4 +1,4 @@
-import { CLIPBOARD_MAX_BYTES, CLIPBOARD_WRITE_TIMEOUT_MS } from "@anvil/core";
+import { CLIPBOARD_MAX_BYTES, CLIPBOARD_WRITE_TIMEOUT_MS } from "@imitravanu/anvil-core";
 import { spawn } from "node:child_process";
 
 /**

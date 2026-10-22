@@ -1,6 +1,6 @@
 import React from "react";
 import { Text, useAnimation } from "ink";
-import { THINKING_TIMER_TICK_MS } from "@anvil/core";
+import { THINKING_TIMER_TICK_MS } from "@imitravanu/anvil-core";
 import { useTheme } from "../theme/theme.js";
 
 /**

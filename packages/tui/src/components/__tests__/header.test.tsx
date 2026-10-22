@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import React from "react";
-import type { SituationalContext } from "@anvil/core";
+import type { SituationalContext } from "@imitravanu/anvil-core";
 import { Header, headerSessionPlan } from "../Header.js";
 import { frameText, renderThemed } from "../../test-utils/testRender.js";
 

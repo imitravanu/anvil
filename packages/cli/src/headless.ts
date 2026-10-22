@@ -7,7 +7,7 @@ import {
   type ModelProvider,
   type PermissionBroker,
   type ToolDefinition,
-} from "@anvil/core";
+} from "@imitravanu/anvil-core";
 import { renderCliEvent, EXIT_OK, EXIT_PERMISSION_DENIED } from "./terminalRenderer.js";
 
 export interface HeadlessOptions {
@@ -45,7 +45,7 @@ export class HeadlessPermissionBroker implements PermissionBroker {
   }
 }
 
-// Centralized in @anvil/core's config/constants (§2.4); re-exported so the
+// Centralized in @imitravanu/anvil-core's config/constants (§2.4); re-exported so the
 // public API and every import site stay unchanged.
 export { MAX_STDIN_BYTES, MAX_STDIN_WAIT_MS };
 

@@ -1,12 +1,24 @@
 {
-  "name": "@anvil/cli",
-  "version": "1.5.0",
+  "name": "@imitravanu/anvil-cli",
+  "version": "1.5.1",
   "description": "A terminal-based AI coding agent with interactive permission prompts.",
   "author": "mitravanu",
   "license": "MIT",
-  "engines": { "node": ">=22" },
-  "repository": { "type": "git", "url": "git+https://github.com/imitravanu/anvil.git", "directory": "packages/cli" },
-  "keywords": ["ai", "coding-agent", "terminal", "cli", "ink"],
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/imitravanu/anvil.git",
+    "directory": "packages/cli"
+  },
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "terminal",
+    "cli",
+    "ink"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -25,13 +37,17 @@
     "typecheck": "tsc -p . --noEmit"
   },
   "devDependencies": {
-    "@anvil/core": "*",
-    "@anvil/tui": "*",
+    "@imitravanu/anvil-core": "1.5.1",
+    "@imitravanu/anvil-tui": "1.5.1",
     "@types/react": "^19.2.0",
     "ink": "^7.1.1",
     "react": "^19.2.0",
     "esbuild": "^0.28.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }

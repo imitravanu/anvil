@@ -39,8 +39,8 @@ export interface GuardianViolation {
 // forbidden substrings it describes — the gate Step 1 scans added lines and
 // would otherwise flag scanner.ts itself for the patterns it encodes (the same
 // trick guardian/init.ts uses for its generated docs).
-const TUI_PACKAGE = "@anvil/" + "tui";
-const CLI_PACKAGE = "@anvil/" + "cli";
+const TUI_PACKAGE = "@imitravanu/anvil-" + "tui";
+const CLI_PACKAGE = "@imitravanu/anvil-" + "cli";
 const PLACEHOLDER_TERMS = "TO" + "DO|FI" + "XME|XX" + "X";
 const TS_SUPPRESSION_TERMS = "@" + "ts-(?:ignore|nocheck)\\b";
 const TEST_SKIP_PATTERN = "\\b(?:it|test|describe)\\.skip\\b|\\b(?:xit|xtest|xdescribe)\\s*\\(";
@@ -85,7 +85,7 @@ const RULES: { rule: string; family: GuardianRuleFamily; scope: RuleScope; patte
     // Batch O: both shapes the gate Step 1 labels Raw error formatting — the
     // ternary and the nullish fallback.
     pattern: /instanceof\s+Error\s*\?|\.\s*message\s*\?\?\s*String\s*\(/,
-    detail: "Raw error formatting (use getErrorMessage(err) from @anvil/core)",
+    detail: "Raw error formatting (use getErrorMessage(err) from @imitravanu/anvil-core)",
   },
   {
     rule: "no-empty-catch",
@@ -98,7 +98,7 @@ const RULES: { rule: string; family: GuardianRuleFamily; scope: RuleScope; patte
     rule: "no-architecture-breach",
     family: "architecture",
     scope: "anvil",
-    pattern: /from\s+["']@anvil\/(tui|cli)["']/,
+    pattern: /from\s+["']@(?:anvil\/|imitravanu\/anvil-)(tui|cli)["']/,
     detail: `Architecture breach: core must never import ${TUI_PACKAGE} or ${CLI_PACKAGE}`,
   },
   {
@@ -128,14 +128,14 @@ const RULES: { rule: string; family: GuardianRuleFamily; scope: RuleScope; patte
     family: "raw-error",
     scope: "anvil",
     pattern: /\bas\s+Error\b/,
-    detail: "Raw error narrowing (use getErrorMessage(err) from @anvil/core or a type guard)",
+    detail: "Raw error narrowing (use getErrorMessage(err) from @imitravanu/anvil-core or a type guard)",
   },
   {
     rule: "no-magic-constant",
     family: "style",
     scope: "anvil",
     pattern: new RegExp(MAGIC_TIMEOUT_TERMS),
-    detail: "Inline timeout/retry/cap literal (import from @anvil/core config/constants)",
+    detail: "Inline timeout/retry/cap literal (import from @imitravanu/anvil-core config/constants)",
   },
   {
     rule: "no-skipped-test",
@@ -235,7 +235,7 @@ const SPLIT_PATTERNS: { rule: string; family: GuardianRuleFamily; scope: RuleSco
     family: "raw-error",
     scope: "anvil",
     pattern: /instanceof\s*\n\s*Error\s*\?/,
-    detail: "Raw error formatting split across lines (use getErrorMessage(err) from @anvil/core)",
+    detail: "Raw error formatting split across lines (use getErrorMessage(err) from @imitravanu/anvil-core)",
   },
 ];
 

@@ -175,8 +175,8 @@ describe("26.4 — no-Anvil degradation", () => {
     // The script must not reference Anvil packages — a repo without @anvil
     // installed still gets full enforcement.
     const hook = fs.readFileSync(path.join(repo.dir, ".githooks/pre-commit"), "utf8");
-    expect(hook).not.toMatch(/require\("@anvil/);
-    expect(hook).not.toMatch(/from "@anvil/);
+    expect(hook).not.toMatch(/require\("@(?:anvil|imitravanu\/anvil-)/);
+    expect(hook).not.toMatch(/from "@(?:anvil|imitravanu\/anvil-)/);
 
     // The git-missing branch reports the recovery hint rather than failing
     // cryptically. Simulated with an isolated PATH dir holding ONLY a node

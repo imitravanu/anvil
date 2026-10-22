@@ -52,18 +52,18 @@ jobs:
       - name: Validate release version and install packed CLI
         run: node scripts/verify-package.mjs --tag "$GITHUB_REF_NAME" --pack-destination dist-tarballs
 
-      - name: Publish @anvil/core
-        run: npm publish dist-tarballs/anvil-core-*.tgz --access public
+      - name: Publish @imitravanu/anvil-core
+        run: npm publish dist-tarballs/imitravanu-anvil-core-*.tgz --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish @anvil/tui
-        run: npm publish dist-tarballs/anvil-tui-*.tgz --access public
+      - name: Publish @imitravanu/anvil-tui
+        run: npm publish dist-tarballs/imitravanu-anvil-tui-*.tgz --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish @anvil/cli
-        run: npm publish dist-tarballs/anvil-cli-*.tgz --access public
+      - name: Publish @imitravanu/anvil-cli
+        run: npm publish dist-tarballs/imitravanu-anvil-cli-*.tgz --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

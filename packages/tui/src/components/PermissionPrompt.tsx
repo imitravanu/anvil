@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Box, Text, useStdout } from "ink";
 import { useInput, usePaste } from "../hooks/useUIInput.js";
-import { splitMcpToolName } from "@anvil/core";
+import { splitMcpToolName } from "@imitravanu/anvil-core";
 import type { PendingPermissionRequest } from "../permission/TuiPermissionBroker.js";
 import { useTheme } from "../theme/theme.js";
 import { splitByDisplayWidth } from "../util/format.js";

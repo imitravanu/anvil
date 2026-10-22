@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderCliEvent, renderGoalEvent, EXIT_OK, EXIT_ERROR, EXIT_BUDGET_EXHAUSTED, EXIT_CANCELLED, EXIT_UNVERIFIED } from "../terminalRenderer.js";
-import type { AgentEvent } from "@anvil/core";
+import type { AgentEvent } from "@imitravanu/anvil-core";
 
 describe("renderCliEvent (Phase 24.13)", () => {
   it("renders text_delta to stdout", () => {

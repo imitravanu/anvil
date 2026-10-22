@@ -1,4 +1,4 @@
-import { getErrorMessage } from "@anvil/core";
+import { getErrorMessage } from "@imitravanu/anvil-core";
 import {
   AgentSession,
   saveSession,
@@ -7,7 +7,7 @@ import {
   type ModelProvider,
   type ProviderId,
   type StoredSession,
-} from "@anvil/core";
+} from "@imitravanu/anvil-core";
 import type { TuiPermissionBroker } from "../permission/TuiPermissionBroker.js";
 import { SESSION_MRU_CAP } from "../util/displayLimits.js";
 import type { DisplayMessage, DisplayGoal } from "./useAgentController.js";

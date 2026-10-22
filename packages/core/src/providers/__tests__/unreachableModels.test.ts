@@ -55,7 +55,7 @@ describe("models the gateway refuses are not advertised as working", () => {
   );
 
   it("no probed-unreachable model is presented as a working choice", () => {
-    // The picker's own rendering of a status lives in @anvil/tui
+    // The picker's own rendering of a status lives in @imitravanu/anvil-tui
     // (util/format.ts) and cannot be asserted from here — core must not import
     // from tui. What core owns is the data the renderer reads: a row whose
     // status is "broken" can only ever render as a refusal. The badge mapping

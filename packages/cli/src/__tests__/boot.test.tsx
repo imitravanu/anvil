@@ -63,8 +63,8 @@ vi.mock("../goalRunner.js", () => ({
   }),
 }));
 
-vi.mock("@anvil/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@anvil/core")>();
+vi.mock("@imitravanu/anvil-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@imitravanu/anvil-core")>();
   class FakeAgentSession {
     readonly projectRoot: string;
     readonly provider: unknown;

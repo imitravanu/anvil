@@ -4,7 +4,7 @@ import {
   syncFreeModels,
   refreshCustomProviderModels,
   getErrorMessage,
-} from "@anvil/core";
+} from "@imitravanu/anvil-core";
 import { SYNC_FREE_SHOWN } from "../../util/displayLimits.js";
 
 export async function handleSyncFreeModels(printSystemMessage: (text: string) => void): Promise<void> {

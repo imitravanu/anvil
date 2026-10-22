@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
 import { runGoalHeadless } from "../goalRunner.js";
-import type { ModelProvider, CompletionRequest, StreamEvent } from "@anvil/core";
+import type { ModelProvider, CompletionRequest, StreamEvent } from "@imitravanu/anvil-core";
 
 class TestFakeProvider implements ModelProvider {
   readonly id = "anthropic" as const;

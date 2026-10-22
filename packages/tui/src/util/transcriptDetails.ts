@@ -1,4 +1,4 @@
-import type { ConversationMessage } from "@anvil/core";
+import type { ConversationMessage } from "@imitravanu/anvil-core";
 import type { DisplayMessage } from "../hooks/eventReducer.js";
 
 function json(value: unknown): string {

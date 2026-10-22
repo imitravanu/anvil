@@ -4,7 +4,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { runHeadless, readStdin, DenialTracker } from "../headless.js";
 import { EXIT_PERMISSION_DENIED } from "../terminalRenderer.js";
-import type { ModelProvider, CompletionRequest, StreamEvent } from "@anvil/core";
+import type { ModelProvider, CompletionRequest, StreamEvent } from "@imitravanu/anvil-core";
 
 class TestFakeProvider implements ModelProvider {
   readonly id = "anthropic" as const;

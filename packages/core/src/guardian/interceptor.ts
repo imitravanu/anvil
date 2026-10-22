@@ -46,7 +46,7 @@ export function guardianFixedText(diff: string): string {
  * same pass, so a repo's own rules block a turn exactly like the built-ins.
  *
  * `scope` decides which rules exist at all: the Anvil-specific families (and
- * therefore the raw-error auto-fix, which rewrites to an `@anvil/core` helper)
+ * therefore the raw-error auto-fix, which rewrites to an `@imitravanu/anvil-core` helper)
  * only apply inside Anvil's own monorepo. See ./scope.ts.
  */
 export function interceptTurn(
@@ -129,11 +129,11 @@ export function interceptTurn(
 
 /**
  * C6 (AUDIT-2026-09-30): true when the body can already resolve
- * `getErrorMessage` — it references the helper, or imports `@anvil/core` (the
+ * `getErrorMessage` — it references the helper, or imports `@imitravanu/anvil-core` (the
  * shipped module that exports it). Anything else must NOT be auto-fixed.
  */
 function canResolveGetErrorMessage(diff: string): boolean {
-  return /\bgetErrorMessage\b/.test(diff) || /from\s+["']@anvil\/core["']/.test(diff);
+  return /\bgetErrorMessage\b/.test(diff) || /from\s+["']@(?:anvil\/core|imitravanu\/anvil-core)["']/.test(diff);
 }
 
 /** Safe auto-fix: common raw-error ternary → getErrorMessage call. */

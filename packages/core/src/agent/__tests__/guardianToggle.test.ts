@@ -17,7 +17,7 @@ beforeEach(async () => {
   await fs.mkdir(path.join(root, "packages", "core"), { recursive: true });
   await fs.writeFile(
     path.join(root, "packages", "core", "package.json"),
-    JSON.stringify({ name: "@anvil/core" })
+    JSON.stringify({ name: "@imitravanu/anvil-core" })
   );
   expect(detectGuardianScope(root)).toBe("anvil");
 });

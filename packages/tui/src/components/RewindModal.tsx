@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Box, Text, useStdout } from "ink";
 import { useInput, usePaste } from "../hooks/useUIInput.js";
-import type { AgentSession, CheckpointMeta } from "@anvil/core";
+import type { AgentSession, CheckpointMeta } from "@imitravanu/anvil-core";
 import { useTheme } from "../theme/theme.js";
 import { formatTime } from "../util/format.js";
 import { windowOffset } from "../hooks/useWindowedList.js";

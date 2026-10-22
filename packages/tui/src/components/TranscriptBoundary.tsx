@@ -1,6 +1,6 @@
 import { Component, type ReactNode } from "react";
 import { Box, Text } from "ink";
-import { getErrorMessage } from "@anvil/core";
+import { getErrorMessage } from "@imitravanu/anvil-core";
 import { useTheme } from "../theme/theme.js";
 
 interface BoundaryProps {

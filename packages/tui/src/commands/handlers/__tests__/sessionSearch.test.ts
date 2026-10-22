@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { saveSession, SESSION_SEARCH_MIN_QUERY_CHARS, type StoredSession } from "@anvil/core";
+import { saveSession, SESSION_SEARCH_MIN_QUERY_CHARS, type StoredSession } from "@imitravanu/anvil-core";
 import { handleSessionSearch } from "../session.js";
 import { COMMANDS } from "../../registry.js";
 import type { CommandContext, CommandHandlerDeps } from "../../types.js";

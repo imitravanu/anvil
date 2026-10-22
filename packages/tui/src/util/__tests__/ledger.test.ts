@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RunLedgerEntry } from "@anvil/core";
+import type { RunLedgerEntry } from "@imitravanu/anvil-core";
 import { formatLedger } from "../ledger.js";
 
 function entry(partial: Partial<RunLedgerEntry> & { seq: number }): RunLedgerEntry {

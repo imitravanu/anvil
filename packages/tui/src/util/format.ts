@@ -1,4 +1,4 @@
-import { getModel } from "@anvil/core";
+import { getModel } from "@imitravanu/anvil-core";
 import { PROVIDER_LABELS } from "./labels.js";
 
 /**

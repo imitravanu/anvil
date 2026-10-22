@@ -2,11 +2,11 @@ import { afterEach, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createProviders, getModelsForProvider, saveCustomProvider } from "@anvil/core";
+import { createProviders, getModelsForProvider, saveCustomProvider } from "@imitravanu/anvil-core";
 import { handleSyncFreeModels } from "../handlers/sync.js";
 
-vi.mock("@anvil/core", async importOriginal => ({
-  ...await importOriginal<typeof import("@anvil/core")>(),
+vi.mock("@imitravanu/anvil-core", async importOriginal => ({
+  ...await importOriginal<typeof import("@imitravanu/anvil-core")>(),
   syncFreeModels: vi.fn(async () => ({ refreshedAt: "fixture", results: [], errors: [] })),
 }));
 let root: string | undefined;

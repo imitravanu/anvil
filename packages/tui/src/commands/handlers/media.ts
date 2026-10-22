@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { getErrorMessage } from "@anvil/core";
+import { getErrorMessage } from "@imitravanu/anvil-core";
 import type { CommandHandlerDeps } from "../types.js";
 import { IMAGE_MAX_BYTES } from "../../util/displayLimits.js";
 import { modelInfo } from "../../util/format.js";

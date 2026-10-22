@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMMANDS } from "@anvil/tui";
+import { COMMANDS } from "@imitravanu/anvil-tui";
 import { buildHelpText } from "../help.js";
 
 /**

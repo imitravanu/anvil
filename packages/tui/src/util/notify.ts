@@ -1,4 +1,4 @@
-import { LONG_TURN_NOTIFY_MS } from "@anvil/core";
+import { LONG_TURN_NOTIFY_MS } from "@imitravanu/anvil-core";
 import { NOTIFY_CLEAN_MAX } from "./displayLimits.js";
 
 /**

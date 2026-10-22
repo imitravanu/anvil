@@ -304,11 +304,11 @@ export function scanLinesForViolations(diffLines) {
       // line that is template-literal content (starts with a backtick) is
       // generated text, not code — skipped like the residual scan does.
       if (!comment && !/^[`'"]/.test(addedText) && MAGIC_TIMEOUT_RE.test(addedText)) {
-        violations.push(`${currentFile}: Hardcoded magic constant "${addedText}" (Rule 2.4: import from @anvil/core constants)`);
+        violations.push(`${currentFile}: Hardcoded magic constant "${addedText}" (Rule 2.4: import from @imitravanu/anvil-core constants)`);
       }
 
       // Rule 3: packages/core must never import from tui or cli
-      if (!comment && currentFile.startsWith("packages/core/") && (addedText.includes("@anvil/tui") || addedText.includes("@anvil/cli"))) {
+      if (!comment && currentFile.startsWith("packages/core/") && /@(?:anvil\/|imitravanu\/anvil-)(tui|cli)/.test(addedText)) {
         violations.push(`${currentFile}: Architecture violation "${addedText}" (Rule 2.5: Core must never import TUI or CLI)`);
       }
 
@@ -325,9 +325,9 @@ export function scanLinesForViolations(diffLines) {
       // (e.g. JSON.stringify) — still slop, use getErrorMessage. 5c: optional-
       // chaining fallback form (also covered by residual drain 1.5).
       if (!comment && /instanceof\s+Error\s*\?/.test(addedText)) {
-        violations.push(`${currentFile}: Raw error formatting "${addedText}" (Rule 2.1: Import and use getErrorMessage(err) from @anvil/core)`);
+        violations.push(`${currentFile}: Raw error formatting "${addedText}" (Rule 2.1: Import and use getErrorMessage(err) from @imitravanu/anvil-core)`);
       } else if (!comment && /\.\s*message\s*\?\?\s*String\s*\(/.test(addedText)) {
-        violations.push(`${currentFile}: Raw error formatting "${addedText}" (Rule 2.1: Import and use getErrorMessage(err) from @anvil/core)`);
+        violations.push(`${currentFile}: Raw error formatting "${addedText}" (Rule 2.1: Import and use getErrorMessage(err) from @imitravanu/anvil-core)`);
       }
 
       // Rule 6: No leftover placeholder markers
@@ -364,7 +364,8 @@ const SENSOR_PROBES = [
   { label: "raw error (String fallback)", line: "+ const msg = err instanceof Error ? err.message : String(err);" },
   { label: "raw error (JSON fallback)", line: "+ const msg2 = err instanceof Error ? err.message : JSON.stringify(err);" },
   { label: "raw error (?.message ?? String)", line: "+ const msg3 = e.message ?? String(e);" },
-  { label: "core imports tui", line: "+ import { TuiComponent } from '@anvil/tui';" },
+  { label: "core imports tui", line: "+ import { TuiComponent } from '@imitravanu/anvil-tui';" },
+  { label: "legacy core imports tui", line: "+ import { TuiComponent } from '@anvil/tui';" },
   { label: "bare any annotation", line: "+ const z: any = 1;" },
   { label: "comma-position any (G3a)", line: "+ const m: Record<string, any> = {};" },
   { label: "hardcoded TUI color", line: "+ <Box color=\"cyan\" />", file: "packages/tui/src/components/SensorProbe.tsx" },
@@ -678,8 +679,8 @@ logStep("1.5", "Scanning FULL source files for legacy slop the diff scanner cann
 const RESIDUAL_RULES = [
   { name: "raw error formatting (instanceof ternary, any fallback)", re: /instanceof\s+Error\s*\?/ },
   { name: "raw error formatting (?.message ?? String)", re: /\.message\s*\?\?\s*String\(/ },
-  { name: "core self-import (@anvil/core inside packages/core)", re: /from\s+["']@anvil\/core["']/, onlyCore: true },
-  { name: "core boundary breach (imports tui/cli)", re: /@anvil\/(tui|cli)/, onlyCore: true },
+  { name: "core self-import (@imitravanu/anvil-core inside packages/core)", re: /from\s+["']@(?:anvil\/core|imitravanu\/anvil-core)["']/, onlyCore: true },
+  { name: "core boundary breach (imports tui/cli)", re: /@(?:anvil\/|imitravanu\/anvil-)(tui|cli)/, onlyCore: true },
   { name: "type escape (as any/never)", re: /\bas\s+(any|never)\b/ },
   { name: "type escape (bare any annotation)", re: /((?<!\?):\s*any\b|<\s*any\b|,\s*any\b|\bany\s*\[\])/ },
   { name: "placeholder marker (TODO/FIXME/XXX)", re: /\b(TODO|FIXME|XXX)\b/ },

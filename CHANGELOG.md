@@ -3,6 +3,17 @@
 All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 
+## [1.5.1] — 2026-10-23
+
+### Changed
+
+- npm packages use the owner's namespace: `@imitravanu/anvil-core`,
+  `@imitravanu/anvil-tui` and `@imitravanu/anvil-cli`. The CLI command remains
+  `anvil`. Cross-package dependencies are pinned to the matching release.
+- Build, package checks and release filenames follow the new namespace.
+  Guardian checks recognize both legacy and current Anvil package names.
+  Existing GitHub 1.5.0 downloads are not replaced.
+
 ## [1.5.0] — 2026-10-23
 
 ### Fixed

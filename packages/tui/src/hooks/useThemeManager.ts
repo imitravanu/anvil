@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { loadSettings, saveSettings } from "@anvil/core";
+import { loadSettings, saveSettings } from "@imitravanu/anvil-core";
 import { THEMES, isThemeName, type Theme } from "../theme/themes.js";
 import { loadCustomThemes } from "../theme/custom.js";
 

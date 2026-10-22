@@ -1,4 +1,4 @@
-import type { AgentEvent, GoalEvent } from "@anvil/core";
+import type { AgentEvent, GoalEvent } from "@imitravanu/anvil-core";
 
 export interface RenderCliOptions {
   raw?: boolean;

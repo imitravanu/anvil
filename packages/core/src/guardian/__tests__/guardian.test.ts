@@ -14,7 +14,7 @@ const FIX_AS_ANY = "const x = foo as " + "any;";
 const FIX_RAW_ERROR = "const m = err instanceof " + "Error ? err.message : String(err);";
 // C6: an auto-fix may only rewrite when getErrorMessage is already resolvable
 // in the same body — a shown import is the honest signal for that.
-const GET_ERROR_MESSAGE_IMPORT = '+import { getErrorMessage } from "@anvil/core";\n';
+const GET_ERROR_MESSAGE_IMPORT = '+import { getErrorMessage } from "@imitravanu/anvil-core";\n';
 // The scanner flags this raw-error ternary shape, but the safe auto-fix
 // cannot rewrite it — its fallback is not String(...).
 const FIX_RAW_ERROR_UNFIXABLE =
@@ -46,7 +46,7 @@ const FIX_COLOR_QUOTE = '<Box color="cyan" />';
 const FIX_COLOR_TEMPLATE = "<Box color={`" + "cyan`} />";
 // Split for the same reason: this repo's gate flags these tokens in added lines.
 const PLACEHOLDER_WORD = "TO" + "DO";
-const TUI_IMPORT = 'import x from "@anvil/' + 'tui";';
+const TUI_IMPORT = 'import x from "@imitravanu/anvil-' + 'tui";';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..");
 
@@ -188,12 +188,16 @@ describe("scanTextForSlop", () => {
   it("does not flag the import path merely named in a comment (S5.3)", () => {
     // The comment describes the boundary; it does not cross it. Landing the
     // original scoping change tripped the gate on exactly this shape.
-    const comment = `// core must never import "@anvil/` + `tui" — see scope.ts`;
+    const comment = `// core must never import "@imitravanu/anvil-` + `tui" — see scope.ts`;
     expect(
       scanTextForSlop("packages/core/src/x.ts", comment, "anvil").some(
         (v) => v.rule === "no-architecture-breach"
       )
     ).toBe(false);
+  });
+
+  it.each(["@imitravanu/anvil-tui", "@imitravanu/anvil-cli", "@anvil/tui", "@anvil/cli"])("enforces the core boundary for %s", name => {
+    expect(scanTextForSlop("packages/core/src/x.ts", `import x from "${name}";`, "anvil").some(v => v.rule === "no-architecture-breach")).toBe(true);
   });
 
   it("still flags a real core -> tui import in code", () => {
@@ -206,7 +210,7 @@ describe("scanTextForSlop", () => {
 
   it("does not judge the core import rule on a non-core package file", () => {
     // S5.3: resolve package membership before applying the import rule. A tui
-    // file naming @anvil/tui is not a core boundary breach.
+    // file naming @imitravanu/anvil-tui is not a core boundary breach.
     expect(
       scanTextForSlop("packages/tui/src/x.ts", TUI_IMPORT, "anvil").some(
         (v) => v.rule === "no-architecture-breach"
@@ -452,11 +456,11 @@ describe("detectGuardianScope", () => {
     expect(detectGuardianScope(dir)).toBe("foreign");
   });
 
-  it("recognises a project whose core workspace is @anvil/core", () => {
+  it.each(["@imitravanu/anvil-core", "@anvil/core"])("recognises a project whose core workspace is %s", name => {
     fs.mkdirSync(path.join(dir, "packages", "core"), { recursive: true });
     fs.writeFileSync(
       path.join(dir, "packages", "core", "package.json"),
-      JSON.stringify({ name: "@anvil/core" })
+      JSON.stringify({ name })
     );
     expect(detectGuardianScope(dir)).toBe("anvil");
   });
@@ -567,7 +571,7 @@ describe("interceptTurn", () => {
 
   it("never rewrites a foreign project's error handling into an unresolvable call", () => {
     // The auto-fix emits `getErrorMessage(...)` and does NOT add an import, so in
-    // a project without @anvil/core it would produce an undefined identifier.
+    // a project without @imitravanu/anvil-core it would produce an undefined identifier.
     const result = interceptTurn([{ path: "src/a.ts", diff: `+${FIX_RAW_ERROR}\n` }], "foreign");
     expect(result.fixed).toHaveLength(0);
     expect(result.allowed).toBe(true);

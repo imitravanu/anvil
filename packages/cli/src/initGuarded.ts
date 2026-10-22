@@ -1,4 +1,4 @@
-import { getErrorMessage, guardedInit } from "@anvil/core";
+import { getErrorMessage, guardedInit } from "@imitravanu/anvil-core";
 
 /**
  * Phase 25.6 — `anvil init --guarded [--lang <id>]`.

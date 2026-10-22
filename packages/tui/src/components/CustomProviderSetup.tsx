@@ -5,7 +5,7 @@ import TextInput from "ink-text-input";
 import {
   FALLBACK_CONTEXT_WINDOW, getErrorMessage, removeCustomProvider, saveCustomProvider,
   validateCustomProvider, loadCustomProviders, type CustomProviderConfig, type ProviderId,
-} from "@anvil/core";
+} from "@imitravanu/anvil-core";
 import { useTheme } from "../theme/theme.js";
 import { OverlayFrame } from "./OverlayFrame.js";
 

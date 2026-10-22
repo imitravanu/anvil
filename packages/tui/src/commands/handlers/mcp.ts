@@ -1,4 +1,4 @@
-import { collectMcpToolDefs, MCP_TOOL_PREFIX, TOOL_DEFINITIONS, getErrorMessage } from "@anvil/core";
+import { collectMcpToolDefs, MCP_TOOL_PREFIX, TOOL_DEFINITIONS, getErrorMessage } from "@imitravanu/anvil-core";
 import type { CommandHandlerDeps } from "../types.js";
 import { formatMcpStatus } from "../../util/mcp.js";
 

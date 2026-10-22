@@ -7,7 +7,7 @@ import {
   type CustomProviderProtocol,
   getErrorMessage,
   FALLBACK_CONTEXT_WINDOW,
-} from "@anvil/core";
+} from "@imitravanu/anvil-core";
 
 export function parseSubcommandFlags(args: string[]): {
   positionals: string[];

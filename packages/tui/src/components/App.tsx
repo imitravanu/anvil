@@ -1,4 +1,4 @@
-import { getErrorMessage } from "@anvil/core";
+import { getErrorMessage } from "@imitravanu/anvil-core";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Box, Text, useApp, useStdout } from "ink";
 import {
@@ -20,7 +20,7 @@ import {
   type ModelProvider,
   type ProviderId,
   type SituationalContext,
-} from "@anvil/core";
+} from "@imitravanu/anvil-core";
 import type { TuiPermissionBroker } from "../permission/TuiPermissionBroker.js";
 import { useAgentController } from "../hooks/useAgentController.js";
 import { useFocusZone } from "../hooks/useFocusZone.js";

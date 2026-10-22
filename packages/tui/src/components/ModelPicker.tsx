@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Text, useStdout } from "ink";
 import { useInput, usePaste } from "../hooks/useUIInput.js";
-import type { ModelInfo, ModelProvider, ProviderId } from "@anvil/core";
+import type { ModelInfo, ModelProvider, ProviderId } from "@imitravanu/anvil-core";
 import {
   DEFAULT_SYNC_TTL_MS,
   createOpenRouterFreeSource,
@@ -13,7 +13,7 @@ import {
   refreshCustomProviderModels,
   loadCustomProviders,
   getErrorMessage,
-} from "@anvil/core";
+} from "@imitravanu/anvil-core";
 import { useTheme } from "../theme/theme.js";
 import { sectionRule } from "../util/chrome.js";
 import { OverlayFrame } from "./OverlayFrame.js";

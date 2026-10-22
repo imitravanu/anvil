@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CLIPBOARD_MAX_BYTES, CLIPBOARD_WRITE_TIMEOUT_MS } from "@anvil/core";
+import { CLIPBOARD_MAX_BYTES, CLIPBOARD_WRITE_TIMEOUT_MS } from "@imitravanu/anvil-core";
 import { copySelection } from "../clipboard.js";
 
 const fixtures = vi.hoisted(() => ({ outcomes: [] as boolean[], writes: [] as string[], calls: [] as Array<{ command: string; args: string[]; options: Record<string, unknown> }> }));

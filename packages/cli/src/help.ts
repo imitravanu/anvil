@@ -1,4 +1,4 @@
-import { COMMANDS } from "@anvil/tui";
+import { COMMANDS } from "@imitravanu/anvil-tui";
 
 /**
  * `--help` text (G9, AUDIT-2026-09-30). The slash-command line is DERIVED from

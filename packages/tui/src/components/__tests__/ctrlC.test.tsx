@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentSession, createProviders } from "@anvil/core";
+import { AgentSession, createProviders } from "@imitravanu/anvil-core";
 import { App } from "../App.js";
 import { FirstRunSetup } from "../FirstRunSetup.js";
 import { TuiPermissionBroker } from "../../permission/TuiPermissionBroker.js";

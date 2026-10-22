@@ -1,4 +1,4 @@
-import type { ModelProvider, ProviderId } from "@anvil/core";
+import type { ModelProvider, ProviderId } from "@imitravanu/anvil-core";
 
 // Single source of truth for human provider names (used in chrome, pickers,
 // and /connect). — previously defined inside App.tsx.

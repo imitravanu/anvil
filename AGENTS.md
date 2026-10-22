@@ -17,7 +17,7 @@
    Verify all file paths, symbol names, and line references against the live working tree before taking action. Roadmaps and plans are guides; live code is truth.
 
 4. **Check Existing Helpers First:**  
-   Before authoring a new utility function or helper, check if one already exists in `@anvil/core` or your package's local utilities.
+   Before authoring a new utility function or helper, check if one already exists in `@imitravanu/anvil-core` or your package's local utilities.
 
 5. **Consult the Pre-Execution Audit (Roadmap Items):**  
    Before executing any item from `docs/PHASE-21-25-ROADMAP.md`, read [`docs/PHASE-21-25-AUDIT.md`](docs/PHASE-21-25-AUDIT.md) and follow its Reality Check Protocol. Some items are already fixed (22.15, 22.16), one is resolved by design and must NOT be "fixed" (22.13), and line numbers drift. Classify the item (live / fixed / by-design / unverified) before writing any code, and record the classification in the phase progress doc.
@@ -27,7 +27,7 @@
 ## 2. ⛔ STRICT DONT's (Anti-Slop Directives)
 
 1. **NO Sequential Raw Error Formatting:**  
-   NEVER copy-paste `err instanceof Error ? err.message : String(err)`. Always import and use `getErrorMessage(err)` from `@anvil/core`.
+   NEVER copy-paste `err instanceof Error ? err.message : String(err)`. Always import and use `getErrorMessage(err)` from `@imitravanu/anvil-core`.
 
 2. **NO `as any` or `as never` Type Casting:**  
    NEVER use `as any` or `as never` to bypass compiler checks. Use proper TypeScript discriminated unions, type narrowing (`typeof`, `instanceof`), or pure type predicates. (Unit test mock fixtures are exempt where noted).
@@ -36,10 +36,10 @@
    NEVER write an empty catch block (`catch {}` or `catch (e) {}`). Every catch block must either log an actionable warning via `console.warn` / `console.error`, or include an explicit one-line comment explaining why swallowing the error is intentional and safe (`// intentional: <reason>`). Never import non-existent loggers.
 
 4. **NO Hardcoded Magic Constants:**  
-   NEVER introduce arbitrary raw numbers for timeouts, buffer caps, or retry limits. Import centralized constants from `@anvil/core` (`packages/core/src/config/constants.ts`).
+   NEVER introduce arbitrary raw numbers for timeouts, buffer caps, or retry limits. Import centralized constants from `@imitravanu/anvil-core` (`packages/core/src/config/constants.ts`).
 
 5. **NO Architecture Boundary Violations:**  
-   `packages/core` must **NEVER** import anything from `@anvil/tui` or `@anvil/cli`. Core is a standalone, headless engine.
+   `packages/core` must **NEVER** import anything from `@imitravanu/anvil-tui` or `@imitravanu/anvil-cli`. Core is a standalone, headless engine.
 
 6. **NO Hardcoded UI Color Strings:**  
    TUI components in `packages/tui/src/components/` must **NEVER** use literal color strings (e.g. `color="cyan"`, `borderColor="green"`). ALL colors must derive from the active theme via `useTheme()`.
@@ -66,7 +66,7 @@
 1. **The Sacred Monorepo Build Order:**  
    Anvil packages compile against built artifacts in `dist/`, not raw sources. Workspace builds must run in this exact sequential order:
    ```bash
-   npm run build -w @anvil/core && npm run build -w @anvil/tui && npm run build -w @anvil/cli
+   npm run build -w @imitravanu/anvil-core && npm run build -w @imitravanu/anvil-tui && npm run build -w @imitravanu/anvil-cli
    ```
 
 2. **Run the Full Gate Before Submission:**  

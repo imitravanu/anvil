@@ -13,7 +13,7 @@ import {
   GUARDIAN_WATCH_INTERVAL_MS,
   GUARDIAN_WATCH_MAX_SCANS_PER_MIN,
   type GuardianViolation,
-} from "@anvil/core";
+} from "@imitravanu/anvil-core";
 
 /**
  * Phase 25.6 — native `anvil gate` command.

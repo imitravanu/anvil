@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatMcpStatus } from "../mcp.js";
-import type { McpServerConnection } from "@anvil/core";
+import type { McpServerConnection } from "@imitravanu/anvil-core";
 
 const ready: McpServerConnection = {
   id: "fs",

@@ -1,5 +1,5 @@
 import { Box, Text } from "ink";
-import type { GuardianRuleFamily } from "@anvil/core";
+import type { GuardianRuleFamily } from "@imitravanu/anvil-core";
 import type { DisplayGuardianReport } from "../hooks/useAgentController.js";
 import { useTheme } from "../theme/theme.js";
 import { inkBorderStyle } from "../util/chrome.js";

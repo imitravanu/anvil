@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { runNativeGate, scanWorkingTree } from "../gate.js";
-import { GATE_DIFF_MAX_BUFFER_BYTES } from "@anvil/core";
+import { GATE_DIFF_MAX_BUFFER_BYTES } from "@imitravanu/anvil-core";
 
 function git(cwd: string, ...args: string[]): void {
   execFileSync("git", ["-c", "user.email=t@t.t", "-c", "user.name=t", ...args], {

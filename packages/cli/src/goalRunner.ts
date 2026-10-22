@@ -1,5 +1,5 @@
-import { getErrorMessage } from "@anvil/core";
-import { GoalEngine, type ModelProvider, type ToolDefinition } from "@anvil/core";
+import { getErrorMessage } from "@imitravanu/anvil-core";
+import { GoalEngine, type ModelProvider, type ToolDefinition } from "@imitravanu/anvil-core";
 import { HeadlessPermissionBroker } from "./headless.js";
 import { renderGoalEvent } from "./terminalRenderer.js";
 

@@ -1,4 +1,4 @@
-import { getErrorMessage, loadSettings, TOKEN_HISTORY_CAP } from "@anvil/core";
+import { getErrorMessage, loadSettings, TOKEN_HISTORY_CAP } from "@imitravanu/anvil-core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { randomUUID } from "node:crypto";
 import {
@@ -9,7 +9,7 @@ import {
   accumulateGoalOutcome,
   type GoalMilestone,
   type GoalTurnOutcome,
-} from "@anvil/core";
+} from "@imitravanu/anvil-core";
 import { HISTORY_RECALL_CAP, TRANSCRIPT_STATE_CAP, MESSAGE_QUEUE_CAP, TEXT_FLUSH_INTERVAL_MS, STAGED_IMAGE_CAP } from "../util/displayLimits.js";
 import { friendlyError } from "../util/errors.js";
 import { notifyTurnComplete } from "../util/notify.js";

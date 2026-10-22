@@ -100,7 +100,7 @@ describe("guardianInterceptCalls", () => {
 
   it("applies an auto-fix to each call's OWN input by position (same path, two edits)", () => {
     // C6: the body must establish getErrorMessage before the auto-fix applies.
-    const importLine = 'import { getErrorMessage } from "@anvil/core";';
+    const importLine = 'import { getErrorMessage } from "@imitravanu/anvil-core";';
     const first = prepared(
       "edit_file",
       { path: "src/a.ts", old_str: "a", new_str: `${importLine}\none = ${RAW_ERR_A};` },
@@ -127,7 +127,7 @@ describe("guardianInterceptCalls", () => {
   // C5 (AUDIT-2026-09-30): a body under a non-content field must be repaired IN
   // THAT FIELD, not scanned-then-dropped while the call ran on with the slop.
   it("writes a repair back to a non-content body field (C5)", () => {
-    const importLine = 'import { getErrorMessage } from "@anvil/core";';
+    const importLine = 'import { getErrorMessage } from "@imitravanu/anvil-core";';
     const call = prepared(
       "mcp_probe__write_file",
       { path: "src/a.ts", new_content: `${importLine}\nconst m = ${RAW_ERR_A};` },
@@ -164,7 +164,7 @@ describe("guardianInterceptCalls", () => {
     expect(universalResult.blocked.size).toBe(1);
 
     // raw-error is anvil-only: silent in a foreign project (it rewrites to an
-    // @anvil/core helper that does not exist there).
+    // @imitravanu/anvil-core helper that does not exist there).
     const anvilOnly = prepared("write_file", { path: "src/r.ts", content: `${RAW_ERR_A}\n` });
     const foreignResult = guardianInterceptCalls([anvilOnly], deps("foreign").opts);
     expect(foreignResult.blocked.size).toBe(0);

@@ -5,7 +5,7 @@ import type {
   ModelProvider,
   ProviderId,
   StoredSession,
-} from "@anvil/core";
+} from "@imitravanu/anvil-core";
 import type { TuiPermissionBroker } from "../permission/TuiPermissionBroker.js";
 import type { DisplayMessage, DisplayGoal } from "../hooks/useAgentController.js";
 import type { McpAppState } from "../components/App.js";

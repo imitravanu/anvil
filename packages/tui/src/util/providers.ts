@@ -1,4 +1,4 @@
-import type { ProviderCredentials, ProviderId } from "@anvil/core";
+import type { ProviderCredentials, ProviderId } from "@imitravanu/anvil-core";
 import { PROVIDER_LABELS } from "./labels.js";
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createProviders, type ProviderId } from "@anvil/core";
+import { createProviders, type ProviderId } from "@imitravanu/anvil-core";
 import { PROVIDER_META } from "../providers.js";
 import { PROVIDER_LABELS } from "../labels.js";
 

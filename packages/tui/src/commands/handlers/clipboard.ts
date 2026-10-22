@@ -1,4 +1,4 @@
-import { getErrorMessage } from "@anvil/core";
+import { getErrorMessage } from "@imitravanu/anvil-core";
 import type { DisplayMessage } from "../../hooks/useAgentController.js";
 import { copyToClipboard } from "../../util/clipboard.js";
 import type { CommandHandlerDeps } from "../types.js";

@@ -5,11 +5,11 @@
  */
 import React from "react";
 import { render } from "ink-testing-library";
-import { AgentSession } from "@anvil/core";
+import { AgentSession } from "@imitravanu/anvil-core";
 import { App } from "../src/components/App.js";
 import { TuiPermissionBroker } from "../src/permission/TuiPermissionBroker.js";
 import { FakeProvider } from "../../core/src/agent/__tests__/fakeProvider.js";
-import type { StreamEvent, ProviderId, ModelProvider } from "@anvil/core";
+import type { StreamEvent, ProviderId, ModelProvider } from "@imitravanu/anvil-core";
 
 const MODEL = "gemini-3.6-flash";
 

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Box, Text, useStdout } from "ink";
-import type { SituationalContext } from "@anvil/core";
+import type { SituationalContext } from "@imitravanu/anvil-core";
 import { useTheme } from "../theme/theme.js";
 import {
   curtail,

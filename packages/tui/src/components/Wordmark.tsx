@@ -8,7 +8,7 @@ import {
   WORDMARK_LETTER_START_MS,
   WORDMARK_RADIAL_CELL_MS,
   WORDMARK_SPARK_DELAY_MS,
-} from "@anvil/core";
+} from "@imitravanu/anvil-core";
 import { useTheme } from "../theme/theme.js";
 
 /**

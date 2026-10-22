@@ -4,7 +4,7 @@ import {
   TOOL_DEFINITIONS,
   type McpServerConnection,
   type ToolDefinition,
-} from "@anvil/core";
+} from "@imitravanu/anvil-core";
 import { handleMcp } from "../mcp.js";
 import type { CommandHandlerDeps } from "../../types.js";
 import type { McpAppState } from "../../../components/App.js";

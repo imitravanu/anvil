@@ -5,7 +5,7 @@ import {
   renameSession,
   searchSessions,
   SESSION_SEARCH_MIN_QUERY_CHARS,
-} from "@anvil/core";
+} from "@imitravanu/anvil-core";
 import type { CommandHandlerDeps } from "../types.js";
 import { curtail, relativeTime } from "../../util/format.js";
 import { readImageForAttachment } from "./media.js";

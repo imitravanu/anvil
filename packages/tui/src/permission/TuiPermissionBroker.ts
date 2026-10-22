@@ -1,4 +1,4 @@
-import { PermissionBroker } from "@anvil/core";
+import { PermissionBroker } from "@imitravanu/anvil-core";
 import { sanitizeTerminalText } from "../util/sanitize.js";
 
 export interface PendingPermissionRequest {

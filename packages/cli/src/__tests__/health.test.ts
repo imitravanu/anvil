@@ -12,7 +12,7 @@ import { createHash } from "node:crypto";
  * not module mocks).
  */
 import { runHealth } from "../health.js";
-import { recordHealthScan } from "@anvil/core";
+import { recordHealthScan } from "@imitravanu/anvil-core";
 
 let home: string;
 let originalHome: string | undefined;

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import { cleanup, render as renderInk } from "ink-testing-library";
-import { AgentSession, loadSession, type StreamEvent, type ModelProvider } from "@anvil/core";
+import { AgentSession, loadSession, type StreamEvent, type ModelProvider } from "@imitravanu/anvil-core";
 import { App } from "../App.js";
 import { TuiPermissionBroker } from "../../permission/TuiPermissionBroker.js";
 import { frameText, renderThemed, tick } from "../../test-utils/testRender.js";

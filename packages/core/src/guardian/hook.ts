@@ -6,7 +6,7 @@
  * block from `.anvil/rules` / AGENTS.md — the same block format the core
  * parser accepts, so a repo can extend its own gate without touching Anvil.
  *
- * The host does not need `@anvil/cli` installed for this to work — which is
+ * The host does not need `@imitravanu/anvil-cli` installed for this to work — which is
  * precisely the point of provisioning it into repos edited by other tools
  * and agents. The no-Anvil degradation contract is enforced by the generated
  * script itself: a missing git fails the commit with the recovery hint.

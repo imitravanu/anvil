@@ -1,13 +1,26 @@
 {
-  "name": "@anvil/core",
-  "version": "1.5.0",
+  "name": "@imitravanu/anvil-core",
+  "version": "1.5.1",
   "description": "Core agent loop, provider adapters, sessions, and tools for Anvil.",
   "author": "mitravanu",
   "license": "MIT",
-  "engines": { "node": ">=22" },
-  "repository": { "type": "git", "url": "git+https://github.com/imitravanu/anvil.git", "directory": "packages/core" },
-  "keywords": ["ai", "coding-agent", "agent", "providers"],
-  "files": ["dist"],
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/imitravanu/anvil.git",
+    "directory": "packages/core"
+  },
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "agent",
+    "providers"
+  ],
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -35,5 +48,9 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^4.1.12"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }

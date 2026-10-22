@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/imitravanu/anvil/releases"><img src="https://img.shields.io/badge/Release-v1.5.0-ff6a00?style=flat-square" alt="Version"></a>
+  <a href="https://www.npmjs.com/package/@imitravanu/anvil-cli"><img src="https://img.shields.io/badge/Release-v1.5.1-ff6a00?style=flat-square" alt="Version"></a>
   <a href="https://github.com/imitravanu/anvil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/imitravanu/anvil/ci.yml?branch=master&style=flat-square&label=CI%20Build" alt="CI"></a>
   <a href="https://github.com/imitravanu/anvil/actions/workflows/visual-regression.yml"><img src="https://img.shields.io/github/actions/workflow/status/imitravanu/anvil/visual-regression.yml?branch=master&style=flat-square&label=Visual%20Gate" alt="Visual Gate"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node-%3E%3D22-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node"></a>
@@ -50,18 +50,18 @@ inspectable before approval. The preview above uses an offline fixture.
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│                   @anvil/cli                           │
+│                 @imitravanu/anvil-cli                  │
 │     Entry point · Flag parsing · Sub-agent commands    │
 └──────────────────────────┬─────────────────────────────┘
                            │
 ┌──────────────────────────▼─────────────────────────────┐
-│                   @anvil/tui                           │
+│                 @imitravanu/anvil-tui                  │
 │    Ink (React) terminal UI · Interactive Diff Prompts  │
 │    Model Picker · Command Palette · Ledger View        │
 └──────────────────────────┬─────────────────────────────┘
                            │
 ┌──────────────────────────▼─────────────────────────────┐
-│                   @anvil/core                          │
+│                 @imitravanu/anvil-core                 │
 │    Autonomous Agent Loop · Provider Adapters (13)      │
 │    16 Built-in Tools · LSP Client · Checkpoint Ring    │
 │    Context Compaction · Session Store · MCP Client     │
@@ -72,14 +72,13 @@ inspectable before approval. The preview above uses an offline fixture.
 
 ## 🚀 Installation
 
-### Global Install from the GitHub Release
+### Global Install from npm
 
-Anvil 1.5.0 is available from the [GitHub release](https://github.com/imitravanu/anvil/releases/tag/v1.5.0).
-The packages are not published to npm; the GitHub release tarball is the
-supported install path. Node.js 22 or newer is required.
+Node.js 22 or newer is required. The package name is scoped; the terminal
+command remains `anvil`.
 
 ```bash
-npm install -g https://github.com/imitravanu/anvil/releases/download/v1.5.0/anvil-cli-1.5.0.tgz
+npm install -g @imitravanu/anvil-cli
 
 # Run inside any repository
 cd ~/my-project
@@ -89,8 +88,12 @@ anvil
 ### Try Without Installing (npx)
 
 ```bash
-npx --package=https://github.com/imitravanu/anvil/releases/download/v1.5.0/anvil-cli-1.5.0.tgz anvil
+npx @imitravanu/anvil-cli
 ```
+
+Library packages: `@imitravanu/anvil-core` and `@imitravanu/anvil-tui`.
+The earlier [GitHub 1.5.0 release](https://github.com/imitravanu/anvil/releases/tag/v1.5.0)
+and its original downloadable packages remain available unchanged.
 
 ### Build from Source
 ```bash

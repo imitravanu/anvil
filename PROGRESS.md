@@ -5824,3 +5824,32 @@ unsupported "unclaimed" wording from the current installation guidance.
 Full local `npm run gate` passed before publication. No npm publish attempted.
 The post-documentation gate also passed: CLI 235, core 1,202 and TUI 498 tests,
 plus 25/25 offline mock evaluations, sequential builds and typechecks.
+
+## 2026-10-23 — personal npm namespace migration
+
+Ownership: this session owns package manifests/lockfile, live package imports
+and their tests, Guardian namespace recognition, root build scripts, packaging
+validation, README/CHANGELOG and this entry. Entry tree clean at `418c174`.
+The user selected `@imitravanu/anvil-{core,tui,cli}` and approved the exact
+protected patch `outputs/anvil-npm-scope-protected-review.patch` in this chat.
+Protected ownership: `AGENTS.md`, `scripts/verify-gate.mjs`,
+`.githooks/pre-commit`, `.github/workflows/release.yml`, the gate sentinel test
+and integrity manifest, all to land together. Both legacy and new namespace
+boundary checks remain enforced. Historical phase documents stay unchanged.
+Target version: 1.5.1; preserve the published GitHub 1.5.0 tag and assets.
+Additional ownership: `packages/tui/__visual-baselines__/empty-state.txt`;
+only its displayed version changes from 1.5.0 to 1.5.1, not its layout.
+
+Release preparation verified: full Guardian Gate passed with the explicitly
+reviewed protected changes acknowledged (17/17 sensor probes, matching integrity
+hashes, builds, typechecks, CLI 239 + core 1,207 + TUI 498 = 1,944 tests,
+25/25 offline mock evaluations). Added package namespace/lockfile/public-access
+tests and legacy/current Guardian recognition coverage. An initial visual
+version-stamp mismatch was corrected without changing layout or weakening tests.
+
+All three 1.5.1 tarballs in `dist-release/npm-1.5.1/` passed publication dry
+runs with matching SHA-512 integrity, and have a local `SHA256SUMS` receipt.
+The CLI installs alone outside the monorepo and reports 1.5.1. Core + TUI also
+install and import together from their tarballs in a clean temporary consumer.
+No npm publication at this preparation checkpoint; publish these same artifacts
+in core → TUI → CLI order, subject to npm's security-key approval.
