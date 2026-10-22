@@ -3,7 +3,7 @@
 All notable changes to Anvil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver
 
-## [Unreleased]
+## [1.5.0] — 2026-10-23
 
 ### Fixed
 
@@ -15,6 +15,23 @@ All notable changes to Anvil are documented here. The format follows
 - Early startup typing, paste, Enter and cancellation are no longer replayed by
   Ink 7's optional keyboard-capability probe. Both chat and setup use the safe
   shared rendering configuration; Ctrl+J remains the portable newline shortcut.
+- AgentRouter certification uses its live-verified default GPT-6.1 Sol model,
+  rather than a retired gateway route.
+- Permission shortcuts ignore Ctrl/Alt modifiers, and long command/MCP previews are
+  fully scrollable. Ctrl+C cancels active turns or exits idle/setup screens even
+  while overlays own input.
+- Read-only Git shortcuts now require the project root to be the repository root
+  and refuse repository-object paths; other cases still work with explicit approval.
+- Provider iterators and Responses HTTP readers close on early consumer exit;
+  incomplete/failed Responses preserve usage and terminal outcomes. LSP ingestion
+  bounds unterminated headers as well as declared message sizes.
+- Ad-hoc endpoints no longer overwrite saved defaults. Custom model readiness
+  includes merged per-model header credentials and chooses ready default routes.
+- Test suites use isolated temporary Anvil homes. Development dependencies are
+  updated to remove the audit's known advisories. Certification reports distinguish
+  offline mocks from live checks, including a mode-tagged JSON envelope.
+- Tagged releases validate workspace, lockfile and core versions, clean-install
+  the packed CLI, and publish those same tested tarballs without repacking.
 
 ### Changed
 
@@ -45,28 +62,6 @@ All notable changes to Anvil are documented here. The format follows
 - Visual captures retain ANSI color, await settled output, reject blank/missing
   content, and cover complete application journeys as well as individual widgets.
 
-## [1.5.0] — Unreleased
-
-### Fixed
-
-- AgentRouter certification uses its live-verified default GPT-6.1 Sol model,
-  rather than a retired gateway route.
-- Permission shortcuts ignore Ctrl/Alt modifiers, and long command/MCP previews are
-  fully scrollable. Ctrl+C cancels active turns or exits idle/setup screens even
-  while overlays own input.
-- Read-only Git shortcuts now require the project root to be the repository root
-  and refuse repository-object paths; other cases still work with explicit approval.
-- Provider iterators and Responses HTTP readers close on early consumer exit;
-  incomplete/failed Responses preserve usage and terminal outcomes. LSP ingestion
-  bounds unterminated headers as well as declared message sizes.
-- Ad-hoc endpoints no longer overwrite saved defaults. Custom model readiness
-  includes merged per-model header credentials and chooses ready default routes.
-- Test suites use isolated temporary Anvil homes. Development dependencies are
-  updated to remove the audit's known advisories. Certification reports distinguish
-  offline mocks from live checks, including a mode-tagged JSON envelope.
-- Tagged releases validate workspace, lockfile and core versions, clean-install
-  the packed CLI, and publish those same tested tarballs without repacking.
-
 ### Added
 
 - Dynamic OpenAI-compatible custom providers with interactive add/edit/remove setup,
@@ -78,6 +73,13 @@ All notable changes to Anvil are documented here. The format follows
   management, ephemeral endpoint/key/protocol flags, and per-model endpoint/header/wire
   overrides. Discovery is bounded, keeps last-good catalogs on failure, and never
   invents a default model ID. Anthropic URLs and keyless authentication are normalized.
+- Four harder-tier evaluation fixtures (08–11) targeting failure modes the 25-task
+  suite cannot reach: a comparator that is not a total order, exact-cent allocation,
+  getter aliasing at depth, and an unaudited second write path. Each carries a
+  structural guard so passing tests is explicitly not a pass, and each is pinned
+  RED/GREEN/guard-probe by the fixture integrity suite.
+- `evals/run.ts` accepts `--tasks-dir`, so the harder tier is measurable from the
+  batch lane rather than only through the A/B harness.
 
 ## [1.4.0] — 2026-10-20
 
