@@ -74,9 +74,10 @@ inspectable before approval. The preview above uses an offline fixture.
 
 ### Global Install from the GitHub Release
 
-The 1.5.0 source release is prepared locally but is not yet published to npm or
-GitHub. Publication is currently deferred.
-The following commands install the previous 1.4.0 GitHub release, not 1.5.0:
+The 1.5.0 source is tagged in this repository. It is not published to npm: the
+`@anvil/*` package names are unclaimed on the public registry, so the GitHub
+release tarball is the supported install path. Until the v1.5.0 release assets
+are uploaded, the commands below install the previous 1.4.0 release:
 
 ```bash
 npm install -g https://github.com/imitravanu/anvil/releases/download/v1.4.0/anvil-cli-1.4.0.tgz

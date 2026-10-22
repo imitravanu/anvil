@@ -5,3 +5,4 @@ dist/
 *.tgz
 packages/tui/__visual-current__/
 packages/tui/__visual-diffs__/
+dist-release/
