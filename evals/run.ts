@@ -2,13 +2,14 @@
 /**
  * Phase 17: Verification Harness CLI Runner
  * Run benchmarks locally or in CI:
- *   npx tsx evals/run.ts [--mock] [--fast] [--filter <name>] [--report]
+ *   npx tsx evals/run.ts [--mock] [--fast] [--filter <name>] [--report] [--tasks-dir <dir>]
  *   npx tsx evals/run.ts --provider gemini --model gemini-2.0-flash
  *   npx tsx evals/run.ts --provider inception --model mercury-2.5 --concurrency 4
  * Guardian proof matrix (26.3):
  *   npx tsx evals/run.ts --provider openrouter --model X --guardian=off
  */
 import path from "node:path";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   runAllEvalTasks,
@@ -109,12 +110,23 @@ async function main() {
     concurrencyRaw === undefined ? undefined : Number(concurrencyRaw)
   );
 
+  // The harder tier (`evals/tasks-hard`) was reachable only from the A/B lane,
+  // so the batch lane could not measure the tasks that exist to break the
+  // ceiling. Resolve the directory once and use it for both the banner and the
+  // run, so the two can never disagree about what was measured.
+  const tasksDirFlag = flagValue(args, "tasks-dir");
+  const tasksDir = tasksDirFlag === undefined ? TASKS_DIR : path.resolve(tasksDirFlag);
+  if (tasksDirFlag !== undefined && !fs.existsSync(tasksDir)) {
+    console.error(`[eval] --tasks-dir does not exist: ${tasksDir}`);
+    process.exit(1);
+  }
+
   console.log("===============================================================================");
   console.log(" ANVIL EVALUATION HARNESS — Starting Task Run");
   console.log(` Provider: ${useMock ? "mock (offline deterministic)" : providerId} | Model: ${modelId || (useMock ? "eval-mock" : "default")}`);
   console.log(` Guardian: ${guardian ? "ON" : "OFF"} (interceptor ${guardian ? "active" : "disabled for this run"})`);
   console.log(` Concurrency: ${concurrency} worker(s)`);
-  console.log(` Tasks Directory: ${TASKS_DIR}`);
+  console.log(` Tasks Directory: ${tasksDir}`);
   if (fastOnly) console.log(" Filter: fast tasks only");
   if (taskFilter) console.log(` Filter: matching "${taskFilter}"`);
   console.log("===============================================================================");
@@ -136,7 +148,7 @@ async function main() {
   // via `betweenTaskDelayMs` (below) — see runAllEvalTasks.
 
   const report = await runAllEvalTasks({
-    tasksDir: TASKS_DIR,
+    tasksDir,
     fastOnly,
     taskFilter,
     useMock,

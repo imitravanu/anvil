@@ -1,0 +1,6 @@
+{
+  "name": "harder-tier-single-write-path",
+  "private": true,
+  "type": "commonjs",
+  "scripts": { "test": "node --test" }
+}

@@ -5666,3 +5666,87 @@ an explicit built-in provider plus endpoint override and a fake environment key.
 Temporary test state contained no provider/key/default-settings writes; real user
 credentials, configuration and saved sessions were not touched. Version remains
 1.4.0 with local unreleased fixes. Ready for a local commit; nothing published.
+
+# 2026-10-22 — breaking the eval ceiling (harder-tier batch 08–11)
+
+Ownership: this session owns `evals/tasks-hard/08-precedence-ordering/`,
+`09-exact-cent-allocation/`, `10-aliasing-copy/`, `11-single-write-path/`,
+`evals/run.ts` (the `--tasks-dir` flag only), and
+`packages/core/src/eval/__tests__/fixtureIntegrity.test.ts` (the harder-tier
+floors only). No protected artifact touched; no other working-tree changes were
+present at entry (tree clean, HEAD `93d49c0`, 9 commits ahead of origin).
+
+**Why.** `CURRENT-FOCUS.md` records the standing blocker on prompt work: the
+25-task suite is at ceiling (baseline 85–100%), so no prompt improvement can be
+detected, and the 38.5 rewrite was measured three ways with the effect reversing
+sign between runs. The instrument is saturated, not the prompt. This batch adds
+tasks the baseline can actually fail, and makes the tier reachable from the
+batch lane (it was previously A/B-only).
+
+**The four fixtures.** Each targets a failure mode the 25-task suite does not
+reach, and each carries a structural guard so "the tests pass" is explicitly not
+a pass:
+
+- `08-precedence-ordering` — a comparator that is not a total order. Guard
+  asserts antisymmetry, the equal-priority tiebreak, and determinism across
+  shuffled inputs.
+- `09-exact-cent-allocation` — largest-remainder allocation. Guard asserts the
+  parts sum to the total AND that no line drifts outside the floor/ceiling of
+  its exact share, so a remainder-dumping fix fails.
+- `10-aliasing-copy` — a getter handing out internal state. Guard asserts
+  isolation at depth (nested objects and arrays), so a shallow copy fails.
+- `11-single-write-path` — an unaudited second writer. Guard asserts the store
+  no longer exposes its internals, so auditing the bypass in place fails.
+
+**Fail-first receipts (run by hand, each state verified separately):**
+
+| task | RED (pristine setup) | GREEN (reference) | guard-probe |
+| --- | --- | --- | --- |
+| 08 | exit 1 | exit 0 | exit 1 |
+| 09 | exit 1 | exit 0 | exit 1 |
+| 10 | exit 1 | exit 0 | exit 1 |
+| 11 | exit 1 | exit 0 | exit 1 |
+
+Every RED is the hidden guard, not the visible suite: all four visible suites are
+green before the fix by construction, which is what makes the tier measure
+something the batch suite cannot.
+
+**Live measurement (first real reading on the new tier).** `inception/mercury-2.5`,
+guardian ON, one trial each, `--tasks-dir evals/tasks-hard`:
+
+- `08-precedence-ordering` PASS (16.5s, 7 tools)
+- `09-exact-cent-allocation` PASS (15.1s, 7 tools)
+- `10-aliasing-copy` PASS (18.2s, 11 tools)
+- `11-single-write-path` **FAIL** (12.0s, 9 tools) — the model routed `bulk.js`
+  through `set()` (fixing the reported symptom) but left `store.data` public, so
+  the second write path survived. The guard caught exactly the intended failure.
+
+So the batch yields one genuine ceiling-breaker and three tasks this model
+already clears. Recorded as measured, not as hoped: 3/4 is not a ceiling, and the
+next batch needs tasks in the same family as 11 (structural invariants a symptom
+fix cannot satisfy) rather than more single-file bug hunts.
+
+**Harness gap closed.** `evals/run.ts` hardcoded `TASKS_DIR` and had no
+`--tasks-dir`, so `evals/tasks-hard` could only be measured through `evals/ab.ts`.
+Added `--tasks-dir` (resolved once, used for both the banner and the run, with a
+loud failure on a missing directory) so the batch lane can measure the tier.
+`tsconfig.scripts.json` typecheck clean.
+
+**Integrity suite.** Raised the harder-tier floors: discovery `>= 11` with the
+four new ids asserted present, and guard-probes `>= 9`. The suite's RED/GREEN and
+guard-bite assertions now cover all eleven tasks; 7/7 pass.
+
+**Gate.** Full `npm run gate` run after the batch; receipt below.
+
+**Gate receipt (2026-10-23).** Full `npm run gate` PASS — Steps 0, 0.5, 1, 1.5,
+2 (sequential core→tui→cli build), 3 (typecheck), 4 (unit tests), 5 (mock evals).
+Measured: **1,935 tests across 221 files** (core 1,202 · TUI 498 · CLI 235),
+25/25 mock evals, protected-artifact hashes unchanged. `--quick` run separately
+confirmed Steps 0–1.5 clean over the new untracked fixtures, and a deliberate
+`as any` probe planted in `08-precedence-ordering/` was caught by Step 1 —
+`evals/tasks-hard` is genuinely gate-scanned (only `evals/tasks` is excluded),
+so the new fixtures are held to the same anti-slop rules as production source.
+
+Working tree at receipt: 3 modified (`PROGRESS.md`, `evals/run.ts`,
+`fixtureIntegrity.test.ts`), 4 untracked fixture directories. Not committed —
+left for review, per the review-teeth rule.

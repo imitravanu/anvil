@@ -1,0 +1,6 @@
+{
+  "name": "harder-tier-exact-cent-allocation",
+  "private": true,
+  "type": "commonjs",
+  "scripts": { "test": "node --test" }
+}

@@ -148,12 +148,19 @@ describe("Harder-tier fixture integrity (A4)", () => {
   const hardDirs = listHardTaskDirs();
 
   it("discovers the harder tier", () => {
-    expect(hardDirs.length).toBeGreaterThanOrEqual(7);
+    expect(hardDirs.length).toBeGreaterThanOrEqual(11);
     expect(hardDirs).toContain("01-contract-propagation");
     expect(hardDirs).toContain("06-untested-symptom");
     // A4's spec is "long horizon, multi-turn, real repo" — the tier must keep a
     // multi-turn member or the maintenance mode simply stops being measured.
     expect(hardDirs).toContain("07-multiturn-ttl");
+    // The ceiling-breaking batch (08–11): each one targets a failure mode the
+    // baseline tier does not reach, so the tier can resolve a prompt difference
+    // the 25-task suite is already at ceiling on.
+    expect(hardDirs).toContain("08-precedence-ordering");
+    expect(hardDirs).toContain("09-exact-cent-allocation");
+    expect(hardDirs).toContain("10-aliasing-copy");
+    expect(hardDirs).toContain("11-single-write-path");
   });
 
   it("gives every harder fixture the structure the harness requires", () => {
@@ -243,10 +250,11 @@ describe("Harder-tier fixture integrity (A4)", () => {
           );
         }
       }
-      // A floor, so a mass deletion of probes is itself a failure. Five tasks
-      // carry structural guards (01/03/04/05/07); 02 and 06 are guarded by the
-      // suite itself, which the RED check above already proves bites.
-      expect(probes).toBeGreaterThanOrEqual(5);
+      // A floor, so a mass deletion of probes is itself a failure. Nine tasks
+      // carry structural guards (01/03/04/05/07 and the 08–11 batch); 02 and 06
+      // are guarded by the suite itself, which the RED check above already
+      // proves bites.
+      expect(probes).toBeGreaterThanOrEqual(9);
       expect(problems).toEqual([]);
     },
     300_000

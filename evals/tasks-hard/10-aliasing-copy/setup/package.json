@@ -1,0 +1,6 @@
+{
+  "name": "harder-tier-aliasing-copy",
+  "private": true,
+  "type": "commonjs",
+  "scripts": { "test": "node --test" }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Stop a getter from handing out the store's internal state",
+  "category": "bugfix",
+  "prompt": "Bug report: saved settings are being corrupted. src/settings.js exports a SettingsStore with get(section) and set(section, values). Callers that read a section and then modify the object they got back are silently changing the store's own data, so a later get(section) returns values nobody set. The existing test suite is green today, so it does not describe this. Fix src/settings.js so that get(section) returns a value callers can modify freely without affecting the store, including nested objects and arrays. Do not change any test file. Verify against the cases the report describes before you call it done.",
+  "timeoutMs": 180000,
+  "maxTokens": 4096,
+  "fast": false
+}

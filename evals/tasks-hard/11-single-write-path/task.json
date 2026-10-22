@@ -1,0 +1,8 @@
+{
+  "name": "Make every write go through one path so the audit log is complete",
+  "category": "multifile",
+  "prompt": "Bug report from compliance: the audit log is missing entries. src/store.js exports a Store whose set(key, value) appends an audit entry, but src/bulk.js has its own importBulk(store, entries) that writes straight into the store's internal data, so bulk imports never appear in the audit log. The existing test suite is green today, so it does not describe this. Fix this so that EVERY write goes through one path and is audited — including bulk imports — and the audit log records one entry per write in the order the writes happened. Do not change any test file. Verify against the cases the report describes before you call it done.",
+  "timeoutMs": 180000,
+  "maxTokens": 4096,
+  "fast": false
+}

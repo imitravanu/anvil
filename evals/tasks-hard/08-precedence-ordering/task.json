@@ -1,0 +1,8 @@
+{
+  "name": "Fix a comparator that is not a total order",
+  "category": "bugfix",
+  "prompt": "Bug report from the deploy queue: rules are applied in the wrong order. A rule with priority 2 and a rule with priority 1 come out in the wrong order, and the queue sometimes reorders itself between two runs on the same input. src/compare.js exports compareRules(a, b) and the queue sorts with it. The existing test suite is green today, so it does not describe the bug. Fix src/compare.js so that rules order by priority descending (higher priority first), and rules with equal priority order by their `id` ascending so the result is stable and deterministic. Do not change any test file. Verify against the cases the report describes before you call it done.",
+  "timeoutMs": 180000,
+  "maxTokens": 4096,
+  "fast": false
+}

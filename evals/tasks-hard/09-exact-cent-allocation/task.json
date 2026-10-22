@@ -1,0 +1,8 @@
+{
+  "name": "Split an amount across weights without losing a cent",
+  "category": "bugfix",
+  "prompt": "Finance reports that the invoice splitter does not add up. src/allocate.js exports allocate(totalCents, weights), which divides a total across weighted lines and returns whole cents per line. The lines it returns do not sum back to totalCents, so the ledger is off by a cent or two on most invoices. The existing test suite is green today, so it does not describe this. Fix src/allocate.js so the returned allocations always sum to exactly totalCents, no line is negative, and the split stays fair: no two lines may differ by more than one cent. Do not change any test file. Verify against the cases the report describes before you call it done.",
+  "timeoutMs": 180000,
+  "maxTokens": 4096,
+  "fast": false
+}
