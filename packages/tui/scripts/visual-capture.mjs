@@ -276,6 +276,7 @@ async function renderInkFrame(element, cols, rows, theme, drive) {
 function findChrome() {
   const candidates = [
     process.env.CHROME_PATH,
+    "/opt/google/chrome/chrome",
     "/usr/bin/google-chrome",
     "/usr/bin/google-chrome-stable",
     "/usr/bin/chromium",
@@ -303,6 +304,9 @@ async function main() {
       "--headless=new",
       "--font-render-hinting=none",
       "--hide-scrollbars",
+      "--use-gl=egl",
+      "--ignore-gpu-blocklist",
+      "--enable-gpu-rasterization",
     ],
   });
 
