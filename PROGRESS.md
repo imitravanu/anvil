@@ -5853,3 +5853,16 @@ The CLI installs alone outside the monorepo and reports 1.5.1. Core + TUI also
 install and import together from their tarballs in a clean temporary consumer.
 No npm publication at this preparation checkpoint; publish these same artifacts
 in core → TUI → CLI order, subject to npm's security-key approval.
+
+### npm submission receipt
+
+All three `npm publish` operations exited successfully and reported
+`+ @imitravanu/anvil-{core,tui,cli}@1.5.1`, in dependency order, using the
+verified tarballs. Core and TUI completed browser security-key authorization;
+CLI was accepted without another challenge. No authentication settings changed.
+
+At the first post-publication check, npm still exposed `0.0.0-stage`
+placeholders rather than 1.5.1. The account's Staged Packages page and scoped
+`npm stage list` calls showed no versions awaiting manual approval. Treat this
+as accepted but not yet confirmed installable; do not re-publish or change tags
+to disguise the processing delay. Final public integrity/install checks remain.
