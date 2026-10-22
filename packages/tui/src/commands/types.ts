@@ -78,6 +78,7 @@ export interface CommandHandlerDeps {
   broker: TuiPermissionBroker;
   mcp?: McpAppState;
   isBusy: boolean;
+  hasQueuedMessages?: boolean;
   messages: DisplayMessage[];
   printSystemMessage: (text: string) => void;
   clearMessages: () => void;
@@ -97,7 +98,7 @@ export interface CommandHandlerDeps {
   setBranchDiff?: Dispatch<SetStateAction<{ branch: string; diff: string } | null>>;
   setIsRewindOpen?: Dispatch<SetStateAction<boolean>>;
   setGoal?: Dispatch<SetStateAction<DisplayGoal | null>>;
-  send: (text: string) => Promise<void>;
+  send: (text: string) => Promise<void | boolean>;
   launchGoal?: (objective: string) => Promise<void>;
-  addPendingImage: (img: { mediaType: string; data: string; path: string }) => void;
+  addPendingImage: (img: { mediaType: string; data: string; path: string }) => void | boolean;
 }

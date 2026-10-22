@@ -1,12 +1,15 @@
 import { getErrorMessage } from "@anvil/core";
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import {
   AgentSession,
+  contextBreakdown,
+  CONTEXT_WARN_THRESHOLD,
   createProviders,
   refreshCustomProviderModels,
   resolveProviderCredentials,
   loadSession,
+  loadCustomProviders,
   loadSettings,
   saveSettings,
   getModelsForProvider,
@@ -21,12 +24,13 @@ import {
 import type { TuiPermissionBroker } from "../permission/TuiPermissionBroker.js";
 import { useAgentController } from "../hooks/useAgentController.js";
 import { useFocusZone } from "../hooks/useFocusZone.js";
+import { InputAvailabilityContext } from "../hooks/useUIInput.js";
 import { usePermissionBroker } from "../hooks/usePermissionBroker.js";
 import { useThemeManager } from "../hooks/useThemeManager.js";
 import { useSessionCommands } from "../hooks/useSessionCommands.js";
-import { ThemeContext, useTheme } from "../theme/theme.js";
+import { ThemeContext } from "../theme/theme.js";
 import { PROVIDER_LABELS, refreshCustomProviderLabels } from "../util/labels.js";
-import { formatPricingTag } from "../util/format.js";
+import { formatPricingTag, modelInfo } from "../util/format.js";
 import { formatRewindResult } from "../util/rewind.js";
 import { Header } from "./Header.js";
 import { InputBar } from "./InputBar.js";
@@ -42,9 +46,11 @@ import { SessionPicker } from "./SessionPicker.js";
 import { ThemePicker } from "./ThemePicker.js";
 import { HelpOverlay } from "./HelpOverlay.js";
 import { StatusBar } from "./StatusBar.js";
+import { QueuePicker } from "./QueuePicker.js";
+import { TextDetail } from "./TextDetail.js";
+import { sanitizeTerminalText } from "../util/sanitize.js";
+import { transcriptDetails } from "../util/transcriptDetails.js";
 import { TRANSCRIPT_SCROLL_PAGE } from "../util/displayLimits.js";
-import { clampTranscriptPin } from "../util/transcriptWindow.js";
-import { sectionRule } from "../util/chrome.js";
 
 // Provider labels live in util/labels.ts — single source of truth.
 
@@ -100,7 +106,7 @@ export function App({
     goal,
     setGoal,
     testStatus,
-    send,
+    submitMessage,
     launchGoal,
     cancel,
     printSystemMessage,
@@ -108,7 +114,13 @@ export function App({
     replaceMessages,
     sentHistory,
     queued,
+    queueEntries,
+    queueHeld,
+    removeQueued,
+    resumeQueue,
     addPendingImage,
+    pendingImagePaths,
+    removePendingImage,
   } = useAgentController(session, {
     // Persist after every settled turn — including queued ones that drain
     // inside the controller, after handleSubmit has already returned.
@@ -141,6 +153,11 @@ export function App({
 
   const { stdout } = useStdout();
   const rows = stdout?.rows ?? 24;
+  const tooSmall = rows < 12 || (stdout?.columns ?? 80) < 40;
+  const contextEstimate = useMemo(() => ({
+    tokens: contextBreakdown(session.getHistory(), session.contextWindow, CONTEXT_WARN_THRESHOLD, session.tokenCalibration).totalTokens,
+    limit: session.contextWindow,
+  }), [session, currentModel, usage.inputTokens, isBusy]);
   // Ink does not re-render on terminal resize by itself, and every zone here
   // reads rows/columns during render — so without this the frame stays
   // frozen at whatever size the terminal was at boot (fullscreening left the
@@ -162,24 +179,31 @@ export function App({
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isSessionPickerOpen, setIsSessionPickerOpen] = useState(false);
   const [isConnectOpen, setIsConnectOpen] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const connectAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => connectAbort.current?.abort(), []);
   const [isThemePickerOpen, setIsThemePickerOpen] = useState(false);
   // /help and `?` — reference overlay (keys + every registered command).
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isDiffOpen, setIsDiffOpen] = useState(false);
   const [branchDiff, setBranchDiff] = useState<{ branch: string; diff: string } | null>(null);
   const [isRewindOpen, setIsRewindOpen] = useState(false);
+  const [isQueueOpen, setIsQueueOpen] = useState(false);
+  const [isAttachmentsOpen, setIsAttachmentsOpen] = useState(false);
+  const [detail, setDetail] = useState<{ title: string; text: string } | null>(null);
   // full tool-output display, toggled by /expand. Session-scoped,
   // never persisted — a resumed session starts compact.
   const [expandTools, setExpandTools] = useState(false);
   // Transcript scroll pin: newest messages held back (0 = follow live).
   const [transcriptPinned, setTranscriptPinned] = useState(0);
+  const transcriptMaximum = useRef(0);
 
   const { themeName, resolveTheme, applyTheme, previewTheme } = useThemeManager({ initialTheme, printSystemMessage });
   // Theme active before the picker started previewing — previews mutate
   // themeName, so Esc-restore needs a value captured at open time.
   const themeBeforePicker = useRef(initialTheme);
   // 28.8: App-level readable notices use the text tier, never decoration dim.
-  const theme = useTheme();
+  const theme = resolveTheme(themeName);
   useEffect(() => {
     if (!isThemePickerOpen) themeBeforePicker.current = themeName;
   }, [isThemePickerOpen, themeName]);
@@ -194,6 +218,9 @@ export function App({
     isSessionPickerOpen ||
     isThemePickerOpen ||
     isHelpOpen ||
+    isQueueOpen ||
+    isAttachmentsOpen ||
+    detail !== null ||
     isConnectOpen;
   // 23.9 focus coordinator: Tab toggles input↔transcript (slash-fill and
   // overlays keep their Tab), Esc returns to input. The transcript zone lets
@@ -208,33 +235,43 @@ export function App({
       if (isBusy) cancel(); else exit();
       return;
     }
+    if (tooSmall) return;
+    if (connecting && key.escape) {
+      connectAbort.current?.abort(); setConnecting(false); setIsConnectOpen(false); return;
+    }
     if (overlaysOpen) return;
+    if (key.ctrl && input === "q") { setIsQueueOpen(true); return; }
+    if (key.ctrl && input === "b") { setIsAttachmentsOpen(true); return; }
+    if (key.ctrl && input === "p") {
+      setDetail({ title: "Plan", text: goal ? `${goal.title}\n${goal.milestones.map(m => `${m.status}: ${m.title}${m.detail ? ` — ${m.detail}` : ""}`).join("\n")}` : plan ?? "No plan recorded." }); return;
+    }
+    if (key.ctrl && input === "o") {
+      setDetail({ title: "Transcript details · visible text and retained tool history", text: transcriptDetails(messages, session.getHistory()) }); return;
+    }
     if (key.tab) {
       onTab(overlaysOpen, slashMenuOpen);
-      // Leaving the input for the transcript keeps the live tail; coming back
-      // returns to live follow so the reply is visible.
-      if (focusZone === "transcript") setTranscriptPinned(0);
       return;
     }
     if (key.escape && focusZone === "transcript") {
       onEscape();
-      setTranscriptPinned(0);
       return;
     }
     if (key.pageUp) {
       // Clamp at the increment (2026-10-10): the display clamp silently
       // absorbed state that grew past the ceiling, so held-PgUp surplus made
       // later PgDn presses invisible no-ops — scroll read as dead.
-      setTranscriptPinned((prev) => clampTranscriptPin(prev + TRANSCRIPT_SCROLL_PAGE, messages.length));
+      setTranscriptPinned(prev => Math.min(transcriptMaximum.current, prev + Math.max(1, rows - 8)));
       return;
     }
     if (key.pageDown) {
-      setTranscriptPinned((prev) => Math.max(0, prev - TRANSCRIPT_SCROLL_PAGE));
+      setTranscriptPinned(prev => Math.max(0, prev - Math.max(1, rows - 8)));
       return;
     }
     if (focusZone === "transcript") {
+      if (key.home) { setTranscriptPinned(transcriptMaximum.current); return; }
+      if (key.end) { setTranscriptPinned(0); return; }
       if (key.upArrow) {
-        setTranscriptPinned((prev) => clampTranscriptPin(prev + 1, messages.length));
+        setTranscriptPinned(prev => Math.min(transcriptMaximum.current, prev + 1));
         return;
       }
       if (key.downArrow) {
@@ -243,9 +280,7 @@ export function App({
     }
   });
   // Clamp the pin when the transcript shrinks (clear/resume/switch).
-  useEffect(() => {
-    setTranscriptPinned((prev) => clampTranscriptPin(prev, messages.length));
-  }, [messages.length]);
+  useEffect(() => { setTranscriptPinned(0); transcriptMaximum.current = 0; }, [session]);
 
   const { handleSubmit, resumeFromStored, persist, mruCommands } = useSessionCommands({
     session,
@@ -256,6 +291,7 @@ export function App({
     broker,
     mcp,
     isBusy,
+    hasQueuedMessages: queued.length > 0,
     messages,
     printSystemMessage,
     clearMessages,
@@ -275,7 +311,7 @@ export function App({
     setBranchDiff,
     setIsRewindOpen,
     setGoal,
-    send,
+    send: async text => submitMessage(text),
     launchGoal,
     addPendingImage,
   });
@@ -302,6 +338,7 @@ export function App({
     setActiveProviderId(provider.id);
     setCurrentModel(modelInfo.id);
     setIsModelPickerOpen(false);
+    if (queueHeld) printSystemMessage("Queued messages remain held. Use Ctrl+Q to review and resume them.");
     try {
       saveSettings({
         ...loadSettings(),
@@ -328,8 +365,13 @@ export function App({
   // and hot-apply it if it belongs to the active provider (same provider id,
   // so switchModel keeps history while swapping the underlying API key).
   const handleConnectDone = async (providerId: ProviderId) => {
+    connectAbort.current?.abort();
+    const controller = new AbortController();
+    connectAbort.current = controller;
+    setConnecting(true);
     try {
-      const discovery = await refreshCustomProviderModels();
+      const discovery = await refreshCustomProviderModels(loadCustomProviders().filter(config => config.id === providerId), { signal: controller.signal });
+      if (controller.signal.aborted) return;
       for (const result of discovery) if (result.error) printSystemMessage(result.error);
       const refreshed = createProviders(resolveProviderCredentials());
       refreshCustomProviderLabels(refreshed);
@@ -350,18 +392,19 @@ export function App({
       } else {
         printSystemMessage(`✓ ${label} connected. Use /model to switch to it.`);
       }
+      if (queueHeld) printSystemMessage("Queued messages remain held. Use Ctrl+Q to review and resume them.");
     } catch (err) {
+      if (controller.signal.aborted) return;
       // A turn may have started if setup was dismissed during discovery.
       printSystemMessage(`Provider saved, but reconnect could not be applied: ${getErrorMessage(err)}`);
+    } finally {
+      if (connectAbort.current === controller) setConnecting(false);
     }
   };
 
   return (
     <ThemeContext.Provider value={resolveTheme(themeName)}>
-      {/* One outer frame wraps every zone — header, messages, input/status — so
-          the app reads as a single window. The border color comes straight from
-          the theme object because App is the theme *provider*; everything below
-          this Box consumes the same colors via useTheme(). */}
+      <InputAvailabilityContext.Provider value={!tooSmall}>
       {/* The frame is one row SHORTER than the terminal, deliberately. Ink
           (build/ink.js) wipes the entire terminal — screen, scrollback, home —
           whenever rendered height >= terminal rows; a frame exactly `rows`
@@ -372,20 +415,15 @@ export function App({
           forever, so Ink always uses its stable in-place diff path. */}
       <Box
         flexDirection="column"
-        borderStyle={resolveTheme(themeName).borders.panel}
-        borderColor={resolveTheme(themeName).colors.border}
-        height={Math.max(9, rows - 1)}
+        height={Math.max(1, rows - 1)}
         width={stdout?.columns ?? 80}
         overflow="hidden"
       >
-        {/* Every fixed-height zone keeps its rows: each component's root Box
-            is flexShrink={0} (see components) and the bare Divider text is
-            wrapped here. When content exceeds the frame (long transcripts,
-            tall overlays), the message list is the ONLY element allowed to
-            shrink — Ink's CSS-style default flex-shrink:1 otherwise compresses
-            everything at once, which is what made turns and chrome overwrite
-            each other's rows. */}
+        {tooSmall && <Text color={theme.colors.textPrimary}>Resize to 40×12 or larger. Ctrl+C {isBusy ? "cancels" : "exits"}.</Text>}
+        <Box display={tooSmall ? "none" : "flex"} flexDirection="column" flexGrow={1} minHeight={0}>
+        {/* Only the transcript shrinks; controls retain their measured rows. */}
         <Header
+          minimal
           model={currentModel}
           providerId={activeProviderId}
           isBusy={isBusy}
@@ -393,34 +431,38 @@ export function App({
           sessionTitle={session.title}
           turnCount={turnCount}
         />
-        <Box flexShrink={0}>
-          <Divider />
-        </Box>
-        <Box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0}>
+        <Box display={overlaysOpen || slashMenuOpen ? "none" : "flex"} flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden" marginTop={1}>
           <TranscriptBoundary>
-            <MessageList messages={messages} model={currentModel} providerId={activeProviderId} expandTools={expandTools} pinnedBack={transcriptPinned} />
+            <MessageList rowScroll messages={messages} model={currentModel} providerId={activeProviderId} expandTools={expandTools} pinnedBack={transcriptPinned} onBounds={(maximum, anchoredOffset) => {
+              transcriptMaximum.current = maximum;
+              setTranscriptPinned(anchoredOffset);
+            }} />
           </TranscriptBoundary>
         </Box>
-        <Box flexShrink={0}>
-          <Divider />
-        </Box>
         {/* Mission Deck: autonomous goal progression and persistent plan HUD */}
-        <MissionDeck goal={goal} plan={plan} isBusy={isBusy} />
-        {queued.length > 0 && (
+        {!overlaysOpen && <MissionDeck compact goal={goal} plan={plan} isBusy={isBusy} />}
+        {queued.length > 0 && !overlaysOpen && (
           <Box flexShrink={0} paddingX={2}>
             <Text color={theme.colors.textSecondary}>
-              ⏳ {queued.length} message{queued.length === 1 ? "" : "s"} queued — sends when the current turn finishes
+              {queued.length} message{queued.length === 1 ? "" : "s"} {queueHeld ? "held" : "queued"} · Ctrl+Q review
             </Text>
           </Box>
         )}
-        {/* Overlays take over keyboard input — InputBar is not rendered while one is open,
-            so keystrokes can never leak into it. */}
+        {pendingImagePaths.length > 0 && !overlaysOpen && <Text color={theme.colors.textSecondary} wrap="truncate-end">{pendingImagePaths.length} image(s) staged · Ctrl+B inspect/remove{modelInfo(currentModel, activeProviderId)?.supportsVision === false ? " · model lacks vision" : modelInfo(currentModel, activeProviderId)?.supportsVision === undefined ? " · vision capability unknown" : ""}</Text>}
+        {pendingImagePaths.length > 0 && !overlaysOpen && modelInfo(currentModel, activeProviderId)?.supportsVision !== true && <Text color={theme.colors.warning}>{modelInfo(currentModel, activeProviderId)?.supportsVision === false ? "This model does not support images. Switch models or remove the attachments." : "Vision support is unknown for this model."}</Text>}
+        {/* Keep the editor mounted to retain its draft/cursor; deactivate its input under overlays. */}
         {pendingPermission ? (
           <PermissionPrompt
             request={pendingPermission}
             broker={broker}
             knownServerIds={mcp?.list().map((conn) => conn.id) ?? []}
           />
+        ) : isAttachmentsOpen ? (
+          <QueuePicker title="Staged images" items={pendingImagePaths.map(path => ({ id: path, text: path }))} held={false} onRemove={removePendingImage} onResume={() => {}} onClose={() => setIsAttachmentsOpen(false)} />
+        ) : detail ? (
+          <TextDetail title={detail.title} text={sanitizeTerminalText(detail.text)} onClose={() => setDetail(null)} />
+        ) : isQueueOpen ? (
+          <QueuePicker items={queueEntries} held={queueHeld} onRemove={removeQueued} onResume={() => { void resumeQueue(); setIsQueueOpen(false); }} onClose={() => setIsQueueOpen(false)} />
         ) : isDiffOpen ? (
           <DiffModal
             session={session}
@@ -432,6 +474,7 @@ export function App({
           />
         ) : isRewindOpen ? (
           <RewindModal
+            minimal
             session={session}
             onSelect={(id) => {
               setIsRewindOpen(false);
@@ -451,6 +494,8 @@ export function App({
           />
         ) : isModelPickerOpen ? (
           <ModelPicker
+            minimal
+            onConnect={() => { setIsModelPickerOpen(false); setIsConnectOpen(true); }}
             providers={providers}
             currentModelId={currentModel}
             currentProviderId={activeProviderId}
@@ -459,11 +504,14 @@ export function App({
           />
         ) : isSessionPickerOpen ? (
           <SessionPicker
+            minimal
             onSelect={handleSessionPick}
             onClose={() => setIsSessionPickerOpen(false)}
           />
         ) : isThemePickerOpen ? (
           <ThemePicker
+            minimal
+            currentThemeName={themeBeforePicker.current}
             onPreview={previewTheme}
             onApply={(name) => {
               applyTheme(name);
@@ -475,7 +523,10 @@ export function App({
             }}
           />
         ) : isConnectOpen ? (
-          <FirstRunSetup
+          connecting ? <Box flexDirection="column" paddingX={1}>
+            <Text color={theme.colors.textPrimary}>Settings saved. Discovering available models…</Text>
+            <Text color={theme.colors.textSecondary}>Esc closes and cancels discovery. Model inference has not been tested.</Text>
+          </Box> : <FirstRunSetup
             handleCtrlC={false}
             title="Connect a provider or add your own endpoint."
             activeProviderId={activeProviderId}
@@ -489,25 +540,30 @@ export function App({
             onCancel={() => setIsConnectOpen(false)}
           />
         ) : isHelpOpen ? (
-          <HelpOverlay onClose={() => setIsHelpOpen(false)} />
-        ) : (
+          <HelpOverlay minimal onClose={() => setIsHelpOpen(false)} />
+        ) : null}
           <InputBar
+            sessionId={session.id}
+            hidden={overlaysOpen}
             handleCtrlC={false}
             isBusy={isBusy}
             hasFocus={focusZone === "input"}
             onSlashMenuChange={setSlashMenuOpen}
-            onSubmit={(text) => {
+            onSubmit={async (text, literal) => {
               // New turn returns to live follow so the reply is visible.
-              setTranscriptPinned(0);
-              void handleSubmit(text);
+              const accepted = await handleSubmit(text, literal);
+              if (accepted !== false) setTranscriptPinned(0);
+              return accepted;
             }}
             onCancel={cancel}
             sentHistory={sentHistory}
             mruCommands={mruCommands}
             onOpenHelp={() => setIsHelpOpen(true)}
           />
-        )}
-        <StatusBar
+        {!overlaysOpen && <StatusBar
+          minimal
+          waiting={pendingPermission !== null}
+          contextEstimate={contextEstimate}
           model={currentModel}
           providerId={activeProviderId}
           isBusy={isBusy}
@@ -515,19 +571,10 @@ export function App({
           checkpointCount={session.getCheckpoints().length}
           testStatus={testStatus}
           tokenHistory={tokenHistory}
-        />
+        />}
+        </Box>
       </Box>
+      </InputAvailabilityContext.Provider>
     </ThemeContext.Provider>
   );
-}
-
-/** Full-width horizontal rule separating the frame's zones. Width accounts for
- * the outer frame's two border columns so the rule spans the content exactly;
- * the glyph comes from the theme's `sectionDivider` (Phase 41), so a custom
- * theme's divider reach every zone boundary, not just the overlays'. */
-function Divider() {
-  const { stdout } = useStdout();
-  const theme = useTheme();
-  const width = Math.max(0, (stdout?.columns ?? 80) - 2);
-  return <Text color={theme.colors.dim}>{sectionRule(theme.typography.sectionDivider, width)}</Text>;
 }

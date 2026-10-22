@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Text, useInput } from "ink";
+import { Text } from "ink";
+import { useInput, usePaste } from "../hooks/useUIInput.js";
 import TextInput from "ink-text-input";
 import {
   FALLBACK_CONTEXT_WINDOW, getErrorMessage, removeCustomProvider, saveCustomProvider,
@@ -11,6 +12,7 @@ import { OverlayFrame } from "./OverlayFrame.js";
 interface SetupValues {
   id: string; name: string; baseUrl: string; credential: string;
   models: string; contextWindow: string; options: string;
+  protocol: "openai-chat" | "openai-responses" | "anthropic";
 }
 
 const FIELDS: Array<{ key: keyof SetupValues; label: string }> = [
@@ -23,7 +25,8 @@ const FIELDS: Array<{ key: keyof SetupValues; label: string }> = [
   { key: "options", label: "Optional JSON: protocol, headers, maxTokensParam, streamUsage, supportsTools, supportsVision" },
 ];
 
-export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemoved, onCancel }: {
+export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemoved, onCancel, simple = false }: {
+  simple?: boolean;
   initial?: CustomProviderConfig;
   activeProviderId?: ProviderId;
   onDone: (id: ProviderId) => void;
@@ -36,18 +39,23 @@ export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemov
     name: initial?.name ?? "", baseUrl: initial?.baseUrl ?? "", credential: "",
     models: initial?.models?.map(model => model.id).join(", ") ?? "",
     contextWindow: String(initial?.models?.[0]?.contextWindow ?? FALLBACK_CONTEXT_WINDOW),
+    protocol: initial?.protocol ?? "openai-chat",
     options: JSON.stringify({
       headers: initial?.headers ?? {}, maxTokensParam: initial?.maxTokensParam ?? "max_tokens",
       streamUsage: initial?.streamUsage ?? true,
       protocol: initial?.protocol ?? "openai-chat",
     }),
   }));
-  const [step, setStep] = useState(initial ? 1 : 0);
+  const [advanced, setAdvanced] = useState(false);
+  const fields = simple ? advanced ? FIELDS.filter(field => ["contextWindow", "options"].includes(field.key)) : [
+    FIELDS[1], FIELDS[2], { key: "protocol" as const, label: "Wire protocol — ↑/↓ choose, Enter continue" }, FIELDS[3], FIELDS[4],
+  ] : FIELDS;
+  const [step, setStep] = useState(simple ? 0 : initial ? 1 : 0);
   const [error, setError] = useState<string | null>(null);
   const [review, setReview] = useState<{ config: CustomProviderConfig; apiKey?: string } | null>(null);
   const [removing, setRemoving] = useState(false);
   const [confirmation, setConfirmation] = useState("");
-  const field = FIELDS[step];
+  const field = fields[step];
 
   const prepare = (next: SetupValues) => {
     const options: unknown = JSON.parse(next.options || "{}");
@@ -60,8 +68,9 @@ export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemov
     const apiKeyEnv = credential.startsWith("$") ? credential.slice(1)
       : !credential ? initial?.apiKeyEnv : undefined;
     const config = validateCustomProvider({
-      id: initial?.id ?? `custom:${next.id.trim()}`, name: next.name, baseUrl: next.baseUrl,
+      id: initial?.id ?? `custom:${simple ? next.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : next.id.trim()}`, name: next.name, baseUrl: next.baseUrl,
       auth, ...(apiKeyEnv ? { apiKeyEnv } : {}), ...providerOptions,
+      ...(simple && !advanced ? { protocol: next.protocol } : {}),
       models: next.models ? next.models.split(",").map(id => {
         const old = initial?.models?.find(model => model.id === id.trim());
         return {
@@ -76,15 +85,30 @@ export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemov
     return { config, ...(credential && credential !== "-" && !credential.startsWith("$") ? { apiKey: credential } : {}) };
   };
 
+  usePaste(text => {
+    if (!review && field?.key !== "protocol") setValues(previous => ({ ...previous, [field.key]: previous[field.key] + text.replace(/[\r\n]/g, "") }));
+  }, { isActive: !review && !removing && field?.key !== "protocol" });
   useInput((input, key) => {
     if (key.escape) {
       setError(null);
       if (removing) { setRemoving(false); return; }
-      if (step > (initial ? 1 : 0)) { setStep(step - 1); setReview(null); }
+      if (review) { setReview(null); setStep(fields.length - 1); }
+      else if (step > (simple ? 0 : initial ? 1 : 0)) { setStep(step - 1); setReview(null); }
+      else if (advanced) { setAdvanced(false); setStep(0); }
       else onCancel();
       return;
     }
+    if (!review && field?.key === "protocol") {
+      const protocols = ["openai-chat", "openai-responses", "anthropic"] as const;
+      if (key.upArrow || key.downArrow) setValues(previous => ({ ...previous, protocol: protocols[(protocols.indexOf(previous.protocol) + (key.upArrow ? 2 : 1)) % protocols.length] }));
+      else if (key.return) setStep(value => value + 1);
+      return;
+    }
     if (!review || removing) return;
+    if (input === "a" && simple && !advanced) {
+      setValues(previous => ({ ...previous, options: JSON.stringify({ ...JSON.parse(previous.options || "{}"), protocol: previous.protocol }) }));
+      setReview(null); setAdvanced(true); setStep(0); return;
+    }
     if (input === "d" && initial && initial.id !== activeProviderId) {
       setRemoving(true); return;
     }
@@ -96,8 +120,8 @@ export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemov
   });
 
   return (
-    <OverlayFrame title={initial ? "Edit custom provider" : "Add custom provider"}
-      meta={removing ? "confirm removal" : review ? "review" : `${step + 1} / ${FIELDS.length}`}
+    <OverlayFrame minimal={simple} title={initial ? "Edit custom provider" : "Add custom provider"}
+      meta={removing ? "confirm removal" : review ? "review" : `${step + 1} / ${fields.length}`}
       hints={review ? "Enter save · Esc back" : "Enter next · Esc back"}>
       {error && <Text color={theme.colors.error}>{error}</Text>}
       {removing ? <>
@@ -115,11 +139,12 @@ export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemov
         <Text color={theme.colors.textSecondary}>Models: {review.config.models?.length ? review.config.models.map(model => model.id).join(", ") : "dynamic / auto-discover"}</Text>
         <Text color={theme.colors.textSecondary}>Authentication: {review.config.auth === "none" ? "none" : review.config.apiKeyEnv ? `environment (${review.config.apiKeyEnv})` : "stored key (hidden)"}</Text>
         <Text color={theme.colors.textSecondary}>Settings and keys are saved separately with owner-only permissions.</Text>
+        {simple && !advanced && <Text color={theme.colors.textSecondary}>a — advanced settings (context, headers and compatibility)</Text>}
         {initial && initial.id !== activeProviderId && <Text color={theme.colors.warning}>d — remove this provider</Text>}
         {initial?.id === activeProviderId && <Text color={theme.colors.textSecondary}>Switch to another provider before removing this one.</Text>}
       </> : <>
         <Text color={theme.colors.primary}>{field.label}</Text>
-        <TextInput key={field.key} value={values[field.key]}
+        {field.key === "protocol" ? <Text color={theme.colors.textPrimary}>{values.protocol}</Text> : <TextInput key={field.key} value={values[field.key]}
           mask={field.key === "credential" ? "*" : undefined}
           onChange={value => setValues({ ...values, [field.key]: value.replace(/[\r\n]/g, "") })}
           onSubmit={value => {
@@ -129,12 +154,12 @@ export function CustomProviderSetup({ initial, activeProviderId, onDone, onRemov
             if (!value.trim() && !["credential", "options", "models"].includes(field.key)) {
               setError("This field is required."); return;
             }
-            if (step === FIELDS.length - 1) {
+            if (step === fields.length - 1) {
               try { setReview(prepare(next)); }
               catch (err) { setError(err instanceof SyntaxError ? "Options must contain valid JSON." : getErrorMessage(err)); return; }
             }
             setStep(step + 1);
-          }} />
+          }} />}
       </>}
     </OverlayFrame>
   );

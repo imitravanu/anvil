@@ -39,7 +39,13 @@ export const HELP_KEYS: readonly HelpRow[] = [
   { primary: "↑ / ↓", secondary: "Recall sent messages (input focused); scroll transcript (transcript focused); navigate menus" },
   { primary: "Esc", secondary: "Cancel the running turn, or dismiss a menu or overlay" },
   { primary: "Ctrl+C", secondary: "Cancel while busy; exit when idle" },
-  { primary: "PgUp / PgDn", secondary: "Scroll the transcript (5 messages per press)" },
+  { primary: "PgUp / PgDn", secondary: "Scroll transcript pages; Tab then ↑/↓ scrolls rows" },
+  { primary: "Ctrl+J", secondary: "Insert a newline; bracketed paste preserves lines and never submits" },
+  { primary: "Home / End", secondary: "Transcript focus: oldest retained output / follow latest" },
+  { primary: "Ctrl+Q", secondary: "Inspect, remove or explicitly resume queued messages" },
+  { primary: "Ctrl+B", secondary: "Inspect and remove staged image attachments" },
+  { primary: "Ctrl+L", secondary: "Toggle literal-message mode for text beginning with /" },
+  { primary: "Ctrl+P / Ctrl+O", secondary: "Read plan / retained transcript and tool details" },
   { primary: "?", secondary: "Open this help" },
 ];
 
@@ -63,7 +69,7 @@ export const HELP_OVERLAY_KEYS: readonly HelpRow[] = [
  * overlay-only shortcuts last — nothing a routine lookup has to scroll past. */
 export function helpSections(): HelpSection[] {
   return [
-    { id: "keys", title: "Keys", rows: [...HELP_KEYS] },
+    { id: "keys", title: "Keys", rows: [...HELP_KEYS.slice(0, 8)] },
     {
       id: "commands",
       title: "Commands",
@@ -72,7 +78,7 @@ export function helpSections(): HelpSection[] {
         secondary: command.description,
       })),
     },
-    { id: "overlays", title: "Inside overlays", rows: [...HELP_OVERLAY_KEYS] },
+    { id: "overlays", title: "More keys & overlays", rows: [...HELP_KEYS.slice(8), ...HELP_OVERLAY_KEYS] },
   ];
 }
 

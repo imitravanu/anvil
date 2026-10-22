@@ -48,7 +48,7 @@ describe("commandIcon", () => {
 
 describe("CommandPalette render", () => {
   it("shows icons, footer hints, and the empty state", () => {
-    const full = renderThemed(<CommandPalette query="" highlight={0} mru={[]} />);
+    const full = renderThemed(<CommandPalette query="goal" highlight={0} mru={[]} />);
     const out = frameText(full.lastFrame);
     expect(out).toContain("🎯");
     expect(out).toContain("/goal");

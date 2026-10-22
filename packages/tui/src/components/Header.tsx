@@ -4,6 +4,7 @@ import type { SituationalContext } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 import {
   curtail,
+  curtailToCells,
   displayModelLabel,
   displayWidth,
   modelInfo,
@@ -19,8 +20,10 @@ import {
   HEADER_TEST_MAX,
   HEADER_TITLE_MAX,
 } from "../util/displayLimits.js";
+import { sanitizeTerminalText } from "../util/sanitize.js";
 
 export interface HeaderProps {
+  minimal?: boolean;
   model: string;
   isBusy: boolean;
   context?: SituationalContext;
@@ -56,7 +59,7 @@ export function headerSessionPlan(
   return { showTitle, titleV, turnsSuffix };
 }
 
-export function Header({ model, isBusy, context, providerId, sessionTitle, turnCount }: HeaderProps) {
+export function Header({ model, isBusy, context, providerId, sessionTitle, turnCount, minimal = false }: HeaderProps) {
   const theme = useTheme();
   const { stdout } = useStdout();
   const width = stdout?.columns ?? 80;
@@ -69,6 +72,14 @@ export function Header({ model, isBusy, context, providerId, sessionTitle, turnC
   const info = modelInfo(model, providerId);
   const provider = info ? providerLabel(providerOfModel(model, providerId) ?? info.providerId) : "Anvil";
   const modelName = displayModelLabel(model, providerId);
+  if (minimal) {
+    const identity = width < 80 ? modelName : `${provider} · ${modelName}`;
+    const left = context ? `${context.projectName}${width >= 80 && context.git ? ` / ${context.git.branch}${context.git.clean ? "" : "*"}` : ""}` : theme.typography.brandName;
+    return <Box flexShrink={0} justifyContent="space-between" paddingX={1}>
+      <Text color={theme.colors.textPrimary} bold wrap="truncate-end">{curtailToCells(sanitizeTerminalText(left).replace(/\n/g, " "), Math.max(8, Math.floor(width / 3)))}</Text>
+      <Text color={theme.colors.textSecondary} wrap="truncate-end">{curtailToCells(sanitizeTerminalText(identity).replace(/\n/g, " "), Math.max(8, Math.floor(width * 2 / 3) - 4))}</Text>
+    </Box>;
+  }
   const state = isBusy ? "busy" : "idle";
   const { showTitle, titleV, turnsSuffix } = headerSessionPlan(width, sessionTitle, turnCount);
   const fullTag = `${provider} · ${modelName}${formatPricingTag(info?.isFree)}${turnsSuffix} · ${state}`;

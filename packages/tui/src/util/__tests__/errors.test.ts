@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { friendlyError } from "../errors.js";
 
 describe("friendlyError", () => {
+  it("distinguishes exhausted billing quota from a temporary rate limit", () => {
+    expect(friendlyError("HTTP 403: free quota exhausted; payment information required")).toContain("Waiting may not resolve");
+    expect(friendlyError("ETIMEDOUT")).toContain("inspect /diff before retrying");
+  });
   it("maps a raw multi-line quota dump to one actionable line", () => {
     const raw = [
       "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.",

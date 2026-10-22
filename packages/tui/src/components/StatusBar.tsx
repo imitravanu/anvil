@@ -9,6 +9,9 @@ import { useSpinnerFrame } from "../util/useSpinner.js";
 import { ContextGauge, gaugeDisplayText } from "./ContextGauge.js";
 
 export interface StatusBarProps {
+  minimal?: boolean;
+  contextEstimate?: { tokens: number; limit: number };
+  waiting?: boolean;
   model: string;
   isBusy: boolean;
   /** Provider the session runs on — qualifies ambiguous model ids (AUDIT-02). */
@@ -30,6 +33,9 @@ export function StatusBar({
   checkpointCount,
   testStatus,
   tokenHistory = [],
+  minimal = false,
+  contextEstimate,
+  waiting = false,
 }: StatusBarProps) {
   const theme = useTheme();
   const { stdout } = useStdout();
@@ -38,6 +44,15 @@ export function StatusBar({
   // Provider-qualified (AUDIT-02): a free model on one provider must not render
   // its paid sibling's pricing/context window here.
   const info = modelInfo(model, providerId);
+  if (minimal) {
+    const label = waiting ? "Waiting for approval" : isBusy ? "Working · Esc cancel" : "Ready";
+    const context = contextEstimate && width >= 80 ? ` · context ~${Math.round(100 * contextEstimate.tokens / contextEstimate.limit)}%` : "";
+    if (width < 80) return <Text color={theme.colors.textSecondary} wrap="truncate-end">{waiting ? "Waiting for approval" : isBusy ? "Working · Enter queue · Esc cancel" : "Enter send · / commands · ? help"}</Text>;
+    return <Box flexShrink={0} justifyContent="space-between" paddingX={1}>
+      <Text color={theme.colors.textSecondary} wrap="truncate-end">{isBusy ? "Enter queue" : "Enter send"} · Ctrl+J newline · / commands</Text>
+      <Text color={waiting ? theme.colors.warning : theme.colors.textSecondary} wrap="truncate-end">{label}{context}</Text>
+    </Box>;
+  }
 
   const modelLabel = `${displayModelLabel(model, providerId)}${formatPricingTag(info?.isFree)}`;
   const state = isBusy ? (

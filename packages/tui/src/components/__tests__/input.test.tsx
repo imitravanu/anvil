@@ -28,7 +28,7 @@ describe("InputBar", () => {
     app.unmount();
   });
 
-  it("echoes typing and submits trimmed text on Enter, then clears", async () => {
+  it("preserves the exact payload on Enter, then clears", async () => {
     const { app, onSubmit } = idleBar();
     await tick();
     app.stdin.write("  hello anvil  ");
@@ -37,7 +37,7 @@ describe("InputBar", () => {
     app.stdin.write(ENTER);
     await tick();
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(onSubmit).toHaveBeenCalledWith("hello anvil");
+    expect(onSubmit).toHaveBeenCalledWith("  hello anvil  ");
     expect(frameText(app.lastFrame)).not.toContain("hello anvil");
     app.unmount();
   });
@@ -112,13 +112,16 @@ describe("InputBar", () => {
     app.unmount();
   });
 
-  it("sanitizes multiline paste into spaces and does not submit prematurely", async () => {
+  it("preserves multiline paste and does not submit prematurely", async () => {
     const { app, onSubmit } = idleBar();
     await tick();
     app.stdin.write("line one\nline two\n");
     await tick();
     expect(onSubmit).not.toHaveBeenCalled();
-    expect(frameText(app.lastFrame)).toContain("line one line two");
+    expect(frameText(app.lastFrame)).toContain("line one");
+    expect(frameText(app.lastFrame)).toContain("line two");
+    app.stdin.write(ENTER); await tick();
+    expect(onSubmit).toHaveBeenCalledWith("line one\nline two\n", true);
     app.unmount();
   });
 

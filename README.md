@@ -37,33 +37,12 @@
 
 ## 🖥️ What It Looks Like
 
-```
-╭──────────────────────────────────────────────────────────────────────────────────╮
-│ ▲ ANVIL                            Ollama · Qwen 2.5 Coder (Local) [FREE] · idle │
-│──────────────────────────────────────────────────────────────────────────────────│
-│ ❯ you                                                                            │
-│ add a multiply function to calc.py                                               │
-│                                                                                  │
-│ anvil                                                                            │
-│ Reading calc.py first.                                                           │
-│    ✓ read_file Read calc.py (29 bytes)                                           │
-│    ✓ edit_file Edited calc.py (+4 −0)                                            │
-│                                                                                  │
-│ ℹ Checkpoint #1: 1 file snapshotted — /rewind 1 to undo.                         │
-│──────────────────────────────────────────────────────────────────────────────────│
-│╭────────────────────────────────────────────────────────────────────────────────╮│
-││ ⚠ edit_file wants to edit a file                                              ││
-││    1  1 │ def add(a,b):                                                       ││
-││ +  3    │                                                                     ││
-││ +  4    │ def multiply(a, b):                                                 ││
-││ ❯ Allow once                                                                    ││
-││   Always allow 'edit_file' this session                                         ││
-││   Deny                                                                          ││
-││  ↑/↓ to move · Enter to confirm · Esc to deny                                   ││
-│╰────────────────────────────────────────────────────────────────────────────────╯│
-│ Qwen 2.5 Coder (Local) [FREE] │ ○ idle │ tokens 1,842 in · 96 out │ ctrl+c exit │
-╰──────────────────────────────────────────────────────────────────────────────────╯
-```
+![Anvil conversation view — offline fixture](packages/tui/__visual-baselines__/dark-80x24/app-chat.png)
+
+The conversation gets the main screen; model identity, composer and status stay
+compact. Queues, plans, tool details and attachments open on demand. Permission
+review replaces the conversation area so full commands and file changes remain
+inspectable before approval. The preview above uses an offline fixture.
 
 ---
 
@@ -190,7 +169,10 @@ relocates both files. For example, an environment-authenticated provider:
 ```
 
 Use your server's actual base URL and context limit. The first configured model is the default.
-The setup flow's optional JSON field accepts `protocol`, `headers`, `maxTokensParam`, `streamUsage`,
+The setup flow lets you choose Chat Completions, Responses or Anthropic Messages
+without writing JSON. Leave models blank for discovery. Its review screen offers
+advanced settings for context limits, headers and compatibility. The optional
+JSON field accepts `protocol`, `headers`, `maxTokensParam`, `streamUsage`,
 `supportsTools` and `supportsVision`. Set `streamUsage: false` if the server rejects
 `stream_options`, or choose `max_completion_tokens` when required. Model capabilities
 can be configured individually in the file; omitted pricing remains unknown.
@@ -247,6 +229,14 @@ One-off endpoint/key overrides do not write provider, key or default-settings fi
 ---
 
 ## ⌨️ Slash Commands
+
+The composer supports multiline drafts: Enter sends, Ctrl+J inserts a newline,
+and bracketed paste preserves code without sending it. Ctrl+L makes slash-prefixed
+text literal. Tab switches between composer and transcript; PgUp/PgDn scroll
+pages and Home/End navigate within the focused transcript. Ctrl+O opens retained
+text/tool details, Ctrl+P the plan, Ctrl+Q queued messages, and Ctrl+B attachments.
+Cancellation or a provider failure holds queued work until explicitly resumed.
+Use `?` from an empty prompt for the complete keyboard reference.
 
 Type `/` at any prompt to open the autocomplete menu:
 

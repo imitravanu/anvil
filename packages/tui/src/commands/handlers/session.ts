@@ -17,6 +17,10 @@ export function handleClearHistory(deps: CommandHandlerDeps): void {
     printSystemMessage("Cannot clear the conversation while a turn is in flight.");
     return;
   }
+  if (deps.hasQueuedMessages) {
+    printSystemMessage("Review queued messages with Ctrl+Q before clearing the conversation.");
+    return;
+  }
   const fresh = new AgentSession(providers[activeProviderId], {
     ...sessionOptions,
     model: currentModel,
@@ -85,6 +89,10 @@ export function handleSessionNew(deps: CommandHandlerDeps): void {
     printSystemMessage("Cannot start a new session while a turn is in flight.");
     return;
   }
+  if (deps.hasQueuedMessages) {
+    printSystemMessage("Review queued messages with Ctrl+Q before starting a new session.");
+    return;
+  }
   const fresh = new AgentSession(providers[activeProviderId], {
     ...sessionOptions,
     model: currentModel,
@@ -100,6 +108,10 @@ export function handleSessionResume(deps: CommandHandlerDeps, id?: string): void
   const { isBusy, printSystemMessage, setIsSessionPickerOpen, resumeFromStored } = deps;
   if (isBusy) {
     printSystemMessage("Cannot resume a session while a turn is in flight.");
+    return;
+  }
+  if (deps.hasQueuedMessages) {
+    printSystemMessage("Review queued messages with Ctrl+Q before resuming another session.");
     return;
   }
   if (!id) {
@@ -129,6 +141,10 @@ export function handleRetryLast(deps: CommandHandlerDeps, replacement?: string):
   const { isBusy, printSystemMessage, session, messages, replaceMessages, send, addPendingImage } = deps;
   if (isBusy) {
     printSystemMessage("Cannot retry while a turn is in flight.");
+    return;
+  }
+  if (deps.hasQueuedMessages) {
+    printSystemMessage("Review queued messages with Ctrl+Q before retrying a turn.");
     return;
   }
   const previous = session.popLastUserTurn();

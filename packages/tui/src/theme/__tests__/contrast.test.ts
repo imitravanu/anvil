@@ -75,6 +75,12 @@ const TINTED_PAIRS = [
 const DECORATIVE_TINT_SITES = ["components/Wordmark.tsx"];
 
 describe("28.9 tinted-lane contrast contract", () => {
+  it("keeps the default reading and hint text legible on its terminal surface", () => {
+    for (const token of ["textPrimary", "textSecondary", "textMuted"] as const) {
+      expect(contrastRatio(THEMES.dark.colors[token], THEMES.dark.colors.surface)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(THEMES.highContrast.colors[token], THEMES.highContrast.colors.surface)).toBeGreaterThanOrEqual(7);
+    }
+  });
   it("keeps every measurable foreground-on-tint pair at WCAG AA", () => {
     const failures: string[] = [];
     for (const [name, theme] of Object.entries(THEMES)) {
@@ -103,7 +109,7 @@ describe("28.9 tinted-lane contrast contract", () => {
       )
       .map(([name]) => name)
       .sort();
-    expect(measurable).toEqual(["forge", "hacker", "midnight"]);
+    expect(measurable).toEqual(["dark", "forge", "hacker", "highContrast", "midnight"]);
   });
 
   it("keeps the quietest readable tier off the diff tints, at the source", () => {

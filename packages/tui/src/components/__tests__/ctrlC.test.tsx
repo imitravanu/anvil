@@ -25,7 +25,7 @@ describe("app-level Ctrl+C ownership", () => {
       }
       app.stdin.write("\r");
       await tick();
-      expect(frameText(app.lastFrame)).toContain("Provider ID");
+      expect(frameText(app.lastFrame)).toContain("Display name");
     }
     app.stdin.write("\x03");
     await tick();

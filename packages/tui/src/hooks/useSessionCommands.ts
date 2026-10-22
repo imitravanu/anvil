@@ -25,6 +25,7 @@ export interface UseSessionCommandsDeps {
   broker: TuiPermissionBroker;
   mcp?: McpAppState;
   isBusy: boolean;
+  hasQueuedMessages?: boolean;
   messages: DisplayMessage[];
   printSystemMessage: (text: string) => void;
   clearMessages: () => void;
@@ -44,16 +45,16 @@ export interface UseSessionCommandsDeps {
   setBranchDiff?: React.Dispatch<React.SetStateAction<{ branch: string; diff: string } | null>>;
   setIsRewindOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   setGoal?: React.Dispatch<React.SetStateAction<DisplayGoal | null>>;
-  send: (text: string) => Promise<void>;
+  send: (text: string) => Promise<void | boolean>;
   launchGoal?: (objective: string) => Promise<void>;
-  addPendingImage: (img: { mediaType: string; data: string; path: string }) => void;
+  addPendingImage: (img: { mediaType: string; data: string; path: string }) => void | boolean;
 }
 
 export interface UseSessionCommandsResult {
   persist: () => void;
   resumeFromStored: (stored: StoredSession) => void;
   ctx: CommandContext;
-  handleSubmit: (text: string) => Promise<void>;
+  handleSubmit: (text: string, literal?: boolean) => Promise<void | boolean>;
   /** Most-recently-used slash commands (max 5) for palette ranking. */
   mruCommands: string[];
 }
@@ -95,6 +96,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     broker,
     mcp,
     isBusy,
+    hasQueuedMessages,
     messages,
     printSystemMessage,
     clearMessages,
@@ -169,6 +171,7 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     broker,
     mcp,
     isBusy,
+    hasQueuedMessages,
     messages,
     printSystemMessage,
     clearMessages,
@@ -196,13 +199,13 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
   // DW-3.2 MRU: successful slash runs float to the palette top.
   const [mruCommands, setMruCommands] = useState<string[]>([]);
 
-  const handleSubmit = async (text: string) => {
+  const handleSubmit = async (text: string, literal = false) => {
     // F8/AUDIT-2026-09-30: sent-history recall is recorded ONCE, in
     // useAgentController.runTurn — the layer that actually sends a turn.
     // Recording here too double-counted: a message queued while busy was
     // recorded at submit and again when the drain ran it, so submitting A, B,
     // C during a turn yielded A,B,C,B,C in Up-arrow recall.
-    const parsed = parseCommand(text);
+    const parsed = literal ? null : parseCommand(text);
     if (parsed) {
       const command = COMMANDS.find((c) => c.name === parsed.name);
       if (command) {
@@ -220,8 +223,9 @@ export function useSessionCommands(deps: UseSessionCommandsDeps): UseSessionComm
     }
     // Regular turn: run it, then auto-save regardless of how it ended
     // (turn_complete, cancelled, or error).
-    await send(text);
+    const accepted = await send(text);
     persist();
+    return accepted;
   };
 
   return { persist, resumeFromStored, ctx, handleSubmit, mruCommands };

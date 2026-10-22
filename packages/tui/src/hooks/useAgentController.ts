@@ -10,7 +10,7 @@ import {
   type GoalMilestone,
   type GoalTurnOutcome,
 } from "@anvil/core";
-import { HISTORY_RECALL_CAP, TRANSCRIPT_STATE_CAP, MESSAGE_QUEUE_CAP, TEXT_FLUSH_INTERVAL_MS } from "../util/displayLimits.js";
+import { HISTORY_RECALL_CAP, TRANSCRIPT_STATE_CAP, MESSAGE_QUEUE_CAP, TEXT_FLUSH_INTERVAL_MS, STAGED_IMAGE_CAP } from "../util/displayLimits.js";
 import { friendlyError } from "../util/errors.js";
 import { notifyTurnComplete } from "../util/notify.js";
 import {
@@ -121,11 +121,17 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
   const lastCumulativeRef = useRef(0);
   // Messages typed while a turn runs queue here and drain automatically
   // when the turn settles — typing ahead used to bounce off with a notice.
-  const queueRef = useRef<string[]>([]);
-  const [queued, setQueued] = useState<string[]>([]);
+  const queueRef = useRef<{ id: string; text: string }[]>([]);
+  const [queueEntries, setQueued] = useState<{ id: string; text: string }[]>([]);
+  const queued = queueEntries.map(item => item.text);
+  const [queueHeld, setQueueHeld] = useState(false);
+  const heldRef = useRef(false);
   const busyRef = useRef(false);
   // /image attachments waiting for the next send (consumed by runTurn).
   const pendingImagesRef = useRef<{ mediaType: string; data: string; path: string }[]>([]);
+  const [pendingImagePaths, setPendingImagePaths] = useState<string[]>([]);
+  const attachmentDrafts = useRef(new Map<string, typeof pendingImagesRef.current>());
+  const attachmentSession = useRef(session.id);
   const onTurnSettledRef = useRef(opts.onTurnSettled);
   onTurnSettledRef.current = opts.onTurnSettled;
   const [sentHistory, setSentHistory] = useState<string[]>([]);
@@ -147,7 +153,13 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     // Queued messages belong to the conversation they were typed in.
     queueRef.current = [];
     setQueued([]);
-    pendingImagesRef.current = [];
+    heldRef.current = false;
+    setQueueHeld(false);
+    if (pendingImagesRef.current.length) attachmentDrafts.current.set(attachmentSession.current, pendingImagesRef.current);
+    else attachmentDrafts.current.delete(attachmentSession.current);
+    attachmentSession.current = session.id;
+    pendingImagesRef.current = attachmentDrafts.current.get(session.id) ?? [];
+    setPendingImagePaths(pendingImagesRef.current.map(image => image.path));
   }, [session]);
 
   // Stream delta backpressure buffer timer ref (cleaned up on unmount)
@@ -181,11 +193,12 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
   }, []);
 
   const runTurn = useCallback(
-    async (text: string): Promise<{ cancelled: boolean }> => {
+    async (text: string): Promise<{ cancelled: boolean; failed: boolean }> => {
       // busyRef belongs to the caller (send's claim covers the whole drain —
       // toggling it here opened a window where two sends ran concurrently).
       const attached = pendingImagesRef.current;
       pendingImagesRef.current = [];
+      setPendingImagePaths([]);
       // Bounded state: recall needs dozens, not thousands; the transcript window
       // renders a handful while history truth lives in the session file.
       recordSentMessage(text);
@@ -218,6 +231,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
       // reused to surprise. The flag is set from the engine's `cancelled`
       // event, which the session emits on every cancel path.
       let turnCancelled = false;
+      let turnFailed = false;
 
       const updateAssistant = (fn: (m: DisplayMessage) => DisplayMessage) => {
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? fn(m) : m)));
@@ -242,10 +256,12 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
               throttler.markBreak();
             }
             if (event.type === "cancelled") turnCancelled = true;
+            if (event.type === "error") turnFailed = true;
             applyEvent(event, updateAssistant, trackUsage, setMessages, setPlan, setTestStatus);
           }
         }
       } catch (err: unknown) {
+        turnFailed = true;
         throttler.flush();
         const msg = getErrorMessage(err);
         updateAssistant((m) => ({
@@ -263,7 +279,7 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         updateAssistant((m) => ({ ...m, streaming: false }));
         setIsBusy(false);
         onTurnSettledRef.current?.();
-        return { cancelled: turnCancelled };
+        return { cancelled: turnCancelled, failed: turnFailed };
       }
     },
     [session]
@@ -289,11 +305,12 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
       const [next, ...rest] = queueRef.current;
       queueRef.current = rest;
       setQueued(rest);
-      const outcome = await runTurn(next);
-      if (outcome.cancelled && queueRef.current.length > 0) {
+      const outcome = await runTurn(next.text);
+      if ((outcome.cancelled || outcome.failed) && queueRef.current.length > 0) {
+        heldRef.current = true; setQueueHeld(true);
         const n = queueRef.current.length;
         printSystemMessage(
-          `Turn cancelled — ${n} queued message${n === 1 ? "" : "s"} held, not sent. Send again to deliver ${n === 1 ? "it" : "them"}.`
+          `Turn ${outcome.cancelled ? "cancelled" : "failed"} — ${n} queued message${n === 1 ? "" : "s"} held. Use Ctrl+Q to review and resume.`
         );
         return;
       }
@@ -304,27 +321,21 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
   const send = useCallback(
     async (text: string) => {
       if (busyRef.current) {
-        const next = [...queueRef.current, text];
+        const next = [...queueRef.current, { id: randomUUID(), text }];
         // A silently dropped head looked like the message never existed.
         if (next.length > MESSAGE_QUEUE_CAP) {
-          printSystemMessage("Queue full — dropped the oldest queued message.");
+          printSystemMessage("Queue full — message not accepted. Your draft is preserved.");
+          return false;
         }
         queueRef.current = next.slice(-MESSAGE_QUEUE_CAP);
         setQueued([...queueRef.current]);
-        return;
+        return true;
       }
       // A held queue from a cancelled turn belongs to its conversation — a new
       // send must drain it first (FIFO), not jump ahead of it.
       if (queueRef.current.length > 0) {
-        busyRef.current = true;
-        try {
-          queueRef.current = [...queueRef.current, text].slice(-MESSAGE_QUEUE_CAP);
-          setQueued([...queueRef.current]);
-          await drainQueue();
-        } finally {
-          busyRef.current = false;
-        }
-        return;
+        printSystemMessage("Queued work is held. Use Ctrl+Q to resume or remove it before sending a new task.");
+        return false;
       }
       busyRef.current = true;
       try {
@@ -334,10 +345,11 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         // (visible in the UI) and drain on the next explicit send; the notice
         // tells the user they are there instead of silently vanishing or
         // launching an unexpected turn.
-        if (outcome.cancelled && queueRef.current.length > 0) {
+        if ((outcome.cancelled || outcome.failed) && queueRef.current.length > 0) {
+          heldRef.current = true; setQueueHeld(true);
           const n = queueRef.current.length;
           printSystemMessage(
-            `Turn cancelled — ${n} queued message${n === 1 ? "" : "s"} held, not sent. Send again to deliver ${n === 1 ? "it" : "them"}.`
+            `Turn ${outcome.cancelled ? "cancelled" : "failed"} — ${n} queued message${n === 1 ? "" : "s"} held. Use Ctrl+Q to review and resume.`
           );
           return;
         }
@@ -349,10 +361,40 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     [runTurn, drainQueue, printSystemMessage]
   );
 
+  const submitMessage = (text: string): boolean => {
+    if (heldRef.current || queueRef.current.length >= MESSAGE_QUEUE_CAP) {
+      printSystemMessage(heldRef.current ? "Queue held — Ctrl+Q to review or resume." : "Queue full — remove a queued message with Ctrl+Q.");
+      return false;
+    }
+    void send(text).catch(err => printSystemMessage(`Send failed: ${getErrorMessage(err)}`));
+    return true;
+  };
+  const removeQueued = (id: string): void => {
+    queueRef.current = queueRef.current.filter(item => item.id !== id);
+    setQueued([...queueRef.current]);
+    if (!queueRef.current.length) { heldRef.current = false; setQueueHeld(false); }
+  };
+  const resumeQueue = async (): Promise<void> => {
+    if (busyRef.current || !queueRef.current.length) return;
+    busyRef.current = true; heldRef.current = false; setQueueHeld(false);
+    try { await drainQueue(); } finally { busyRef.current = false; }
+  };
+
   /** Stage an image for the next message (/image). Capped at 4 pending. */
   const addPendingImage = useCallback((img: { mediaType: string; data: string; path: string }) => {
-    pendingImagesRef.current = [...pendingImagesRef.current, img].slice(-4);
+    const elsewhere = [...attachmentDrafts.current.entries()].filter(([id]) => id !== attachmentSession.current).reduce((total, [, images]) => total + images.length, 0);
+    if (pendingImagesRef.current.length + elsewhere >= STAGED_IMAGE_CAP || pendingImagesRef.current.some(image => image.path === img.path)) {
+      printSystemMessage("Image not attached: already staged or attachment limit reached. Ctrl+B to review/remove images.");
+      return false;
+    }
+    pendingImagesRef.current = [...pendingImagesRef.current, img];
+    setPendingImagePaths(pendingImagesRef.current.map(image => image.path));
+    return true;
   }, []);
+  const removePendingImage = (imagePath: string): void => {
+    pendingImagesRef.current = pendingImagesRef.current.filter(image => image.path !== imagePath);
+    setPendingImagePaths(pendingImagesRef.current.map(image => image.path));
+  };
 
   const cancel = useCallback(() => session.cancel(), [session]);
 
@@ -462,6 +504,10 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     async (objective: string) => {
       if (busyRef.current) {
         printSystemMessage("Finish or cancel the current turn before starting a mission.");
+        return;
+      }
+      if (queueRef.current.length > 0) {
+        printSystemMessage("Review queued messages with Ctrl+Q before starting a mission.");
         return;
       }
       busyRef.current = true;
@@ -595,9 +641,10 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
         try {
           // Cancellation holds queued intent, matching ordinary chat turns.
           if (missionCancelled) {
+            heldRef.current = queueRef.current.length > 0; setQueueHeld(heldRef.current);
             const n = queueRef.current.length;
             if (n > 0) printSystemMessage(
-              `Mission cancelled — ${n} queued message${n === 1 ? "" : "s"} held, not sent. Send again to deliver ${n === 1 ? "it" : "them"}.`
+              `Mission cancelled — ${n} queued message${n === 1 ? "" : "s"} held, not sent. Ctrl+Q to review and resume.`
             );
           } else {
             await drainQueue();
@@ -622,9 +669,16 @@ export function useAgentController(session: AgentSession, opts: UseAgentControll
     testStatus,
     setTestStatus,
     queued,
+    queueEntries,
+    queueHeld,
+    submitMessage,
+    removeQueued,
+    resumeQueue,
     send,
     launchGoal,
     addPendingImage,
+    pendingImagePaths,
+    removePendingImage,
     cancel,
     printSystemMessage,
     clearMessages,

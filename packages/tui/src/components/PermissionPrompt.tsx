@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Box, Text, useInput, useStdout } from "ink";
+import { Box, Text, useStdout } from "ink";
+import { useInput, usePaste } from "../hooks/useUIInput.js";
 import { splitMcpToolName } from "@anvil/core";
 import type { PendingPermissionRequest } from "../permission/TuiPermissionBroker.js";
-import { ColorizedDiff } from "../diff/colorizeDiff.js";
 import { useTheme } from "../theme/theme.js";
 import { splitByDisplayWidth } from "../util/format.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
@@ -54,8 +54,9 @@ export function PermissionPrompt({
   const theme = useTheme();
   const [selected, setSelected] = useState(0);
   const [offset, setOffset] = useState(0);
+  const [previewFocus, setPreviewFocus] = useState(false);
   const { stdout } = useStdout();
-  const previewRows = Math.max(1, Math.min(3, (stdout?.rows ?? 24) - 16));
+  const previewRows = Math.max(1, (stdout?.rows ?? 24) - 11);
   const previewLines = sanitizeTerminalText(request.summary).split("\n")
     .flatMap(line => splitByDisplayWidth(line, Math.max(1, (stdout?.columns ?? 80) - 8)));
   const maxOffset = Math.max(0, previewLines.length - previewRows);
@@ -66,6 +67,7 @@ export function PermissionPrompt({
   useEffect(() => {
     setSelected(0);
     setOffset(0);
+    setPreviewFocus(false);
   }, [request]);
   const options = optionsFor(request.toolName);
   const isDiff = DIFF_TOOLS.has(request.toolName);
@@ -73,17 +75,19 @@ export function PermissionPrompt({
   // the point; everything else (shell, MCP) gets a single-line y/a/n bar so a
   // routine command doesn't cost three navigation keys.
   const compact = !isDiff;
+  usePaste(() => { /* intentional: pasted y/a/n/Enter must never approve an operation. */ });
 
   useInput((input, key) => {
     // Control shortcuts must never act as affirmative permission keys.
     if (key.ctrl || key.meta) return;
+    if (key.tab && isDiff) { setPreviewFocus(value => !value); return; }
     if (key.escape) {
       // Esc = Deny: the overlay must always be escapable with one key,
       // matching every other overlay's Esc-to-dismiss contract.
       request.resolve(false);
       return;
     }
-    if (compact) {
+    if (compact || previewFocus || key.pageUp || key.pageDown || input === "g" || input === "G") {
       if (key.upArrow || key.pageUp) {
         setOffset(value => Math.max(0, Math.min(value, maxOffset) - (key.pageUp ? previewRows : 1)));
         return;
@@ -93,6 +97,7 @@ export function PermissionPrompt({
         return;
       }
       if (input === "g" || input === "G") { setOffset(input === "G" ? maxOffset : 0); return; }
+      if (!compact) return;
       // Symmetric with diff mode below: Enter is allow-once everywhere, and
       // y/a/n work in both modes (users shouldn't guess which keys this
       // prompt speaks).
@@ -143,8 +148,6 @@ export function PermissionPrompt({
     <Box
       flexDirection="column"
       flexShrink={0}
-      borderStyle={theme.borders.modal}
-      borderColor={theme.colors.warning}
       paddingX={1}
     >
       <Text color={theme.colors.toolName}>
@@ -163,24 +166,18 @@ export function PermissionPrompt({
         </Text>
       )}
       <Box marginTop={0} marginBottom={1}>
-        {isDiff ? (
-          <ColorizedDiff diff={request.summary} />
-        ) : (
           <Box flexDirection="column">
-            <Text color={theme.colors.assistantText}>{previewLines.slice(visibleOffset, visibleOffset + previewRows).join("\n")}</Text>
+            {previewLines.slice(visibleOffset, visibleOffset + previewRows).map((line, index) => <Text key={index} color={isDiff && line.startsWith("+") ? theme.colors.success : isDiff && line.startsWith("-") ? theme.colors.error : theme.colors.textPrimary}>{line}</Text>)}
             {maxOffset > 0 && <Text color={theme.colors.textSecondary}>
               {`Lines ${visibleOffset + 1}–${Math.min(previewLines.length, visibleOffset + previewRows)} of ${previewLines.length} · ↑/↓ scroll · PgUp/PgDn page · g/G start/end`}
             </Text>}
           </Box>
-        )}
       </Box>
       {compact ? (
         // Phase 28.7 inline bar — the summary above is the command line; here
         // the three answers sit on one row so y/a/n need no navigation.
         <Box
           flexShrink={0}
-          borderStyle={theme.borders.panel}
-          borderColor={theme.colors.warning}
           paddingX={1}
         >
           <Text>
@@ -193,7 +190,7 @@ export function PermissionPrompt({
             <Text color={theme.colors.textPrimary} bold>
               a
             </Text>
-            <Text color={theme.colors.textSecondary}> always · </Text>
+            <Text color={theme.colors.textSecondary}> always this tool/session · </Text>
             <Text color={theme.colors.textPrimary} bold>
               n
             </Text>
@@ -202,13 +199,10 @@ export function PermissionPrompt({
         </Box>
       ) : (
         <>
-          {/* DW-2.3 action buttons: full-width boxes, selected raised in brand. */}
           {options.map((option, i) => (
             <Box
               key={option}
               flexShrink={0}
-              borderStyle={theme.borders.panel}
-              borderColor={i === selected ? theme.colors.brand : theme.colors.separator}
               paddingX={1}
             >
               <Text color={i === selected ? theme.colors.brand : theme.colors.textSecondary} bold={i === selected}>
@@ -217,7 +211,8 @@ export function PermissionPrompt({
               </Text>
             </Box>
           ))}
-          <Text color={theme.colors.textSecondary}> ↑/↓ to move · Enter/y to confirm · a always · n/Esc to deny</Text>
+          <Text color={theme.colors.textSecondary}>Tab {previewFocus ? "actions" : "preview"} · ↑/↓ {previewFocus ? "scroll" : "move"} · PgUp/PgDn scroll</Text>
+          <Text color={theme.colors.textSecondary}>Enter/y allow · a allow tool this session · n/Esc deny</Text>
         </>
       )}
     </Box>

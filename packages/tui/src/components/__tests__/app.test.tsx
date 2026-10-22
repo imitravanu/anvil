@@ -1,9 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
+import { cleanup, render as renderInk } from "ink-testing-library";
 import { AgentSession, type StreamEvent, type ModelProvider } from "@anvil/core";
 import { App } from "../App.js";
 import { TuiPermissionBroker } from "../../permission/TuiPermissionBroker.js";
 import { frameText, renderThemed, tick } from "../../test-utils/testRender.js";
+
+afterEach(() => cleanup());
 
 function fakeProvider(): ModelProvider {
   return {
@@ -37,7 +40,7 @@ function allProviders(provider: ModelProvider) {
 function bootApp() {
   const provider = fakeProvider();
   const broker = new TuiPermissionBroker();
-  const sessionOptions = { projectRoot: process.cwd(), systemPrompt: "test", maxTokens: 1000 };
+  const sessionOptions = { projectRoot: process.env.ANVIL_HOME ?? process.cwd(), systemPrompt: "test", maxTokens: 1000 };
   const session = new AgentSession(provider, {
     ...sessionOptions,
     model: "claude-sonnet-5",
@@ -77,6 +80,36 @@ describe("App Component - 22.17 MCP Boot Notices", () => {
 });
 
 describe("App — ? opens the help overlay end-to-end", () => {
+  it("suspends hidden approval controls in a tiny terminal and restores the draft on resize", async () => {
+    const state = bootApp();
+    const app = renderInk(<App {...state} providerId="anthropic" model="claude-sonnet-5" />);
+    let columns = 80; let rows = 24;
+    Object.defineProperties(app.stdout, { columns: { get: () => columns }, rows: { get: () => rows } });
+    await tick(); app.stdin.write("kept"); await tick();
+    let decided = false;
+    const decision = state.broker.requestPermission("run_command", "Run command: npm test").then(value => { decided = true; return value; });
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("wants to run a command"));
+    columns = 30; rows = 8; app.stdout.emit("resize");
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("Resize to"));
+    app.stdin.write("y"); await tick(); expect(decided).toBe(false);
+    columns = 80; rows = 24; app.stdout.emit("resize");
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("wants to run a command"));
+    app.stdin.write("\x1b"); await expect(decision).resolves.toBe(false); await tick();
+    expect(frameText(app.lastFrame)).toContain("kept"); app.unmount();
+  });
+  it("keeps an unsent draft and cursor while an asynchronous permission owns input", async () => {
+    const state = bootApp();
+    const send = vi.spyOn(state.session, "send");
+    const app = renderThemed(<App {...state} providerId="anthropic" model="claude-sonnet-5" />);
+    await tick(); app.stdin.write("abc"); await tick(); app.stdin.write("\x1b[D"); await tick();
+    const decision = state.broker.requestPermission("run_command", "Run command: npm test");
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("wants to run a command"));
+    app.stdin.write("\x1b[200~ya\r\x1b[201~"); await tick();
+    expect(frameText(app.lastFrame)).toContain("wants to run a command");
+    app.stdin.write("\x1b"); await expect(decision).resolves.toBe(false); await tick();
+    app.stdin.write("X"); await tick(); app.stdin.write("\r"); await tick();
+    expect(send).toHaveBeenCalledWith("abXc", expect.anything()); app.unmount();
+  });
   it("Ctrl+C cancels a turn while its permission overlay owns input", async () => {
     const state = bootApp();
     state.providers.anthropic.streamCompletion = async function* () {
@@ -87,8 +120,7 @@ describe("App — ? opens the help overlay end-to-end", () => {
     const app = renderThemed(<App {...state} providerId="anthropic" model="claude-sonnet-5" />);
     await tick();
     app.stdin.write("task"); await tick(); app.stdin.write("\r");
-    await tick(200);
-    expect(frameText(app.lastFrame)).toContain("wants to write a file");
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("wants to write a file"), { timeout: 3000 });
     app.stdin.write("\x03");
     await tick();
     expect(cancel).toHaveBeenCalledOnce();
@@ -111,7 +143,7 @@ describe("App — ? opens the help overlay end-to-end", () => {
 
     // The prompt is empty and focused — this is the only state where `?` means
     // "open help" rather than typing a question mark.
-    expect(frameText(lastFrame)).toContain("Type a message");
+    await vi.waitFor(() => expect(frameText(lastFrame)).toContain("Type a message"));
     stdin.write("?");
     await tick();
     const help = frameText(lastFrame);
@@ -121,7 +153,7 @@ describe("App — ? opens the help overlay end-to-end", () => {
     // Esc closes the overlay and hands the keyboard back to the prompt.
     stdin.write("\u001B");
     await tick();
-    expect(frameText(lastFrame)).toContain("Type a message");
+    await vi.waitFor(() => expect(frameText(lastFrame)).toContain("Type a message"));
     unmount();
   });
 });

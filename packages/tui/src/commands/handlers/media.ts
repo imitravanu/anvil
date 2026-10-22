@@ -82,7 +82,7 @@ export function handleAttachImage(deps: CommandHandlerDeps, rawPath: string): vo
     printSystemMessage(res.error);
     return;
   }
-  addPendingImage({ mediaType: res.image.mediaType, data: res.image.data, path: res.image.path });
+  if (addPendingImage({ mediaType: res.image.mediaType, data: res.image.data, path: res.image.path }) === false) return;
   // Provider-qualified (AUDIT-02): the vision flag must come from THIS
   // provider's row, not another provider's same-named model.
   const supportsVision = modelInfo(currentModel, activeProviderId)?.supportsVision;

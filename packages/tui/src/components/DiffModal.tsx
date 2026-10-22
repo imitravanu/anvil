@@ -1,6 +1,7 @@
 import { getErrorMessage } from "@anvil/core";
 import { useEffect, useState } from "react";
-import { Box, Text, useInput, useStdout } from "ink";
+import { Box, Text, useStdout } from "ink";
+import { useInput } from "../hooks/useUIInput.js";
 import type { AgentSession, SessionFileChange } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 import { ColorizedDiff } from "../diff/colorizeDiff.js";

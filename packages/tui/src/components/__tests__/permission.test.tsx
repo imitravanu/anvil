@@ -51,7 +51,7 @@ describe("PermissionPrompt", () => {
 
   it("lets the user inspect the complete long command before approval", async () => {
     const resolve = vi.fn();
-    const summary = `Run command: ${"prefix ".repeat(100)}FINAL_ARGUMENT`;
+    const summary = `Run command: ${"prefix ".repeat(500)}FINAL_ARGUMENT`;
     const app = renderThemed(<PermissionPrompt request={{ toolName: "run_command", summary, resolve }} broker={brokerStub()} />);
     await tick();
     expect(frameText(app.lastFrame)).toContain("start/end");
@@ -171,7 +171,7 @@ describe("PermissionPrompt", () => {
     await tick();
     const out = frameText(app.lastFrame);
     expect(out).toContain("Allow once");
-    expect(out).toContain("↑/↓ to move");
+    expect(out).toContain("↑/↓ move");
     app.unmount();
   });
 

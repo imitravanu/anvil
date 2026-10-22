@@ -14,7 +14,7 @@ import { ThinkingTimer } from "./ThinkingTimer.js";
 import { VerificationCard } from "./VerificationCard.js";
 import { GuardianReportCard } from "./GuardianReportCard.js";
 
-export const MessageView = React.memo(function MessageView({ message, expandTools }: { message: DisplayMessage; expandTools?: boolean }) {
+export const MessageView = React.memo(function MessageView({ message, expandTools, minimal = false }: { message: DisplayMessage; expandTools?: boolean; minimal?: boolean }) {
   const theme = useTheme();
   const { stdout } = useStdout();
   // Card headers: role label + rule; with /expand, a dim timestamp rides the
@@ -29,7 +29,7 @@ export const MessageView = React.memo(function MessageView({ message, expandTool
   const cardHeader = (label: string, color: string | undefined, bold?: boolean) => (
     <Box justifyContent="space-between" flexShrink={0} flexGrow={1}>
       <Text color={color} bold={bold}>
-        {label} {rule(ruleRoom(label))}
+        {label}{minimal ? "" : ` ${rule(ruleRoom(label))}`}
       </Text>
       {timeText && <Text color={theme.colors.textMuted}>{timeText}</Text>}
     </Box>
@@ -106,9 +106,16 @@ export const MessageView = React.memo(function MessageView({ message, expandTool
       {message.errorText && (
         <Text color={theme.colors.error}>✗ {sanitizeTerminalText(message.errorText)}</Text>
       )}
-      {message.toolCalls.map((call) => (
-        <ToolCallView key={call.id} call={call} expanded={expandTools} />
-      ))}
+      {message.toolCalls.map((call, index, calls) => {
+        const simpleRead = (item: typeof call) => item.status === "done" && ["read_file", "grep", "list_files", "get_outline"].includes(item.name) && !(typeof item.output === "object" && item.output !== null && "diagnostics" in item.output);
+        if (minimal && !expandTools && simpleRead(call)) {
+          if (index > 0 && simpleRead(calls[index - 1])) return null;
+          let count = 1;
+          while (index + count < calls.length && simpleRead(calls[index + count])) count++;
+          if (count > 1) return <Text key={call.id} color={theme.colors.textSecondary}>  ✓ {count} reads/searches · Ctrl+O details</Text>;
+        }
+        return <ToolCallView key={call.id} call={call} expanded={expandTools} />;
+      })}
       {message.verifications?.map((v) => (
         <VerificationCard key={v.id} verification={v} />
       ))}

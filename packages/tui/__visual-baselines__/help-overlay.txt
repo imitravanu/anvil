@@ -1,5 +1,5 @@
 ╔══════════════════════════════════════════════════════════════════════════════════════════════════╗
-║ Help (8 keys · 20 commands)                              type to filter · ↑/↓ scroll · Esc close ║
+║ Help (14 keys · 20 commands)                             type to filter · ↑/↓ scroll · Esc close ║
 ║ ──────────────────────────────────────────────────────────────────────────────────────────────── ║
 ║ ── Keys                                                                                          ║
 ║ Enter             Send the message (queues while a turn runs)                                    ║
@@ -9,8 +9,8 @@
 ║ navigate menus                                                                                   ║
 ║ Esc               Cancel the running turn, or dismiss a menu or overlay                          ║
 ║ Ctrl+C            Cancel while busy; exit when idle                                              ║
-║ PgUp / PgDn       Scroll the transcript (5 messages per press)                                   ║
-║ ?                 Open this help                                                                 ║
+║ PgUp / PgDn       Scroll transcript pages; Tab then ↑/↓ scrolls rows                             ║
+║ Ctrl+J            Insert a newline; bracketed paste preserves lines and never submits            ║
 ║ ── Commands                                                                                      ║
 ║ /help             Keys & commands — searchable reference overlay (`?` does the same)             ║
 ║ /clear            Clear the conversation history                                                 ║
@@ -20,5 +20,5 @@
 ║ /image            Attach an image (png/jpeg/webp/gif) to your next message                       ║
 ║ /connect          Add or update a provider API key                                               ║
 ║ /ledger           Show this session's run ledger (what ran, tokens spent)                        ║
-║   ▼ 21 more below — ↓ to scroll                                                                  ║
+║   ▼ 27 more below — ↓ to scroll                                                                  ║
 ╚══════════════════════════════════════════════════════════════════════════════════════════════════╝

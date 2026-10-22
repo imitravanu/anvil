@@ -8,6 +8,9 @@ import { isRateLimitMessage } from "@anvil/core";
  */
 export function friendlyError(message: string): string {
   const retry = message.match(/retry in ([\d.]+)\s*s/i);
+  if (!retry && /insufficient_quota|quota.*exhaust|free quota|insufficient.*(credit|balance)|payment|billing/i.test(message)) {
+    return "Provider quota unavailable — check the account's quota or billing, or choose another provider with /model. Waiting may not resolve this.";
+  }
   if (isRateLimitMessage(message)) {
     const wait = retry ? ` Retry in ~${Math.ceil(parseFloat(retry[1]))}s.` : "";
     return `Rate limit reached — the provider needs a short break.${wait} Wait it out or /model to another provider.`;
@@ -26,6 +29,9 @@ export function friendlyError(message: string): string {
   }
   if (/\b5\d{2}\b|bad gateway|service unavailable|overloaded/i.test(message)) {
     return "The provider is having trouble right now — try again in a moment.";
+  }
+  if (/timeout|timed out|ETIMEDOUT|ECONNRESET|fetch failed|network error/i.test(message)) {
+    return "Connection interrupted — check the network and inspect /diff before retrying. Completed file changes are retained.";
   }
   // Unknown error: keep the first meaningful line, note the truncation.
   const lines = message.split("\n").filter((l) => l.trim() !== "");

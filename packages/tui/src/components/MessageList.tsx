@@ -8,8 +8,9 @@ import { WordmarkAnimation, wordmarkMode } from "./Wordmark.js";
 import { detectColorSupport } from "../theme/colorSupport.js";
 import { displayModelLabel, providerLabel, providerOfModel } from "../util/format.js";
 import { hiddenMessageCount, applyTranscriptPin } from "../util/transcriptWindow.js";
+import { TranscriptViewport } from "./TranscriptViewport.js";
 
-function EmptyState({ model, providerId }: { model: string; providerId?: string }) {
+function EmptyState({ model, providerId, minimal = false }: { model: string; providerId?: string; minimal?: boolean }) {
   const theme = useTheme();
   const provider = providerOfModel(model, providerId);
   const { stdout } = useStdout();
@@ -27,6 +28,10 @@ function EmptyState({ model, providerId }: { model: string; providerId?: string 
   // than the animation: a plain fallback shows them at once, and the animated
   // path reveals them the moment the wordmark settles.
   const showHints = mode !== "animate" || settled;
+  if (minimal) return <Box flexDirection="column" paddingX={1} flexGrow={1} justifyContent="center">
+    <Text color={theme.colors.textPrimary} bold>What would you like to work on?</Text>
+    <Text color={theme.colors.textSecondary}>Describe a change, ask a question, or / for commands.</Text>
+  </Box>;
   return (
     <Box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1}>
       {mode === "plain" ? (
@@ -82,7 +87,7 @@ function EmptyState({ model, providerId }: { model: string; providerId?: string 
   );
 }
 
-export function MessageList({ messages, model, providerId, expandTools, pinnedBack }: { messages: DisplayMessage[]; model: string; providerId?: string; expandTools?: boolean; pinnedBack?: number }) {
+export function MessageList({ messages, model, providerId, expandTools, pinnedBack, rowScroll = false, onBounds }: { messages: DisplayMessage[]; model: string; providerId?: string; expandTools?: boolean; pinnedBack?: number; rowScroll?: boolean; onBounds?: (maximum: number, anchoredOffset: number) => void }) {
   const theme = useTheme();
   const { stdout } = useStdout();
   const termRows = stdout?.rows ?? 24;
@@ -104,6 +109,13 @@ export function MessageList({ messages, model, providerId, expandTools, pinnedBa
   );
   // Keyboard scroll window: pinning holds back newest messages (0 = follow).
   const { start, end, pinned } = applyTranscriptPin(messages.length, hidden, pinnedBack ?? 0);
+  if (rowScroll) {
+    if (!messages.length) return <EmptyState minimal model={model} providerId={providerId} />;
+    return <Box flexDirection="column" flexGrow={1} minHeight={0} paddingX={1}>
+      <TranscriptViewport messages={messages} expanded={expandTools ?? false} offset={pinnedBack ?? 0} onBounds={onBounds} />
+      {(pinnedBack ?? 0) > 0 && <Text color={theme.colors.textSecondary}>Reading earlier output · Tab, then End to follow · Ctrl+O details</Text>}
+    </Box>;
+  }
   // Shared bounded container for both states: bottom-anchored, clipped at the
   // top exactly like terminal scrollback. No explicit height here: the parent
   // frame is height={rows} and every chrome zone is flexShrink={0}, so this

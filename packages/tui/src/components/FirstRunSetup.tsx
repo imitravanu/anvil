@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Box, Text, useApp, useInput } from "ink";
+import { Box, Text, useApp, useStdout } from "ink";
+import { useInput } from "../hooks/useUIInput.js";
 import TextInput from "ink-text-input";
 import type { ProviderId } from "@anvil/core";
 import { getErrorMessage, saveCredential, loadCustomProviders, type CustomProviderConfig } from "@anvil/core";
@@ -36,16 +37,18 @@ export function FirstRunSetup({
 }) {
   const { exit } = useApp();
   const theme = useTheme();
+  const { stdout } = useStdout();
+  const visibleRows = Math.max(1, Math.min(MAX_VISIBLE_ROWS, Math.floor(((stdout?.rows ?? 24) - 10) / 2)));
   const [selected, setSelected] = useState(0);
   const [apiKey, setApiKey] = useState("");
   const [step, setStep] = useState<"provider" | "key" | "done">("provider");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [customs, setCustoms] = useState(loadCustomProviders);
   const [customSetup, setCustomSetup] = useState<{ initial?: CustomProviderConfig } | null>(null);
-  const rows = [...PROVIDERS.map(provider => ({ id: provider.id, label: provider.marketLabel })),
+  const rows = [...PROVIDERS.map(provider => ({ id: provider.id, label: provider.shortLabel })),
     ...customs.map(provider => ({ id: provider.id, label: `${provider.name} (custom)` })),
-    { id: "add-custom", label: "+ Add custom OpenAI-compatible provider" }];
-  const window = useWindowedList(rows.length, selected);
+    { id: "add-custom", label: "+ Custom endpoint (Chat, Responses, Anthropic)" }];
+  const window = useWindowedList(rows.length, selected, visibleRows);
   const provider = PROVIDERS[selected];
 
   useInput((input, key) => {
@@ -74,7 +77,7 @@ export function FirstRunSetup({
   // text: theme modal border, brand title, step in the meta slot.
   const brandTitle = `${theme.typography.brandIcon} ${theme.typography.brandName}`;
 
-  if (customSetup) return <CustomProviderSetup initial={customSetup.initial} activeProviderId={activeProviderId}
+  if (customSetup) return <CustomProviderSetup simple initial={customSetup.initial} activeProviderId={activeProviderId}
     onDone={onDone} onCancel={() => setCustomSetup(null)} onRemoved={() => {
       setCustoms(loadCustomProviders()); setSelected(0); setCustomSetup(null); onRemoved?.();
     }} />;
@@ -89,7 +92,7 @@ export function FirstRunSetup({
         <Text color={theme.colors.primary}>{title}</Text>
         <Text color={theme.colors.textSecondary}>Step 1 of 2 — choose a provider, Enter to continue{onCancel ? ", Esc to cancel" : ""}:</Text>
         {window.hasAbove && <Text color={theme.colors.textSecondary}>↑ more providers</Text>}
-        {rows.slice(window.offset, window.offset + MAX_VISIBLE_ROWS).map((p, index) => (
+        {rows.slice(window.offset, window.offset + visibleRows).map((p, index) => (
           // The absolute index keeps selection aligned while the list scrolls.
           <Text key={p.id} color={index + window.offset === selected ? theme.colors.primary : theme.colors.textSecondary}>
             {index + window.offset === selected ? "❯ " : "  "}
@@ -154,7 +157,7 @@ export function FirstRunSetup({
   return (
     <OverlayFrame title={brandTitle} meta="ready" hints="Enter continue">
       <Text color={theme.colors.toolDone}>✓ {provider.marketLabel} API key saved.</Text>
-      <Text color={theme.colors.textSecondary}>Add more providers or press Enter to continue.</Text>
+      <Text color={theme.colors.textSecondary}>Key saved; model connectivity has not been tested. Enter to continue.</Text>
     </OverlayFrame>
   );
 }

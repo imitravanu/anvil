@@ -8,9 +8,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
+import os from "node:os";
+import { spawnSync } from "node:child_process";
 import React from "react";
 import { render } from "ink";
 import puppeteer from "puppeteer-core";
+import AnsiToHtml from "ansi-to-html";
+import { AgentSession } from "../../core/dist/index.js";
+import { App } from "../dist/components/App.js";
+import { FirstRunSetup } from "../dist/components/FirstRunSetup.js";
+import { TuiPermissionBroker } from "../dist/permission/TuiPermissionBroker.js";
 
 import { Header } from "../dist/components/Header.js";
 import { MessageList } from "../dist/components/MessageList.js";
@@ -20,11 +28,24 @@ import { PermissionPrompt } from "../dist/components/PermissionPrompt.js";
 import { RewindModal } from "../dist/components/RewindModal.js";
 import { StatusBar } from "../dist/components/StatusBar.js";
 import { THEMES, ThemeContext } from "../dist/theme/theme.js";
+import { displayWidth } from "../dist/util/format.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_TUI = path.resolve(__dirname, "..");
 const DEFAULT_OUT = path.join(ROOT_TUI, "__visual-current__");
 const BASELINE_OUT = path.join(ROOT_TUI, "__visual-baselines__");
+const CAPTURE_SETTLE_MS = 40;
+const CAPTURE_TURN_TIMEOUT_MS = 3000;
+const CAPTURE_MATRIX_TIMEOUT_MS = 10 * 60 * 1000;
+// Chalk caches support during module loading, before any script body executes.
+if (process.env.FORCE_COLOR !== "3") {
+  const child = spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], {
+    env: { ...process.env, FORCE_COLOR: "3" }, stdio: "inherit", timeout: CAPTURE_MATRIX_TIMEOUT_MS,
+  });
+  if (child.error) throw child.error;
+  process.exit(child.status ?? 1);
+}
+process.env.ANVIL_NO_ANIM = "1";
 
 const FONT_FILE = path.join(__dirname, "LiberationMono-Regular.ttf");
 const SYSTEM_FONT = "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf";
@@ -48,6 +69,7 @@ const SIZES = [
 
 const THEME_LIST = [
   { name: "dark", theme: THEMES.dark, bg: "#0d1117", fg: "#c9d1d9" },
+  { name: "light", theme: THEMES.light, bg: "#ffffff", fg: "#24292f" },
   { name: "highContrast", theme: THEMES.highContrast, bg: "#000000", fg: "#ffffff" },
   // Phase 28.12: forge is the 6th built-in theme and the one whose "dim is
   // decoration-only" philosophy most needs a rendered baseline — the PNG
@@ -219,29 +241,36 @@ function getScenarios(cols, rows) {
   ];
 }
 
-function renderInkFrame(element, cols, rows, theme) {
+async function renderInkFrame(element, cols, rows, theme, drive) {
   const stdout = new EventEmitter();
   stdout.columns = cols;
   stdout.rows = rows;
   let last = "";
-  stdout.write = (chunk) => {
-    last = chunk;
+  stdout.write = (chunk, encoding, callback) => {
+    if (String(chunk).replace(/\u001b\[[0-9;?]*[A-Za-z]/g, "").trim()) last = String(chunk);
+    (typeof encoding === "function" ? encoding : callback)?.();
+    return true;
   };
+  const stdin = new PassThrough();
+  stdin.isTTY = true;
+  stdin.setRawMode = () => stdin;
+  stdin.ref = () => stdin;
+  stdin.unref = () => stdin;
   const app = render(
     React.createElement(ThemeContext.Provider, { value: theme }, element),
-    { stdout, debug: true, exitOnCtrlC: false, patchConsole: false }
+    { stdout, stdin, debug: true, interactive: true, exitOnCtrlC: false, patchConsole: false }
   );
-  const raw = last || "";
-  app.unmount();
-  app.cleanup?.();
-  return raw.replace(/\u001b\[[0-9;]*m/g, "").replace(/[ \t]+$/gm, "");
-}
-
-function escapeHtml(str) {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  try {
+    await app.waitUntilRenderFlush();
+    await new Promise(resolve => setTimeout(resolve, CAPTURE_SETTLE_MS));
+    await drive?.(stdin, () => last);
+    await app.waitUntilRenderFlush();
+    const raw = last.replace(/\u001b\[[0-9;?]*[A-LN-Za-ln-z]/g, "");
+    if (!raw.replace(/\u001b\[[0-9;]*m/g, "").trim()) throw new Error("Blank visual capture");
+    return raw.replace(/[ \t]+$/gm, "");
+  } finally {
+    app.unmount(); app.cleanup?.(); stdin.destroy();
+  }
 }
 
 function findChrome() {
@@ -260,6 +289,8 @@ function findChrome() {
 }
 
 async function main() {
+  const captureHome = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-ui-capture-"));
+  process.env.ANVIL_HOME = captureHome;
   console.log(`[visual:capture] Output directory: ${outDir}`);
   const chromePath = findChrome();
   console.log(`[visual:capture] Launching headless browser (${chromePath})...`);
@@ -280,18 +311,29 @@ async function main() {
 
   try {
     for (const size of SIZES) {
+      if (process.env.VISUAL_SIZE && size.name !== process.env.VISUAL_SIZE) continue;
       for (const th of THEME_LIST) {
         const targetDir = path.join(outDir, `${th.name}-${size.name}`);
         fs.mkdirSync(targetDir, { recursive: true });
 
-        const scenarios = getScenarios(size.cols, size.rows);
+        const scenarios = [...getScenarios(size.cols, size.rows), ...appScenarios(th.name)];
+        let capturedThisConfig = 0;
         for (const sc of scenarios) {
-          let text = renderInkFrame(sc.render(), size.cols, size.rows, th.theme);
+          if (process.env.VISUAL_SCENARIO && !sc.name.includes(process.env.VISUAL_SCENARIO)) continue;
+          let text = await renderInkFrame(sc.render(), size.cols, size.rows, th.theme, sc.drive);
           if (sc.postProcess) {
             text = sc.postProcess(text);
           }
+          const plain = text.replace(/\u001b\[[0-9;]*m/g, "");
+          const componentRequirements = { "01-empty-state": "Terminal coding agent", "02-chat-exchange": "Checkpoint", "03-markdown-rendering": "Summary", "04-permission-prompt": "wants to edit a file", "05-mission-deck": "MISSION", "06-header-collapse": "ANVIL", "07-verification-card": "All checks pass", "08-rewind-modal": "checkpoint" };
+          const required = sc.required ?? componentRequirements[sc.name];
+          if (required && !plain.replace(/\s+/g, " ").toLowerCase().includes(required.toLowerCase())) throw new Error(`${sc.name}: required content missing: ${required}; frame=${JSON.stringify(plain)}`);
+          if (!text.includes("\u001b[")) throw new Error(`${sc.name}: color capture produced no ANSI styling`);
+          if (sc.name.startsWith("app-") && plain.trimEnd().split("\n").length > size.rows - 1) throw new Error(`${sc.name}: app exceeds terminal height`);
+          if (sc.name.startsWith("app-") && plain.split("\n").some(line => displayWidth(line) > size.cols)) throw new Error(`${sc.name}: app exceeds terminal width`);
+          const colored = new AnsiToHtml({ escapeXML: true, fg: th.fg, bg: th.bg }).toHtml(text);
 
-          const viewportWidth = Math.max(680, Math.round(size.cols * 8.5 + 32));
+          const viewportWidth = Math.round(size.cols * 8.5 + 32);
           const viewportHeight = Math.max(360, Math.round(size.rows * 18 + 32));
           await page.setViewport({ width: viewportWidth, height: viewportHeight, deviceScaleFactor: 1 });
 
@@ -318,27 +360,92 @@ async function main() {
   }
 </style>
 </head>
-<body>${escapeHtml(text)}</body>
+<body>${colored}</body>
 </html>`;
 
           await page.setContent(html);
           await page.evaluateHandle("document.fonts.ready");
+          const cellWidth = await page.evaluate(() => {
+            const context = document.createElement("canvas").getContext("2d");
+            if (!context) throw new Error("Font measurement is unavailable");
+            context.font = `13px ${getComputedStyle(document.body).fontFamily}`;
+            return context.measureText("M").width;
+          });
+          const measuredWidth = Math.ceil(cellWidth * size.cols + 32);
+          await page.setViewport({ width: measuredWidth, height: viewportHeight, deviceScaleFactor: 1 });
           const buf = await page.screenshot({
             type: "png",
-            clip: { x: 0, y: 0, width: viewportWidth, height: viewportHeight },
+            clip: { x: 0, y: 0, width: measuredWidth, height: viewportHeight },
           });
 
           const outFile = path.join(targetDir, `${sc.name}.png`);
           fs.writeFileSync(outFile, buf);
+          if (sc.name.startsWith("app-")) fs.writeFileSync(path.join(targetDir, `${sc.name}.txt`), plain);
           totalCaptured++;
+          capturedThisConfig++;
         }
-        console.log(`[visual:capture] Captured ${scenarios.length} frames for ${th.name}-${size.name}`);
+        console.log(`[visual:capture] Captured ${capturedThisConfig} frames for ${th.name}-${size.name}`);
       }
     }
     console.log(`[visual:capture] Successfully captured ${totalCaptured} frames total.`);
   } finally {
     await browser.close();
+    fs.rmSync(captureHome, { recursive: true, force: true });
   }
+}
+
+function appScenarios(theme) {
+  const make = (mode = "normal") => {
+    const broker = new TuiPermissionBroker();
+    const provider = { id: "ollama", displayName: "Local fixture", isConfigured: () => true,
+      async *streamCompletion() {
+        if (mode === "error") { yield { type: "error", code: "AUTH_FAILED", isRetryable: false, message: "Authentication failed: invalid API key" }; return; }
+        yield { type: "text_delta", text: mode === "long" ? Array.from({ length: 60 }, (_, index) => `Row ${index}: retained answer`).join("\n\n") : "The module exports boot, shutdown, and reload.\n\nAll three functions preserve the server lifecycle." };
+        if (mode === "stream") await new Promise(() => {});
+        yield { type: "turn_end", stopReason: "end_turn" };
+      } };
+    const projectRoot = path.join(process.env.ANVIL_HOME, "demo-project");
+    fs.mkdirSync(projectRoot, { recursive: true });
+    const options = { projectRoot, systemPrompt: "fixture", maxTokens: 1000 };
+    const session = new AgentSession(provider, { ...options, model: "qwen2.5-coder:latest", permissionBroker: broker });
+    if (mode === "rewind") session.getCheckpoints = () => CHECKPOINTS;
+    return { broker, element: React.createElement(App, { session, broker, providers: { ollama: provider }, providerId: "ollama", model: "qwen2.5-coder:latest", sessionOptions: options, initialTheme: theme }) };
+  };
+  const idle = make();
+  const chat = make();
+  const permission = make();
+  const slash = make(); const model = make(); const stream = make("stream"); const queue = make("stream"); const error = make("error"); const long = make("long");
+  const help = make(); const themes = make(); const rewind = make("rewind");
+  const type = async (stdin, ...chunks) => { for (const chunk of chunks) { stdin.write(chunk); await new Promise(resolve => setTimeout(resolve, CAPTURE_SETTLE_MS)); } };
+  const waitForText = async (frame, text) => {
+    const deadline = Date.now() + CAPTURE_TURN_TIMEOUT_MS;
+    while (!frame().replace(/\u001b\[[0-9;]*m/g, "").replace(/\s+/g, " ").includes(text)) {
+      if (Date.now() >= deadline) throw new Error(`Fixture did not reach expected state: ${text}`);
+      await new Promise(resolve => setTimeout(resolve, CAPTURE_SETTLE_MS));
+    }
+  };
+  return [
+    { name: "app-idle", render: () => idle.element, required: "What would you like to work on?" },
+    { name: "app-slash", render: () => slash.element, required: "Commands", drive: stdin => type(stdin, "/") },
+    { name: "app-models", render: () => model.element, required: "Connected models", drive: stdin => type(stdin, "/model", "\r") },
+    { name: "app-streaming", render: () => stream.element, required: "server lifecycle", drive: async (stdin, frame) => { await type(stdin, "Explain", "\r"); await waitForText(frame, "server lifecycle"); } },
+    { name: "app-queue", render: () => queue.element, required: "Message queue", drive: stdin => type(stdin, "Explain", "\r", "Next task", "\r", "\x11") },
+    { name: "app-error", render: () => error.element, required: "Authentication failed", drive: stdin => type(stdin, "Explain", "\r") },
+    { name: "app-long", render: () => long.element, required: "Row 0", drive: stdin => type(stdin, "Explain", "\r", "\t", "\x1b[H") },
+    { name: "app-setup", render: () => React.createElement(FirstRunSetup, { onDone: () => {}, onCancel: () => {} }), required: "choose a provider" },
+    { name: "app-help", render: () => help.element, required: "Help", drive: stdin => type(stdin, "?") },
+    { name: "app-themes", render: () => themes.element, required: "Themes", drive: stdin => type(stdin, "/theme", "\r") },
+    { name: "app-rewind", render: () => rewind.element, required: "Restore checkpoint", postProcess: normalizeTimes, drive: stdin => type(stdin, "/rewind", "\r") },
+    { name: "app-chat", render: () => chat.element, required: "server lifecycle", drive: async (stdin, frame) => {
+      stdin.write("Explain the module"); await new Promise(resolve => setTimeout(resolve, CAPTURE_SETTLE_MS)); stdin.write("\r");
+      const deadline = Date.now() + CAPTURE_TURN_TIMEOUT_MS;
+      while (!frame().includes("server lifecycle") && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, CAPTURE_SETTLE_MS));
+    } },
+    { name: "app-permission", render: () => permission.element, required: "wants to edit a file", drive: async () => {
+      void permission.broker.requestPermission("edit_file", DIFF);
+      await new Promise(resolve => setTimeout(resolve, CAPTURE_SETTLE_MS));
+    } },
+  ];
 }
 
 main().catch((err) => {

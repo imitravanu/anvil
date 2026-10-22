@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { Box, Text, useInput } from "ink";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Box, Text, useStdout } from "ink";
+import { useInput, usePaste } from "../hooks/useUIInput.js";
 import type { ModelInfo, ModelProvider, ProviderId } from "@anvil/core";
 import {
   DEFAULT_SYNC_TTL_MS,
@@ -16,6 +17,7 @@ import {
 import { useTheme } from "../theme/theme.js";
 import { sectionRule } from "../util/chrome.js";
 import { OverlayFrame } from "./OverlayFrame.js";
+import { TextDetail } from "./TextDetail.js";
 import { groupByProvider } from "../util/grouping.js";
 import { formatCertificationBadge, formatPricingTag, pricingKind } from "../util/format.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
@@ -39,12 +41,16 @@ const MAX_VISIBLE = MAX_VISIBLE_ROWS;
  * with scrolling to accommodate large model registries cleanly.
  */
 export function ModelPicker({
+  minimal = false,
+  onConnect,
   providers,
   currentModelId,
   currentProviderId,
   onSelect,
   onClose,
 }: {
+  minimal?: boolean;
+  onConnect?: () => void;
   providers: Record<ProviderId, ModelProvider>;
   currentModelId: string;
   currentProviderId?: ProviderId;
@@ -52,6 +58,11 @@ export function ModelPicker({
   onClose: () => void;
 }) {
   const theme = useTheme();
+  const { stdout } = useStdout();
+  const [showAll, setShowAll] = useState(false);
+  const selection = useRef<string | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
+  const maxVisible = minimal ? Math.max(1, Math.min(MAX_VISIBLE, Math.floor(((stdout?.rows ?? 24) - 13) / 2))) : MAX_VISIBLE;
   const [models, setModels] = useState<ModelInfo[]>(() => visibleModels());
   // Type-to-filter: a registry of 40+ models is un-navigable with arrows
   // alone. Printable keys extend the filter, Backspace retracts, Esc clears
@@ -70,8 +81,9 @@ export function ModelPicker({
   // lands in the registry automatically.
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     if (Object.keys(providers).some(id => id.startsWith("custom:"))) {
-      void Promise.resolve().then(() => refreshCustomProviderModels(loadCustomProviders().filter(config => providers[config.id]?.isConfigured())))
+      void Promise.resolve().then(() => refreshCustomProviderModels(loadCustomProviders().filter(config => providers[config.id]?.isConfigured()), { signal: controller.signal }))
         .then(results => {
           if (!active) return;
           setModels(visibleModels());
@@ -93,18 +105,20 @@ export function ModelPicker({
     }
     return () => {
       active = false;
+      controller.abort();
     };
   }, [providers]);
 
   // Filter after the live-sync state, before grouping/navigation.
   const filteredModels = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return models;
-    return models.filter(
+    const available = minimal && !showAll ? models.filter(model => providers[model.providerId as ProviderId]?.isConfigured(model.id)) : models;
+    if (!q) return available;
+    return available.filter(
       (m) =>
         m.displayName.toLowerCase().includes(q) || m.id.toLowerCase().includes(q) || m.providerId.toLowerCase().includes(q)
     );
-  }, [models, filter]);
+  }, [models, filter, minimal, showAll, providers]);
 
   const rows: PickerRow[] = useMemo(
     () =>
@@ -141,6 +155,8 @@ export function ModelPicker({
   useEffect(() => {
     const currentIdx = ordered.findIndex((o) => o.row.model.id === currentModelId &&
       (!currentProviderId || o.row.model.providerId === currentProviderId) && o.row.enabled);
+    const preserved = ordered.findIndex(entry => `${entry.row.model.providerId}/${entry.row.model.id}` === selection.current);
+    if (preserved >= 0) { setSelected(preserved); return; }
     if (currentIdx !== -1) {
       setSelected(currentIdx);
       return;
@@ -149,7 +165,16 @@ export function ModelPicker({
     setSelected(first === -1 ? 0 : first);
   }, [ordered, currentModelId, currentProviderId]);
 
+  usePaste(text => { selection.current = null; setFilter(value => value + sanitizeTerminalText(text).replace(/\n/g, " ")); }, { isActive: detail === null });
   useInput((input, key) => {
+    if (detail !== null) return;
+    if (key.ctrl && input === "n" && onConnect) { onConnect(); return; }
+    if (key.ctrl && input === "o" && ordered[selected]) {
+      const row = ordered[selected].row;
+      setDetail(`${row.providerDisplayName}\n${JSON.stringify(row.model, null, 2)}\n${row.enabled ? "Ready to select; inference has not been tested by this action." : row.provider?.configurationIssue?.(row.model.id) ?? "Provider not connected."}`); return;
+    }
+    if (key.ctrl || key.meta) return;
+    if (key.tab && minimal) { selection.current = null; setShowAll(value => !value); return; }
     if (key.escape) {
       if (filter) setFilter(""); // filter first, close second
       else onClose();
@@ -177,22 +202,24 @@ export function ModelPicker({
       // Skip over disabled (unconfigured) entries rather than selecting them
       for (let i = 0; i < ordered.length; i++) {
         next = (next + dir + ordered.length) % ordered.length;
-        if (ordered[next].row.enabled) break;
+        if (minimal || ordered[next].row.enabled) break;
       }
       setSelected(next);
+      selection.current = `${ordered[next].row.model.providerId}/${ordered[next].row.model.id}`;
     } else if (key.return) {
       const entry = ordered[selected];
       if (entry?.row.enabled) onSelect(entry.row.provider, entry.row.model);
+      else if (entry && minimal) setCustomNote(entry.row.provider?.configurationIssue?.(entry.row.model.id) ?? "Use /connect to configure this provider.");
     }
   });
 
-  const { offset: scrollOffset, hasAbove, hasBelow } = useWindowedList(ordered.length, selected);
+  const { offset: scrollOffset, hasAbove, hasBelow } = useWindowedList(ordered.length, selected, maxVisible);
 
   const visible = useMemo(() => {
     return ordered
-      .slice(scrollOffset, scrollOffset + MAX_VISIBLE)
+      .slice(scrollOffset, scrollOffset + maxVisible)
       .map((entry, i) => ({ ...entry, pos: scrollOffset + i }));
-  }, [ordered, scrollOffset]);
+  }, [ordered, scrollOffset, maxVisible]);
 
   // DW-2.5 context window badge: 128000 → "128K", 2000000 → "2M".
   const formatWindow = (tokens: number | undefined): string => {
@@ -207,6 +234,7 @@ export function ModelPicker({
     const isSelected = pos === selected;
     const isCurrent = row.model.id === currentModelId && (!currentProviderId || row.model.providerId === currentProviderId);
     const marker = isSelected ? "❯ " : "  ";
+    if (minimal) return <Text key={`${row.model.providerId}/${row.model.id}`} color={isSelected ? theme.colors.textPrimary : theme.colors.textSecondary} wrap="truncate-end">{marker}{sanitizeTerminalText(row.model.displayName).replace(/\n/g, " ")}{isCurrent ? " · current" : ""}{!row.enabled ? " · unavailable" : ""}</Text>;
     const windowTag = formatWindow(row.model.contextWindow);
     const windowSuffix = windowTag ? ` ${windowTag}` : "";
     const kind = pricingKind(row.model.isFree);
@@ -280,11 +308,13 @@ export function ModelPicker({
   const enabledPos = ordered
     .slice(0, selected + 1)
     .reduce((n, o) => n + (o.row.enabled ? 1 : 0), 0);
+  if (detail !== null) return <TextDetail title="Model details" text={detail} onClose={() => setDetail(null)} />;
   return (
     <OverlayFrame
+      minimal={minimal}
       title="Select a model"
-      meta={enabledTotal > 0 ? `(${enabledPos}/${enabledTotal})` : "(no matches)"}
-      hints="↑/↓ · Enter switch · Esc cancel · type to filter"
+      meta={minimal ? ordered.length > 0 ? `(${Math.min(selected + 1, ordered.length)}/${ordered.length})` : "(no matches)" : enabledTotal > 0 ? `(${enabledPos}/${enabledTotal})` : "(no matches)"}
+      hints={minimal ? "↑/↓ select · Enter switch · Tab all/connected · Esc back" : "↑/↓ · Enter switch · Esc cancel · type to filter"}
     >
       {ordered.length === 0 && (
         <Text color={theme.colors.textSecondary}>
@@ -296,8 +326,8 @@ export function ModelPicker({
           filter: <Text color={theme.colors.toolName}>{filter}</Text> — Backspace to erase, Esc to clear
         </Text>
       )}
-      {cacheNote && <Text color={theme.colors.textSecondary}>⚠ {cacheNote}</Text>}
-      {customNote && <Text color={theme.colors.warning}>⚠ {customNote}</Text>}
+      {!minimal && cacheNote && <Text color={theme.colors.textSecondary}>⚠ {cacheNote}</Text>}
+      {customNote && <Text color={theme.colors.warning} wrap="truncate-end">⚠ {customNote}</Text>}
       {hasAbove && (
         <Text color={theme.colors.textSecondary}>  ▲ {scrollOffset} more above...</Text>
       )}
@@ -310,8 +340,16 @@ export function ModelPicker({
           {section.rows.map(renderRow)}
         </Box>
       ))}
+      {minimal && <>
+        <Text color={theme.colors.textSecondary}>{showAll ? "All models" : "Connected models"}</Text>
+        <Text color={theme.colors.textSecondary}>Ctrl+O details{onConnect ? " · Ctrl+N connect" : " · /connect adds a provider"}</Text>
+        {ordered[selected] && <>
+          <Text color={theme.colors.textSecondary} wrap="truncate-end">{ordered[selected].row.model.id} · {formatWindow(ordered[selected].row.model.contextWindow)} · {formatPricingTag(ordered[selected].row.model.isFree)}{formatCertificationBadge(ordered[selected].row.model.certified, ordered[selected].row.model.certifiedMode)}</Text>
+          {!ordered[selected].row.enabled && <Text color={theme.colors.warning} wrap="truncate-end">{ordered[selected].row.provider?.configurationIssue?.(ordered[selected].row.model.id) ?? "Provider not connected. Use /connect to configure it."}</Text>}
+        </>}
+      </>}
       {hasBelow && (
-        <Text color={theme.colors.textSecondary}>  ▼ {ordered.length - (scrollOffset + MAX_VISIBLE)} more below...</Text>
+        <Text color={theme.colors.textSecondary}>  ▼ {ordered.length - (scrollOffset + maxVisible)} more below...</Text>
       )}
     </OverlayFrame>
   );

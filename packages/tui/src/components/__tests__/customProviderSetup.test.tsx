@@ -37,22 +37,33 @@ async function reviewExisting(app: ThemedRender) {
 }
 
 describe("custom provider setup", () => {
+  it("edits the wire in basic setup while preserving model routing and headers", async () => {
+    const routed: CustomProviderConfig = { ...config, protocol: "anthropic", headers: { "X-Client": "retained" }, models: [{ id: "fixture-model", contextWindow: 8192, protocol: "openai-responses", baseUrl: "https://responses.invalid/v1" }] };
+    saveCustomProvider(routed, "retained-key");
+    const done = vi.fn();
+    const app = mount(<CustomProviderSetup simple initial={routed} onDone={done} onRemoved={vi.fn()} onCancel={vi.fn()} />);
+    await tick(); await press(app); await press(app);
+    expect(frameText(app.lastFrame)).toContain("Wire protocol");
+    await press(app, "\x1b[A"); await press(app); await press(app); await press(app);
+    expect(frameText(app.lastFrame)).toContain("Protocol: openai-responses");
+    await press(app);
+    expect(loadCustomProviders()[0]).toMatchObject({ protocol: "openai-responses", headers: routed.headers, models: routed.models });
+    expect(done).toHaveBeenCalledWith(config.id);
+  });
   it("adds a provider through /connect, hides the key, and persists usable settings", async () => {
     const done = vi.fn();
     const app = mount(<FirstRunSetup onDone={done} />);
     await tick();
     for (let i = 0; i < PROVIDER_META.length; i++) await press(app, "\u001b[B");
-    expect(frameText(app.lastFrame)).toContain("Add custom OpenAI-compatible provider");
+    expect(frameText(app.lastFrame)).toContain("Custom endpoint");
     await press(app);
     await fill(app, "fixture");
-    await fill(app, "Fixture Gateway");
     await fill(app, "https://fixture.invalid/v1");
+    await press(app); // explicit chat protocol
     await press(app, "ui-secret-key");
     expect(frameText(app.lastFrame)).not.toContain("ui-secret-key");
     await press(app);
     await fill(app, "fixture-model, second-model");
-    await press(app); // conservative context default
-    await press(app); // default compatibility options
     expect(frameText(app.lastFrame)).toContain("stored key (hidden)");
     expect(fs.existsSync(path.join(root, "providers.json"))).toBe(false);
     await press(app); // review/save

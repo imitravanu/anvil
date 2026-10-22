@@ -50,7 +50,7 @@ function fakeProvider(): ModelProvider & { release: () => void; calls: () => num
 }
 
 type Api = {
-  handleSubmit: (text: string) => Promise<void>;
+  handleSubmit: (text: string) => Promise<void | boolean>;
   sentHistory: () => string[];
   isBusy: () => boolean;
 };

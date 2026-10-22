@@ -97,6 +97,63 @@
 
 # PROGRESS — multi-agent coordination
 
+## 2026-10-22 — conversation-first UI/UX implementation
+
+Ownership: this session owns `packages/tui/src/components/` presentation/input,
+`hooks/` composer/controller/focus integration, `util/` viewport/display budgets,
+`diff/` permission review, `commands/` UX/copy and related tests; TUI visual capture
+scripts and baselines; CHANGELOG and this record. Starting checkout clean at
+4cd95ce. AGENTS.md, historical Phase 21–25 roadmap and anti-slop guide read;
+this implements the user-approved UI/UX review revision 2, not stale roadmap items.
+No protected gate/CI files, provider wire implementations, publication or remote
+state are in scope. Work proceeds through input/consent reliability, shell,
+discovery/setup and validation; actual results and limits recorded before handoff.
+Additional ownership: `packages/core/src/providers/{types,custom}.ts` and custom
+provider regression tests, exposing the existing readiness reason to the picker
+without probing inference or duplicating credential logic in the UI.
+Also owns README UI preview and keyboard/setup instructions, replacing the
+outdated framed mock-up with an actual offline-fixture capture.
+
+Implemented: quieter conversation-first shell and semantic themes; persistent,
+session-scoped multiline drafts with literal paste and explicit submission;
+windowed command/model/session menus; measured row scrolling and virtualized
+transcripts; retained text/tool detail views; honest history-based context
+estimates; scrollable permission review and callback-level hidden-control guards;
+explicit held-queue inspection/removal/resume; visible session-scoped attachments;
+protocol-aware custom setup and route-readiness explanations. Idle provider
+reconnection/model selection remains available with held messages, while session
+replacement, retry and mission launch cannot discard or implicitly drain them.
+
+The capture harness now preserves ANSI styling, rejects blank/incomplete frames
+and covers 21 scenes × 6 sizes × 4 themes (504 references). Baselines were reviewed
+visually, then independently recaptured and compared successfully. The synthetic
+1,000-message render fixture improved from 157 ms median / 323 ms maximum update
+to 11 ms / 19 ms in this local run; these are fixture measurements, not latency
+guarantees. Visual references are test-only and excluded from packaged files.
+
+Linux x64 native PTY and isolated tmux journeys exercised bracketed multiline
+paste, long-answer/detail navigation, resize/draft retention and Ctrl+C terminal
+restoration. Redirected NO_COLOR headless output contained no ANSI escapes. No
+real provider requests or credential/config changes were needed for this UI pass.
+Windows/macOS, other terminal emulators and screen-reader accessibility remain
+unverified; content already discarded by core retention cannot be recovered.
+The installed CLI links to this checkout, so rebuilding updates it locally.
+No protected gate/CI artifact, public version, npm publication or GitHub state was
+changed.
+
+Final validation: `npm run gate` passed on Node 24.21.0: sequential builds,
+workspace/script typechecks, **1,893 tests** (CLI 229, core 1,202, TUI 462), integrity
+and residual checks, and **25/25** offline evaluations. The complete TUI suite also
+passed independently on Node 22.23.4 (71 files / 462 tests). An earlier loaded run
+exposed a real commit-to-passive-effect input window: callbacks now independently
+check availability, not only subscription cleanup. Permission tests await visible
+states rather than assuming a fixed render delay. The full gate was rerun alone
+and passed without weakening checks or extending timeouts. `git diff --check` is
+clean. This change and its reviewed visual references are committed together;
+the commit is discoverable by this section's date/title in local Git history.
+All three final tarballs packed successfully; the CLI clean-installed and launched
+outside the monorepo on Node 22.23.4. The linked installed launcher reports 1.5.0.
+
 ## 2026-10-22 — 1.5.0 prepared locally; publication deferred
 
 Ownership: this session owns package versions in `packages/{core,tui,cli}/package.json`,

@@ -1,16 +1,21 @@
 import { useState } from "react";
-import { Box, Text, useInput, useStdout } from "ink";
+import { Box, Text, useStdout } from "ink";
+import { useInput, usePaste } from "../hooks/useUIInput.js";
 import type { AgentSession, CheckpointMeta } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 import { formatTime } from "../util/format.js";
+import { windowOffset } from "../hooks/useWindowedList.js";
+import { MAX_VISIBLE_ROWS } from "../util/displayLimits.js";
+import { OverlayFrame } from "./OverlayFrame.js";
 
 export interface RewindModalProps {
+  minimal?: boolean;
   session: AgentSession;
   onSelect: (checkpointId: number) => void;
   onClose: () => void;
 }
 
-export function RewindModal({ session, onSelect, onClose }: RewindModalProps) {
+export function RewindModal({ session, onSelect, onClose, minimal = false }: RewindModalProps) {
   const theme = useTheme();
   const { stdout } = useStdout();
   const checkpoints: CheckpointMeta[] = session.getCheckpoints();
@@ -18,7 +23,9 @@ export function RewindModal({ session, onSelect, onClose }: RewindModalProps) {
     checkpoints.length > 0 ? checkpoints.length - 1 : 0
   );
 
+  usePaste(() => { /* intentional: restoring files requires a typed selection, never paste. */ });
   useInput((input, key) => {
+    if (key.ctrl || key.meta) return;
     if (key.escape || input === "q") {
       onClose();
       return;
@@ -37,6 +44,17 @@ export function RewindModal({ session, onSelect, onClose }: RewindModalProps) {
       }
     }
   });
+  if (minimal) {
+    const budget = Math.max(1, Math.min(MAX_VISIBLE_ROWS, (stdout?.rows ?? 24) - 10));
+    const { offset, hasAbove, hasBelow } = windowOffset(checkpoints.length, selectedIdx, budget);
+    return <OverlayFrame minimal title="Restore checkpoint" hints="↑/↓ select · Enter restore · Esc close">
+      <Text color={theme.colors.textSecondary}>Restores file snapshots. Conversation is kept; external edits are protected.</Text>
+      {!checkpoints.length && <Text color={theme.colors.textSecondary}>No checkpoints recorded yet.</Text>}
+      {hasAbove && <Text color={theme.colors.textSecondary}>↑ earlier checkpoints</Text>}
+      {checkpoints.slice(offset, offset + budget).map((checkpoint, index) => <Text key={checkpoint.id} color={index + offset === selectedIdx ? theme.colors.textPrimary : theme.colors.textSecondary} wrap="truncate-end">{index + offset === selectedIdx ? "› " : "  "}#{checkpoint.id} · {checkpoint.files} files · {formatTime(new Date(checkpoint.ts).getTime())}</Text>)}
+      {hasBelow && <Text color={theme.colors.textSecondary}>↓ newer checkpoints</Text>}
+    </OverlayFrame>;
+  }
 
   if (checkpoints.length === 0) {
     return (

@@ -42,6 +42,8 @@ describe("custom-provider completion regressions", () => {
     expect(provider.isConfigured()).toBe(true);
     expect(provider.isConfigured("ready")).toBe(true);
     expect(provider.isConfigured("blocked")).toBe(false);
+    expect(provider.configurationIssue?.("blocked")).toContain("AUDIT_ROUTE_TOKEN");
+    expect(provider.configurationIssue?.("ready")).toBeNull();
     const fetcher = vi.spyOn(globalThis, "fetch");
     const events = [];
     for await (const event of provider.streamCompletion(request("blocked"))) events.push(event);

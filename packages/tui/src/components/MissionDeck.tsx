@@ -5,19 +5,28 @@ import { collapsePlan, curtail } from "../util/format.js";
 import { MISSION_DETAIL_MAX } from "../util/displayLimits.js";
 import { useSpinnerFrame } from "../util/useSpinner.js";
 import type { DisplayGoal } from "../hooks/useAgentController.js";
+import { sanitizeTerminalText } from "../util/sanitize.js";
 
 export interface MissionDeckProps {
+  compact?: boolean;
   goal?: DisplayGoal | null;
   plan?: string | null;
   isBusy?: boolean;
 }
 
-export function MissionDeck({ goal, plan, isBusy = false }: MissionDeckProps) {
+export function MissionDeck({ goal, plan, isBusy = false, compact = false }: MissionDeckProps) {
   const theme = useTheme();
   const { stdout } = useStdout();
   const width = Math.max(20, (stdout?.columns ?? 80) - 2);
   // DW-3.1 blocks = goal milestone progress (filling up).
   const spinner = useSpinnerFrame(isBusy, "blocks");
+  if (compact) {
+    const current = goal?.milestones.find(milestone => milestone.status === "in_progress");
+    const text = current?.title ?? goal?.title ?? plan?.split("\n").find(line => line.trim());
+    if (!text) return null;
+    const count = goal ? `${goal.milestones.filter(m => m.status === "completed").length}/${goal.milestones.length} · ` : "";
+    return <Text color={theme.colors.textSecondary} wrap="truncate-end">{isBusy ? spinner : "·"} Plan {count}{curtail(sanitizeTerminalText(text).replace(/\n/g, " "), Math.max(8, width - 30))} · Ctrl+P details</Text>;
+  }
 
   // If full autonomous mission goal is active, render the rich Mission Deck
   if (goal && goal.milestones.length > 0) {

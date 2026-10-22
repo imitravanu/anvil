@@ -62,8 +62,6 @@ function dimUseCount(path: string): number {
  */
 const EXPECTED_DIM_USES: Record<string, number> = {
   "components/StatusBar.tsx": 3,
-  "components/App.tsx": 1,
-  "components/InputBar.tsx": 1,
   "markdown/MarkdownView.tsx": 5,
 };
 

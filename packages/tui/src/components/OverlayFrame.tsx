@@ -19,7 +19,9 @@ export function OverlayFrame({
   meta,
   hints,
   children,
+  minimal = false,
 }: {
+  minimal?: boolean;
   /** Overlay name, brand-tinted and bold. */
   title: string;
   /** Dim suffix on the title row — counts, filters, live state. */
@@ -39,11 +41,11 @@ export function OverlayFrame({
     <Box
       flexDirection="column"
       flexShrink={0}
-      borderStyle={theme.borders.modal}
+      borderStyle={minimal ? undefined : theme.borders.modal}
       borderColor={theme.colors.borderFocus}
       paddingX={theme.spacing.panelPaddingX}
     >
-      <Box justifyContent="space-between" gap={1} flexShrink={0}>
+      <Box justifyContent="space-between" gap={1} flexShrink={0} flexDirection={minimal ? "column" : "row"}>
         <Text bold color={theme.colors.brand}>
           {title}
           {meta ? <Text color={theme.colors.textSecondary}> {meta}</Text> : null}

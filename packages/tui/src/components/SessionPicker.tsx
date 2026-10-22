@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useStdout } from "ink";
+import { useInput, usePaste } from "../hooks/useUIInput.js";
 import { listSessions } from "@anvil/core";
 import { useTheme } from "../theme/theme.js";
 import { curtail, displayModelLabel, relativeTime } from "../util/format.js";
 import { OverlayFrame } from "./OverlayFrame.js";
 import { SESSION_TITLE_MAX, MAX_VISIBLE_ROWS } from "../util/displayLimits.js";
 import { useWindowedList } from "../hooks/useWindowedList.js";
+import { sanitizeTerminalText } from "../util/sanitize.js";
 
 const MAX_VISIBLE = MAX_VISIBLE_ROWS;
 
@@ -14,13 +16,17 @@ const MAX_VISIBLE = MAX_VISIBLE_ROWS;
  * PermissionPrompt/ModelPicker — App renders it in place of InputBar.
  */
 export function SessionPicker({
+  minimal = false,
   onSelect,
   onClose,
 }: {
+  minimal?: boolean;
   onSelect: (id: string) => void;
   onClose: () => void;
 }) {
   const theme = useTheme();
+  const { stdout } = useStdout();
+  const visibleRows = minimal ? Math.max(1, Math.min(MAX_VISIBLE, (stdout?.rows ?? 24) - 9)) : MAX_VISIBLE;
   // Load once per mount (initializer), never in the render body: the old
   // per-render listSessions() re-scanned the sessions dir on every parent
   // re-render, and a corrupt dir threw inside render and crashed the frame.
@@ -35,7 +41,9 @@ export function SessionPicker({
   const sessions = loaded.sessions; // already sorted most-recent-first
   const [selected, setSelected] = useState(0);
 
+  usePaste(() => { /* intentional: pasted Enter must never resume a conversation. */ });
   useInput((_input, key) => {
+    if (key.ctrl || key.meta) return;
     if (key.escape) {
       onClose();
       return;
@@ -49,11 +57,12 @@ export function SessionPicker({
     }
   });
 
-  const { offset: scrollOffset, hasAbove, hasBelow } = useWindowedList(sessions.length, selected);
-  const visibleSessions = sessions.slice(scrollOffset, scrollOffset + MAX_VISIBLE);
+  const { offset: scrollOffset, hasAbove, hasBelow } = useWindowedList(sessions.length, selected, visibleRows);
+  const visibleSessions = sessions.slice(scrollOffset, scrollOffset + visibleRows);
 
   return (
     <OverlayFrame
+      minimal={minimal}
       title="Saved sessions"
       meta={sessions.length > 0 ? `(${selected + 1}/${sessions.length})` : undefined}
       hints="↑/↓ · Enter resume · Esc cancel"
@@ -69,14 +78,14 @@ export function SessionPicker({
             const globalIndex = scrollOffset + i;
             const isSelected = globalIndex === selected;
             return (
-              <Text key={meta.id} color={isSelected ? theme.colors.primary : theme.colors.userText}>
+              <Text key={meta.id} color={isSelected ? theme.colors.primary : theme.colors.userText} wrap={minimal ? "truncate-end" : "wrap"}>
                 {isSelected ? "❯ " : "  "}
-                {curtail(meta.title, SESSION_TITLE_MAX)} · {displayModelLabel(meta.model, meta.providerId)} · updated {relativeTime(meta.updatedAt)}
+                {curtail(sanitizeTerminalText(meta.title).replace(/\n/g, " "), SESSION_TITLE_MAX)} · {sanitizeTerminalText(displayModelLabel(meta.model, meta.providerId)).replace(/\n/g, " ")} · updated {relativeTime(meta.updatedAt)}
               </Text>
             );
           })}
           {hasBelow && (
-            <Text color={theme.colors.textSecondary}>  ▼ {sessions.length - (scrollOffset + MAX_VISIBLE)} more below...</Text>
+            <Text color={theme.colors.textSecondary}>  ▼ {sessions.length - (scrollOffset + visibleRows)} more below...</Text>
           )}
         </>
       )}

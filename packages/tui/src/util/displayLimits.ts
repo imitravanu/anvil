@@ -13,6 +13,10 @@ export const TRANSCRIPT_SCROLL_PAGE = 5; // PgUp/PgDn transcript messages per pr
 export const TEXT_FLUSH_INTERVAL_MS = 16; // ~60 FPS streaming-text throttle window
 export const HISTORY_RECALL_CAP = 100; // sentHistory bound
 export const MESSAGE_QUEUE_CAP = 10; // messages typed while a turn runs
+export const COMPOSER_MAX_CHARS = 64 * 1024;
+export const COMPOSER_MAX_ROWS = 4;
+export const COMPOSER_SESSION_CAP = 32;
+export const STAGED_IMAGE_CAP = 4;
 export const IMAGE_MAX_BYTES = 5 * 1024 * 1024; // /image attachment cap
 
 // AUDIT-11: caps that lived beside their consumers (§2.4) — centralized here

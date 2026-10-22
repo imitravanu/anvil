@@ -216,6 +216,7 @@ export interface ModelProvider {
   id: ProviderId;
   displayName: string;
   isConfigured(model?: string): boolean; // model routes may require different headers
+  configurationIssue?(model: string): string | null;
   streamCompletion(request: CompletionRequest): AsyncGenerator<StreamEvent>;
 }
 

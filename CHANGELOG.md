@@ -5,6 +5,32 @@ All notable changes to Anvil are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Conversation-first terminal layout: compact identity/status, quieter dark palette,
+  readable high-contrast labels, restrained tool summaries and on-demand plan/details.
+- Multiline composer preserves whitespace and trailing newlines. Bracketed paste
+  never submits or executes slash commands; Ctrl+J inserts a newline and Ctrl+L
+  toggles literal text. Drafts and cursors survive overlays and session changes.
+- Transcript scrolls rendered rows, including within a long answer. Ctrl+O opens
+  retained text/tool details; clipped code/tables are accessible there, with honest
+  notices for data discarded by retention limits.
+- Ctrl+Q reviews/removes queued messages and explicitly resumes held work. Full
+  queues reject new input without evicting intent; errors/cancellation hold work.
+  Held work permits provider recovery but blocks session replacement, retry and
+  new missions until the queue is reviewed.
+  Ctrl+B reviews staged images; limits no longer silently replace attachments.
+- Model selection defaults to connected routes, supports complete details and
+  direct connection setup. Custom setup exposes protocol choice and optional
+  advanced settings; model discovery cancels when dismissed.
+- Permission diffs are fully scrollable before approval. Paste cannot consent;
+  tiny terminals suspend hidden controls while preserving UI state.
+- Context status uses the existing calibrated history estimate rather than
+  cumulative billing totals. Exhausted quota and network failures give distinct
+  recovery guidance.
+- Visual captures retain ANSI color, await settled output, reject blank/missing
+  content, and cover complete application journeys as well as individual widgets.
+
 ## [1.5.0] — Unreleased
 
 ### Fixed

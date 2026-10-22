@@ -3,6 +3,39 @@ import { COMMANDS, parseCommand, makeHandlers } from "../registry.js";
 import type { CommandContext, CommandHandlerDeps } from "../types.js";
 
 describe("TUI Command Registry & /goal", () => {
+  it("protects queued intent without blocking idle provider recovery", () => {
+    const printSystemMessage = vi.fn();
+    const setIsModelPickerOpen = vi.fn();
+    const setIsConnectOpen = vi.fn();
+    const setSession = vi.fn();
+    const clearMessages = vi.fn();
+    const resumeFromStored = vi.fn();
+    const setIsSessionPickerOpen = vi.fn();
+    const popLastUserTurn = vi.fn();
+    const launchGoal = vi.fn();
+    const deps: Partial<CommandHandlerDeps> = {
+      isBusy: false, hasQueuedMessages: true, printSystemMessage,
+      setIsModelPickerOpen, setIsConnectOpen, setSession, clearMessages,
+      resumeFromStored, setIsSessionPickerOpen, launchGoal,
+      session: { popLastUserTurn } as unknown as CommandHandlerDeps["session"],
+    };
+    const handlers = makeHandlers(deps as CommandHandlerDeps);
+    handlers.clearHistory();
+    handlers.sessionNew();
+    handlers.sessionResume();
+    handlers.retryLast();
+    handlers.launchGoal("do not drain held work");
+    expect(printSystemMessage).toHaveBeenCalledTimes(5);
+    for (const [message] of printSystemMessage.mock.calls) expect(message).toContain("Ctrl+Q");
+    for (const mutation of [setSession, clearMessages, resumeFromStored, setIsSessionPickerOpen, popLastUserTurn, launchGoal]) {
+      expect(mutation).not.toHaveBeenCalled();
+    }
+    handlers.openModelPicker();
+    handlers.openConnect();
+    expect(setIsModelPickerOpen).toHaveBeenCalledWith(true);
+    expect(setIsConnectOpen).toHaveBeenCalledWith(true);
+  });
+
   it("parses /goal command and arguments", () => {
     const parsed = parseCommand("/goal add user auth");
     expect(parsed).toEqual({

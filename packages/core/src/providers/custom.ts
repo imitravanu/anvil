@@ -464,6 +464,13 @@ export async function testCustomProvider(
 export function createCustomProvider(config: CustomProviderConfig, apiKeyOverride?: string): ModelProvider {
   config = validateCustomProvider(config);
   const adapters = new Map<string, ModelProvider>();
+  const configurationIssue = (model: string): string | null => {
+    if (isCustomProviderConfigured(config, apiKeyOverride, model)) return null;
+    const effective = effectiveCustomConfig(config, model);
+    const missing = Object.values(effective.headers ?? {}).filter(value => value.startsWith("$") && !process.env[value.slice(1)]?.trim()).map(value => value.slice(1));
+    if (config.apiKeyEnv && !process.env[config.apiKeyEnv]?.trim() && !apiKeyOverride) missing.push(config.apiKeyEnv);
+    return missing.length ? `Set required environment variable(s): ${[...new Set(missing)].join(", ")}.` : "Authentication is not configured for this route.";
+  };
   const adapterFor = (modelId: string): ModelProvider => {
     const existing = adapters.get(modelId);
     if (existing) return existing;
@@ -475,13 +482,11 @@ export function createCustomProvider(config: CustomProviderConfig, apiKeyOverrid
   return {
     id: config.id, displayName: config.name,
     isConfigured: model => isCustomProviderConfigured(config, apiKeyOverride, model),
+    configurationIssue,
     async *streamCompletion(request) {
       if (!isCustomProviderConfigured(config, apiKeyOverride, request.model)) {
-        const effective = effectiveCustomConfig(config, request.model);
-        const missing = Object.values(effective.headers ?? {}).filter(value => value.startsWith("$") && !process.env[value.slice(1)]?.trim()).map(value => value.slice(1));
-        if (config.apiKeyEnv && !process.env[config.apiKeyEnv]?.trim() && !apiKeyOverride) missing.push(config.apiKeyEnv);
         yield { type: "error", code: "AUTH_FAILED", isRetryable: false,
-          message: missing.length ? `Set required environment variable(s) for ${config.id}/${request.model}: ${[...new Set(missing)].join(", ")}.` : `Authentication is not configured for ${config.id}/${request.model}.` };
+          message: `${config.id}/${request.model}: ${configurationIssue(request.model)}` };
         return;
       }
       const model = customProviderModels([config]).find(item => item.id === request.model);

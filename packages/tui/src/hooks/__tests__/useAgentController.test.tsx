@@ -413,6 +413,10 @@ describe("useAgentController - goal mission outcomes", () => {
         expect(calls.slice(-2)).toEqual(["queued first", "queued second"]);
       }
       expect(api.current!.isBusy).toBe(false);
+      if (cancelled) {
+        expect(await api.current!.send("explicit next")).toBe(false);
+        await api.current!.resumeQueue();
+      }
       await api.current!.send("explicit next");
       await new Promise(resolve => setTimeout(resolve, 30));
       expect(calls.slice(-3)).toEqual(["queued first", "queued second", "explicit next"]);
@@ -534,7 +538,7 @@ describe("useAgentController - S6 cancel-queue UX", () => {
 
     expect(api.current!.queued).toEqual(["typed during turn"]);
     const notice = api.current!.messages.find(
-      (m: DisplayMessage) => m.role === "system" && m.text.includes("held, not sent")
+      (m: DisplayMessage) => m.role === "system" && m.text.includes("queued message held")
     );
     expect(notice).toBeDefined();
     expect(notice!.text).toContain("1 queued message held");

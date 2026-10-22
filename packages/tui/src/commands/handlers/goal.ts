@@ -6,6 +6,10 @@ export function handleLaunchGoal(deps: CommandHandlerDeps, objective: string): v
     printSystemMessage("Cannot launch a goal while a turn is in flight.");
     return;
   }
+  if (deps.hasQueuedMessages) {
+    printSystemMessage("Review queued messages with Ctrl+Q before starting a mission.");
+    return;
+  }
   printSystemMessage(`🎯 Autonomous Mission Initiated: "${objective}"`);
   void launchGoal?.(objective);
 }
