@@ -191,6 +191,7 @@ export const DEFAULT_GATE_TIMEOUT_MS = 180_000; // 3 minutes timeout per gate st
 // Phase DW-4 — Terminal Platform
 export const LONG_TURN_NOTIFY_MS = getEnvNumber("ANVIL_NOTIFY_AFTER_MS", 60_000);
 export const CLIPBOARD_MAX_BYTES = getEnvNumber("ANVIL_CLIPBOARD_MAX_BYTES", 100 * 1024);
+export const CLIPBOARD_WRITE_TIMEOUT_MS = 2_000;
 export const TOKEN_HISTORY_CAP = getEnvNumber("ANVIL_TOKEN_HISTORY_CAP", 24);
 
 // TUI / UI / UX Performance & Responsiveness Constraints

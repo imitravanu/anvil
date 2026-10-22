@@ -8,8 +8,8 @@
 
 export const ALT_SCREEN_ENTER = "\u001b[?1049h\u001b[H";
 export const ALT_SCREEN_EXIT = "\u001b[?1049l";
-const MOUSE_ENTER = "\u001b[?1000h\u001b[?1006h";
-const MOUSE_EXIT = "\u001b[?1006l\u001b[?1000l";
+const MOUSE_ENTER = "\u001b[?1002h\u001b[?1006h";
+const MOUSE_EXIT = "\u001b[?1006l\u001b[?1002l\u001b[?1000l";
 
 export interface AltScreenCapable {
   isTTY?: boolean;

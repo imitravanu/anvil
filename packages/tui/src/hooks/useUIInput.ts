@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 import { useInput as useInkInput, usePaste as useInkPaste } from "ink";
-import { terminalMouseInput } from "../util/terminalMouse.js";
+import { terminalMouseInput, type TerminalMouseEvent } from "../util/terminalMouse.js";
 import { TERMINAL_WHEEL_ROWS } from "../util/displayLimits.js";
 
 /** Keep mounted UI state while a terminal is too small to show its controls. */
@@ -23,6 +23,13 @@ export function useWheel(handler: (rows: number) => void, options: { isActive?: 
     const event = terminalMouseInput(input);
     if (event?.direction) handler(event.direction === "up" ? TERMINAL_WHEEL_ROWS : -TERMINAL_WHEEL_ROWS);
   }, { isActive: available && options.isActive !== false });
+}
+
+export function usePointer(handler: (event: TerminalMouseEvent | null) => void, isActive: boolean): void {
+  const available = useContext(InputAvailabilityContext);
+  useInkInput(input => {
+    if (available && isActive) handler(terminalMouseInput(input));
+  }, { isActive: available && isActive });
 }
 
 export function usePaste(handler: (text: string) => void, options: { isActive?: boolean } = {}): void {

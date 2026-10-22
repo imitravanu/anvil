@@ -10,6 +10,7 @@ import { ContextGauge, gaugeDisplayText } from "./ContextGauge.js";
 
 export interface StatusBarProps {
   minimal?: boolean;
+  selectionNotice?: string | null;
   contextEstimate?: { tokens: number; limit: number };
   waiting?: boolean;
   model: string;
@@ -36,6 +37,7 @@ export function StatusBar({
   minimal = false,
   contextEstimate,
   waiting = false,
+  selectionNotice,
 }: StatusBarProps) {
   const theme = useTheme();
   const { stdout } = useStdout();
@@ -47,9 +49,9 @@ export function StatusBar({
   if (minimal) {
     const label = waiting ? "Waiting for approval" : isBusy ? "Working · Esc cancel" : "Ready";
     const context = contextEstimate && width >= 80 ? ` · context ~${Math.round(100 * contextEstimate.tokens / contextEstimate.limit)}%` : "";
-    if (width < 80) return <Text color={theme.colors.textSecondary} wrap="truncate-end">{waiting ? "Waiting for approval" : isBusy ? "Working · Enter queue · Esc cancel" : "Enter send · / commands · ? help"}</Text>;
+    if (width < 80) return <Text color={theme.colors.textSecondary} wrap="truncate-end">{waiting ? "Waiting for approval" : selectionNotice ?? (isBusy ? "Working · Enter queue · Esc cancel" : "Enter send · / commands · ? help")}</Text>;
     return <Box flexShrink={0} justifyContent="space-between" paddingX={1}>
-      <Text color={theme.colors.textSecondary} wrap="truncate-end">{isBusy ? "Enter queue" : "Enter send"} · Ctrl+J newline · / commands</Text>
+      <Text color={theme.colors.textSecondary} wrap="truncate-end">{selectionNotice ?? `${isBusy ? "Enter queue" : "Enter send"} · Ctrl+J newline · / commands`}</Text>
       <Text color={waiting ? theme.colors.warning : theme.colors.textSecondary} wrap="truncate-end">{label}{context}</Text>
     </Box>;
   }

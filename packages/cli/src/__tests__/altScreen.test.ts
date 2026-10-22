@@ -31,9 +31,9 @@ describe("enter/exit pairing", () => {
     const stream = memStream(true);
     exitAltScreen(stream);
     enterAltScreen(stream, {});
-    expect(stream.chunks.join("")).toContain("\x1b[?1000h\x1b[?1006h");
+    expect(stream.chunks.join("")).toContain("\x1b[?1002h\x1b[?1006h");
     exitAltScreen(stream);
-    expect(stream.chunks.join("")).toContain("\x1b[?1006l\x1b[?1000l");
+    expect(stream.chunks.join("")).toContain("\x1b[?1006l\x1b[?1002l\x1b[?1000l");
     const count = stream.chunks.length;
     exitAltScreen(stream);
     expect(stream.chunks).toHaveLength(count);
@@ -45,7 +45,7 @@ describe("enter/exit pairing", () => {
     enterAltScreen(stream, { ANVIL_NO_MOUSE: "1" });
     exitAltScreen(stream);
     expect(stream.chunks.join("")).toContain(ALT_SCREEN_ENTER);
-    expect(stream.chunks.join("")).not.toMatch(/\[\?100[06][hl]/);
+    expect(stream.chunks.join("")).not.toMatch(/\[\?100[026][hl]/);
   });
 
   it("enters once, ignores re-entry, and exits on an injected stream", () => {
@@ -54,9 +54,9 @@ describe("enter/exit pairing", () => {
     // Explicit {} env keeps the test hermetic — production passes process.env.
     expect(enterAltScreen(stream, {})).toBe(true);
     expect(enterAltScreen(stream, {})).toBe(true);
-    expect(stream.chunks).toEqual([ALT_SCREEN_ENTER, "\x1b[?1000h\x1b[?1006h"]);
+    expect(stream.chunks).toEqual([ALT_SCREEN_ENTER, "\x1b[?1002h\x1b[?1006h"]);
     exitAltScreen(stream);
-    expect(stream.chunks).toEqual([ALT_SCREEN_ENTER, "\x1b[?1000h\x1b[?1006h", "\x1b[?1006l\x1b[?1000l", ALT_SCREEN_EXIT]);
+    expect(stream.chunks).toEqual([ALT_SCREEN_ENTER, "\x1b[?1002h\x1b[?1006h", "\x1b[?1006l\x1b[?1002l\x1b[?1000l", ALT_SCREEN_EXIT]);
   });
 
   it("enter is a no-op on unsupported streams", () => {

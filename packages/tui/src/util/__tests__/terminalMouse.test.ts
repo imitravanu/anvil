@@ -19,7 +19,7 @@ describe("terminal mouse reports", () => {
     ["[<64;20;0M", null],
     ["[<64;9007199254740992;10M", null],
   ])("consumes %j with vertical direction %j", (input, direction) => {
-    expect(terminalMouseInput(input!)).toEqual({ direction });
+    expect(terminalMouseInput(input!)).toMatchObject({ direction });
   });
 
   it.each(["hello", "y", "[A", "[B", "[<64;20;", "[<64;-1;10M", "[<64;20;10Mextra"])("does not reinterpret non-report input %j", input => {

@@ -39,6 +39,9 @@
     "visual:approve": "node scripts/visual-approve.mjs"
   },
   "dependencies": {
+    "cli-truncate": "^6.1.1",
+    "string-width": "^8.3.0",
+    "wrap-ansi": "^10.0.2",
     "@anvil/core": "*",
     "cli-highlight": "^2.1.11",
     "ink": "^7.1.1",

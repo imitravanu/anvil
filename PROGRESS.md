@@ -97,6 +97,54 @@
 
 # PROGRESS — multi-agent coordination
 
+## 2026-10-22 — drag selection and automatic clipboard copy
+
+Ownership: this session owns TUI mouse/input and selection utilities/components,
+App/StatusBar/TextDetail integration and regressions; CLI mouse-mode lifecycle
+and tests; TUI dependency declarations/lockfile, README/CHANGELOG and this record.
+Starting checkout clean at 3a00ec7. Constitution, historical roadmap, anti-slop
+instructions and terminal-feature scope ruling consulted. This is the explicit
+user request to add selection to the already-shipped wheel support, not a claim
+that historical mouse/pane-navigation milestones are all complete. Reuse actual
+Ink layout and existing clipboard limits; no protected artifacts or publication.
+Also owns core `config/constants.ts` for the bounded clipboard-process timeout.
+
+Implemented: drag over visible chat or retained-text details to highlight; release
+automatically copies without changing modes or disabling wheel scrolling. Uses
+SGR button-motion reporting (1002/1006) with paired normal/signal/crash cleanup.
+Snapshots are bounded to visible cells and derived from actual Ink text layout,
+using the same wrapping/truncation/Unicode-width packages already installed by
+Ink, now declared directly. Selection preserves indentation and complete graphemes,
+supports reverse/multiline drags and clipping, and freezes its visible frame while
+underlying streaming continues. Wheel/key input clears the highlight and reveals
+live content. Geometry/session changes cancel stale selections; clicks, non-left
+drags and hidden/permission controls cannot trigger a copy or an approval.
+
+Clipboard: bounded, shell-free local wl-copy/xclip/pbcopy processes receive only
+necessary display/locale environment and selected text on stdin, never provider
+keys. Writes are serialized with only the newest pending selection retained.
+Existing OSC 52 is the remote/unavailable-helper fallback. Feedback distinguishes
+confirmed local copy from a terminal request with no acknowledgement. Existing
+clipboard byte limit and a new shared process timeout bound work and payloads.
+No user's real clipboard was read or changed during automated verification.
+
+Evidence so far: focused tests cover exact text, reverse/multiline/Unicode/clipped
+selection, streaming stability, resize cancellation, repeated releases, rapid-copy
+ordering, disabled regions and backend failures/fallback/environment isolation.
+The actual CLI passed native Linux PTY highlight/inverse-style and exact OSC 52
+payload checks, followed by wheel/draft/exit checks; isolated tmux scrolling also
+passed. Full fresh visual capture/comparison passed **504/504**, without changing
+baselines. All three packages packed and the CLI clean-installed/launched outside
+the monorepo. The final full gate passed on Node 24.21.0: ordered builds, all
+typechecks, integrity/residual checks, **1,935 tests** (CLI 235, core 1,202,
+TUI 498), and **25/25** offline evaluations. The linked installed CLI was rebuilt
+in place; restart it to load the new mouse mode and selection handler.
+`git diff --check` clean; protected artifacts untouched. Source, tests and notes
+are committed locally with normal hooks. No npm/GitHub publication performed.
+Limits: physical gestures/system clipboard integration still need the user's
+terminal check; Windows/macOS not exercised. Selection copies visible content,
+not omitted/compacted text; existing Ctrl+O and /copy remain available for details.
+
 ## 2026-10-22 — startup input replay fix
 
 Ownership: this session owns CLI interactive render configuration, its two

@@ -1,4 +1,5 @@
-import { CLIPBOARD_MAX_BYTES } from "@anvil/core";
+import { CLIPBOARD_MAX_BYTES, CLIPBOARD_WRITE_TIMEOUT_MS } from "@anvil/core";
+import { spawn } from "node:child_process";
 
 /**
  * DW-4.11 — OSC 52 clipboard. Writes to STDERR (same pty as stdout, but never
@@ -45,4 +46,29 @@ export function copyToClipboard(
     // of the clip pipe (piped redirect); the copy already failed cleanly.
     return { ok: false, reason: "write-failed", bytes };
   }
+}
+
+/** Prefer a confirmed local clipboard write; OSC 52 remains the SSH fallback. */
+export async function copySelection(text: string, stream: ClipboardStream = process.stderr): Promise<ClipboardResult & { confirmed?: boolean }> {
+  const bytes = Buffer.byteLength(text, "utf8");
+  if (!text) return { ok: false, reason: "empty", bytes };
+  if (bytes > CLIPBOARD_MAX_BYTES) return { ok: false, reason: "too-large", bytes };
+  if (stream.isTTY !== true) return { ok: false, reason: "not-a-tty", bytes };
+  const commands: string[][] = [];
+  if (process.platform === "linux" && !process.env.SSH_CONNECTION && !process.env.SSH_TTY) {
+    if (process.env.WAYLAND_DISPLAY) commands.push(["wl-copy"]);
+    if (process.env.DISPLAY) commands.push(["xclip", "-selection", "clipboard", "-in"]);
+  } else if (process.platform === "darwin" && !process.env.SSH_CONNECTION && !process.env.SSH_TTY) commands.push(["pbcopy"]);
+  for (const [command, ...args] of commands) {
+    const copied = await new Promise<boolean>(resolve => {
+      const env = Object.fromEntries(["PATH", "HOME", "DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS", "LANG", "LC_ALL", "LC_CTYPE"].flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]]]));
+      const child = spawn(command, args, { env, stdio: ["pipe", "ignore", "ignore"], timeout: CLIPBOARD_WRITE_TIMEOUT_MS });
+      child.once("error", () => resolve(false));
+      child.once("close", code => resolve(code === 0));
+      child.stdin.on("error", () => { /* intentional: EPIPE is handled by the process error/exit result. */ });
+      child.stdin.end(text);
+    });
+    if (copied) return { ok: true, reason: "copied", bytes, confirmed: true };
+  }
+  return { ...copyToClipboard(text, stream), confirmed: false };
 }

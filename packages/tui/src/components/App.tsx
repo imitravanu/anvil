@@ -48,6 +48,7 @@ import { HelpOverlay } from "./HelpOverlay.js";
 import { StatusBar } from "./StatusBar.js";
 import { QueuePicker } from "./QueuePicker.js";
 import { TextDetail } from "./TextDetail.js";
+import { SelectableRegion } from "./SelectableRegion.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
 import { transcriptDetails } from "../util/transcriptDetails.js";
 
@@ -195,6 +196,7 @@ export function App({
   const [expandTools, setExpandTools] = useState(false);
   // Transcript scroll pin: newest messages held back (0 = follow live).
   const [transcriptPinned, setTranscriptPinned] = useState(0);
+  const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const transcriptMaximum = useRef(0);
 
   const { themeName, resolveTheme, applyTheme, previewTheme } = useThemeManager({ initialTheme, printSystemMessage });
@@ -434,10 +436,12 @@ export function App({
         />
         <Box display={overlaysOpen || slashMenuOpen ? "none" : "flex"} flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden" marginTop={1}>
           <TranscriptBoundary>
+            <SelectableRegion enabled={!overlaysOpen && !slashMenuOpen && !tooSmall} resetKey={session.id} onNotice={setSelectionNotice}>
             <MessageList rowScroll messages={messages} model={currentModel} providerId={activeProviderId} expandTools={expandTools} pinnedBack={transcriptPinned} onBounds={(maximum, anchoredOffset) => {
               transcriptMaximum.current = maximum;
               setTranscriptPinned(anchoredOffset);
             }} />
+            </SelectableRegion>
           </TranscriptBoundary>
         </Box>
         {/* Mission Deck: autonomous goal progression and persistent plan HUD */}
@@ -563,6 +567,7 @@ export function App({
           />
         {!overlaysOpen && <StatusBar
           minimal
+          selectionNotice={selectionNotice}
           waiting={pendingPermission !== null}
           contextEstimate={contextEstimate}
           model={currentModel}

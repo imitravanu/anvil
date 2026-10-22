@@ -7,6 +7,11 @@ All notable changes to Anvil are documented here. The format follows
 
 ### Fixed
 
+- Mouse dragging now highlights visible chat/detail text and automatically copies
+  on release while trackpad scrolling remains enabled. Selection handles wrapped,
+  clipped and Unicode text, stays stable during streaming and cannot approve tools.
+  Local clipboard helpers have bounded runtimes and do not inherit provider keys;
+  terminal clipboard fallback is reported without claiming confirmation.
 - Early startup typing, paste, Enter and cancellation are no longer replayed by
   Ink 7's optional keyboard-capability probe. Both chat and setup use the safe
   shared rendering configuration; Ctrl+J remains the portable newline shortcut.

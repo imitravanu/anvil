@@ -240,8 +240,14 @@ Use `?` from an empty prompt for the complete keyboard reference.
 
 In fullscreen mode, two-finger trackpad scrolling and the mouse wheel scroll
 chat and retained-text detail views without moving keyboard focus. This requires
-a terminal that supports SGR mouse reporting. While mouse capture is active, use
-your terminal's selection modifier (usually Shift) to select/copy text. Set
+a terminal that supports SGR mouse reporting. Drag over chat or detail text to
+highlight it; releasing the left button automatically copies the visible selection.
+No modifier or mode switch is needed. Typing, clicking elsewhere or scrolling
+clears the highlight and returns to live output. Selection stays still while
+streaming; resizing cancels it rather than copying shifted text. Local Wayland,
+X11 and macOS clipboard helpers are preferred; SSH/other environments use OSC 52
+when the terminal permits it. The status distinguishes a confirmed local copy
+from a request sent to the terminal. Set
 `ANVIL_NO_MOUSE=1` to disable capture, or `ANVIL_NO_ALT_SCREEN=1` for inline mode.
 Keyboard scrolling remains available in either mode.
 
