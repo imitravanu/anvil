@@ -97,6 +97,55 @@
 
 # PROGRESS — multi-agent coordination
 
+## 2026-10-22 — 1.5.0 prepared locally; publication deferred
+
+Ownership: this session owns package versions in `packages/{core,tui,cli}/package.json`,
+`package-lock.json`, `packages/core/src/version.ts`, the README version badge and
+release status, CHANGELOG and this record. Starting checkout is clean at 33e9153.
+The completed Phase 21–25 guide and anti-slop plan were read; this is release
+maintenance, not new roadmap work. Prepare 1.5.0 for the accumulated additive custom
+provider features. No protected files or GitHub remote state will be changed.
+Additional ownership: `packages/core/src/cert/runner.ts` and its certification tests.
+Also owns `packages/tui/__visual-baselines__/empty-state.txt`: the version bump
+changes only its rendered v1.4.0 label to v1.5.0; retain strict frame comparison.
+The live AgentRouter catalog no longer offers the old certificate target, while
+the existing runtime default gpt-6.1-sol passed all live criteria. Align the harness
+target with that verified default; do not hide account quota failures as code fixes.
+Changes: all three workspace manifests, lockfile workspace versions, CORE_VERSION,
+README badge and the empty-state frame now agree on 1.5.0. CHANGELOG remains marked
+Unreleased, and the README distinguishes this local build from the prior public
+1.4.0 GitHub download. The AgentRouter certification target now matches the existing
+gpt-6.1-sol runtime default; its new regression failed before the fix and passed after.
+
+Validation: the complete gate passed on Linux x64 with both Node 22.23.4 and
+Node 24.21.0: sequential builds, workspace/script typechecks, **1,866 tests**
+(core 1,202; TUI 435; CLI 229), and **25/25** offline evaluations on each runtime.
+Node 22 was downloaded from nodejs.org and checked against its published SHA-256.
+The final 1.5.0 packages packed, clean-installed and ran outside the repository,
+including a full Node 22 package/CLI smoke test. Fresh captures passed **144/144**
+pixel comparisons without changing PNG baselines. The only text-fixture change
+is the displayed version. The dependency audit reports zero vulnerabilities.
+
+Real-provider checks passed for Gemini, OpenRouter, Orcarouter, Inception and
+AgentRouter (gpt-6.1-sol). The original AgentRouter DeepSeek target was absent from
+the authenticated live catalog; the default GPT route passed all five criteria.
+Both custom-provider factory routes also passed real streaming, tools, multi-turn,
+invalid-model and rate-limit handling criteria: openai-chat via OpenRouter and
+openai-responses via AgentRouter. No custom configuration was persisted.
+Evidence JSON files are retained in this chat workspace's outputs directory.
+
+External limitations: QwenCloud returned HTTP 403 because its free quota is
+exhausted; billing and account settings were not changed. Seven other built-in
+providers lack configured credentials/local service and were not certified live;
+the custom Anthropic wire remains mock-tested only. Real Windows/macOS and the
+earliest Node 22.0 runtime were not exercised.
+
+Installed CLI: the existing global installation is a link to this checkout;
+the rebuild updates it in place, and its actual launcher reports **anvil 1.5.0**.
+The user explicitly deferred npm authentication/publishing; the pending login
+was canceled. No npm publish, GitHub push, release or tag was performed. The local
+release-preparation changes and this verification record are committed together.
+
 ## 2026-10-22 — audit remediation A01–A13 (complete)
 
 Ownership: this session owns TUI permission/input/setup/App/model-picker components,

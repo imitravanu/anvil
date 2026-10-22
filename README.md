@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/imitravanu/anvil/releases"><img src="https://img.shields.io/badge/Release-v1.4.0-ff6a00?style=flat-square" alt="Version"></a>
+  <a href="https://github.com/imitravanu/anvil/releases"><img src="https://img.shields.io/badge/Release-v1.5.0-ff6a00?style=flat-square" alt="Version"></a>
   <a href="https://github.com/imitravanu/anvil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/imitravanu/anvil/ci.yml?branch=master&style=flat-square&label=CI%20Build" alt="CI"></a>
   <a href="https://github.com/imitravanu/anvil/actions/workflows/visual-regression.yml"><img src="https://img.shields.io/github/actions/workflow/status/imitravanu/anvil/visual-regression.yml?branch=master&style=flat-square&label=Visual%20Gate" alt="Visual Gate"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node-%3E%3D22-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node"></a>
@@ -95,8 +95,9 @@
 
 ### Global Install from the GitHub Release
 
-The npm registry packages are awaiting owner publishing credentials. Install the
-self-contained CLI tarball from the latest GitHub release:
+The 1.5.0 source release is prepared locally but is not yet published to npm or
+GitHub. Publication is currently deferred.
+The following commands install the previous 1.4.0 GitHub release, not 1.5.0:
 
 ```bash
 npm install -g https://github.com/imitravanu/anvil/releases/download/v1.4.0/anvil-cli-1.4.0.tgz

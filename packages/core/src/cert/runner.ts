@@ -42,7 +42,7 @@ export const PROVIDER_CERT_MODELS: Record<ProviderId, string> = {
   inception: "mercury-3",
   ollama: "qwen2.5-coder:latest",
   qwencloud: "qwen3.8-flash",
-  agentrouter: "deepseek-v4-flash",
+  agentrouter: "gpt-6.1-sol",
 };
 
 /**

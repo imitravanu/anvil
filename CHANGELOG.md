@@ -5,8 +5,12 @@ All notable changes to Anvil are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.0] — Unreleased
+
 ### Fixed
 
+- AgentRouter certification uses its live-verified default GPT-6.1 Sol model,
+  rather than a retired gateway route.
 - Permission shortcuts ignore Ctrl/Alt modifiers, and long command/MCP previews are
   fully scrollable. Ctrl+C cancels active turns or exits idle/setup screens even
   while overlays own input.
@@ -2333,7 +2337,7 @@ loop with six tools and path containment, interactive permission prompts with
 unified diffs, session persistence, context compaction, theming, first-run
 onboarding, sub-agent delegation, and MCP (stdio) support.
 
-[Unreleased]: https://github.com/imitravanu/anvil/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/imitravanu/anvil/compare/v1.4.0...HEAD
 [0.8.0]: https://github.com/imitravanu/anvil/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/imitravanu/anvil/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/imitravanu/anvil/compare/v0.6.2...v0.6.3

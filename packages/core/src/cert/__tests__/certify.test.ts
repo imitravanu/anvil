@@ -7,9 +7,14 @@ import {
   resolveCertificationCredentials,
 } from "../runner.js";
 import { getLatestCertificationDate, getModel } from "../../providers/registry.js";
+import { resolveProviderSelection } from "../../config/index.js";
 import type { ProviderId } from "../../providers/types.js";
 
 describe("Phase 18: Provider Certification Harness", () => {
+  it("certifies the same AgentRouter model used by a normal default launch", () => {
+    const selection = resolveProviderSelection({ creds: { agentrouterApiKey: "fixture" }, customProviders: [] });
+    expect(PROVIDER_CERT_MODELS.agentrouter).toBe(selection?.model);
+  });
   it("certifies a healthy provider as live with all 5 criteria passing", async () => {
     const mock = createMockCertificationProvider("gemini");
     const result = await certifyProvider(mock, { timeoutMs: 5000, mock: true });
