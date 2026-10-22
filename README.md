@@ -238,6 +238,13 @@ text/tool details, Ctrl+P the plan, Ctrl+Q queued messages, and Ctrl+B attachmen
 Cancellation or a provider failure holds queued work until explicitly resumed.
 Use `?` from an empty prompt for the complete keyboard reference.
 
+In fullscreen mode, two-finger trackpad scrolling and the mouse wheel scroll
+chat and retained-text detail views without moving keyboard focus. This requires
+a terminal that supports SGR mouse reporting. While mouse capture is active, use
+your terminal's selection modifier (usually Shift) to select/copy text. Set
+`ANVIL_NO_MOUSE=1` to disable capture, or `ANVIL_NO_ALT_SCREEN=1` for inline mode.
+Keyboard scrolling remains available in either mode.
+
 Type `/` at any prompt to open the autocomplete menu:
 
 | Command | Description |

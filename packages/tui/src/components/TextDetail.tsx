@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Box, Text, useStdout } from "ink";
-import { useInput, usePaste } from "../hooks/useUIInput.js";
+import { useInput, usePaste, useWheel } from "../hooks/useUIInput.js";
 import { useTheme } from "../theme/theme.js";
 import { ScrollViewport } from "./ScrollViewport.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
@@ -11,6 +11,7 @@ export function TextDetail({ title, text, onClose }: { title: string; text: stri
   const page = Math.max(1, (stdout?.rows ?? 24) - 6);
   const [maximum, setMaximum] = useState(0);
   const [offset, setOffset] = useState(Number.MAX_SAFE_INTEGER);
+  useWheel(delta => setOffset(value => Math.max(0, Math.min(maximum, Math.min(value, maximum) + delta))));
   usePaste(() => { /* intentional: read-only details do not interpret pasted shortcuts. */ });
   useInput((input, key) => {
     if (key.ctrl || key.meta) return;

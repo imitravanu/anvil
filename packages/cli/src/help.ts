@@ -39,6 +39,7 @@ Options:
 Environment:
   ANVIL_PROVIDER, ANVIL_MODEL — same as the flags, lower precedence
   ANVIL_NO_ALT_SCREEN=1 — stay in the main screen buffer (no alt-screen)
+  ANVIL_NO_MOUSE=1 — disable fullscreen trackpad/wheel capture
 
 Config lives in ~/.anvil (credentials.json, settings.json, providers.json, provider-keys.json, sessions/).
 Custom providers: configure with anvil config or /connect, then use --provider custom:<id>.

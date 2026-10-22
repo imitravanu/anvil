@@ -1,6 +1,6 @@
 import { getErrorMessage } from "@anvil/core";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { Box, Text, useApp, useInput, useStdout } from "ink";
+import { Box, Text, useApp, useStdout } from "ink";
 import {
   AgentSession,
   contextBreakdown,
@@ -24,7 +24,7 @@ import {
 import type { TuiPermissionBroker } from "../permission/TuiPermissionBroker.js";
 import { useAgentController } from "../hooks/useAgentController.js";
 import { useFocusZone } from "../hooks/useFocusZone.js";
-import { InputAvailabilityContext } from "../hooks/useUIInput.js";
+import { InputAvailabilityContext, useInput, useWheel } from "../hooks/useUIInput.js";
 import { usePermissionBroker } from "../hooks/usePermissionBroker.js";
 import { useThemeManager } from "../hooks/useThemeManager.js";
 import { useSessionCommands } from "../hooks/useSessionCommands.js";
@@ -50,7 +50,6 @@ import { QueuePicker } from "./QueuePicker.js";
 import { TextDetail } from "./TextDetail.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
 import { transcriptDetails } from "../util/transcriptDetails.js";
-import { TRANSCRIPT_SCROLL_PAGE } from "../util/displayLimits.js";
 
 // Provider labels live in util/labels.ts — single source of truth.
 
@@ -208,8 +207,7 @@ export function App({
     if (!isThemePickerOpen) themeBeforePicker.current = themeName;
   }, [isThemePickerOpen, themeName]);
 
-  // PgUp/PgDn transcript scroll (keyboard-first; trackpads need inline mode).
-  // Overlays own their keys while open, so the transcript stays put then.
+  // Overlays own input while open, so the underlying transcript stays put.
   const overlaysOpen =
     pendingPermission !== null ||
     isDiffOpen ||
@@ -224,9 +222,12 @@ export function App({
     isConnectOpen;
   // 23.9 focus coordinator: Tab toggles input↔transcript (slash-fill and
   // overlays keep their Tab), Esc returns to input. The transcript zone lets
-  // Up/Down scroll one message; the input keeps them for history recall.
+  // Up/Down scroll rows; the input keeps them for history recall.
   const { zone: focusZone, onTab, onEscape, onOverlaysChanged } = useFocusZone();
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  useWheel(delta => {
+    setTranscriptPinned(previous => Math.max(0, Math.min(transcriptMaximum.current, previous + delta)));
+  }, { isActive: !tooSmall && !overlaysOpen && !slashMenuOpen });
   useEffect(() => {
     onOverlaysChanged(overlaysOpen);
   }, [overlaysOpen, onOverlaysChanged]);

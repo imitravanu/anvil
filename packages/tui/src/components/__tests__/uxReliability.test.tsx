@@ -8,11 +8,27 @@ import { Header } from "../Header.js";
 import { StatusBar } from "../StatusBar.js";
 import { MessageView } from "../MessageView.js";
 import { MissionDeck } from "../MissionDeck.js";
+import { TextDetail } from "../TextDetail.js";
 import { THEMES } from "../../theme/theme.js";
 import { displayWidth } from "../../util/format.js";
 import { frameText, renderThemed, renderWithTheme, tick } from "../../test-utils/testRender.js";
 
 describe("conversation-first input and review", () => {
+  it("scrolls retained details with wheel reports while clicks and pasted reports stay inert", async () => {
+    const close = vi.fn();
+    const app = renderThemed(<Box height={10}><TextDetail title="Retained text" text={Array.from({ length: 50 }, (_, index) => `detail-row-${index}`).join("\n")} onClose={close} /></Box>);
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("detail-row-0"));
+    app.stdin.write("\x1b[<65;10;4M".repeat(4));
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).not.toContain("detail-row-0"));
+    const frame = frameText(app.lastFrame);
+    app.stdin.write("\x1b[200~\x1b[<65;10;4M\x1b[201~\x1b[<0;10;4M"); await tick();
+    expect(frameText(app.lastFrame)).toBe(frame);
+    expect(close).not.toHaveBeenCalled();
+    app.stdin.write("\x1b[<64;10;4M".repeat(40));
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("detail-row-0"));
+    app.unmount();
+  });
+
   it("sanitizes external labels and keeps wide custom-theme dividers within the terminal", () => {
     const theme = { ...THEMES.dark, typography: { ...THEMES.dark.typography, sectionDivider: "中+" } };
     const app = renderWithTheme(theme, <Box flexDirection="column"><Header minimal model="fixture" isBusy={false} context={{ projectRoot: "/tmp", projectName: "safe\x1b[2Jname", ecosystem: { type: "node", packageManager: "npm" }, topLevelEntries: [], summary: "" }} /><MissionDeck compact plan={"safe\x1b[2Jplan"} /><InputBar isBusy={false} onSubmit={() => {}} onCancel={() => {}} /></Box>);

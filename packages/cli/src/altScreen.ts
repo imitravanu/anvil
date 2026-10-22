@@ -8,6 +8,8 @@
 
 export const ALT_SCREEN_ENTER = "\u001b[?1049h\u001b[H";
 export const ALT_SCREEN_EXIT = "\u001b[?1049l";
+const MOUSE_ENTER = "\u001b[?1000h\u001b[?1006h";
+const MOUSE_EXIT = "\u001b[?1006l\u001b[?1000l";
 
 export interface AltScreenCapable {
   isTTY?: boolean;
@@ -24,6 +26,7 @@ export function isAltScreenSupported(
 }
 
 let active = false;
+let mouseActive = false;
 
 export interface AltScreenStream extends AltScreenCapable {
   write: (chunk: string) => void;
@@ -51,6 +54,8 @@ export function enterAltScreen(
 ): boolean {
   if (active || !isAltScreenSupported(stream, env)) return active;
   writeSeq(ALT_SCREEN_ENTER, stream);
+  mouseActive = env.ANVIL_NO_MOUSE !== "1";
+  if (mouseActive) writeSeq(MOUSE_ENTER, stream);
   active = true;
   return true;
 }
@@ -59,5 +64,7 @@ export function enterAltScreen(
 export function exitAltScreen(stream: AltScreenStream = process.stdout as AltScreenStream): void {
   if (!active) return;
   active = false;
+  if (mouseActive) writeSeq(MOUSE_EXIT, stream);
+  mouseActive = false;
   writeSeq(ALT_SCREEN_EXIT, stream);
 }

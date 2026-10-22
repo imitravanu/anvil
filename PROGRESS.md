@@ -97,6 +97,48 @@
 
 # PROGRESS — multi-agent coordination
 
+## 2026-10-22 — trackpad/wheel chat scrolling
+
+Ownership: this session owns CLI `altScreen.ts`, `help.ts` and related tests, TUI input hooks,
+mouse parsing/display budgets, App/TextDetail scroll integration and regressions,
+README/CHANGELOG and this record. Starting checkout clean at de429cd. Constitution,
+historical roadmap, anti-slop plan and Phase 23 feature-scope ruling consulted.
+Reality check: keyboard row scrolling shipped, but no mouse reporting or wheel
+handler exists. The old 23.11 mouse feature remains absent; its Ink 5 coordinate
+limitation is not a current requirement for this wheel-only implementation.
+Scope is terminal wheel reports for visible chat/details, not click selection,
+full pointer navigation or a general terminal-platform rewrite. Preserve keyboard
+fallback, inline mode and consent safety; no protected artifacts or publication.
+
+Implemented SGR-1006 wheel handling (three rendered rows per vertical report),
+independent of composer focus, in chat and retained-text details. Wheel bursts
+clamp at both ends, so scrolling back down works immediately after reaching the
+oldest message. Click, release, horizontal and motion reports are consumed without
+typing protocol bytes or acting on consent. Overlays/menus and tiny-terminal
+states cannot scroll the hidden chat. Fullscreen startup enables 1000/1006, and
+the existing normal/crash/signal exit path disables both before restoring the
+main screen. Inline/dumb/non-TTY modes remain untouched; `ANVIL_NO_MOUSE=1`
+opts out without losing fullscreen. README and CLI help document the option and
+the terminal selection-modifier tradeoff.
+
+Evidence: the real-App wheel regression failed before the fix (the oldest visible
+row stayed 62) and passed afterward, including split reports, bursts, bounds,
+draft integrity and permission isolation. Full `npm run gate` passed: sequential
+builds, typechecks, integrity/residual checks, **1,919 tests** (CLI 231, core 1,202,
+TUI 486), and **25/25** offline evaluations. All 44 focused TUI regressions also
+passed on Node 22.23.4. Final three-package packing and clean CLI installation
+outside the repository passed on Node 22. The linked installed launcher is rebuilt.
+
+An offline real-CLI harness passed native Linux PTY and isolated tmux scroll
+journeys; native checks also verified unchanged submitted draft text, Ctrl+C exit,
+SIGTERM cleanup and mouse opt-out. These inject the standard terminal reports;
+physical trackpad gestures, terminal preferences and Windows/macOS are not
+hardware-tested here. The PTY fixture waits for Ink's 200ms Kitty negotiation:
+separately observed upstream early-input replay during that startup window is
+outside this wheel fix and remains unmodified. No visual layout was changed.
+`git diff --check` clean; protected files untouched. Work committed locally with
+normal hooks; no npm publication, GitHub push, release or tag.
+
 ## 2026-10-22 — conversation-first UI/UX implementation
 
 Ownership: this session owns `packages/tui/src/components/` presentation/input,

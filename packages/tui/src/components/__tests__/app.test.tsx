@@ -80,6 +80,41 @@ describe("App Component - 22.17 MCP Boot Notices", () => {
 });
 
 describe("App — ? opens the help overlay end-to-end", () => {
+  it("scrolls chat with terminal trackpad reports without changing the draft or approving an overlay", async () => {
+    const state = bootApp();
+    state.providers.anthropic.streamCompletion = async function* () {
+      yield { type: "text_delta", text: Array.from({ length: 80 }, (_, index) => `wheel-row-${index}`).join("\n") };
+      yield { type: "turn_end", stopReason: "end_turn" };
+    };
+    const send = vi.spyOn(state.session, "send");
+    const app = renderThemed(<App {...state} providerId="anthropic" model="claude-sonnet-5" />);
+    await tick(); app.stdin.write("task"); await tick(); app.stdin.write("\r");
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("wheel-row-79"));
+    app.stdin.write("draft kept"); await tick();
+    const firstVisible = () => Math.min(...Array.from(frameText(app.lastFrame).matchAll(/wheel-row-(\d+)/g), match => Number(match[1])));
+    const initial = firstVisible();
+    // Ink assembles split CSI reports, and processes coalesced bursts separately.
+    app.stdin.write("\x1b[<64;20;"); app.stdin.write("10M");
+    app.stdin.write("\x1b[<64;20;10M".repeat(6));
+    await vi.waitFor(() => expect(firstVisible()).toBeLessThan(initial));
+    expect(frameText(app.lastFrame)).toContain("draft kept");
+    app.stdin.write("\x1b[<64;20;10M".repeat(80));
+    await vi.waitFor(() => expect(firstVisible()).toBe(0));
+    app.stdin.write("\x1b[<65;20;10M".repeat(3));
+    await vi.waitFor(() => expect(firstVisible()).toBeGreaterThan(0));
+    app.stdin.write("\x1b[<65;20;10M".repeat(40));
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("wheel-row-79"));
+    let decided = false;
+    const decision = state.broker.requestPermission("run_command", "Run command: npm test").then(value => { decided = true; return value; });
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("wants to run a command"));
+    app.stdin.write("\x1b[<64;20;10M\x1b[<0;20;10M\x1b[<0;20;10m"); await tick();
+    expect(decided).toBe(false);
+    app.stdin.write("\x1b"); await expect(decision).resolves.toBe(false); await tick();
+    app.stdin.write("\r");
+    await vi.waitFor(() => expect(send).toHaveBeenLastCalledWith("draft kept", expect.anything()));
+    app.unmount();
+  });
+
   it("suspends hidden approval controls in a tiny terminal and restores the draft on resize", async () => {
     const state = bootApp();
     const app = renderInk(<App {...state} providerId="anthropic" model="claude-sonnet-5" />);

@@ -7,6 +7,9 @@ All notable changes to Anvil are documented here. The format follows
 
 ### Changed
 
+- Fullscreen chat and text details support terminal trackpad/wheel scrolling.
+  Mouse reports never enter the composer or permission actions; reporting is
+  restored on exit and can be disabled with `ANVIL_NO_MOUSE=1`.
 - Conversation-first terminal layout: compact identity/status, quieter dark palette,
   readable high-contrast labels, restrained tool summaries and on-demand plan/details.
 - Multiline composer preserves whitespace and trailing newlines. Bracketed paste
