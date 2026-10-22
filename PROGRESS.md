@@ -97,6 +97,49 @@
 
 # PROGRESS — multi-agent coordination
 
+## 2026-10-22 — startup input replay fix
+
+Ownership: this session owns CLI interactive render configuration, its two
+`index.tsx` call sites, boot/startup regression tests, CHANGELOG and this record;
+the chat workspace's offline terminal validation fixtures. Starting checkout clean
+at 93d49c0. Constitution, historical roadmap and anti-slop instructions consulted;
+this is the user-authorized startup bugfix, not new historical roadmap work.
+Reality check: Ink 7.1.1's Kitty auto probe observes stdin and unshifts buffered
+typing after the same input already reached useInput. Upstream fixes this in
+Ink 8, but that major changes React requirements, stream types and mouse input.
+Use Ink's supported disabled-probe option instead of bundling a framework
+migration into the fix. Keep normal controls and wheel reporting intact; verify
+cancellation and saved-session recovery. No protected changes or publication.
+Additional ownership: `packages/tui/src/components/__tests__/app.test.tsx` for
+real-App cancellation/held-queue and clear/resume regressions.
+
+Implemented one shared render-options object for both chat and setup, disabling
+the faulty optional probe rather than delaying input or modifying dependencies.
+Legacy typing, Ctrl+J, paste, cancellation and separate SGR mouse reporting stay
+available; enhanced Kitty keyboard negotiation is intentionally off pending a
+separately validated framework migration. No version/dependency change was needed.
+This resolves the deferred startup issue recorded in the previous wheel section.
+Reference: [upstream Ink 8 release/migration notes](https://github.com/vadimdemedes/ink/releases/tag/v8.0.0).
+
+Four real-stream regressions cover early text, bracketed multiline paste, Enter
+and Ctrl+C across the old probe's timeout. Before the fix, text and paste were
+delivered twice; afterward all four deliver once with no query sent. Boot tests
+assert that both actual render call paths use the safe options. New App journeys
+verify streaming Ctrl+C holds queued intent until explicit resume and /clear →
+/session resume restores saved history into the next real provider request.
+
+Validation: full `npm run gate` passed on Node 24.21.0: ordered core/TUI/CLI builds,
+all typechecks, integrity/residual scans, **1,925 tests** (CLI 235, core 1,202,
+TUI 488), and **25/25** offline evaluations. The real-CLI native PTY/tmux harness
+now types immediately, with its former 250ms negotiation workaround removed;
+exact submitted text, trackpad navigation, Ctrl+C/SIGTERM cleanup and mouse opt-out
+all pass. No real provider/configuration was touched. Release notes updated in
+CHANGELOG; the installed linked CLI rebuilt in place. Node 22 and Windows/macOS
+were not rerun for this pass. `git diff --check` clean; protected artifacts
+unchanged. Work committed with normal hooks; publication stays deferred.
+All three final tarballs also packed successfully, and the CLI clean-installed
+and launched outside the repository on Node 24.21.0.
+
 ## 2026-10-22 — trackpad/wheel chat scrolling
 
 Ownership: this session owns CLI `altScreen.ts`, `help.ts` and related tests, TUI input hooks,

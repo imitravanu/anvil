@@ -55,6 +55,7 @@ import { runNativeGate, runNativeGateWatch, isSignalClaimed } from "./gate.js";
 import { runGuardedInit } from "./initGuarded.js";
 import { runHealth } from "./health.js";
 import { enterAltScreen, exitAltScreen } from "./altScreen.js";
+import { interactiveRenderOptions } from "./interactiveRenderOptions.js";
 import { parseFlags, resolveInvocation } from "./args.js";
 import { buildHelpText } from "./help.js";
 import { runProviderCommand } from "./providerCommand.js";
@@ -441,11 +442,7 @@ async function bootChat(flags: Record<string, string>): Promise<void> {
         reconnect: () => connectAllMcpServers(mcpConns, { timeoutMs: MCP_CONNECT_TIMEOUT_MS }),
       }}
     />,
-    {
-      exitOnCtrlC: false,
-      incrementalRendering: true,
-      kittyKeyboard: { mode: "auto" },
-    }
+    interactiveRenderOptions
   );
 }
 
@@ -512,11 +509,7 @@ function runSetup(thenChat: boolean): void {
         else exitAltScreen();
       }}
     />,
-    {
-      exitOnCtrlC: false,
-      incrementalRendering: true,
-      kittyKeyboard: { mode: "auto" },
-    }
+    interactiveRenderOptions
   );
   appInstance = instance;
 }

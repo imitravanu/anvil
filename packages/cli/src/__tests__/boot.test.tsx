@@ -30,7 +30,7 @@ import React from "react";
  * exit-code plumbing through process.exit.
  */
 
-const renderCalls: { element: { type: unknown; props: Record<string, unknown> } | null; unmount: ReturnType<typeof vi.fn> }[] = [];
+const renderCalls: { element: { type: unknown; props: Record<string, unknown> } | null; options: unknown; unmount: ReturnType<typeof vi.fn> }[] = [];
 const headlessCalls: { prompt: string; opts: Record<string, unknown> }[] = [];
 const goalCalls: { goal: string; opts: Record<string, unknown> }[] = [];
 let headlessCode = 0;
@@ -39,9 +39,9 @@ let headlessPending = false;
 let goalPending = false;
 
 vi.mock("ink", () => ({
-  render: vi.fn((element: { type: unknown; props: Record<string, unknown> }) => {
+  render: vi.fn((element: { type: unknown; props: Record<string, unknown> }, options: unknown) => {
     const unmount = vi.fn(() => undefined);
-    renderCalls.push({ element, unmount });
+    renderCalls.push({ element, options, unmount });
     return { unmount };
   }),
 }));
@@ -169,6 +169,7 @@ describe("boot paths", () => {
       await runEntry(["--base-url", "http://127.0.0.1:9/v1", "--model", "fixture", "--no-mcp"]);
       expect(renderCalls).toHaveLength(1);
       expect(renderCalls[0]!.element!.props.providerId).toBe("custom:adhoc");
+      expect(renderCalls[0]!.options).toMatchObject({ exitOnCtrlC: false, kittyKeyboard: { mode: "disabled" } });
       expect(JSON.parse(fs.readFileSync(path.join(home, "settings.json"), "utf8"))).toEqual(saved);
       expect(fs.existsSync(path.join(home, "providers.json"))).toBe(false);
       expect(fs.existsSync(path.join(home, "provider-keys.json"))).toBe(false);
@@ -275,6 +276,7 @@ describe("boot paths", () => {
       expect(renderCalls).toHaveLength(1);
       // FirstRunSetup, not App: its props carry onDone and no session wiring.
       const setupProps = renderCalls[0]!.element!.props;
+      expect(renderCalls[0]!.options).toMatchObject({ exitOnCtrlC: false, kittyKeyboard: { mode: "disabled" } });
       expect(typeof setupProps.onDone).toBe("function");
       expect(setupProps.session).toBeUndefined();
       writeCreds({ anthropicApiKey: "sk-test" });

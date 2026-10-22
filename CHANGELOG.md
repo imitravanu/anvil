@@ -5,6 +5,12 @@ All notable changes to Anvil are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Early startup typing, paste, Enter and cancellation are no longer replayed by
+  Ink 7's optional keyboard-capability probe. Both chat and setup use the safe
+  shared rendering configuration; Ctrl+J remains the portable newline shortcut.
+
 ### Changed
 
 - Fullscreen chat and text details support terminal trackpad/wheel scrolling.

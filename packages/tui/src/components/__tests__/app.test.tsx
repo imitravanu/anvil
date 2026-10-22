@@ -1,12 +1,79 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import { cleanup, render as renderInk } from "ink-testing-library";
-import { AgentSession, type StreamEvent, type ModelProvider } from "@anvil/core";
+import { AgentSession, loadSession, type StreamEvent, type ModelProvider } from "@anvil/core";
 import { App } from "../App.js";
 import { TuiPermissionBroker } from "../../permission/TuiPermissionBroker.js";
 import { frameText, renderThemed, tick } from "../../test-utils/testRender.js";
 
 afterEach(() => cleanup());
+
+describe("App — cancellation and session recovery", () => {
+  it("restores the saved conversation after clear and includes it in the next provider turn", async () => {
+    const state = bootApp();
+    const turns: string[][] = [];
+    state.providers.anthropic.streamCompletion = async function* (request) {
+      turns.push(request.messages.flatMap(message => message.role === "user" ? message.content.flatMap(part => part.type === "text" ? [part.text] : []) : []));
+      yield { type: "text_delta", text: "RECOVERY_ACK" };
+      yield { type: "turn_end", stopReason: "end_turn" };
+    };
+    const app = renderThemed(<App {...state} providerId="anthropic" model="claude-sonnet-5" />);
+    await tick();
+    const submit = async (text: string) => {
+      app.stdin.write(text);
+      await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain(text));
+      app.stdin.write("\r");
+    };
+    await submit("remember this recovery checkpoint");
+    await vi.waitFor(() => expect(loadSession(state.session.id)?.history.some(message => message.content.some(part => part.type === "text" && part.text === "RECOVERY_ACK"))).toBe(true));
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("Ready"));
+    await submit("/clear");
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("Conversation cleared"));
+    expect(loadSession(state.session.id)).not.toBeNull();
+    await submit(`/session resume ${state.session.id}`);
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("Resumed"));
+    expect(frameText(app.lastFrame)).toContain("RECOVERY_ACK");
+    await submit("continue the restored conversation");
+    await vi.waitFor(() => expect(turns).toHaveLength(2));
+    expect(turns[1]).toContain("remember this recovery checkpoint");
+    expect(turns[1]).toContain("continue the restored conversation");
+    app.unmount();
+  });
+
+  it("cancels an active stream without exiting and holds queued work until explicit resume", async () => {
+    const state = bootApp();
+    let calls = 0;
+    state.providers.anthropic.streamCompletion = async function* (request) {
+      calls++;
+      if (calls === 1) {
+        yield { type: "text_delta", text: "STREAM_STARTED" };
+        await new Promise<void>(resolve => {
+          if (request.signal?.aborted) resolve();
+          else request.signal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+        return;
+      }
+      yield { type: "text_delta", text: "QUEUE_RESUMED" };
+      yield { type: "turn_end", stopReason: "end_turn" };
+    };
+    const cancel = vi.spyOn(state.session, "cancel");
+    const app = renderThemed(<App {...state} providerId="anthropic" model="claude-sonnet-5" />);
+    await tick(); app.stdin.write("long task"); await tick(); app.stdin.write("\r");
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("STREAM_STARTED"));
+    app.stdin.write("queued follow-up"); await tick(); app.stdin.write("\r");
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("1 message queued"));
+    app.stdin.write("\x03");
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("1 message held"));
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(calls).toBe(1);
+    app.stdin.write("\x11");
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("queued follow-up"));
+    app.stdin.write("r");
+    await vi.waitFor(() => expect(frameText(app.lastFrame)).toContain("QUEUE_RESUMED"));
+    expect(calls).toBe(2);
+    app.unmount();
+  });
+});
 
 function fakeProvider(): ModelProvider {
   return {
