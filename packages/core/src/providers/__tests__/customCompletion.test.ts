@@ -32,6 +32,27 @@ afterEach(() => {
 });
 
 describe("custom-provider completion regressions", () => {
+  it("checks each effective model route and names missing environment references", async () => {
+    vi.stubEnv("AUDIT_ROUTE_TOKEN", "");
+    const config = cfg({ models: [
+      { id: "blocked", contextWindow: 8192, headers: { "X-Api-Key": "$AUDIT_ROUTE_TOKEN" } },
+      { id: "ready", contextWindow: 8192 },
+    ] });
+    const provider = createCustomProvider(config);
+    expect(provider.isConfigured()).toBe(true);
+    expect(provider.isConfigured("ready")).toBe(true);
+    expect(provider.isConfigured("blocked")).toBe(false);
+    const fetcher = vi.spyOn(globalThis, "fetch");
+    const events = [];
+    for await (const event of provider.streamCompletion(request("blocked"))) events.push(event);
+    expect(events).toContainEqual(expect.objectContaining({ type: "error", code: "AUTH_FAILED", message: expect.stringContaining("AUDIT_ROUTE_TOKEN") }));
+    expect(fetcher).not.toHaveBeenCalled();
+    const overridden = createCustomProvider(cfg({ headers: { "X-Api-Key": "$AUDIT_ROUTE_TOKEN" }, models: [
+      { id: "ready", contextWindow: 8192, headers: { "x-api-key": "$AUDIT_WORKING_TOKEN" } },
+    ] }));
+    vi.stubEnv("AUDIT_WORKING_TOKEN", "secret-only-in-env");
+    expect(overridden.isConfigured("ready")).toBe(true);
+  });
   it.each([undefined, []])("discovers an omitted/empty model list into selection and the registry (%s)", async models => {
     const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: [{ id: "live-model" }, { id: "live-model" }, { id: 42 }, { id: "bad-context", context_length: -1 }] })));
     const config = validateCustomProvider(cfg({ models }));

@@ -299,7 +299,7 @@ async function resolveBootContext(
   const providers = createProviders(creds, customConfigs, customApiKeys);
 
   const provider = providers[selection.providerId];
-  if (!provider.isConfigured()) {
+  if (!provider.isConfigured(selection.model)) {
     console.error(
       `Provider "${selection.providerId}" is not configured. Check ~/.anvil/credentials.json.`
     );
@@ -363,7 +363,7 @@ async function bootChat(flags: Record<string, string>): Promise<void> {
   const ctx = await resolveBootContext(flags, { mode: "chat" });
   const { providers, provider, providerId, model, mcpConns, mcpNotices } = ctx;
 
-  if (flags.provider || flags.model) {
+  if (!flags["base-url"] && (flags.provider || flags.model)) {
     try {
       saveSettings({
         ...loadSettings(),

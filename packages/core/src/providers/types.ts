@@ -215,7 +215,7 @@ export interface CompletionRequest {
 export interface ModelProvider {
   id: ProviderId;
   displayName: string;
-  isConfigured(): boolean; // true if required API key is present
+  isConfigured(model?: string): boolean; // model routes may require different headers
   streamCompletion(request: CompletionRequest): AsyncGenerator<StreamEvent>;
 }
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useApp, useInput } from "ink";
 import TextInput from "ink-text-input";
 import type { ProviderId } from "@anvil/core";
 import { getErrorMessage, saveCredential, loadCustomProviders, type CustomProviderConfig } from "@anvil/core";
@@ -23,6 +23,7 @@ export function FirstRunSetup({
   onRemoved,
   activeProviderId,
   title = "Welcome to Anvil. Configure at least one provider's API key to start.",
+  handleCtrlC = true,
 }: {
   onDone: (providerId: ProviderId) => void;
   /** Esc-to-cancel for the /connect overlay. First-run boot omits it: Anvil
@@ -31,7 +32,9 @@ export function FirstRunSetup({
   onRemoved?: () => void;
   activeProviderId?: ProviderId;
   title?: string;
+  handleCtrlC?: boolean;
 }) {
+  const { exit } = useApp();
   const theme = useTheme();
   const [selected, setSelected] = useState(0);
   const [apiKey, setApiKey] = useState("");
@@ -45,7 +48,8 @@ export function FirstRunSetup({
   const window = useWindowedList(rows.length, selected);
   const provider = PROVIDERS[selected];
 
-  useInput((_input, key) => {
+  useInput((input, key) => {
+    if (handleCtrlC && key.ctrl && (input === "c" || input === "\x03")) { exit(); return; }
     if (customSetup) return;
     if (key.escape) {
       // F11 (AUDIT-2026-09-30): every overlay honors Esc at EVERY step. /connect

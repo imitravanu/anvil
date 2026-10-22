@@ -8,6 +8,7 @@ import { CommandPalette } from "./CommandPalette.js";
 import { sanitizeTerminalText } from "../util/sanitize.js";
 
 interface InputBarProps {
+  handleCtrlC?: boolean;
   isBusy: boolean;
   /** 23.9 focus zone: false routes keystrokes away (transcript owns arrows). */
   hasFocus?: boolean;
@@ -20,7 +21,7 @@ interface InputBarProps {
   onOpenHelp?: () => void; // `?` on an empty prompt — the key/command reference
 }
 
-export function InputBar({ isBusy, hasFocus = true, onSlashMenuChange, onSubmit, onCancel, sentHistory = [], mruCommands = [], onOpenHelp }: InputBarProps) {
+export function InputBar({ isBusy, handleCtrlC = true, hasFocus = true, onSlashMenuChange, onSubmit, onCancel, sentHistory = [], mruCommands = [], onOpenHelp }: InputBarProps) {
   const theme = useTheme();
   const { exit } = useApp();
   const [value, setValue] = useState("");
@@ -57,7 +58,7 @@ export function InputBar({ isBusy, hasFocus = true, onSlashMenuChange, onSubmit,
         onCancel();
         return;
       }
-      if (key.ctrl && (input === "c" || input === "\x03")) {
+      if (handleCtrlC && key.ctrl && (input === "c" || input === "\x03")) {
         if (isBusy) {
           onCancel();
           return;
@@ -109,7 +110,7 @@ export function InputBar({ isBusy, hasFocus = true, onSlashMenuChange, onSubmit,
     // exit cleanly while idle. Ink delivers Ctrl+C as "c" with key.ctrl set
     // (use-input.js maps ctrl keys to keypress.name); accept the raw \x03 byte
     // too, in case a future Ink version changes that mapping.
-    if (key.ctrl && (input === "c" || input === "\x03")) {
+    if (handleCtrlC && key.ctrl && (input === "c" || input === "\x03")) {
       if (isBusy) {
         onCancel();
         return;

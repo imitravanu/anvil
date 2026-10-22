@@ -4,7 +4,8 @@ import { splitMcpToolName } from "@anvil/core";
 import type { PendingPermissionRequest } from "../permission/TuiPermissionBroker.js";
 import { ColorizedDiff } from "../diff/colorizeDiff.js";
 import { useTheme } from "../theme/theme.js";
-import { curtail } from "../util/format.js";
+import { splitByDisplayWidth } from "../util/format.js";
+import { sanitizeTerminalText } from "../util/sanitize.js";
 
 const DIFF_TOOLS = new Set(["edit_file", "write_file"]);
 
@@ -52,11 +53,19 @@ export function PermissionPrompt({
 }) {
   const theme = useTheme();
   const [selected, setSelected] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const { stdout } = useStdout();
+  const previewRows = Math.max(1, Math.min(3, (stdout?.rows ?? 24) - 16));
+  const previewLines = sanitizeTerminalText(request.summary).split("\n")
+    .flatMap(line => splitByDisplayWidth(line, Math.max(1, (stdout?.columns ?? 80) - 8)));
+  const maxOffset = Math.max(0, previewLines.length - previewRows);
+  const visibleOffset = Math.min(offset, maxOffset);
   // A new queued request reuses this overlay: reset the highlight so a
   // fast Enter can never confirm the previous request's selection (Allow
   // on a dangerous tool, or Deny on a benign one) without the user looking.
   useEffect(() => {
     setSelected(0);
+    setOffset(0);
   }, [request]);
   const options = optionsFor(request.toolName);
   const isDiff = DIFF_TOOLS.has(request.toolName);
@@ -66,6 +75,8 @@ export function PermissionPrompt({
   const compact = !isDiff;
 
   useInput((input, key) => {
+    // Control shortcuts must never act as affirmative permission keys.
+    if (key.ctrl || key.meta) return;
     if (key.escape) {
       // Esc = Deny: the overlay must always be escapable with one key,
       // matching every other overlay's Esc-to-dismiss contract.
@@ -73,6 +84,15 @@ export function PermissionPrompt({
       return;
     }
     if (compact) {
+      if (key.upArrow || key.pageUp) {
+        setOffset(value => Math.max(0, Math.min(value, maxOffset) - (key.pageUp ? previewRows : 1)));
+        return;
+      }
+      if (key.downArrow || key.pageDown) {
+        setOffset(value => Math.min(maxOffset, value + (key.pageDown ? previewRows : 1)));
+        return;
+      }
+      if (input === "g" || input === "G") { setOffset(input === "G" ? maxOffset : 0); return; }
       // Symmetric with diff mode below: Enter is allow-once everywhere, and
       // y/a/n work in both modes (users shouldn't guess which keys this
       // prompt speaks).
@@ -115,11 +135,9 @@ export function PermissionPrompt({
   const label = mcp
     ? `wants to run external tool ${mcp.tool}`
     : (TOOL_LABELS[request.toolName] ?? `wants to ${request.toolName.replace(/_/g, " ")}`);
-  const { stdout } = useStdout();
   // Command summaries are model-authored — a 500-char one-liner would wrap to
   // a dozen rows inside this flexShrink={0} overlay and overflow the frame.
   // The diff path bounds itself in ColorizedDiff; bound the text path here.
-  const maxText = Math.max(20, (stdout?.columns ?? 80) - 8);
 
   return (
     <Box
@@ -148,7 +166,12 @@ export function PermissionPrompt({
         {isDiff ? (
           <ColorizedDiff diff={request.summary} />
         ) : (
-          <Text color={theme.colors.assistantText}>{curtail(request.summary, maxText * 3)}</Text>
+          <Box flexDirection="column">
+            <Text color={theme.colors.assistantText}>{previewLines.slice(visibleOffset, visibleOffset + previewRows).join("\n")}</Text>
+            {maxOffset > 0 && <Text color={theme.colors.textSecondary}>
+              {`Lines ${visibleOffset + 1}–${Math.min(previewLines.length, visibleOffset + previewRows)} of ${previewLines.length} · ↑/↓ scroll · PgUp/PgDn page · g/G start/end`}
+            </Text>}
+          </Box>
         )}
       </Box>
       {compact ? (

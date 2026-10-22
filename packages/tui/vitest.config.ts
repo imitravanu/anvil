@@ -4,6 +4,7 @@ import { defineConfig } from "vitest/config";
 // this include, vitest counts each pure-helper test TWICE (src + dist copy).
 export default defineConfig({
   test: {
+    setupFiles: ["../../test/setup.ts"],
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     // The thinking-timer property wait can need ~10s of real time under gate
     // load before its 1s tick lands; vitest's 5s default killed the test

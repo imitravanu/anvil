@@ -240,7 +240,7 @@ async function main() {
   }
 
   if (json) {
-    console.log(JSON.stringify(results, null, 2));
+    console.log(JSON.stringify({ mode: mock ? "mock" : "live", results }, null, 2));
     process.exit(totalPassed === totalTested ? 0 : 1);
   }
 
@@ -269,7 +269,7 @@ async function main() {
 
     const badge =
       r.status === "live"
-        ? "✅ live"
+        ? mock ? "✅ mock" : "✅ live"
         : r.status === "broken"
         ? "❌ broken"
         : "⚠ untested";
@@ -287,7 +287,7 @@ async function main() {
   }
 
   console.log("─".repeat(90));
-  console.log(`Passed: ${totalPassed}/${totalTested} configured providers certified live.`);
+  console.log(`Passed: ${totalPassed}/${totalTested} providers passed ${mock ? "offline mock" : "live"} certification.`);
   console.log("════════════════════════════════════════════════════════════════════\n");
 
   if (totalTested > 0 && totalPassed < totalTested) {

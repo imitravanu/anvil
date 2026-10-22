@@ -22,6 +22,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { validateRelease } from "./release-validation.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const WORKSPACES = ["packages/core", "packages/tui", "packages/cli"];
@@ -41,8 +42,18 @@ function tarballPrefix(name) {
   return name.replace(/^@/, "").replace(/\//g, "-");
 }
 
+const options = {};
+for (let i = 2; i < process.argv.length; i += 2) {
+  const flag = process.argv[i];
+  const value = process.argv[i + 1];
+  if (!["--tag", "--pack-destination"].includes(flag) || !value || value.startsWith("--")) fail("Use --tag <vX.Y.Z> and/or --pack-destination <empty-directory>.");
+  options[flag] = value;
+}
+try { validateRelease(ROOT, WORKSPACES, options["--tag"]); }
+catch (err) { fail(err.message); }
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "anvil-pkg-"));
-const packDir = path.join(tmp, "pack");
+const packDir = options["--pack-destination"] ? path.resolve(options["--pack-destination"]) : path.join(tmp, "pack");
+if (fs.existsSync(packDir) && fs.readdirSync(packDir).length) fail("Pack destination must be empty; existing files were preserved.");
 fs.mkdirSync(packDir, { recursive: true });
 
 try {
@@ -88,9 +99,9 @@ try {
   );
   if (!fs.existsSync(bin)) fail("the installed package exposes no `anvil` bin");
 
-  const out = execFileSync(bin, ["--version"], { cwd: consumer, encoding: "utf8" }).trim();
+  const out = execFileSync(bin, ["--version"], { cwd: consumer, encoding: "utf8", env: { ...process.env, ANVIL_HOME: path.join(tmp, "home") } }).trim();
   console.log(`[verify:package] installed CLI reports: ${out}`);
-  if (!/^anvil \d+\.\d+\.\d+/.test(out)) fail(`unexpected --version output: ${JSON.stringify(out)}`);
+  if (out !== `anvil ${cli.version}` && !out.startsWith(`anvil ${cli.version} (`)) fail(`unexpected --version output: ${JSON.stringify(out)}`);
 
   console.log("[verify:package] OK — the packed CLI installs and runs outside the monorepo.");
 } finally {

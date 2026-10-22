@@ -13,6 +13,7 @@ const never = new AbortController().signal;
 
 beforeAll(async () => {
   root = await fs.mkdtemp(path.join(os.tmpdir(), "anvil-bash-"));
+  execSync("git init -q", { cwd: root });
   ctx = { projectRoot: root, signal: never };
 });
 afterAll(() => fs.rm(root, { recursive: true, force: true }));
@@ -409,6 +410,17 @@ describe("run_command read-only safe-list", () => {
     }
     // No projectRoot means fail closed, exactly like the file readers.
     expect(isReadOnlyCommand("git status")).toBe(false);
+  });
+
+  it("requires approval for Git object reads and repository-wide reads from a nested project", async () => {
+    const { isReadOnlyCommand } = await import("../bash.js");
+    const nested = path.join(root, "nested");
+    await fs.mkdir(nested, { recursive: true });
+    for (const command of ["git show HEAD:outside.txt", "git show HEAD:../outside.txt", "git log -p", "git show HEAD", "git diff"]) {
+      expect(isReadOnlyCommand(command, nested), command).toBe(false);
+    }
+    expect(isReadOnlyCommand("git show HEAD:outside.txt", root)).toBe(false);
+    expect(isReadOnlyCommand("git diff", root)).toBe(true);
   });
 
   it("rejects brace expansion — bash rewrites the argument list after the check", async () => {

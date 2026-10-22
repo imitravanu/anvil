@@ -4,6 +4,7 @@ import { defineConfig } from "vitest/config";
 // low-coverage area never blocks the gate. It counts production src/ only.
 export default defineConfig({
   test: {
+    setupFiles: ["../../test/setup.ts"],
     // The entry-point harnesses (entry/boot/bootFailures) re-evaluate the whole
     // CLI + Ink module graph for EVERY test (vi.resetModules + a fresh import),
     // which costs seconds per test. The 5s default cap is a product-speed

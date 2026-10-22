@@ -112,7 +112,7 @@ export function ModelPicker({
         const provider = providers[m.providerId as ProviderId];
         return {
           model: m,
-          enabled: provider?.isConfigured() ?? false,
+          enabled: provider?.isConfigured(m.id) ?? false,
           provider,
           providerDisplayName: provider?.displayName ?? m.providerId,
         };

@@ -31,6 +31,40 @@ const DIFF = [
 ].join("\n");
 
 describe("PermissionPrompt", () => {
+  it.each(["run_command", "edit_file"])("ignores modified permission keys for %s", async toolName => {
+    const resolve = vi.fn();
+    const broker = brokerStub();
+    const app = renderThemed(<PermissionPrompt request={{ toolName, summary: DIFF, resolve }} broker={broker} />);
+    await tick();
+    for (const shortcut of ["\x01", "\x19", "\x0e", "\x1ba"]) {
+      app.stdin.write(shortcut);
+      await tick();
+    }
+    expect(resolve).not.toHaveBeenCalled();
+    expect(broker.approveAlwaysForSession).not.toHaveBeenCalled();
+    app.stdin.write("a");
+    await tick();
+    expect(resolve).toHaveBeenCalledWith(true);
+    expect(broker.approveAlwaysForSession).toHaveBeenCalledWith(toolName);
+    app.unmount();
+  });
+
+  it("lets the user inspect the complete long command before approval", async () => {
+    const resolve = vi.fn();
+    const summary = `Run command: ${"prefix ".repeat(100)}FINAL_ARGUMENT`;
+    const app = renderThemed(<PermissionPrompt request={{ toolName: "run_command", summary, resolve }} broker={brokerStub()} />);
+    await tick();
+    expect(frameText(app.lastFrame)).toContain("start/end");
+    expect(frameText(app.lastFrame)).not.toContain("FINAL_ARGUMENT");
+    app.stdin.write("G");
+    await tick();
+    expect(frameText(app.lastFrame)).toContain("FINAL_ARGUMENT");
+    app.stdin.write("g");
+    await tick();
+    expect(frameText(app.lastFrame)).toContain("Run command:");
+    expect(resolve).not.toHaveBeenCalled();
+    app.unmount();
+  });
   it("shows active phrasing plus the diff for file tools", async () => {
     const { request } = makeRequest("edit_file", DIFF);
     const app = renderThemed(<PermissionPrompt request={request} broker={brokerStub()} />);

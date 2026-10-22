@@ -35,6 +35,25 @@ describe("hasAnyConfiguredProvider", () => {
 });
 
 describe("resolveProviderSelection", () => {
+  it("defaults to a ready custom route and rejects an explicitly unready model", () => {
+    vi.stubEnv("ANVIL_TEST_ROUTE_KEY", "");
+    const customProviders = [{
+      id: "custom:routes" as const, name: "routes", baseUrl: "https://example.test/v1", auth: "none" as const,
+      models: [
+        { id: "blocked", contextWindow: 4096, headers: { "X-Api-Key": "$ANVIL_TEST_ROUTE_KEY" } },
+        { id: "ready", contextWindow: 4096 },
+      ],
+    }];
+    const input = { customProviders, creds: {}, flagProvider: "custom:routes" };
+    try {
+      expect(resolveProviderSelection(input)).toEqual({ providerId: "custom:routes", model: "ready" });
+      expect(resolveProviderSelection({ ...input, settings: { defaultProviderId: "custom:routes", defaultModel: "blocked" } })).toEqual({ providerId: "custom:routes", model: "ready" });
+      expect(() => resolveProviderSelection({ ...input, flagModel: "blocked" })).toThrow(/Model "blocked".*not configured/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("flag level: --provider/--model beat everything", () => {
     const sel = resolveProviderSelection({
       flagProvider: "anthropic",

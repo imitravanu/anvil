@@ -5,6 +5,7 @@ import { defineConfig } from "vitest/config";
 // tests measuring themselves is how a coverage number becomes meaningless.
 export default defineConfig({
   test: {
+    setupFiles: ["../../test/setup.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text-summary"],

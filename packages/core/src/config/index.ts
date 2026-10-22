@@ -194,6 +194,10 @@ export function resolveProviderSelection(input: SelectionInput): ProviderSelecti
   const customConfigured = customConfigs.filter(config => isCustomProviderConfigured(config, input.customApiKeys?.[config.id])).map(config => config.id);
   const providerOrder = [...PROVIDER_ORDER, ...customConfigs.map(config => config.id)];
   const models = [...MODEL_REGISTRY.filter(model => !model.providerId.startsWith("custom:")), ...customProviderModels(customConfigs)];
+  const modelConfigured = (providerId: string, modelId: string): boolean => {
+    const custom = customConfigs.find(config => config.id === providerId);
+    return !custom || isCustomProviderConfigured(custom, input.customApiKeys?.[custom.id], modelId);
+  };
   const configured = PROVIDER_ORDER.filter(
     (id) =>
       KEYLESS_PROVIDERS.has(id) ||
@@ -260,18 +264,25 @@ export function resolveProviderSelection(input: SelectionInput): ProviderSelecti
   ];
   const selectedModel = input.flagModel ?? inheritedModels.find(candidate => {
     if (!candidate.model || (candidate.provider && candidate.provider !== providerId)) return false;
+    if (candidate.saved && !modelConfigured(providerId, candidate.model)) return false;
     if (candidate.saved && providerId.startsWith("custom:") && !models.some(model => model.providerId === providerId && model.id === candidate.model)) return false;
     const registered = models.filter(m => m.id === candidate.model);
     return registered.length === 0 || registered.some(m => m.providerId === providerId);
   })?.model;
   const model =
     selectedModel ??
-    models.find((m) => m.providerId === providerId)?.id ??
+    models.find((m) => m.providerId === providerId && modelConfigured(providerId, m.id))?.id ??
     "unknown-model";
 
   if (model === "unknown-model" && providerId.startsWith("custom:")) {
     const error = new ProviderSelectionError(providerId);
     error.message = `No models available for ${providerId}. Check model discovery, pass --model <id>, or configure model IDs explicitly.`;
+    throw error;
+  }
+
+  if (!modelConfigured(providerId, model)) {
+    const error = new ProviderSelectionError(providerId);
+    error.message = `Model "${model}" for ${providerId} is not configured. Check its API key and header environment references.`;
     throw error;
   }
 

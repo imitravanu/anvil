@@ -87,6 +87,19 @@ async function collect(gen: AsyncGenerator<StreamEvent>): Promise<StreamEvent[]>
 }
 
 describe("BaseProvider", () => {
+  it("closes an adapter when its consumer stops after text or an error", async () => {
+    for (const event of [{ type: "text_delta", text: "partial" }, { type: "error", message: "failed" }] as StreamEvent[]) {
+      let closed = false;
+      class CloseProbe extends OkProvider {
+        protected async *doStream(): AsyncGenerator<StreamEvent> {
+          try { yield event; yield { type: "turn_end", stopReason: "end_turn" }; }
+          finally { closed = true; }
+        }
+      }
+      for await (const _ of new CloseProbe().streamCompletion(req())) break;
+      expect(closed).toBe(true);
+    }
+  });
   it("yields a not-configured error without calling doStream", async () => {
     const p = new OkProvider(false);
     const events = await collect(p.streamCompletion(req()));

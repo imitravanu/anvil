@@ -172,3 +172,13 @@
 - [x] CHANGELOG entry + README claim only as far as evidence supports
       (`## [1.1.0]` heading; README Guardian section documents surfaces, claims
       no pass-rate delta — matrix tracked here pending quota)
+
+# Post-phase maintenance — 2026-10-22 audit remediation
+
+Protected-path ownership: `.github/workflows/release.yml`,
+`packages/cli/src/__tests__/gate.sentinel.test.ts`, `scripts/gate-manifest.json`.
+The user reviewed and explicitly approved the release-workflow diff in this chat.
+The workflow verifies version/tag consistency and the isolated packed installation
+before publishing the same tarballs; the sentinel asserts that ordering, and the
+integrity manifest is regenerated together. Gate rules are unchanged. Verification
+and commit are tracked in the 2026-10-22 entry of `PROGRESS.md`; no publish is requested.

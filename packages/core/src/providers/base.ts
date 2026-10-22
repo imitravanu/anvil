@@ -48,9 +48,10 @@ export abstract class BaseProvider implements ModelProvider {
       // consumer. Retry is only safe while nothing has been delivered —
       // restarting after delivered deltas would replay them.
       let surfaced = false;
+      let iterator: AsyncGenerator<StreamEvent> | undefined;
       try {
         const stream = await this.doStream(request);
-        const iterator = ensureTurnEnd(stream)[Symbol.asyncIterator]();
+        iterator = ensureTurnEnd(stream)[Symbol.asyncIterator]();
         let first = await iterator.next();
         if (!first.done && first.value.type === "error") {
           const info = classifyProviderError(first.value.message);
@@ -99,6 +100,9 @@ export abstract class BaseProvider implements ModelProvider {
           ...(info.httpStatus !== undefined ? { httpStatus: info.httpStatus } : {}),
         };
         return;
+      } finally {
+        // Consumers stop on errors and cancellation before the adapter reaches EOF.
+        await iterator?.return(undefined);
       }
     }
   }

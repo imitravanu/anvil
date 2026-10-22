@@ -27,7 +27,7 @@
   - **Filesystem & AST Intelligence**: `read_file` (with AST skeleton folding), `write_file`, `edit_file` (unified diffs), `list_files`, `grep`, `find_symbol`.
   - **Code Intelligence (LSP)**: `get_outline`, `goto_definition`, `find_references`, `get_hover`, `get_diagnostics`.
   - **Execution & Memory**: `run_command`, `verify_tests`, `update_plan`, `delegate_task` (sub-agent), `update_memory`.
-- **Interactive Unified Diff Permissions**: Every mutating tool shows the exact diff or command before execution (`Allow once` / `Always allow this session` / `Deny` / `Esc`). Safe read-only commands (`ls`, `cat`, `git status`) run automatically.
+- **Interactive Unified Diff Permissions**: Every mutating tool shows the exact diff or command before execution (`Allow once` / `Always allow this session` / `Deny` / `Esc`). Long command/MCP previews scroll with ↑/↓ or PgUp/PgDn (`g`/`G` for start/end). Modified approval keys are ignored. Safe read-only commands (`ls`, `cat`, `git status`) run automatically; Git commands from a nested repository directory or with repository-object paths require approval.
 - **Model Picker with Live Search**: Filter through 102 free-visible models (129 registered) plus live-synced OpenRouter/Orcarouter free models mid-session via `/model`.
 - **Session Checkpoints & Rewind**: Automatic pre-mutation snapshots allow full file rollbacks via `/rewind <n>`.
 - **Context Compaction**: Summarizes older conversation regions when nearing model context windows without breaking tool-call continuity.
@@ -188,13 +188,15 @@ relocates both files. For example, an environment-authenticated provider:
 ]
 ```
 
-Use your server's actual base URL and context limit. The first model is the default.
+Use your server's actual base URL and context limit. The first configured model is the default.
 The setup flow's optional JSON field accepts `protocol`, `headers`, `maxTokensParam`, `streamUsage`,
 `supportsTools` and `supportsVision`. Set `streamUsage: false` if the server rejects
 `stream_options`, or choose `max_completion_tokens` when required. Model capabilities
 can be configured individually in the file; omitted pricing remains unknown.
 Secret headers such as `X-Api-Key` must reference `$ENV_NAME`; use `auth: "none"`
-for header-only authentication. Missing referenced variables disable that provider.
+for header-only authentication. Missing referenced variables disable the affected
+model routes in the picker, not other ready routes. Explicitly selecting an unavailable
+route fails before a request is sent. Ad-hoc `--base-url` runs never change saved defaults.
 Changes made through `/connect` are applied immediately; external file edits take effect
 on the next launch or reconnect. `protocol` selects `openai-chat` (default),
 `openai-responses`, or `anthropic`. Per-model `baseUrl`, `protocol` and `headers`
@@ -347,6 +349,10 @@ npm run certify -- --mock --all
 # Launch local CLI in development mode
 npm run dev
 ```
+
+Certification output distinguishes offline mocks from live endpoint checks. With
+`--json`, output is an object containing `mode` (`mock` or `live`) and `results`;
+mock success is not evidence of live provider availability.
 
 ---
 

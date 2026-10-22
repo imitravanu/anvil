@@ -8,6 +8,7 @@ import {
   RUN_COMMAND_TIMEOUT_MS,
   MIN_COMMAND_TIMEOUT_MS,
   MAX_COMMAND_TIMEOUT_MS,
+  GIT_INSPECT_TIMEOUT_MS,
 } from "../config/constants.js";
 
 /**
@@ -438,6 +439,15 @@ export function isReadOnlyCommand(command: string, projectRoot?: string): boolea
     // one — both with no permission prompt otherwise. No projectRoot means
     // fail closed, same as the readers.
     if (projectRoot === undefined) return false;
+    if (bin === "git") {
+      // Git object paths and repository-wide reads do not use cwd-relative paths.
+      if (rest.some(arg => stripShellQuotes(arg).includes(":"))) return false;
+      const top = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+        cwd: projectRoot, encoding: "utf8", timeout: GIT_INSPECT_TIMEOUT_MS,
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      if (top.error || top.status !== 0 || path.relative(path.resolve(projectRoot), top.stdout.trim()) !== "") return false;
+    }
     return pathsInsideRoot(rest, projectRoot);
   }
   if (!READ_ONLY_BINARIES.has(bin)) return false;

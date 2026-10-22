@@ -267,8 +267,24 @@ function resolvedHeaders(config: CustomProviderConfig): Record<string, string> |
   return headers;
 }
 
-export function isCustomProviderConfigured(config: CustomProviderConfig, apiKeyOverride?: string): boolean {
-  return (config.auth === "none" || text((apiKeyOverride ?? apiKeyFor(config))?.trim())) && resolvedHeaders(config) !== undefined;
+function effectiveCustomConfig(config: CustomProviderConfig, modelId?: string): CustomProviderConfig {
+  const model = config.models?.find(item => item.id === modelId);
+  const headers: Record<string, string> = { ...config.headers };
+  for (const [name, value] of Object.entries(model?.headers ?? {})) {
+    for (const inherited of Object.keys(headers)) {
+      if (inherited.toLowerCase() === name.toLowerCase()) delete headers[inherited];
+    }
+    headers[name] = value;
+  }
+  return { ...config, baseUrl: model?.baseUrl ?? config.baseUrl, protocol: model?.protocol ?? config.protocol, headers };
+}
+
+export function isCustomProviderConfigured(config: CustomProviderConfig, apiKeyOverride?: string, modelId?: string): boolean {
+  if (modelId === undefined && config.models?.length) {
+    return config.models.some(model => isCustomProviderConfigured(config, apiKeyOverride, model.id));
+  }
+  const effective = effectiveCustomConfig(config, modelId);
+  return (config.auth === "none" || text((apiKeyOverride ?? apiKeyFor(config))?.trim())) && resolvedHeaders(effective) !== undefined;
 }
 
 export function customProviderModels(configs: CustomProviderConfig[]): ModelInfo[] {
@@ -451,23 +467,23 @@ export function createCustomProvider(config: CustomProviderConfig, apiKeyOverrid
   const adapterFor = (modelId: string): ModelProvider => {
     const existing = adapters.get(modelId);
     if (existing) return existing;
-    const model = config.models?.find(item => item.id === modelId);
-    const mergedHeaders: Record<string, string> = { ...config.headers };
-    for (const [name, value] of Object.entries(model?.headers ?? {})) {
-      for (const inherited of Object.keys(mergedHeaders)) {
-        if (inherited.toLowerCase() === name.toLowerCase()) delete mergedHeaders[inherited];
-      }
-      mergedHeaders[name] = value;
-    }
-    const effective = { ...config, baseUrl: model?.baseUrl ?? config.baseUrl, protocol: model?.protocol ?? config.protocol, headers: mergedHeaders };
+    const effective = effectiveCustomConfig(config, modelId);
     const adapter = createCustomAdapter(effective, apiKeyOverride);
     adapters.set(modelId, adapter);
     return adapter;
   };
   return {
     id: config.id, displayName: config.name,
-    isConfigured: () => isCustomProviderConfigured(config) || Boolean(apiKeyOverride && resolvedHeaders(config)),
+    isConfigured: model => isCustomProviderConfigured(config, apiKeyOverride, model),
     async *streamCompletion(request) {
+      if (!isCustomProviderConfigured(config, apiKeyOverride, request.model)) {
+        const effective = effectiveCustomConfig(config, request.model);
+        const missing = Object.values(effective.headers ?? {}).filter(value => value.startsWith("$") && !process.env[value.slice(1)]?.trim()).map(value => value.slice(1));
+        if (config.apiKeyEnv && !process.env[config.apiKeyEnv]?.trim() && !apiKeyOverride) missing.push(config.apiKeyEnv);
+        yield { type: "error", code: "AUTH_FAILED", isRetryable: false,
+          message: missing.length ? `Set required environment variable(s) for ${config.id}/${request.model}: ${[...new Set(missing)].join(", ")}.` : `Authentication is not configured for ${config.id}/${request.model}.` };
+        return;
+      }
       const model = customProviderModels([config]).find(item => item.id === request.model);
       yield* adapterFor(request.model).streamCompletion({ ...request, ...(model?.supportsTools === false ? { tools: [] } : {}) });
     },

@@ -231,19 +231,6 @@ export class ResponsesStyleProvider extends BaseProvider {
               return;
             }
 
-            if (data.type === "response.failed" || currentEvent === "response.failed") {
-              const resp = data.response as { error?: { message?: string } } | undefined;
-              if (resp?.error?.message) {
-                yield {
-                  type: "error",
-                  message: resp.error.message,
-                };
-                return;
-              }
-              // intentional: wait for subsequent error frame containing specific details
-              continue;
-            }
-
             // Reasoning text delta
             if (
               data.type === "response.reasoning_text.delta" ||
@@ -343,11 +330,12 @@ export class ResponsesStyleProvider extends BaseProvider {
 
             // Response completed
             if (
-              data.type === "response.completed" ||
-              currentEvent === "response.completed"
+              ["response.completed", "response.incomplete", "response.failed"].includes(String(data.type ?? currentEvent))
             ) {
               const resp = data.response as
                 | {
+                    error?: { message?: string };
+                    incomplete_details?: { reason?: string };
                     usage?: {
                       input_tokens?: number;
                       output_tokens?: number;
@@ -373,10 +361,18 @@ export class ResponsesStyleProvider extends BaseProvider {
                 };
               }
 
+              const terminal = data.type ?? currentEvent;
+              if (terminal === "response.failed") {
+                yield { type: "error", message: resp?.error?.message ?? `${this.displayName} response failed.` };
+                return;
+              }
               yield {
                 type: "turn_end",
-                stopReason: hasToolCalls ? "tool_use" : "end_turn",
+                stopReason: terminal === "response.incomplete"
+                  ? resp?.incomplete_details?.reason === "max_output_tokens" ? "max_tokens" : "error"
+                  : hasToolCalls ? "tool_use" : "end_turn",
               };
+              return;
             }
           }
         }
@@ -384,6 +380,10 @@ export class ResponsesStyleProvider extends BaseProvider {
     } catch (err) {
       yield { type: "error", message: getErrorMessage(err) };
     } finally {
+      try { await reader.cancel(); }
+      catch {
+        // intentional: an aborted/closed body may already reject cancellation.
+      }
       reader.releaseLock();
     }
   }

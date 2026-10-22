@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import React from "react";
 import { AgentSession, type StreamEvent, type ModelProvider } from "@anvil/core";
 import { App } from "../App.js";
@@ -77,6 +77,24 @@ describe("App Component - 22.17 MCP Boot Notices", () => {
 });
 
 describe("App — ? opens the help overlay end-to-end", () => {
+  it("Ctrl+C cancels a turn while its permission overlay owns input", async () => {
+    const state = bootApp();
+    state.providers.anthropic.streamCompletion = async function* () {
+      yield { type: "tool_call_end", id: "write", name: "write_file", input: { path: "audit-fixture.txt", content: "fixture" } };
+      yield { type: "turn_end", stopReason: "tool_use" };
+    };
+    const cancel = vi.spyOn(state.session, "cancel");
+    const app = renderThemed(<App {...state} providerId="anthropic" model="claude-sonnet-5" />);
+    await tick();
+    app.stdin.write("task"); await tick(); app.stdin.write("\r");
+    await tick(200);
+    expect(frameText(app.lastFrame)).toContain("wants to write a file");
+    app.stdin.write("\x03");
+    await tick();
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(frameText(app.lastFrame)).not.toContain("wants to write a file");
+    app.unmount();
+  });
   it("shows help on a bare ? and restores the input bar on Esc", async () => {
     const { session, broker, providers, sessionOptions } = bootApp();
     const { lastFrame, unmount, stdin } = renderThemed(

@@ -1,6 +1,6 @@
 import { getErrorMessage } from "@anvil/core";
 import { useEffect, useReducer, useRef, useState } from "react";
-import { Box, Text, useInput, useStdout } from "ink";
+import { Box, Text, useApp, useInput, useStdout } from "ink";
 import {
   AgentSession,
   createProviders,
@@ -82,6 +82,7 @@ export function App({
   initialTheme = "dark",
   mcp,
 }: AppProps) {
+  const { exit } = useApp();
   const [session, setSession] = useState(initialSession);
   const [providers, setProviders] = useState(() => {
     refreshCustomProviderLabels(initialProviders);
@@ -202,7 +203,11 @@ export function App({
   useEffect(() => {
     onOverlaysChanged(overlaysOpen);
   }, [overlaysOpen, onOverlaysChanged]);
-  useInput((_input, key) => {
+  useInput((input, key) => {
+    if (key.ctrl && (input === "c" || input === "\x03")) {
+      if (isBusy) cancel(); else exit();
+      return;
+    }
     if (overlaysOpen) return;
     if (key.tab) {
       onTab(overlaysOpen, slashMenuOpen);
@@ -471,6 +476,7 @@ export function App({
           />
         ) : isConnectOpen ? (
           <FirstRunSetup
+            handleCtrlC={false}
             title="Connect a provider or add your own endpoint."
             activeProviderId={activeProviderId}
             onRemoved={() => {
@@ -486,6 +492,7 @@ export function App({
           <HelpOverlay onClose={() => setIsHelpOpen(false)} />
         ) : (
           <InputBar
+            handleCtrlC={false}
             isBusy={isBusy}
             hasFocus={focusZone === "input"}
             onSlashMenuChange={setSlashMenuOpen}

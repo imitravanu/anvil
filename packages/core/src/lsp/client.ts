@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { getErrorMessage } from "../errors.js";
-import { LSP_REQUEST_TIMEOUT_MS, LSP_DIAGNOSTICS_POLL_MS, LSP_PATH_DIAGNOSTICS_POLL_MS, LSP_MAX_FRAME_BYTES, LSP_IDLE_CLOSE_MS, LSP_SHUTDOWN_TIMEOUT_MS, LSP_KILL_GRACE_MS } from "../config/constants.js";
+import { LSP_REQUEST_TIMEOUT_MS, LSP_DIAGNOSTICS_POLL_MS, LSP_PATH_DIAGNOSTICS_POLL_MS, LSP_MAX_FRAME_BYTES, LSP_MAX_HEADER_BYTES, LSP_IDLE_CLOSE_MS, LSP_SHUTDOWN_TIMEOUT_MS, LSP_KILL_GRACE_MS } from "../config/constants.js";
 import type { LspClient, LspDiagnostic, LspLocation, LspPosition, LspServerCommand } from "./types.js";
 
 interface PendingRequest {
@@ -103,10 +103,32 @@ export class LspStdioClient implements LspClient {
   }
 
   private onData(chunk: Buffer): void {
-    this.buffer = Buffer.concat([this.buffer, chunk]);
+    let offset = 0;
+    while (!this.dead && offset < chunk.length) {
+      const room = LSP_MAX_FRAME_BYTES + LSP_MAX_HEADER_BYTES - this.buffer.length;
+      if (room <= 0) { this.failFrame(); return; }
+      const end = Math.min(chunk.length, offset + room);
+      this.buffer = Buffer.concat([this.buffer, chunk.subarray(offset, end)]);
+      offset = end;
+      this.parseFrames();
+    }
+  }
+
+  private failFrame(): void {
+    this.buffer = Buffer.alloc(0);
+    this.dead = true;
+    this.failAll(new Error("LSP frame exceeds size cap"));
+    this.killTree("SIGKILL");
+  }
+
+  private parseFrames(): void {
     for (;;) {
       const headerEnd = this.buffer.indexOf("\r\n\r\n");
-      if (headerEnd < 0) return;
+      if (headerEnd < 0) {
+        if (this.buffer.length > LSP_MAX_HEADER_BYTES) this.failFrame();
+        return;
+      }
+      if (headerEnd + 4 > LSP_MAX_HEADER_BYTES) { this.failFrame(); return; }
       const header = this.buffer.subarray(0, headerEnd).toString("utf8");
       const match = header.match(/Content-Length:\s*(\d+)/i);
       if (!match) {
@@ -117,9 +139,7 @@ export class LspStdioClient implements LspClient {
       if (!Number.isFinite(length) || length < 0 || length > LSP_MAX_FRAME_BYTES) {
         // intentional: a hostile/buggy server claiming an unbounded frame
         // must not OOM the agent — drop the frame and fail the client.
-        this.buffer = this.buffer.subarray(headerEnd + 4);
-        this.dead = true;
-        this.failAll(new Error("LSP frame exceeds size cap"));
+        this.failFrame();
         return;
       }
       const bodyStart = headerEnd + 4;

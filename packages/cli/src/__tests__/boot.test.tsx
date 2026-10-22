@@ -160,6 +160,23 @@ function expectThrownExit(handler: (() => void) | undefined, code: number): void
 }
 
 describe("boot paths", () => {
+  it("interactive ad-hoc selection preserves existing defaults", async () => {
+    const saved = { defaultProviderId: "anthropic", defaultModel: "saved", theme: "dark" };
+    writeSettings(saved);
+    const tty = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+    Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
+    try {
+      await runEntry(["--base-url", "http://127.0.0.1:9/v1", "--model", "fixture", "--no-mcp"]);
+      expect(renderCalls).toHaveLength(1);
+      expect(renderCalls[0]!.element!.props.providerId).toBe("custom:adhoc");
+      expect(JSON.parse(fs.readFileSync(path.join(home, "settings.json"), "utf8"))).toEqual(saved);
+      expect(fs.existsSync(path.join(home, "providers.json"))).toBe(false);
+      expect(fs.existsSync(path.join(home, "provider-keys.json"))).toBe(false);
+    } finally {
+      if (tty) Object.defineProperty(process.stdin, "isTTY", tty);
+      else delete (process.stdin as { isTTY?: boolean }).isTTY;
+    }
+  });
   it("bootHeadless passes the prompt, flags, and resolved provider; exits with the runner's code", async () => {
     writeCreds({ anthropicApiKey: "sk-test" });
     headlessCode = 7;

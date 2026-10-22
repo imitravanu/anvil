@@ -5,6 +5,24 @@ All notable changes to Anvil are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Permission shortcuts ignore Ctrl/Alt modifiers, and long command/MCP previews are
+  fully scrollable. Ctrl+C cancels active turns or exits idle/setup screens even
+  while overlays own input.
+- Read-only Git shortcuts now require the project root to be the repository root
+  and refuse repository-object paths; other cases still work with explicit approval.
+- Provider iterators and Responses HTTP readers close on early consumer exit;
+  incomplete/failed Responses preserve usage and terminal outcomes. LSP ingestion
+  bounds unterminated headers as well as declared message sizes.
+- Ad-hoc endpoints no longer overwrite saved defaults. Custom model readiness
+  includes merged per-model header credentials and chooses ready default routes.
+- Test suites use isolated temporary Anvil homes. Development dependencies are
+  updated to remove the audit's known advisories. Certification reports distinguish
+  offline mocks from live checks, including a mode-tagged JSON envelope.
+- Tagged releases validate workspace, lockfile and core versions, clean-install
+  the packed CLI, and publish those same tested tarballs without repacking.
+
 ### Added
 
 - Dynamic OpenAI-compatible custom providers with interactive add/edit/remove setup,

@@ -119,6 +119,27 @@ describe("custom provider setup", () => {
     expect(select).toHaveBeenCalledWith(providers[config.id], expect.objectContaining({ id: "fixture-model", providerId: config.id }));
   });
 
+  it("disables only the model whose header credential is missing", async () => {
+    vi.stubEnv("ANVIL_TEST_PICKER_KEY", "");
+    saveCustomProvider({ ...config, models: [
+      { id: "blocked-route", contextWindow: 8192, headers: { "X-Api-Key": "$ANVIL_TEST_PICKER_KEY" } },
+      { id: "ready-route", contextWindow: 8192 },
+    ] }, "picker-key");
+    const providers = createProviders({});
+    const select = vi.fn();
+    const blocked = mount(<ModelPicker providers={providers} currentModelId="" onSelect={select} onClose={vi.fn()} />);
+    await tick();
+    await press(blocked, "blocked-route");
+    await press(blocked);
+    expect(select).not.toHaveBeenCalled();
+    blocked.unmount();
+    const ready = mount(<ModelPicker providers={providers} currentModelId="" onSelect={select} onClose={vi.fn()} />);
+    await tick();
+    await press(ready, "ready-route");
+    await press(ready);
+    expect(select).toHaveBeenCalledWith(providers[config.id], expect.objectContaining({ id: "ready-route" }));
+  });
+
   it("preserves protocol and per-model routing overrides through an ordinary edit", async () => {
     const routed: CustomProviderConfig = { ...config, protocol: "anthropic", models: [{ id: "fixture-model", contextWindow: 8192, protocol: "openai-responses", baseUrl: "https://responses.invalid/v1", headers: { "X-Client": "model" } }] };
     saveCustomProvider(routed, "retained-key");

@@ -5,6 +5,17 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { isValidSourceFilePath, scanTextForSlop, scanUnifiedDiffForSlop } from "@anvil/core";
 
+it("release validates versions and packed installation before publishing those same tarballs", () => {
+  const workflow = read(".github/workflows/release.yml");
+  const verify = workflow.indexOf('node scripts/verify-package.mjs --tag "$GITHUB_REF_NAME" --pack-destination dist-tarballs');
+  expect(verify).toBeGreaterThan(0);
+  for (const name of ["core", "tui", "cli"]) {
+    expect(workflow.indexOf(`npm publish dist-tarballs/anvil-${name}-*.tgz --access public`)).toBeGreaterThan(verify);
+  }
+  expect(workflow).not.toContain("npm publish -w");
+  expect(workflow).not.toContain("npm pack -w");
+});
+
 /**
  * GATE INTEGRITY SENTINEL (hardening, 2026-09-13)
  *

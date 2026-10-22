@@ -49,27 +49,23 @@ jobs:
       - name: Run Guardian Gate (integrity + anti-slop + quality)
         run: npm run gate
 
+      - name: Validate release version and install packed CLI
+        run: node scripts/verify-package.mjs --tag "$GITHUB_REF_NAME" --pack-destination dist-tarballs
+
       - name: Publish @anvil/core
-        run: npm publish -w @anvil/core --access public
+        run: npm publish dist-tarballs/anvil-core-*.tgz --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @anvil/tui
-        run: npm publish -w @anvil/tui --access public
+        run: npm publish dist-tarballs/anvil-tui-*.tgz --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @anvil/cli
-        run: npm publish -w @anvil/cli --access public
+        run: npm publish dist-tarballs/anvil-cli-*.tgz --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Package npm tarballs for release
-        run: |
-          mkdir -p dist-tarballs
-          npm pack -w @anvil/core --pack-destination dist-tarballs
-          npm pack -w @anvil/tui --pack-destination dist-tarballs
-          npm pack -w @anvil/cli --pack-destination dist-tarballs
 
       - name: Generate SHA256 checksums
         working-directory: dist-tarballs

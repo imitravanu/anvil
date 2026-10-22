@@ -97,6 +97,57 @@
 
 # PROGRESS — multi-agent coordination
 
+## 2026-10-22 — audit remediation A01–A13 (complete)
+
+Ownership: this session owns TUI permission/input/setup/App/model-picker components,
+their tests and input helpers; core command containment, provider base/Responses/custom
+adapters, readiness/selection contracts, LSP parser/constants and regression tests;
+CLI ephemeral boot and certification output/tests; workspace test setup/configuration,
+development dependency manifests/lockfile; release/package verification helpers/tests;
+README, CHANGELOG and this record. Entry checkout was clean at c90d013.
+All thirteen audit findings are live/reproduced or directly verified against source.
+The historical Phase 21–25 roadmap is complete; this is corrective maintenance.
+Protected release-workflow/manifest/sentinel diff was explicitly approved by the user
+in this chat before application, following AGENTS.md §3.4. Ownership and purpose are
+also recorded in docs/PHASE-26-PROGRESS.md. No publication is planned.
+Repairs (all thirteen findings closed):
+
+- A01: permission decisions ignore Ctrl/Alt-modified keys in both layouts.
+- A02: complete command/MCP summaries are sanitized, wrapped and scrollable.
+- A03: Git repository-object operands and nested-repository reads require approval.
+- A04: interactive ephemeral endpoints do not persist default-provider/model settings.
+- A05: always-mounted App/setup handlers own Ctrl+C; children do not double-handle it.
+- A06: abandoned provider iterators close; Responses readers cancel before release.
+- A07: bounded LSP ingestion also caps incomplete headers and kills oversized streams.
+- A08: completed/incomplete/failed Responses retain usage and correct terminal state.
+- A09: merged per-model headers participate in readiness, picker and default selection;
+  explicit unavailable routes fail before networking with actionable diagnostics.
+- A10: development dependencies updated; full npm audit reports zero vulnerabilities.
+- A11: release tags/package/lock/core versions must agree, the packed CLI is installed
+  in a clean consumer, and publishing uses those same retained tarballs.
+- A12: certification matrix/summary/JSON distinguish offline mock and live provenance.
+- A13: every workspace test suite receives an isolated temporary ANVIL_HOME.
+
+Validation: full `npm run gate -- --ack-protected-change` passed with sequential
+core/TUI/CLI build, all workspace/script typechecks, **1,865 tests** (core 1,201,
+TUI 435, CLI 229), integrity/sentinel checks and **25/25** offline evaluations.
+All **144/144** visual scenarios passed without changing baselines; **13/13**
+offline provider certifications passed and are labelled mock. All workspace coverage
+runs passed (statement coverage: core 90.33%, TUI 78.14%, CLI 65.94%).
+`verify-package.mjs --tag v1.4.0 --pack-destination <temporary-directory>` packed all
+three workspaces, rejected test artifacts, and clean-installed/ran the CLI at 1.4.0;
+all tarballs contain LICENSE. An intentionally mismatched tag was rejected before
+packing. Original independent probes confirm cleanup, bounded framing, denied
+modified approval, inspectable command tails and required Git permission. Real PTY
+checks confirm Ctrl+C exits standalone setup and an idle help overlay (exit 0).
+
+Scope/limits: verified on Linux, Node 24.21.0. No live provider inference, Windows/macOS
+or minimum-Node runtime certification was performed. Mock checks are not live API
+certification. Existing version remains 1.4.0; no tag, push, npm publish or GitHub
+release was performed. The local CLI was rebuilt. This entry and all repairs are
+committed together; the explicitly reviewed protected change uses the documented
+human-approved `git commit --no-verify` exception (AGENTS.md §4), not a weakened gate.
+
 > Per AGENTS.md §1.2: file ownership declarations for concurrent sessions.
 >
 > **DONE 2026-10-14 — chief-engineer corrective pass (Codex).** Read-only audit
