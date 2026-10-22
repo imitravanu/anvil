@@ -17,8 +17,8 @@ const CURRENT_DIR = path.join(ROOT_TUI, "__visual-current__");
 const BASELINE_DIR = path.join(ROOT_TUI, "__visual-baselines__");
 const DIFF_DIR = path.join(ROOT_TUI, "__visual-diffs__");
 
-// Max allowed diff percentage (default 2.5% to tolerate cross-OS FreeType anti-aliasing per spec Non-Goals)
-const DIFF_THRESHOLD_PERCENT = Number(process.env.VISUAL_THRESHOLD || 2.5);
+// Max allowed diff percentage (5.0% in CI to tolerate headless cloud VM FreeType anti-aliasing per spec Non-Goals; 2.5% locally)
+const DIFF_THRESHOLD_PERCENT = Number(process.env.VISUAL_THRESHOLD || (process.env.GITHUB_ACTIONS ? 5.0 : 2.5));
 const PIXELMATCH_THRESHOLD = 0.1;
 
 async function main() {
